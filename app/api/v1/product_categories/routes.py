@@ -27,7 +27,10 @@ ALLOWED_ROLES = ("GESTOR",)
 @router.get("", response_model=list[ProductCategoryResponse])
 async def get_product_categories(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    # Explicit list, not the shared ALLOWED_ROLES - CAIXA needs read access here,
+    # Caixa.jsx loads this alongside products/services on every visit (see the
+    # "categoria 403 bloqueia o Caixa" fix); only GESTOR can create/edit categories.
+    current_user: User = Depends(require_role("GESTOR", "CAIXA")),
 ):
     return await list_product_categories(db, current_user.company_id)
 

@@ -46,7 +46,10 @@ async def get_suggested_code(
 async def create_new_customer(
     payload: CustomerCreateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    # Explicit list, not the shared ALLOWED_ROLES - CAIXA needs to create a
+    # customer inline (Reservas' quick-add "Hospede" modal) without gaining the
+    # broader customer-management access ALLOWED_ROLES grants elsewhere in this file.
+    current_user: User = Depends(require_role("GESTOR", "CAIXA")),
 ):
     """Creates a customer within the caller's company."""
     try:
@@ -80,7 +83,8 @@ async def create_new_customer(
 @router.get("", response_model=list[CustomerResponse])
 async def get_customers(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    # Explicit list - CAIXA needs this for Reservas' "Hospede" selector.
+    current_user: User = Depends(require_role("GESTOR", "CAIXA")),
 ):
     """Lists all customers belonging to the caller's company."""
     return await list_customers(db, current_user.company_id)

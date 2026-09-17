@@ -103,7 +103,10 @@ async def get_resources(
     activity_id: uuid.UUID | None = None,
     resource_type_id: uuid.UUID | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    # Explicit list (not the shared ALLOWED_ROLES) - ARMAZENISTA needs read-only
+    # access here for Consumo Interno's resource picker, but shouldn't gain the
+    # broader booking-management access ALLOWED_ROLES grants to the rest of this file.
+    current_user: User = Depends(require_role("GESTOR", "CAIXA", "ARMAZENISTA")),
 ):
     return await list_resources(db, current_user.company_id, activity_id, resource_type_id)
 

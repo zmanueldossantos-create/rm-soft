@@ -27,7 +27,9 @@ ALLOWED_ROLES = ("GESTOR",)
 @router.get("", response_model=list[ServiceTypeResponse])
 async def get_service_types(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    # Explicit list, not the shared ALLOWED_ROLES - CAIXA needs read access here,
+    # same reasoning as product_categories' get_product_categories fix.
+    current_user: User = Depends(require_role("GESTOR", "CAIXA")),
 ):
     return await list_service_types(db, current_user.company_id)
 

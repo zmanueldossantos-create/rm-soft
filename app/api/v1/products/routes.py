@@ -86,8 +86,9 @@ async def create_new_product(
 async def get_products(
     db: AsyncSession = Depends(get_db),
     # CAIXA needs read access too - a cashier must see the product catalog to sell
-    # (Caixa, Contas Abertas) even though only GESTOR can create/edit products.
-    current_user: User = Depends(require_role("GESTOR", "CAIXA")),
+    # (Caixa, Contas Abertas). ARMAZENISTA needs it too - Consumo Interno's product
+    # picker calls this same list. Only GESTOR can create/edit products.
+    current_user: User = Depends(require_role("GESTOR", "CAIXA", "ARMAZENISTA")),
 ):
     """Lists all products belonging to the caller's company."""
     return await list_products(db, current_user.company_id)

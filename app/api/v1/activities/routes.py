@@ -39,7 +39,8 @@ router = APIRouter(prefix="/api/v1/activities", tags=["activities"])
 @router.get("", response_model=list[ActivityResponse])
 async def get_activities(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("GESTOR", "CAIXA")),
+    # ARMAZENISTA needs this too - Consumo Interno's activity tabs call this list.
+    current_user: User = Depends(require_role("GESTOR", "CAIXA", "ARMAZENISTA")),
 ):
     """Lists the company's configured activities (e.g. Padaria, Bar, Hotel)."""
     return await list_activities(db, current_user.company_id)
