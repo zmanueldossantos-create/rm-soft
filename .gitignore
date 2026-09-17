@@ -1,0 +1,45 @@
+﻿# Environnement virtuel Python
+venv/
+env/
+__pycache__/
+*.pyc
+
+# Variables d'environnement (secrets DB, chaves)
+.env
+
+# Base de dados local
+*.db
+*.sqlite3
+
+# Licenca gerada
+license.key
+*.lic
+
+# Build PyInstaller
+build/
+dist/
+*.spec
+
+# Editores
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Frontend - dependencias e build
+frontend/node_modules/
+frontend/dist/
+
+# Uploads em runtime - logos, fotos de produtos gerados pela aplicacao
+uploads/
+
+# Scripts pontuais de sessao (fix_*.py, apply_*.py) e saidas de teste avulsas -
+# nao fazem parte do codigo fonte, sao descartaveis apos cada sessao de trabalho.
+# Sem barra inicial - aplica-se em qualquer pasta (raiz, frontend/, etc.)
+fix_*.py
+apply_*.py
+*_output.txt
+*_dump.txt
+test_accents.txt
+company_id_scan.txt

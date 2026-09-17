@@ -1,0 +1,249 @@
+"""
+Routes for the POS/Caixa module - cash session open/close and checkout.
+"""
+import uuid
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+
+from app.core.database import get_db
+from app.api.deps import require_role
+from app.models.user import User
+from app.models.activity import Activity
+from app.models.stock import Stock
+from app.services.point_of_sale_service import get_pos_or_raise
+from app.schemas.cash_session import (
+    OpenSessionRequest,
+    CloseSessionRequest,
+    CashSessionResponse,
+    CheckoutRequest,
+    LiquidatePendingInvoiceRequest,
+    CreateProFormaRequest,
+)
+from app.schemas.invoice import InvoiceResponse
+from app.services.cash_session_service import (
+    open_session,
+    close_session,
+    get_open_session,
+    get_current_expected_cash_balance,
+    get_carry_forward_amount,
+    list_sessions,
+    SessionAlreadyOpenError,
+    SessionNotFoundError,
+    SessionAlreadyClosedError,
+    BilletageRequiredError,
+)
+from app.services.pos_service import checkout, liquidate_pending_invoice, create_pro_forma_from_pos, NoOpenSessionError
+from app.services.point_of_sale_service import PosNotFoundError
+from app.services.invoice_service import (
+    ActivityNotFoundError,
+    PeriodClosedError,
+    EmptyInvoiceError,
+    CustomerNotFoundError,
+    ProductNotFoundError,
+    StockUnavailableError,
+    PaymentAmountMismatchError,
+    DocumentTypeNotConfiguredError,
+    SeriesNotConfiguredError,
+    ProFormaNotFoundError,
+    ProFormaAlreadyConvertedError,
+)
+
+router = APIRouter(prefix="/api/v1/pos", tags=["pos"])
+
+ALLOWED_ROLES = ("GESTOR", "CAIXA")
+
+
+@router.post("/sessions/open", response_model=CashSessionResponse, status_code=status.HTTP_201_CREATED)
+async def post_open_session(
+    payload: OpenSessionRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+):
+    try:
+        return await open_session(db, current_user.company_id, payload.pos_id, current_user, payload.opening_amount)
+    except SessionAlreadyOpenError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except PosNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.get("/sessions/open", response_model=CashSessionResponse | None)
+async def get_current_open_session(
+    pos_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+):
+    """Returns the currently open session for this POS, or null if none - lets the frontend know whether to show the checkout screen or the open-session prompt."""
+    return await get_open_session(db, current_user.company_id, pos_id)
+
+
+@router.get("/sessions/balance")
+async def get_current_balance(
+    pos_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+):
+    """Live expected cash balance for this POS's currently open session - not just
+    the opening float, but opening + cash sales + net movements so far (same formula
+    as close_session, computed on demand - see get_current_expected_cash_balance)."""
+    balance = await get_current_expected_cash_balance(db, current_user.company_id, pos_id)
+    return {"balance": balance}
+
+
+@router.get("/sessions/carry-forward")
+async def get_carry_forward(
+    pos_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+):
+    """The amount that will automatically become the opening float if this POS's
+    session is opened right now (last closed session's counted total, or 0) - lets
+    the "Abrir caixa" confirmation show it before the cashier commits."""
+    amount = await get_carry_forward_amount(db, current_user.company_id, pos_id)
+    return {"amount": amount}
+
+
+@router.get("/stock-levels")
+async def get_pos_stock_levels(
+    pos_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+):
+    """Current on-hand quantity per product, in the warehouse tied to this POS's
+    Activity (Activity.warehouse_id) - shown on the Caixa product grid so the cashier
+    can see availability at a glance. Returns {product_id: quantity}; a product with
+    no Stock row for this warehouse (never received) is simply absent from the map -
+    the frontend treats that as 0."""
+    pos = await get_pos_or_raise(db, current_user.company_id, pos_id)
+    activity_result = await db.execute(select(Activity).where(Activity.id == pos.activity_id))
+    activity = activity_result.scalar_one_or_none()
+    if activity is None or activity.warehouse_id is None:
+        return {}
+    stock_result = await db.execute(
+        select(Stock.product_id, Stock.quantity).where(Stock.warehouse_id == activity.warehouse_id)
+    )
+    return {str(product_id): float(quantity) for product_id, quantity in stock_result.all()}
+
+
+@router.post("/sessions/{session_id}/close", response_model=CashSessionResponse)
+async def post_close_session(
+    session_id: uuid.UUID,
+    payload: CloseSessionRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+):
+    try:
+        return await close_session(
+            db, current_user.company_id, session_id, current_user.id,
+            payload.closing_amount_counted, payload.closing_notes,
+        )
+    except SessionNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except SessionAlreadyClosedError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except BilletageRequiredError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+
+
+@router.get("/sessions", response_model=list[CashSessionResponse])
+async def get_sessions(
+    activity_id: uuid.UUID | None = None,
+    pos_id: uuid.UUID | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+):
+    """Lists past cash sessions - history for review, optionally filtered by activity and/or POS."""
+    return await list_sessions(db, current_user.company_id, activity_id, pos_id)
+
+
+@router.post("/checkout/{pos_id}", response_model=InvoiceResponse, status_code=status.HTTP_201_CREATED)
+async def post_checkout(
+    pos_id: uuid.UUID,
+    payload: CheckoutRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+):
+    try:
+        return await checkout(
+            db, current_user.company_id, pos_id, current_user, payload.customer_id,
+            [{"product_id": l.product_id, "service_id": l.service_id, "quantity": l.quantity, "discount_percent": l.discount_percent} for l in payload.lines],
+            [{"payment_method_id": p.payment_method_id, "amount": p.amount} for p in payload.payments],
+            invoice_type=payload.invoice_type,
+            discount_global_percent=payload.discount_global_percent,
+            payment_term_id=payload.payment_term_id,
+            payment_method_id=payload.payment_method_id,
+            bank_account_id=payload.bank_account_id,
+            due_date=payload.due_date,
+        )
+    except NoOpenSessionError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except ActivityNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except PeriodClosedError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except EmptyInvoiceError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    except CustomerNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ProductNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except PaymentAmountMismatchError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    except StockUnavailableError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except DocumentTypeNotConfiguredError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    except SeriesNotConfiguredError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+
+
+@router.post("/pro-forma/{pos_id}", response_model=InvoiceResponse, status_code=status.HTTP_201_CREATED)
+async def post_create_pro_forma(
+    pos_id: uuid.UUID,
+    payload: CreateProFormaRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+):
+    """Generates a Pro-forma (FP) from the Caixa screen - no payment, see pos_service.create_pro_forma_from_pos."""
+    try:
+        return await create_pro_forma_from_pos(
+            db, current_user.company_id, pos_id, current_user, payload.customer_id,
+            [{"product_id": l.product_id, "service_id": l.service_id, "quantity": l.quantity, "discount_percent": l.discount_percent} for l in payload.lines],
+            discount_global_percent=payload.discount_global_percent,
+        )
+    except NoOpenSessionError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except ActivityNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except PeriodClosedError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except SeriesNotConfiguredError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+
+
+@router.post("/liquidate/{pos_id}", response_model=InvoiceResponse, status_code=status.HTTP_201_CREATED)
+async def post_liquidate_pending_invoice(
+    pos_id: uuid.UUID,
+    payload: LiquidatePendingInvoiceRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+):
+    """Liquidates a pending Pro-forma from the Caixa screen - see NovaFatura/Invoices for the admin equivalent."""
+    try:
+        return await liquidate_pending_invoice(
+            db, current_user.company_id, pos_id,
+            payload.pro_forma_id, payload.target_invoice_type,
+            [{"payment_method_id": p.payment_method_id, "amount": p.amount} for p in payload.payments],
+        )
+    except NoOpenSessionError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except ProFormaNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ProFormaAlreadyConvertedError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except PeriodClosedError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except PaymentAmountMismatchError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))

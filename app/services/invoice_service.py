@@ -1,0 +1,1258 @@
+﻿"""
+Business logic for invoice creation.
+See specification v6/v7, section 4 (Priority #1 - AGT fiscal compliance).
+
+Enforces:
+- Period/Year lock check before any invoice is created (section 3.4/3.5).
+- Sequential invoice numbering per (company, series) - never reused, never skipped.
+- VAT breakdown computed per line from each product's current VAT rate,
+  snapshotted onto the line so it never changes retroactively (section 4.5).
+- Simulated ATCUD/hash/QR (correct format, not homologated) per Decision 2,
+  section 4.4, pending the real AGT signature key.
+
+Each invoice belongs to an Activity (business line / point of sale within
+the company - e.g. Padaria, Bar, Hotel - see discussion on multi-activity
+companies). The Activity determines the invoice series and number padding;
+both are snapshotted onto the Invoice at creation time so past documents
+never reformat retroactively if the Activity's settings change later.
+
+business_date and payments are optional - when called from the POS/Caixa
+flow (see cash_session_service), business_date comes from the active
+CashSession (not today's real date, so a session spanning midnight stays
+on the day it opened - see CashSession model docstring) and payments
+records how the sale was settled (possibly split across several methods).
+Called directly by a GESTOR outside a cash session, both stay unset -
+business_date defaults to today, no Payment rows are created.
+"""
+import hashlib
+import uuid
+from datetime import date, datetime
+
+from sqlalchemy import select, func, extract
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.invoice import Invoice, InvoiceStatus, InvoiceType, DocumentLifecycleStatus, CreditNoteReason
+from app.models.invoice_line import InvoiceLine
+from app.models.product import Product
+from app.models.service import Service
+from app.models.withholding_tax import WithholdingTax
+from app.models.customer import LegalPersonType
+from app.models.vat import VAT
+from app.models.customer import Customer
+from app.models.activity import Activity
+from app.models.payment import Payment
+from app.models.payment_method_catalog import PaymentMethodCatalog
+from app.models.company import Company
+from app.models.document_type import DocumentType
+from app.services.fiscal_period_service import is_period_open_for_date, PeriodClosedError
+from app.services.stock_service import deduct_stock_for_sale, InsufficientStockError
+from app.services.document_series_service import get_or_create_current_series, get_next_number, SeriesNotFoundError
+from app.workers.agt_worker import submit_invoice_to_agt
+
+# Maps the (legacy) InvoiceType enum to the platform DocumentType catalog code -
+# see decision on integrating DocumentSeries into invoicing.
+INVOICE_TYPE_TO_DOC_CODE = {
+    "FACTURA": "FT",
+    "FACTURA_RECIBO": "FR",
+    "NOTA_CREDITO": "NC",
+    "NOTA_DEBITO": "ND",
+}
+
+
+class DocumentTypeNotConfiguredError(Exception):
+    """Raised when the platform DocumentType catalog is missing the code this invoice_type maps to."""
+    pass
+
+
+class SeriesNotConfiguredError(Exception):
+    """Raised when no active DocumentSeries exists for this document type/year and none can be auto-created."""
+    pass
+
+
+
+class ProductNotFoundError(Exception):
+    pass
+
+
+class CustomerNotFoundError(Exception):
+    pass
+
+
+class InvoiceNotFoundError(Exception):
+    pass
+
+
+class ActivityNotFoundError(Exception):
+    pass
+
+
+class EmptyInvoiceError(Exception):
+    pass
+
+
+class StockUnavailableError(Exception):
+    """Raised when a line item cannot be fulfilled due to insufficient stock."""
+    pass
+
+
+class PaymentAmountMismatchError(Exception):
+    """Raised when the sum of the given payment lines does not equal the invoice total."""
+
+
+class ReferenceInvoiceNotFoundError(Exception):
+    pass
+
+
+class ReferenceInvoiceTypeNotEligibleError(Exception):
+    """AGT rule: a Nota de Credito can only reference a Factura, Factura/Recibo or Autofactura."""
+    pass
+
+
+class ReferenceInvoiceAlreadyCancelledError(Exception):
+    pass
+
+
+class CreditNoteExceedsOriginalError(Exception):
+    """AGT rule: the credit note total/quantities cannot exceed the original invoice's."""
+    pass
+    pass
+
+
+def _simulate_atcud(company_id: uuid.UUID, series: str, number: int) -> str:
+    """
+    Simulated ATCUD in the correct format (validation-code-sequence),
+    clearly non-homologated - see Decision 2, section 4.4.
+    """
+    return f"SIMUL-{series}{number:06d}"
+
+
+def _simulate_hash(company_id: uuid.UUID, series: str, number: int, total: float, business_date: date) -> str:
+    """Simulated invoice hash - correct shape, not a real AGT-issued signature."""
+    raw = f"{company_id}|{series}|{number}|{total}|{business_date.isoformat()}"
+    return "SIMUL-" + hashlib.sha256(raw.encode()).hexdigest()[:40]
+
+
+def _simulate_qr_payload(company_id: uuid.UUID, series: str, number: int, total: float, atcud: str) -> str:
+    """Simulated QR code payload - correct field structure, non-homologated."""
+    return f"A:SIMULATED*B:{company_id}*C:{series}/{number}*D:{total}*E:{atcud}"
+
+
+async def create_invoice(
+    db: AsyncSession,
+    company_id: uuid.UUID,
+    activity_id: uuid.UUID,
+    customer_id: uuid.UUID | None,
+    invoice_type: str,
+    lines_input: list[dict],
+    business_date: date | None = None,
+    cash_session_id: uuid.UUID | None = None,
+    payments: list[dict] | None = None,
+    payment_term_id: uuid.UUID | None = None,
+    payment_method_id: uuid.UUID | None = None,
+    bank_account_id: uuid.UUID | None = None,
+    due_date: date | None = None,
+    amount_received: float | None = None,
+    payment_date: date | None = None,
+    observations: str | None = None,
+    discount_global_percent: float = 0,
+    document_reference: str | None = None,
+) -> Invoice:
+    """
+    Creates an invoice with its lines, under the given Activity (which
+    determines the invoice series and number padding).
+    lines_input: list of {"product_id": UUID, "quantity": float}
+    payments (optional): list of {"payment_method_id": UUID, "amount": float} -
+    if given, must sum to exactly the invoice total (see PaymentAmountMismatchError).
+    payment_method_id here refers to PaymentMethodCatalog (the 12 official AGT codes),
+    same catalog as the invoice-level payment_method_id parameter below - not to be
+    confused with each other: this one is per split-payment line (real cash received),
+    the other is the invoice's single predicted payment method (FT, no real cash yet).
+    """
+    business_date = business_date or date.today()
+
+    company_result = await db.execute(select(Company).where(Company.id == company_id))
+    company = company_result.scalar_one()
+    if business_date > date.today() and not company.allows_future_sale_date:
+        raise EmptyInvoiceError("Nao e permitido faturar com data futura - active essa opcao em Empresa, se necessario")
+
+    activity_result = await db.execute(
+        select(Activity).where(Activity.id == activity_id, Activity.company_id == company_id, Activity.is_active == True)
+    )
+    activity = activity_result.scalar_one_or_none()
+    if activity is None:
+        raise ActivityNotFoundError("Atividade nao encontrada ou inativa")
+
+    if not await is_period_open_for_date(db, company_id, business_date):
+        raise PeriodClosedError(
+            "O periodo ou ano fiscal correspondente a data de hoje nao esta aberto. "
+            "Contacte o GESTOR para abrir o periodo antes de faturar."
+        )
+
+    if not lines_input:
+        raise EmptyInvoiceError("A fatura deve ter pelo menos uma linha")
+
+    customer = None
+    if customer_id is not None:
+        customer_result = await db.execute(
+            select(Customer).where(Customer.id == customer_id, Customer.company_id == company_id)
+        )
+        customer = customer_result.scalar_one_or_none()
+        if customer is None:
+            raise CustomerNotFoundError("Cliente nao encontrado")
+
+    doc_code = INVOICE_TYPE_TO_DOC_CODE.get(invoice_type)
+    if doc_code is None:
+        raise DocumentTypeNotConfiguredError(f"Tipo de fatura '{invoice_type}' nao mapeado a um tipo de documento")
+
+    doc_type_result = await db.execute(select(DocumentType).where(DocumentType.code == doc_code))
+    doc_type = doc_type_result.scalar_one_or_none()
+    if doc_type is None:
+        raise DocumentTypeNotConfiguredError(f"Tipo de documento '{doc_code}' nao existe no catalogo da plataforma")
+
+    company_result = await db.execute(select(Company).where(Company.id == company_id))
+    company = company_result.scalar_one()
+
+    try:
+        series_row = await get_or_create_current_series(db, company, doc_type.id)
+    except SeriesNotFoundError as e:
+        raise SeriesNotConfiguredError(str(e))
+
+    if not series_row.is_active:
+        raise SeriesNotConfiguredError(f"A serie {series_row.series_code} para {doc_code} esta inativa")
+
+    series = series_row.series_code
+    document_type_id = doc_type.id
+    number_digits = activity.number_digits
+
+    # Next sequential number for this series (never reused) - see DocumentSeries.current_number.
+    next_number = await get_next_number(db, series_row)
+
+    subtotal_total = 0.0
+    vat_total = 0.0
+    line_objects = []
+
+    retention_total = 0.0
+    customer_is_juridica = customer is not None and customer.legal_person_type == LegalPersonType.JURIDICA
+    for line_input in lines_input:
+        product_id = line_input.get("product_id")
+        service_id = line_input.get("service_id")
+        quantity = float(line_input["quantity"])
+
+        if service_id:
+            service_result = await db.execute(
+                select(Service).where(Service.id == service_id, Service.company_id == company_id, Service.is_active == True)
+            )
+            service = service_result.scalar_one_or_none()
+            if service is None:
+                raise ProductNotFoundError("Servico nao encontrado ou inativo")
+            vat_result = await db.execute(select(VAT).where(VAT.id == service.vat_id))
+            vat = vat_result.scalar_one_or_none()
+            vat_rate = float(vat.rate) if vat else 0.0
+            unit_price = float(service.price or 0)
+            item_name = service.name
+            line_product_id = None
+            line_service_id = service.id
+            line_retention_pct = 0.0
+            # AGT rule (Ulemo 8.8): withholding is exclusive to Service lines, requires the
+            # article's own withholding_tax_id to be set ("Sujeito"), and only applies when
+            # the customer is pessoa coletiva - never computed for Products or for a
+            # counter sale with no customer.
+            if service.withholding_tax_id and customer_is_juridica:
+                wh_result = await db.execute(select(WithholdingTax).where(WithholdingTax.id == service.withholding_tax_id))
+                wh = wh_result.scalar_one_or_none()
+                if wh and float(wh.rate) > 0:
+                    line_retention_pct = float(wh.rate)
+        else:
+            product_result = await db.execute(
+                select(Product).where(Product.id == product_id, Product.company_id == company_id, Product.is_active == True)
+            )
+            product = product_result.scalar_one_or_none()
+            if product is None:
+                raise ProductNotFoundError("Produto nao encontrado ou inativo")
+            vat_result = await db.execute(select(VAT).where(VAT.id == product.vat_id))
+            vat = vat_result.scalar_one_or_none()
+            vat_rate = float(vat.rate) if vat else 0.0
+            unit_price = float(product.price)
+            item_name = product.name
+            line_product_id = product.id
+            line_service_id = None
+            line_retention_pct = 0.0
+
+        discount_percent = float(line_input.get("discount_percent", 0) or 0)
+        gross_subtotal = round(quantity * unit_price, 2)
+        line_discount = round(gross_subtotal * (discount_percent / 100), 2)
+        line_subtotal = round(gross_subtotal - line_discount, 2)
+        line_vat = round(line_subtotal * (vat_rate / 100), 2)
+        line_total = round(line_subtotal + line_vat, 2)
+        line_retention = round(line_subtotal * (line_retention_pct / 100), 2)
+
+        subtotal_total += line_subtotal
+        vat_total += line_vat
+        retention_total += line_retention
+
+        line_objects.append(InvoiceLine(
+            product_id=line_product_id,
+            service_id=line_service_id,
+            product_name_snapshot=item_name,
+            quantity=quantity,
+            unit_price=unit_price,
+            discount_percent=discount_percent,
+            vat_rate_snapshot=vat_rate,
+            line_subtotal=line_subtotal,
+            line_vat=line_vat,
+            line_total=line_total,
+        ))
+
+    subtotal_total = round(subtotal_total, 2)
+    vat_total = round(vat_total, 2)
+    retention_total = round(retention_total, 2)
+    global_discount_amount = round((subtotal_total + vat_total) * (float(discount_global_percent) / 100), 2)
+    grand_total = round(subtotal_total + vat_total - global_discount_amount, 2)
+
+    # An empty payments list on a FACTURA_RECIBO (real cash-in-hand sale) means the
+    # company has no payment methods marked available_at_pos for this POS (see
+    # CompanyPaymentMethodPreference) - the Caixa screen lets the sale proceed rather
+    # than blocking the cashier, but the cash balance must still reflect the money that
+    # actually changed hands. Default the whole total to Numerario (NU) in that case -
+    # see the "3000 Kz balance didn't move after a paid sale" bug discussion. FACTURA
+    # (due later, no cash yet) and PRO_FORMA (not a real sale) are left alone: no
+    # payments is the correct, honest state for those.
+    if not payments and invoice_type == "FACTURA_RECIBO" and grand_total > 0:
+        numerario_result = await db.execute(select(PaymentMethodCatalog).where(PaymentMethodCatalog.code == "NU"))
+        numerario = numerario_result.scalar_one_or_none()
+        if numerario is not None:
+            payments = [{"payment_method_id": numerario.id, "amount": grand_total}]
+
+    # Only reconcile when payments were actually supplied - see the auto-default above
+    # for why an empty list is sometimes filled in before reaching this point.
+    if payments:
+        payments_sum = round(sum(float(p["amount"]) for p in payments), 2)
+        if abs(payments_sum - grand_total) > 0.01:
+            raise PaymentAmountMismatchError(
+                f"A soma dos pagamentos ({payments_sum}) nao corresponde ao total da fatura ({grand_total})"
+            )
+
+    atcud = _simulate_atcud(company_id, series, next_number)
+    invoice_hash = _simulate_hash(company_id, series, next_number, grand_total, business_date)
+    qr_code_data = _simulate_qr_payload(company_id, series, next_number, grand_total, atcud)
+
+    invoice = Invoice(
+        company_id=company_id,
+        activity_id=activity_id,
+        customer_id=customer_id,
+        cash_session_id=cash_session_id,
+        invoice_type=InvoiceType(invoice_type),
+        document_type_id=document_type_id,
+        payment_term_id=payment_term_id,
+        payment_method_id=payment_method_id,
+        bank_account_id=bank_account_id,
+        due_date=due_date,
+        amount_received=amount_received,
+        payment_date=payment_date,
+        observations=observations,
+        document_reference=document_reference,
+        discount_global_percent=discount_global_percent,
+        retention_total=retention_total,
+        issuance_mode=company.issuance_mode,
+        series=series,
+        number=next_number,
+        number_digits=number_digits,
+        business_date=business_date,
+        subtotal=subtotal_total,
+        vat_total=vat_total,
+        total=grand_total,
+        status=InvoiceStatus.PENDENTE,
+        atcud=atcud,
+        invoice_hash=invoice_hash,
+        qr_code_data=qr_code_data,
+    )
+    db.add(invoice)
+    await db.flush()
+
+    for line in line_objects:
+        line.invoice_id = invoice.id
+        db.add(line)
+
+    if payments is not None:
+        for p in payments:
+            db.add(Payment(
+                company_id=company_id, invoice_id=invoice.id,
+                payment_method_id=p["payment_method_id"], amount=float(p["amount"]),
+            ))
+
+    # Deduct stock within the SAME transaction as the invoice - if any line
+    # cannot be fulfilled, the whole invoice (and its lines) rolls back
+    # together, never leaving a partial sale or a partial stock deduction.
+    # SAF-T XSD requires the space: "{DocType} {series_code}/{number}".
+    invoice_reference = f"{doc_code} {series}/{str(next_number).zfill(number_digits)}"
+    try:
+        for line_input in lines_input:
+            # Services have no physical inventory - never deduct stock for them (either a
+            # true Service line, or a legacy Product row typed as SERVICO).
+            if line_input.get("service_id"):
+                continue
+            await deduct_stock_for_sale(
+                db,
+                company_id=company_id,
+                warehouse_id=activity.warehouse_id,
+                product_id=line_input["product_id"],
+                quantity=float(line_input["quantity"]),
+                reference=invoice_reference,
+            )
+    except InsufficientStockError as e:
+        await db.rollback()
+        raise StockUnavailableError(str(e))
+
+    await db.commit()
+    await db.refresh(invoice)
+
+    # Trigger AGT submission asynchronously - section 4.2 requires submission
+    # within 30s of creation, via a Celery task fired immediately.
+    submit_invoice_to_agt.delay(str(invoice.id))
+
+    return invoice
+
+
+async def create_credit_note(
+    db: AsyncSession,
+    company_id: uuid.UUID,
+    activity_id: uuid.UUID,
+    reference_invoice_id: uuid.UUID,
+    credit_note_reason: str,
+    credit_note_cause: str,
+    lines_input: list[dict],
+    business_date: date | None = None,
+) -> Invoice:
+    """
+    Creates a Nota de Credito (NC) against an already-issued Factura/Factura-Recibo,
+    then updates that original invoice's document_status accordingly. See Video 5 and
+    the Ulemo NC endpoint rules:
+    - lines_input: list of {"invoice_line_id": UUID, "quantity": float} - quantities are
+      taken from the ORIGINAL invoice's own lines (same product, price, VAT rate), never
+      re-priced against current catalog prices, and can be less than the original quantity
+      (partial return).
+    - credit_note_reason: "ANL" (anulacao) or "RTF" (rectificacao).
+    - No stock is deducted for a credit note (see create_invoice for sales); a future
+      stock-return flow is a separate concern.
+    """
+    business_date = business_date or date.today()
+
+    activity_result = await db.execute(
+        select(Activity).where(Activity.id == activity_id, Activity.company_id == company_id, Activity.is_active == True)
+    )
+    activity = activity_result.scalar_one_or_none()
+    if activity is None:
+        raise ActivityNotFoundError("Atividade nao encontrada ou inativa")
+
+    if not await is_period_open_for_date(db, company_id, business_date):
+        raise PeriodClosedError(
+            "O periodo ou ano fiscal correspondente a data de hoje nao esta aberto. "
+            "Contacte o GESTOR para abrir o periodo antes de faturar."
+        )
+
+    if not lines_input:
+        raise EmptyInvoiceError("A nota de credito deve ter pelo menos uma linha")
+
+    ref_result = await db.execute(
+        select(Invoice).where(Invoice.id == reference_invoice_id, Invoice.company_id == company_id)
+    )
+    reference_invoice = ref_result.scalar_one_or_none()
+    if reference_invoice is None:
+        raise ReferenceInvoiceNotFoundError("Fatura de referencia nao encontrada")
+
+    if reference_invoice.invoice_type not in (InvoiceType.FACTURA, InvoiceType.FACTURA_RECIBO):
+        raise ReferenceInvoiceTypeNotEligibleError(
+            "A nota de credito so pode ser emitida para Factura ou Factura/Recibo"
+        )
+
+    if reference_invoice.document_status == DocumentLifecycleStatus.ANULADO:
+        raise ReferenceInvoiceAlreadyCancelledError("A fatura de referencia ja foi anulada")
+
+    ref_lines_result = await db.execute(select(InvoiceLine).where(InvoiceLine.invoice_id == reference_invoice.id))
+    ref_lines_by_id = {str(l.id): l for l in ref_lines_result.scalars().all()}
+
+    subtotal_total = 0.0
+    vat_total = 0.0
+    line_objects = []
+    is_full_credit = True
+
+    for line_input in lines_input:
+        ref_line = ref_lines_by_id.get(str(line_input["invoice_line_id"]))
+        if ref_line is None:
+            raise ReferenceInvoiceNotFoundError("Linha da fatura de referencia nao encontrada")
+
+        quantity = float(line_input["quantity"])
+        if quantity > float(ref_line.quantity):
+            raise CreditNoteExceedsOriginalError(
+                f"Quantidade a creditar ({quantity}) excede a quantidade original ({ref_line.quantity})"
+            )
+        if quantity < float(ref_line.quantity):
+            is_full_credit = False
+
+        unit_price = float(ref_line.unit_price)
+        vat_rate = float(ref_line.vat_rate_snapshot)
+        line_subtotal = round(quantity * unit_price, 2)
+        line_vat = round(line_subtotal * (vat_rate / 100), 2)
+        line_total = round(line_subtotal + line_vat, 2)
+
+        subtotal_total += line_subtotal
+        vat_total += line_vat
+
+        line_objects.append(InvoiceLine(
+            product_id=ref_line.product_id,
+            product_name_snapshot=ref_line.product_name_snapshot,
+            quantity=quantity,
+            unit_price=unit_price,
+            vat_rate_snapshot=vat_rate,
+            line_subtotal=line_subtotal,
+            line_vat=line_vat,
+            line_total=line_total,
+        ))
+
+    # A line from the original invoice not included at all in lines_input also makes this a partial credit.
+    if len(lines_input) < len(ref_lines_by_id):
+        is_full_credit = False
+
+    subtotal_total = round(subtotal_total, 2)
+    vat_total = round(vat_total, 2)
+    grand_total = round(subtotal_total + vat_total, 2)
+
+    if grand_total > float(reference_invoice.total) + 0.01:
+        raise CreditNoteExceedsOriginalError(
+            f"O valor da nota de credito ({grand_total}) excede o valor da fatura original ({reference_invoice.total})"
+        )
+
+    doc_type_result = await db.execute(select(DocumentType).where(DocumentType.code == "NC"))
+    doc_type = doc_type_result.scalar_one_or_none()
+    if doc_type is None:
+        raise DocumentTypeNotConfiguredError("Tipo de documento 'NC' nao existe no catalogo da plataforma")
+
+    company_result = await db.execute(select(Company).where(Company.id == company_id))
+    company = company_result.scalar_one()
+
+    try:
+        series_row = await get_or_create_current_series(db, company, doc_type.id)
+    except SeriesNotFoundError as e:
+        raise SeriesNotConfiguredError(str(e))
+
+    if not series_row.is_active:
+        raise SeriesNotConfiguredError(f"A serie {series_row.series_code} para NC esta inativa")
+
+    next_number = await get_next_number(db, series_row)
+    number_digits = activity.number_digits
+
+    invoice_reference = f"NC {series_row.series_code}/{str(next_number).zfill(number_digits)}"
+    atcud = _simulate_atcud(company_id, series_row.series_code, next_number)
+    invoice_hash = _simulate_hash(company_id, series_row.series_code, next_number, grand_total, business_date)
+    qr_code_data = _simulate_qr_payload(company_id, series_row.series_code, next_number, grand_total, atcud)
+
+    credit_note = Invoice(
+        company_id=company_id,
+        activity_id=activity_id,
+        customer_id=reference_invoice.customer_id,
+        invoice_type=InvoiceType.NOTA_CREDITO,
+        document_type_id=doc_type.id,
+        series=series_row.series_code,
+        number=next_number,
+        number_digits=number_digits,
+        business_date=business_date,
+        subtotal=subtotal_total,
+        vat_total=vat_total,
+        total=grand_total,
+        status=InvoiceStatus.PENDENTE,
+        document_status=DocumentLifecycleStatus.EMITIDO,
+        reference_invoice_id=reference_invoice.id,
+        document_reference=f"{INVOICE_TYPE_TO_DOC_CODE.get(reference_invoice.invoice_type.value, '')} {reference_invoice.series}/{reference_invoice.number}",
+        credit_note_reason=CreditNoteReason(credit_note_reason),
+        credit_note_cause=credit_note_cause,
+        issuance_mode=company.issuance_mode,
+        atcud=atcud,
+        invoice_hash=invoice_hash,
+        qr_code_data=qr_code_data,
+    )
+    db.add(credit_note)
+    await db.flush()
+
+    for line in line_objects:
+        line.invoice_id = credit_note.id
+        db.add(line)
+
+    # Update the original invoice's fiscal lifecycle - see Video 5.
+    if is_full_credit:
+        reference_invoice.document_status = (
+            DocumentLifecycleStatus.ANULADO if CreditNoteReason(credit_note_reason) == CreditNoteReason.ANL
+            else DocumentLifecycleStatus.RECTIFICADO
+        )
+    else:
+        reference_invoice.document_status = DocumentLifecycleStatus.RECTIFICADO_PARCIAL
+
+    await db.commit()
+    await db.refresh(credit_note)
+
+    submit_invoice_to_agt.delay(str(credit_note.id))
+
+    return credit_note
+
+
+async def create_debit_note(
+    db: AsyncSession,
+    company_id: uuid.UUID,
+    activity_id: uuid.UUID,
+    reference_invoice_id: uuid.UUID,
+    customer_id: uuid.UUID | None,
+    lines_input: list[dict],
+    business_date: date | None = None,
+    document_reference: str | None = None,
+    observations: str | None = None,
+) -> Invoice:
+    """
+    Creates a Nota de Debito (ND) referencing an already-issued Factura/Factura-Recibo/
+    Autofactura, for charging an additional amount not covered by the original (e.g. an
+    omitted item, a price correction upward) - see Video 5 decision. Unlike a Nota de
+    Credito, an ND's lines are freely specified (not limited to the original's own lines
+    or quantities), and it does NOT alter the original invoice's document_status - it adds
+    to what is owed rather than crediting/cancelling what was already billed.
+    """
+    business_date = business_date or date.today()
+
+    company_result = await db.execute(select(Company).where(Company.id == company_id))
+    company = company_result.scalar_one()
+    if business_date > date.today() and not company.allows_future_sale_date:
+        raise EmptyInvoiceError("Nao e permitido faturar com data futura - active essa opcao em Empresa, se necessario")
+
+    activity_result = await db.execute(
+        select(Activity).where(Activity.id == activity_id, Activity.company_id == company_id, Activity.is_active == True)
+    )
+    activity = activity_result.scalar_one_or_none()
+    if activity is None:
+        raise ActivityNotFoundError("Atividade nao encontrada ou inativa")
+
+    if not await is_period_open_for_date(db, company_id, business_date):
+        raise PeriodClosedError(
+            "O periodo ou ano fiscal correspondente a data de hoje nao esta aberto. "
+            "Contacte o GESTOR para abrir o periodo antes de faturar."
+        )
+
+    if not lines_input:
+        raise EmptyInvoiceError("A nota de debito deve ter pelo menos uma linha")
+
+    ref_result = await db.execute(
+        select(Invoice).where(Invoice.id == reference_invoice_id, Invoice.company_id == company_id)
+    )
+    reference_invoice = ref_result.scalar_one_or_none()
+    if reference_invoice is None:
+        raise ReferenceInvoiceNotFoundError("Fatura de referencia nao encontrada")
+
+    if reference_invoice.invoice_type not in (InvoiceType.FACTURA, InvoiceType.FACTURA_RECIBO):
+        raise ReferenceInvoiceTypeNotEligibleError(
+            "A nota de debito so pode ser emitida para Factura ou Factura/Recibo"
+        )
+
+    if reference_invoice.document_status == DocumentLifecycleStatus.ANULADO:
+        raise ReferenceInvoiceAlreadyCancelledError("A fatura de referencia ja foi anulada")
+
+    customer = None
+    if customer_id is not None:
+        customer_result = await db.execute(
+            select(Customer).where(Customer.id == customer_id, Customer.company_id == company_id)
+        )
+        customer = customer_result.scalar_one_or_none()
+        if customer is None:
+            raise CustomerNotFoundError("Cliente nao encontrado")
+
+    doc_type_result = await db.execute(select(DocumentType).where(DocumentType.code == "ND"))
+    doc_type = doc_type_result.scalar_one_or_none()
+    if doc_type is None:
+        raise DocumentTypeNotConfiguredError("Tipo de documento 'ND' nao existe no catalogo da plataforma")
+
+    try:
+        series_row = await get_or_create_current_series(db, company, doc_type.id)
+    except SeriesNotFoundError as e:
+        raise SeriesNotConfiguredError(str(e))
+
+    if not series_row.is_active:
+        raise SeriesNotConfiguredError(f"A serie {series_row.series_code} para ND esta inativa")
+
+    subtotal_total = 0.0
+    vat_total = 0.0
+    retention_total = 0.0
+    line_objects = []
+    customer_is_juridica = customer is not None and customer.legal_person_type == LegalPersonType.JURIDICA
+
+    for line_input in lines_input:
+        product_id = line_input.get("product_id")
+        service_id = line_input.get("service_id")
+        quantity = float(line_input["quantity"])
+        line_retention_pct = 0.0
+
+        if service_id:
+            service_result = await db.execute(
+                select(Service).where(Service.id == service_id, Service.company_id == company_id, Service.is_active == True)
+            )
+            service = service_result.scalar_one_or_none()
+            if service is None:
+                raise ProductNotFoundError("Servico nao encontrado ou inativo")
+            vat_result = await db.execute(select(VAT).where(VAT.id == service.vat_id))
+            vat = vat_result.scalar_one_or_none()
+            vat_rate = float(vat.rate) if vat else 0.0
+            unit_price = float(service.price or 0)
+            item_name = service.name
+            line_product_id = None
+            line_service_id = service.id
+            if service.withholding_tax_id and customer_is_juridica:
+                wh_result = await db.execute(select(WithholdingTax).where(WithholdingTax.id == service.withholding_tax_id))
+                wh = wh_result.scalar_one_or_none()
+                if wh and float(wh.rate) > 0:
+                    line_retention_pct = float(wh.rate)
+        else:
+            product_result = await db.execute(
+                select(Product).where(Product.id == product_id, Product.company_id == company_id, Product.is_active == True)
+            )
+            product = product_result.scalar_one_or_none()
+            if product is None:
+                raise ProductNotFoundError("Produto nao encontrado ou inativo")
+            vat_result = await db.execute(select(VAT).where(VAT.id == product.vat_id))
+            vat = vat_result.scalar_one_or_none()
+            vat_rate = float(vat.rate) if vat else 0.0
+            unit_price = float(product.price)
+            item_name = product.name
+            line_product_id = product.id
+            line_service_id = None
+
+        discount_percent = float(line_input.get("discount_percent", 0) or 0)
+        gross_subtotal = round(quantity * unit_price, 2)
+        line_discount = round(gross_subtotal * (discount_percent / 100), 2)
+        line_subtotal = round(gross_subtotal - line_discount, 2)
+        line_vat = round(line_subtotal * (vat_rate / 100), 2)
+        line_total = round(line_subtotal + line_vat, 2)
+        line_retention = round(line_subtotal * (line_retention_pct / 100), 2)
+
+        subtotal_total += line_subtotal
+        vat_total += line_vat
+        retention_total += line_retention
+
+        line_objects.append(InvoiceLine(
+            product_id=line_product_id,
+            service_id=line_service_id,
+            product_name_snapshot=item_name,
+            quantity=quantity,
+            unit_price=unit_price,
+            discount_percent=discount_percent,
+            vat_rate_snapshot=vat_rate,
+            line_subtotal=line_subtotal,
+            line_vat=line_vat,
+            line_total=line_total,
+        ))
+
+    subtotal_total = round(subtotal_total, 2)
+    vat_total = round(vat_total, 2)
+    retention_total = round(retention_total, 2)
+    grand_total = round(subtotal_total + vat_total, 2)
+
+    next_number = await get_next_number(db, series_row)
+    number_digits = activity.number_digits
+
+    atcud = _simulate_atcud(company_id, series_row.series_code, next_number)
+    invoice_hash = _simulate_hash(company_id, series_row.series_code, next_number, grand_total, business_date)
+    qr_code_data = _simulate_qr_payload(company_id, series_row.series_code, next_number, grand_total, atcud)
+
+    debit_note = Invoice(
+        company_id=company_id,
+        activity_id=activity_id,
+        customer_id=customer_id if customer_id is not None else reference_invoice.customer_id,
+        invoice_type=InvoiceType.NOTA_DEBITO,
+        document_type_id=doc_type.id,
+        series=series_row.series_code,
+        number=next_number,
+        number_digits=number_digits,
+        business_date=business_date,
+        subtotal=subtotal_total,
+        vat_total=vat_total,
+        total=grand_total,
+        status=InvoiceStatus.PENDENTE,
+        document_status=DocumentLifecycleStatus.EMITIDO,
+        reference_invoice_id=reference_invoice.id,
+        document_reference=document_reference,
+        observations=observations,
+        retention_total=retention_total,
+        issuance_mode=company.issuance_mode,
+        atcud=atcud,
+        invoice_hash=invoice_hash,
+        qr_code_data=qr_code_data,
+    )
+    db.add(debit_note)
+    await db.flush()
+
+    for line in line_objects:
+        line.invoice_id = debit_note.id
+        db.add(line)
+
+    await db.commit()
+    await db.refresh(debit_note)
+
+    submit_invoice_to_agt.delay(str(debit_note.id))
+
+    return debit_note
+
+
+class ReceiptExceedsPendingError(Exception):
+    """Raised when the receipt amount exceeds the reference invoice's remaining balance."""
+    pass
+
+
+async def create_receipt(
+    db: AsyncSession,
+    company_id: uuid.UUID,
+    activity_id: uuid.UUID,
+    reference_invoice_id: uuid.UUID,
+    amount: float,
+    business_date: date | None = None,
+    document_reference: str | None = None,
+    observations: str | None = None,
+) -> Invoice:
+    """
+    Creates a Recibo (RC) - a standalone payment acknowledgement against an already-issued
+    Factura/Factura-Recibo. Unlike NC/ND, an RC has no product/service lines - it simply
+    records that `amount` was paid, and accumulates into the reference invoice's own
+    amount_received/payment_date (see Ulemo RC rules: "TOTAL_RECIBO_EXCEDEU" when the
+    amount exceeds the remaining balance).
+    """
+    business_date = business_date or date.today()
+
+    company_result = await db.execute(select(Company).where(Company.id == company_id))
+    company = company_result.scalar_one()
+    if business_date > date.today() and not company.allows_future_sale_date:
+        raise EmptyInvoiceError("Nao e permitido faturar com data futura - active essa opcao em Empresa, se necessario")
+
+    activity_result = await db.execute(
+        select(Activity).where(Activity.id == activity_id, Activity.company_id == company_id, Activity.is_active == True)
+    )
+    activity = activity_result.scalar_one_or_none()
+    if activity is None:
+        raise ActivityNotFoundError("Atividade nao encontrada ou inativa")
+
+    if not await is_period_open_for_date(db, company_id, business_date):
+        raise PeriodClosedError(
+            "O periodo ou ano fiscal correspondente a data de hoje nao esta aberto. "
+            "Contacte o GESTOR para abrir o periodo antes de faturar."
+        )
+
+    if amount is None or amount <= 0:
+        raise EmptyInvoiceError("O valor do recibo deve ser maior que zero")
+
+    ref_result = await db.execute(
+        select(Invoice).where(Invoice.id == reference_invoice_id, Invoice.company_id == company_id)
+    )
+    reference_invoice = ref_result.scalar_one_or_none()
+    if reference_invoice is None:
+        raise ReferenceInvoiceNotFoundError("Fatura de referencia nao encontrada")
+
+    if reference_invoice.invoice_type not in (InvoiceType.FACTURA, InvoiceType.FACTURA_RECIBO):
+        raise ReferenceInvoiceTypeNotEligibleError(
+            "O recibo so pode ser emitido para Factura ou Factura/Recibo"
+        )
+
+    if reference_invoice.document_status == DocumentLifecycleStatus.ANULADO:
+        raise ReferenceInvoiceAlreadyCancelledError("A fatura de referencia ja foi anulada")
+
+    already_received = float(reference_invoice.amount_received or 0)
+    pending = round(float(reference_invoice.total) - float(reference_invoice.retention_total or 0) - already_received, 2)
+    if amount > pending + 0.01:
+        raise ReceiptExceedsPendingError(
+            f"O valor do recibo ({amount}) excede o valor pendente da fatura ({pending})"
+        )
+
+    doc_type_result = await db.execute(select(DocumentType).where(DocumentType.code == "RC"))
+    doc_type = doc_type_result.scalar_one_or_none()
+    if doc_type is None:
+        raise DocumentTypeNotConfiguredError("Tipo de documento 'RC' nao existe no catalogo da plataforma")
+
+    try:
+        series_row = await get_or_create_current_series(db, company, doc_type.id)
+    except SeriesNotFoundError as e:
+        raise SeriesNotConfiguredError(str(e))
+
+    if not series_row.is_active:
+        raise SeriesNotConfiguredError(f"A serie {series_row.series_code} para RC esta inativa")
+
+    next_number = await get_next_number(db, series_row)
+    number_digits = activity.number_digits
+    amount = round(amount, 2)
+
+    atcud = _simulate_atcud(company_id, series_row.series_code, next_number)
+    invoice_hash = _simulate_hash(company_id, series_row.series_code, next_number, amount, business_date)
+    qr_code_data = _simulate_qr_payload(company_id, series_row.series_code, next_number, amount, atcud)
+
+    receipt = Invoice(
+        company_id=company_id,
+        activity_id=activity_id,
+        customer_id=reference_invoice.customer_id,
+        invoice_type=InvoiceType.RECIBO,
+        document_type_id=doc_type.id,
+        series=series_row.series_code,
+        number=next_number,
+        number_digits=number_digits,
+        business_date=business_date,
+        subtotal=amount,
+        vat_total=0,
+        total=amount,
+        status=InvoiceStatus.PENDENTE,
+        document_status=DocumentLifecycleStatus.EMITIDO,
+        reference_invoice_id=reference_invoice.id,
+        document_reference=document_reference,
+        observations=observations,
+        amount_received=amount,
+        payment_date=business_date,
+        issuance_mode=company.issuance_mode,
+        atcud=atcud,
+        invoice_hash=invoice_hash,
+        qr_code_data=qr_code_data,
+    )
+    db.add(receipt)
+
+    # Accumulate the payment onto the original invoice - see Estado Pagamento derivation.
+    reference_invoice.amount_received = round(already_received + amount, 2)
+    reference_invoice.payment_date = business_date
+
+    await db.commit()
+    await db.refresh(receipt)
+
+    submit_invoice_to_agt.delay(str(receipt.id))
+
+    return receipt
+
+
+async def create_pro_forma(
+    db: AsyncSession,
+    company_id: uuid.UUID,
+    activity_id: uuid.UUID,
+    customer_id: uuid.UUID | None,
+    lines_input: list[dict],
+    business_date: date | None = None,
+    document_reference: str | None = None,
+    observations: str | None = None,
+    discount_global_percent: float = 0,
+) -> Invoice:
+    """
+    Creates a Fatura Pro-forma (FP) - a non-fiscal quote/preview document. Unlike FT/FR/NC/ND/RC:
+    - Never submitted to AGT (no submit_invoice_to_agt.delay call)
+    - Does not deduct stock (no real sale has happened yet)
+    - atcud/hash/qr are simulated placeholders only, never meaningful for compliance
+    See Video 4 spec: "FP Factura Pro-forma" in the tipo de documento list, and the SAF-T
+    WorkingDocuments vs SalesInvoices distinction (is_fiscal=False on this DocumentType).
+    """
+    business_date = business_date or date.today()
+
+    company_result = await db.execute(select(Company).where(Company.id == company_id))
+    company = company_result.scalar_one()
+
+    activity_result = await db.execute(
+        select(Activity).where(Activity.id == activity_id, Activity.company_id == company_id, Activity.is_active == True)
+    )
+    activity = activity_result.scalar_one_or_none()
+    if activity is None:
+        raise ActivityNotFoundError("Atividade nao encontrada ou inativa")
+
+    if not lines_input:
+        raise EmptyInvoiceError("A pro-forma deve ter pelo menos uma linha")
+
+    customer = None
+    if customer_id is not None:
+        customer_result = await db.execute(
+            select(Customer).where(Customer.id == customer_id, Customer.company_id == company_id)
+        )
+        customer = customer_result.scalar_one_or_none()
+        if customer is None:
+            raise CustomerNotFoundError("Cliente nao encontrado")
+
+    doc_type_result = await db.execute(select(DocumentType).where(DocumentType.code == "FP"))
+    doc_type = doc_type_result.scalar_one_or_none()
+    if doc_type is None:
+        raise DocumentTypeNotConfiguredError("Tipo de documento 'FP' nao existe no catalogo da plataforma")
+
+    try:
+        series_row = await get_or_create_current_series(db, company, doc_type.id)
+    except SeriesNotFoundError as e:
+        raise SeriesNotConfiguredError(str(e))
+
+    if not series_row.is_active:
+        raise SeriesNotConfiguredError(f"A serie {series_row.series_code} para FP esta inativa")
+
+    subtotal_total = 0.0
+    vat_total = 0.0
+    line_objects = []
+
+    for line_input in lines_input:
+        product_id = line_input.get("product_id")
+        service_id = line_input.get("service_id")
+        quantity = float(line_input["quantity"])
+
+        if service_id:
+            service_result = await db.execute(
+                select(Service).where(Service.id == service_id, Service.company_id == company_id, Service.is_active == True)
+            )
+            service = service_result.scalar_one_or_none()
+            if service is None:
+                raise ProductNotFoundError("Servico nao encontrado ou inativo")
+            vat_result = await db.execute(select(VAT).where(VAT.id == service.vat_id))
+            vat = vat_result.scalar_one_or_none()
+            vat_rate = float(vat.rate) if vat else 0.0
+            unit_price = float(service.price or 0)
+            item_name = service.name
+            line_product_id = None
+            line_service_id = service.id
+        else:
+            product_result = await db.execute(
+                select(Product).where(Product.id == product_id, Product.company_id == company_id, Product.is_active == True)
+            )
+            product = product_result.scalar_one_or_none()
+            if product is None:
+                raise ProductNotFoundError("Produto nao encontrado ou inativo")
+            vat_result = await db.execute(select(VAT).where(VAT.id == product.vat_id))
+            vat = vat_result.scalar_one_or_none()
+            vat_rate = float(vat.rate) if vat else 0.0
+            unit_price = float(product.price)
+            item_name = product.name
+            line_product_id = product.id
+            line_service_id = None
+
+        discount_percent = float(line_input.get("discount_percent", 0) or 0)
+        gross_subtotal = round(quantity * unit_price, 2)
+        line_discount = round(gross_subtotal * (discount_percent / 100), 2)
+        line_subtotal = round(gross_subtotal - line_discount, 2)
+        line_vat = round(line_subtotal * (vat_rate / 100), 2)
+        line_total = round(line_subtotal + line_vat, 2)
+
+        subtotal_total += line_subtotal
+        vat_total += line_vat
+
+        line_objects.append(InvoiceLine(
+            product_id=line_product_id,
+            service_id=line_service_id,
+            product_name_snapshot=item_name,
+            quantity=quantity,
+            unit_price=unit_price,
+            discount_percent=discount_percent,
+            vat_rate_snapshot=vat_rate,
+            line_subtotal=line_subtotal,
+            line_vat=line_vat,
+            line_total=line_total,
+        ))
+
+    subtotal_total = round(subtotal_total, 2)
+    vat_total = round(vat_total, 2)
+    gross_total = round(subtotal_total + vat_total, 2)
+    global_discount_amount = round(gross_total * (discount_global_percent / 100), 2)
+    grand_total = round(gross_total - global_discount_amount, 2)
+
+    next_number = await get_next_number(db, series_row)
+    number_digits = activity.number_digits
+
+    # Simulated only - a Pro-forma has no real ATCUD/hash, it is never submitted to AGT.
+    atcud = _simulate_atcud(company_id, series_row.series_code, next_number)
+    invoice_hash = _simulate_hash(company_id, series_row.series_code, next_number, grand_total, business_date)
+    qr_code_data = _simulate_qr_payload(company_id, series_row.series_code, next_number, grand_total, atcud)
+
+    pro_forma = Invoice(
+        company_id=company_id,
+        activity_id=activity_id,
+        customer_id=customer_id,
+        invoice_type=InvoiceType.PRO_FORMA,
+        document_type_id=doc_type.id,
+        series=series_row.series_code,
+        number=next_number,
+        number_digits=number_digits,
+        business_date=business_date,
+        subtotal=subtotal_total,
+        vat_total=vat_total,
+        total=grand_total,
+        discount_global_percent=discount_global_percent,
+        status=InvoiceStatus.PENDENTE,
+        document_status=DocumentLifecycleStatus.EMITIDO,
+        document_reference=document_reference,
+        observations=observations,
+        issuance_mode=company.issuance_mode,
+        atcud=atcud,
+        invoice_hash=invoice_hash,
+        qr_code_data=qr_code_data,
+    )
+    db.add(pro_forma)
+    await db.flush()
+
+    for line in line_objects:
+        line.invoice_id = pro_forma.id
+        db.add(line)
+
+    await db.commit()
+    await db.refresh(pro_forma)
+
+    # Deliberately NOT calling submit_invoice_to_agt.delay() here - FP is non-fiscal.
+
+    return pro_forma
+
+
+class ProFormaNotFoundError(Exception):
+    """Raised when the given id does not point to an existing Pro-forma."""
+    pass
+
+
+class ProFormaAlreadyConvertedError(Exception):
+    """Raised when trying to convert a Pro-forma that has already been converted once."""
+    pass
+
+
+async def convert_pro_forma_to_invoice(
+    db: AsyncSession,
+    company_id: uuid.UUID,
+    pro_forma_id: uuid.UUID,
+    target_invoice_type: str,
+    business_date: date | None = None,
+    payment_term_id: uuid.UUID | None = None,
+    payment_method_id: uuid.UUID | None = None,
+    bank_account_id: uuid.UUID | None = None,
+    due_date: date | None = None,
+    cash_session_id: uuid.UUID | None = None,
+    payments: list[dict] | None = None,
+) -> Invoice:
+    """
+    Converts a Pro-forma (FP) into a real fiscal Factura/Factura-Recibo, replaying its lines
+    through the normal create_invoice flow (so stock deduction, VAT, retention and AGT
+    submission all behave exactly like a fresh sale) - see Kiami's "passar a FT/FR" action.
+    A Pro-forma can only be converted once; converting again raises
+    ProFormaAlreadyConvertedError.
+
+    cash_session_id/payments are optional pass-throughs for the Caixa liquidation flow
+    (see pos_service.checkout) - when supplied, the resulting invoice is linked to that
+    session exactly like a fresh POS sale, so close_session's expected-amount calculation
+    picks it up correctly. The Invoices.jsx admin conversion flow omits both and behaves
+    exactly as before.
+    """
+    pf_result = await db.execute(
+        select(Invoice).where(Invoice.id == pro_forma_id, Invoice.company_id == company_id)
+    )
+    pro_forma = pf_result.scalar_one_or_none()
+    if pro_forma is None or pro_forma.invoice_type != InvoiceType.PRO_FORMA:
+        raise ProFormaNotFoundError("Pro-forma nao encontrada")
+
+    if pro_forma.converted_to_invoice_id is not None:
+        raise ProFormaAlreadyConvertedError("Esta pro-forma ja foi convertida numa fatura")
+
+    lines_result = await db.execute(select(InvoiceLine).where(InvoiceLine.invoice_id == pro_forma.id))
+    pf_lines = lines_result.scalars().all()
+    lines_input = [
+        {
+            "product_id": line.product_id,
+            "service_id": line.service_id,
+            "quantity": float(line.quantity),
+            "discount_percent": float(line.discount_percent or 0),
+        }
+        for line in pf_lines
+    ]
+
+    new_invoice = await create_invoice(
+        db,
+        company_id=company_id,
+        activity_id=pro_forma.activity_id,
+        customer_id=pro_forma.customer_id,
+        invoice_type=target_invoice_type,
+        lines_input=lines_input,
+        business_date=business_date,
+        payment_term_id=payment_term_id,
+        payment_method_id=payment_method_id,
+        bank_account_id=bank_account_id,
+        due_date=due_date,
+        observations=pro_forma.observations,
+        discount_global_percent=float(pro_forma.discount_global_percent or 0),
+        document_reference=f"FP {pro_forma.series}/{pro_forma.number}",
+        cash_session_id=cash_session_id,
+        payments=payments,
+    )
+
+    pro_forma.converted_to_invoice_id = new_invoice.id
+    await db.commit()
+    await db.refresh(new_invoice)
+
+    return new_invoice
+
+
+async def list_invoices(
+    db: AsyncSession,
+    company_id: uuid.UUID,
+    year: int | None = None,
+    month: int | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    limit: int = 50,
+    offset: int = 0,
+    invoice_type: str | None = None,
+    pending_only: bool = False,
+) -> list[Invoice]:
+    """
+    Lists invoices, newest first, with optional filters (year/month OR an
+    explicit date_from/date_to range - both can combine) and pagination
+    (limit/offset) - see discussion on filtering + "Carregar mais".
+
+    invoice_type filters to one InvoiceType (e.g. "PRO_FORMA"). pending_only,
+    combined with invoice_type="PRO_FORMA", is the Caixa liquidation search:
+    pro-formas not yet converted to a real invoice (converted_to_invoice_id
+    IS NULL) - see pos_service.liquidate_pending_invoice.
+    """
+    query = select(Invoice).where(Invoice.company_id == company_id)
+    if year is not None:
+        query = query.where(extract("year", Invoice.business_date) == year)
+    if month is not None:
+        query = query.where(extract("month", Invoice.business_date) == month)
+    if date_from is not None:
+        query = query.where(Invoice.business_date >= date_from)
+    if date_to is not None:
+        query = query.where(Invoice.business_date <= date_to)
+    if invoice_type is not None:
+        query = query.where(Invoice.invoice_type == InvoiceType(invoice_type))
+    if pending_only:
+        query = query.where(Invoice.converted_to_invoice_id.is_(None))
+    query = query.order_by(Invoice.created_at.desc()).limit(limit).offset(offset)
+
+    result = await db.execute(query)
+    invoices_list = list(result.scalars().all())
+
+    # Attach item_count dynamically (not a real column) - InvoiceResponse picks it up via
+    # from_attributes/getattr, avoiding a schema/route rewrite for this one derived field.
+    if invoices_list:
+        invoice_ids = [inv.id for inv in invoices_list]
+        count_result = await db.execute(
+            select(InvoiceLine.invoice_id, func.count(InvoiceLine.id))
+            .where(InvoiceLine.invoice_id.in_(invoice_ids))
+            .group_by(InvoiceLine.invoice_id)
+        )
+        counts_by_id = dict(count_result.all())
+        for inv in invoices_list:
+            inv.item_count = counts_by_id.get(inv.id, 0)
+
+    return invoices_list
+
+
+async def get_invoice_periods(db: AsyncSession, company_id: uuid.UUID) -> list[dict]:
+    """Returns the distinct (year, month) pairs that have at least one invoice - populates the Ano/Mes filters."""
+    result = await db.execute(
+        select(
+            extract("year", Invoice.business_date).label("year"),
+            extract("month", Invoice.business_date).label("month"),
+        )
+        .where(Invoice.company_id == company_id)
+        .distinct()
+        .order_by(extract("year", Invoice.business_date).desc(), extract("month", Invoice.business_date).desc())
+    )
+    return [{"year": int(row.year), "month": int(row.month)} for row in result.all()]
+
+
+async def get_invoice_with_lines(db: AsyncSession, company_id: uuid.UUID, invoice_id: uuid.UUID):
+    result = await db.execute(
+        select(Invoice).where(Invoice.id == invoice_id, Invoice.company_id == company_id)
+    )
+    invoice = result.scalar_one_or_none()
+    if invoice is None:
+        raise InvoiceNotFoundError("Fatura nao encontrada")
+
+    lines_result = await db.execute(select(InvoiceLine).where(InvoiceLine.invoice_id == invoice_id))
+    lines = list(lines_result.scalars().all())
+    return invoice, lines

@@ -1,0 +1,23 @@
+﻿services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: rmsystem_postgres
+    environment:
+      POSTGRES_USER: erp_user
+      POSTGRES_PASSWORD: erp_password
+      POSTGRES_DB: erp_agt
+    ports:
+      - "5436:5432"
+    volumes:
+      - rmsystem_pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: rmsystem_redis
+    ports:
+      - "6383:6379"
+    restart: unless-stopped
+
+volumes:
+  rmsystem_pgdata:

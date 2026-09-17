@@ -1,0 +1,146 @@
+@import "tailwindcss";
+
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/inter.woff2') format('woff2');
+  font-weight: 400 600;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Space Grotesk';
+  src: url('/fonts/space-grotesk.woff2') format('woff2');
+  font-weight: 500 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('/fonts/jetbrains-mono.woff2') format('woff2');
+  font-weight: 400 600;
+  font-display: swap;
+}
+
+/* Accent (bordeaux, Angola flag) - identical in both themes, saturated enough
+   to stay legible on both dark and light backgrounds. */
+:root {
+  --accent: #8B3A3A;
+  --accent-hover: #712E2E;
+}
+
+/* Dark theme (default) */
+:root {
+  --bg-primary: #12181A;
+  --bg-elevated: #1B2326;
+  --bg-inset: #0D1214;
+  --text-primary: #EDEFEE;
+  --text-muted: #8B9490;
+  --success: #4FAE7C;
+  --danger: #E5645A;
+  --border: #2A3336;
+}
+
+/* Light theme - accent stays the same as dark, only surfaces/text invert */
+:root.light {
+  --bg-primary: #F7F6F3;
+  --bg-elevated: #F0EEE8;
+  --bg-inset: #EFEDE8;
+  --text-primary: #1A1F1D;
+  --text-muted: #5C6560;
+  --success: #2F8557;
+  --danger: #C33D33;
+  --border: #DAD6CC;
+}
+
+@theme {
+  --color-bg-primary: var(--bg-primary);
+  --color-bg-elevated: var(--bg-elevated);
+  --color-bg-inset: var(--bg-inset);
+  --color-text-primary: var(--text-primary);
+  --color-text-muted: var(--text-muted);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-success: var(--success);
+  --color-danger: var(--danger);
+  --color-border: var(--border);
+
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Courier New', monospace;
+}
+
+body {
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Signature: perforated ticket edge, like a thermal receipt (spec Â§4.1) */
+.ticket-edge::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  left: 0;
+  right: 0;
+  height: 12px;
+  background-image: radial-gradient(circle, var(--color-bg-primary) 4px, transparent 4.5px);
+  background-size: 20px 12px;
+  background-position: 10px 0;
+}
+
+
+/* Fully hidden scrollbar - used on the navbar's horizontally-scrolling link list. */
+.scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Thin, muted scrollbar - used on long modal forms so the ability to
+   scroll is visible without being visually loud. */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: var(--color-border);
+  border-radius: 3px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-text-muted);
+}
+
+
+/* Scrollbar hidden by default, appears discreetly on hover - used on the
+   navbar so it stays clean visually but reveals itself as a scroll hint
+   when the person's mouse is over it. */
+.scrollbar-hover-thin {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-hover-thin::-webkit-scrollbar {
+  height: 6px;
+}
+.scrollbar-hover-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-hover-thin::-webkit-scrollbar-thumb {
+  background-color: transparent;
+}
+.scrollbar-hover-thin:hover {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+.scrollbar-hover-thin:hover::-webkit-scrollbar-thumb {
+  background-color: var(--color-border);
+}
