@@ -26,7 +26,7 @@ router = APIRouter(prefix="/api/v1", tags=["internal-consumption"])
 # PILOT MODULE for the dynamic permission system - every Depends() below
 # checks a per-company RolePermission grant (admin-configurable) instead of
 # a hardcoded role tuple. See app.services.permission_service for the
-# design rationale and PILOT_PERMISSIONS for the seeded defaults (which
+# design rationale and PERMISSION_CATALOG for the seeded defaults (which
 # reproduce the old require_role(...) behaviour exactly out of the box).
 
 

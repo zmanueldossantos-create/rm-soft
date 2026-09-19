@@ -12,6 +12,9 @@ from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.permission_service import grant_default_role_permissions
+from app.models.role_permission import RolePermission
+from app.models.company_permission_seed import CompanyPermissionSeed
 from app.models.company import Company, LegalPersonType, InvoiceIssuanceMode
 from app.models.company_bank_account import CompanyBankAccount
 from app.models.vat import VAT
@@ -234,6 +237,7 @@ async def create_company(
         role=UserRole.GESTOR,
     ))
 
+    await grant_default_role_permissions(db, company.id)
     await db.commit()
     await db.refresh(company)
     return company
@@ -338,6 +342,8 @@ async def delete_company(db: AsyncSession, company_id: uuid.UUID) -> None:
     """
     company = await get_company_or_raise(db, company_id)
 
+    await db.execute(RolePermission.__table__.delete().where(RolePermission.company_id == company_id))
+    await db.execute(CompanyPermissionSeed.__table__.delete().where(CompanyPermissionSeed.company_id == company_id))
     await db.execute(CompanyBankAccount.__table__.delete().where(CompanyBankAccount.company_id == company_id))
     await db.execute(VAT.__table__.delete().where(VAT.company_id == company_id))
     await db.execute(User.__table__.delete().where(User.company_id == company_id))

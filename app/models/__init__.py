@@ -68,4 +68,4 @@ __all__ = [
     "FiscalYear", "FiscalPeriod", "Invoice", "InvoiceLine",
     "Warehouse", "Stock", "StockMovement", "ResourceTypeCatalog", "ConsumptionReasonCatalog", "InternalConsumption", "Resource", "Booking", "OpenAccount", "OpenAccountLine", "PlatformSettings", "FiscalRegime", "Activity", "RecipeIngredient", "CashSession", "Payment", "Country", "Currency", "Province", "Municipality", "Bank", "PaymentMethodCatalog", "CompanyPaymentMethodPreference", "PaymentTerm", "VatCode", "DocumentType", "UnitOfMeasureCatalog", "WithholdingTax", "CompanyBankAccount", "CustomerBankAccountLink", "ProductCategory", "ServiceType", "Service", "ProductServiceStatus", "Establishment", "DocumentSeries", "ContingencyIndicator", "Module", "CompanyModule", "PointOfSale", "CashMovementReason", "CashMovement", "CashMovementType", "UserCashPointAccess", "Denomination", "DenominationType", "CashDenominationCount", "CashDenominationCountLine", "DenominationCountType",
 ]
-
+from app.models.company_permission_seed import CompanyPermissionSeed  # noqa: F401

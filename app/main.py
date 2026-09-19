@@ -47,6 +47,7 @@ settings = get_settings()
 
 app = FastAPI(
     title=settings.APP_NAME,
+    description="RM System - Conforme RGIFT 2.0 (AGT)",
     version="7.0.0",
 )
 

@@ -29,6 +29,7 @@ export default function Permissoes() {
   }
 
   async function handleToggle(entry, role) {
+    if (role === 'GESTOR') return;
     const key = entry.id + role;
     const currentlyGranted = entry.granted_roles.includes(role);
     setSavingKey(key);
@@ -101,7 +102,9 @@ export default function Permissoes() {
                               type="checkbox"
                               checked={granted}
                               onChange={() => handleToggle(entry, role)}
-                              className="w-4 h-4 accent-accent cursor-pointer"
+                              disabled={role === 'GESTOR'}
+                              title={role === 'GESTOR' ? 'O perfil Gestor tem sempre todas as permissoes' : undefined}
+                              className={'w-4 h-4 accent-accent ' + (role === 'GESTOR' ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer')}
                             />
                           )}
                         </td>
