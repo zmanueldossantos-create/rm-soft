@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.core.database import get_db
-from app.api.deps import require_role
+from app.api.deps import require_permission
 from app.models.user import User
 from app.models.activity import Activity
 from app.models.stock import Stock
@@ -52,14 +52,13 @@ from app.services.invoice_service import (
 
 router = APIRouter(prefix="/api/v1/pos", tags=["pos"])
 
-ALLOWED_ROLES = ("GESTOR", "CAIXA")
 
 
 @router.post("/sessions/open", response_model=CashSessionResponse, status_code=status.HTTP_201_CREATED)
 async def post_open_session(
     payload: OpenSessionRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("pos:open_session")),
 ):
     try:
         return await open_session(db, current_user.company_id, payload.pos_id, current_user, payload.opening_amount)
@@ -73,7 +72,7 @@ async def post_open_session(
 async def get_current_open_session(
     pos_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("pos:view")),
 ):
     """Returns the currently open session for this POS, or null if none - lets the frontend know whether to show the checkout screen or the open-session prompt."""
     return await get_open_session(db, current_user.company_id, pos_id)
@@ -83,7 +82,7 @@ async def get_current_open_session(
 async def get_current_balance(
     pos_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("pos:view")),
 ):
     """Live expected cash balance for this POS's currently open session - not just
     the opening float, but opening + cash sales + net movements so far (same formula
@@ -96,7 +95,7 @@ async def get_current_balance(
 async def get_carry_forward(
     pos_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("pos:view")),
 ):
     """The amount that will automatically become the opening float if this POS's
     session is opened right now (last closed session's counted total, or 0) - lets
@@ -109,7 +108,7 @@ async def get_carry_forward(
 async def get_pos_stock_levels(
     pos_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("pos:view")),
 ):
     """Current on-hand quantity per product, in the warehouse tied to this POS's
     Activity (Activity.warehouse_id) - shown on the Caixa product grid so the cashier
@@ -132,7 +131,7 @@ async def post_close_session(
     session_id: uuid.UUID,
     payload: CloseSessionRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("pos:close_session")),
 ):
     try:
         return await close_session(
@@ -152,7 +151,7 @@ async def get_sessions(
     activity_id: uuid.UUID | None = None,
     pos_id: uuid.UUID | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("pos:view")),
 ):
     """Lists past cash sessions - history for review, optionally filtered by activity and/or POS."""
     return await list_sessions(db, current_user.company_id, activity_id, pos_id)
@@ -163,7 +162,7 @@ async def post_checkout(
     pos_id: uuid.UUID,
     payload: CheckoutRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("pos:checkout")),
 ):
     try:
         return await checkout(
@@ -204,7 +203,7 @@ async def post_create_pro_forma(
     pos_id: uuid.UUID,
     payload: CreateProFormaRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("pos:proforma")),
 ):
     """Generates a Pro-forma (FP) from the Caixa screen - no payment, see pos_service.create_pro_forma_from_pos."""
     try:
@@ -228,7 +227,7 @@ async def post_liquidate_pending_invoice(
     pos_id: uuid.UUID,
     payload: LiquidatePendingInvoiceRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("pos:liquidate")),
 ):
     """Liquidates a pending Pro-forma from the Caixa screen - see NovaFatura/Invoices for the admin equivalent."""
     try:

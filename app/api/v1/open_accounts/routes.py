@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.api.deps import require_role
+from app.api.deps import require_permission
 from app.models.user import User
 from app.schemas.open_account import (
     OpenAccountCreateRequest, OpenAccountResponse,
@@ -22,14 +22,13 @@ from app.services.invoice_service import PaymentAmountMismatchError, StockUnavai
 
 router = APIRouter(prefix="/api/v1/open-accounts", tags=["open-accounts"])
 
-ALLOWED_ROLES = ("GESTOR", "CAIXA")
 
 
 @router.post("", response_model=OpenAccountResponse, status_code=status.HTTP_201_CREATED)
 async def post_open_account(
     payload: OpenAccountCreateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("open_accounts:open")),
 ):
     try:
         return await open_account(
@@ -44,7 +43,7 @@ async def post_open_account(
 async def get_open_accounts(
     activity_id: uuid.UUID | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("open_accounts:view")),
 ):
     return await list_open_accounts(db, current_user.company_id, activity_id)
 
@@ -53,7 +52,7 @@ async def get_open_accounts(
 async def get_open_account_detail(
     account_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("open_accounts:view")),
 ):
     try:
         return await get_account_or_raise(db, current_user.company_id, account_id)
@@ -65,7 +64,7 @@ async def get_open_account_detail(
 async def get_account_lines(
     account_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("open_accounts:view")),
 ):
     await get_account_or_raise(db, current_user.company_id, account_id)
     return await list_account_lines(db, account_id)
@@ -76,7 +75,7 @@ async def post_add_line(
     account_id: uuid.UUID,
     payload: OpenAccountLineCreateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("open_accounts:edit_lines")),
 ):
     try:
         return await add_line(
@@ -97,7 +96,7 @@ async def patch_line_quantity(
     line_id: uuid.UUID,
     payload: OpenAccountLineUpdateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("open_accounts:edit_lines")),
 ):
     try:
         return await update_line_quantity(db, current_user.company_id, account_id, line_id, payload.quantity)
@@ -112,7 +111,7 @@ async def delete_line(
     account_id: uuid.UUID,
     line_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("open_accounts:edit_lines")),
 ):
     try:
         await remove_line(db, current_user.company_id, account_id, line_id)
@@ -127,7 +126,7 @@ async def post_close_account(
     account_id: uuid.UUID,
     payload: OpenAccountCloseRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("open_accounts:close")),
 ):
     try:
         payments = [{"payment_method_id": p.payment_method_id, "amount": p.amount} for p in payload.payments]

@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.api.deps import require_role
+from app.api.deps import require_permission
 from app.models.user import User
 from app.models.cash_denomination_count import DenominationCountType
 from app.schemas.moedeiro import (
@@ -28,14 +28,13 @@ from app.services.cash_denomination_count_service import (
 
 router = APIRouter(prefix="/api/v1/moedeiro", tags=["moedeiro"])
 
-ALLOWED_ROLES = ("GESTOR", "CAIXA")
 
 
 @router.get("/denominations", response_model=list[DenominationResponse])
 async def get_denominations(
     currency_id: uuid.UUID | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("moedeiro:view")),
 ):
     return await list_denominations(db, currency_id)
 
@@ -44,7 +43,7 @@ async def get_denominations(
 async def post_denomination_count(
     payload: RecordDenominationCountRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("moedeiro:record")),
 ):
     try:
         count, total = await record_denomination_count(
@@ -71,7 +70,7 @@ async def get_latest_denomination_count(
     cash_session_id: uuid.UUID,
     count_type: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("moedeiro:view")),
 ):
     """Fetches the most recent count of a given type for a session - used to
     pre-fill the closing screen if a FECHO count was already made from Moedeiro."""

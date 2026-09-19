@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.api.deps import require_role
+from app.api.deps import require_permission
 from app.models.user import User
 from app.models.company import Company
 from app.models.customer import Customer
@@ -57,14 +57,13 @@ from app.services.invoice_service import (
 
 router = APIRouter(prefix="/api/v1/invoices", tags=["invoices"])
 
-ALLOWED_ROLES = ("GESTOR", "CAIXA")
 
 
 @router.post("", response_model=InvoiceResponse, status_code=status.HTTP_201_CREATED)
 async def create_new_invoice(
     payload: InvoiceCreateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("invoices:issue")),
 ):
     """Creates an invoice with its lines, blocked if the fiscal period is closed."""
     try:
@@ -105,7 +104,7 @@ async def create_new_invoice(
 async def create_new_credit_note(
     payload: CreditNoteCreateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("invoices:credit_note")),
 ):
     """Creates a Nota de Credito against an already-issued Factura/Factura-Recibo - see Video 5."""
     try:
@@ -143,7 +142,7 @@ async def create_new_credit_note(
 async def create_new_debit_note(
     payload: DebitNoteCreateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("invoices:debit_note")),
 ):
     """Creates a Nota de Debito referencing an already-issued Factura/Factura-Recibo - see Video 5."""
     try:
@@ -182,7 +181,7 @@ async def create_new_debit_note(
 async def create_new_receipt(
     payload: ReceiptCreateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("invoices:receipt")),
 ):
     """Creates a Recibo (payment acknowledgement) against an already-issued Factura/Factura-Recibo."""
     try:
@@ -220,7 +219,7 @@ async def create_new_receipt(
 async def create_new_pro_forma(
     payload: ProFormaCreateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("invoices:proforma")),
 ):
     """Creates a Fatura Pro-forma (FP) - a non-fiscal quote, never submitted to AGT."""
     try:
@@ -252,7 +251,7 @@ async def convert_pro_forma(
     item_id: uuid.UUID,
     payload: ConvertProFormaRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("invoices:proforma_convert")),
 ):
     """Converts a Pro-forma into a real fiscal Factura/Factura-Recibo - see Kiami's "passar a FT/FR"."""
     try:
@@ -294,7 +293,7 @@ async def get_invoices(
     invoice_type: str | None = None,
     pending_only: bool = False,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("invoices:view")),
 ):
     """Lists invoices belonging to the caller's company, filtered and paginated.
     invoice_type + pending_only=true finds pro-formas awaiting Caixa liquidation."""
@@ -307,7 +306,7 @@ async def get_invoices(
 @router.get("/available-periods")
 async def get_invoices_available_periods(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("invoices:view")),
 ):
     """Returns the distinct (year, month) pairs that have invoices - populates the Ano/Mes filters."""
     return await get_invoice_periods(db, current_user.company_id)
@@ -317,7 +316,7 @@ async def get_invoices_available_periods(
 async def get_invoice_detail(
     invoice_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("invoices:view")),
 ):
     """Returns an invoice with its line items."""
     try:
@@ -336,7 +335,7 @@ async def download_invoice_pdf(
     invoice_id: uuid.UUID,
     format: str = "thermal",
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("invoices:view")),
 ):
     """Generates and returns the invoice PDF - format=thermal (80mm) or format=a4."""
     try:
@@ -486,7 +485,7 @@ async def download_invoice_pdf(
 async def resubmit_invoice(
     invoice_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("invoices:resubmit")),
 ):
     """
     Manually re-queues an invoice for AGT submission - the "Reenviar"

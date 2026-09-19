@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.api.deps import require_role
+from app.api.deps import require_permission
 from app.models.user import User
 from app.schemas.customer import (
     CustomerCreateRequest, CustomerUpdateRequest, CustomerResponse,
@@ -29,13 +29,12 @@ from app.services.customer_service import (
 )
 
 router = APIRouter(prefix="/api/v1/customers", tags=["customers"])
-ALLOWED_ROLES = ("GESTOR",)
 
 
 @router.get("/suggest-code", response_model=CustomerCodeSuggestionResponse)
 async def get_suggested_code(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("customers:manage")),
 ):
     """Suggests the next sequential customer code - purely a suggestion, the form field stays freely editable."""
     code = await suggest_next_customer_code(db, current_user.company_id)
@@ -49,7 +48,7 @@ async def create_new_customer(
     # Explicit list, not the shared ALLOWED_ROLES - CAIXA needs to create a
     # customer inline (Reservas' quick-add "Hospede" modal) without gaining the
     # broader customer-management access ALLOWED_ROLES grants elsewhere in this file.
-    current_user: User = Depends(require_role("GESTOR", "CAIXA")),
+    current_user: User = Depends(require_permission("customers:create")),
 ):
     """Creates a customer within the caller's company."""
     try:
@@ -84,7 +83,7 @@ async def create_new_customer(
 async def get_customers(
     db: AsyncSession = Depends(get_db),
     # Explicit list - CAIXA needs this for Reservas' "Hospede" selector.
-    current_user: User = Depends(require_role("GESTOR", "CAIXA")),
+    current_user: User = Depends(require_permission("customers:view")),
 ):
     """Lists all customers belonging to the caller's company."""
     return await list_customers(db, current_user.company_id)
@@ -95,7 +94,7 @@ async def edit_customer(
     customer_id: uuid.UUID,
     payload: CustomerUpdateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("customers:manage")),
 ):
     """Updates a customer's editable fields, scoped to the caller's company."""
     try:
@@ -134,7 +133,7 @@ async def edit_customer(
 async def toggle_status(
     customer_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("customers:manage")),
 ):
     """Activates or deactivates a customer."""
     try:
@@ -150,7 +149,7 @@ async def toggle_status(
 async def get_customer_bank_links(
     customer_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("customers:manage")),
 ):
     return await list_customer_bank_links(db, current_user.company_id, customer_id)
 
@@ -160,7 +159,7 @@ async def post_customer_bank_link(
     customer_id: uuid.UUID,
     payload: CustomerBankLinkRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("customers:manage")),
 ):
     try:
         return await add_customer_bank_link(db, current_user.company_id, customer_id, payload.company_bank_account_id)
@@ -173,7 +172,7 @@ async def delete_customer_bank_link(
     customer_id: uuid.UUID,
     link_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("customers:manage")),
 ):
     try:
         await remove_customer_bank_link(db, current_user.company_id, link_id)
