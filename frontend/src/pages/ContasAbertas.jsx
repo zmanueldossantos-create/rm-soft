@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect } from 'react';
-import { Wallet2, Plus, Loader2, X, Trash2, CheckCircle2, Search, Minus } from 'lucide-react';
+import { Wallet2, Plus, Loader2, X, Trash2, CheckCircle2, Search, Minus, ArrowRightLeft } from 'lucide-react';
 import { useCan } from '../utils/permissions';
 import { listActivities } from '../api/activity';
 import { listPointsOfSale } from '../api/activity';
@@ -7,7 +7,7 @@ import { listResources } from '../api/booking';
 import { listProducts } from '../api/products';
 import { listServices } from '../api/services';
 import { listPaymentMethodPreferences } from '../api/tesouraria';
-import { listOpenAccounts, openAccount, getOpenAccount, listAccountLines, addAccountLine, updateAccountLineQuantity, removeAccountLine, closeAccount } from '../api/openAccount';
+import { listOpenAccounts, openAccount, getOpenAccount, listAccountLines, addAccountLine, updateAccountLineQuantity, removeAccountLine, closeAccount, transferAccountLines } from '../api/openAccount';
 import { getPosStockLevels } from '../api/pos';
 import { extractErrorMessage } from '../utils/errors';
 import Modal from '../components/Modal';
@@ -49,6 +49,14 @@ export default function ContasAbertas() {
   const [closePayments, setClosePayments] = useState([]);
   const [closeError, setCloseError] = useState('');
   const [closeSaving, setCloseSaving] = useState(false);
+  const [transferModalOpen, setTransferModalOpen] = useState(false);
+  const [transferSelection, setTransferSelection] = useState({});
+  const [transferMode, setTransferMode] = useState('account');
+  const [transferTargetAccountId, setTransferTargetAccountId] = useState('');
+  const [transferTargetResourceId, setTransferTargetResourceId] = useState('');
+  const [transferNewLabel, setTransferNewLabel] = useState('');
+  const [transferError, setTransferError] = useState('');
+  const [transferSaving, setTransferSaving] = useState(false);
 
   useEffect(() => {
     listActivities().then((data) => {
@@ -223,6 +231,76 @@ export default function ContasAbertas() {
       setCloseError(extractErrorMessage(err, 'Erro ao fechar conta'));
     } finally {
       setCloseSaving(false);
+    }
+  }
+
+  // ---- Transfer / split (see open_account_service.transfer_lines) ----
+  const transferAccountOptions = detailAccount
+    ? accounts.filter((a) => a.id !== detailAccount.id && a.pos_id === detailAccount.pos_id && !a.booking_id).map((a) => ({ value: a.id, label: a.label }))
+    : [];
+  const occupiedResourceIds = new Set(accounts.filter((a) => a.resource_id).map((a) => a.resource_id));
+  const freeResourceOptions = resources.filter((r) => !occupiedResourceIds.has(r.id)).map((r) => ({ value: r.id, label: r.name }));
+  const transferTotal = detailLines.reduce((sum, l) => sum + (transferSelection[l.id] !== undefined ? Number(l.unit_price) * (parseFloat(transferSelection[l.id]) || 0) : 0), 0);
+
+  function openTransferModal() {
+    setTransferSelection({});
+    setTransferMode(transferAccountOptions.length > 0 ? 'account' : 'split');
+    setTransferTargetAccountId('');
+    setTransferTargetResourceId('');
+    setTransferNewLabel((detailAccount?.label || '') + ' - B');
+    setTransferError('');
+    setTransferModalOpen(true);
+  }
+
+  function toggleTransferLine(line) {
+    setTransferSelection((prev) => {
+      const next = { ...prev };
+      if (next[line.id] !== undefined) delete next[line.id];
+      else next[line.id] = String(line.quantity);
+      return next;
+    });
+  }
+
+  function updateTransferQuantity(lineId, value) {
+    setTransferSelection((prev) => ({ ...prev, [lineId]: value }));
+  }
+
+  async function handleTransferSubmit() {
+    if (!detailAccount) return;
+    setTransferError('');
+    const items = detailLines
+      .filter((l) => transferSelection[l.id] !== undefined)
+      .map((l) => ({ line_id: l.id, quantity: parseFloat(transferSelection[l.id]), available: Number(l.quantity) }));
+    if (items.length === 0) {
+      setTransferError('Selecione pelo menos um artigo');
+      return;
+    }
+    if (items.some((i) => !(i.quantity > 0) || i.quantity > i.available + 1e-9)) {
+      setTransferError('Indique quantidades validas (superiores a zero e nao superiores as existentes)');
+      return;
+    }
+    const payload = { items: items.map((i) => ({ line_id: i.line_id, quantity: i.quantity })) };
+    if (transferMode === 'account') {
+      if (!transferTargetAccountId) { setTransferError('Selecione a conta de destino'); return; }
+      payload.target_account_id = transferTargetAccountId;
+    } else if (transferMode === 'table') {
+      if (!transferTargetResourceId) { setTransferError('Selecione a mesa de destino'); return; }
+      payload.target_resource_id = transferTargetResourceId;
+    } else {
+      if (!transferNewLabel.trim()) { setTransferError('Indique um nome para a nova conta'); return; }
+      payload.new_label = transferNewLabel.trim();
+    }
+    setTransferSaving(true);
+    try {
+      const result = await transferAccountLines(detailAccount.id, payload);
+      setTransferModalOpen(false);
+      await loadAccounts();
+      if (result.source_closed) setDetailAccount(null);
+      else await refreshDetailLines();
+    } catch (err) {
+      setTransferError(extractErrorMessage(err, 'Erro ao transferir'));
+    } finally {
+      setTransferSaving(false);
     }
   }
 
@@ -448,6 +526,17 @@ export default function ContasAbertas() {
               <span className="font-mono font-bold text-text-primary text-lg">{formatKz(detailTotal)} Kz</span>
             </div>
 
+            {can('open_accounts:transfer') && !detailAccount.booking_id && (
+              <button
+                type="button"
+                onClick={openTransferModal}
+                disabled={detailLines.length === 0}
+                className="border border-border hover:border-accent text-text-primary font-medium text-sm rounded-md py-2.5 flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <ArrowRightLeft size={16} />
+                Transferir / Dividir
+              </button>
+            )}
             <button
               onClick={openCloseModal}
               disabled={detailLines.length === 0 || !can('open_accounts:close')}
@@ -503,6 +592,90 @@ export default function ContasAbertas() {
           >
             {closeSaving ? <Loader2 size={17} className="animate-spin" /> : <CheckCircle2 size={17} />}
             {closeSaving ? 'A fechar...' : 'Confirmar fecho'}
+          </button>
+        </div>
+      </Modal>
+      <Modal open={transferModalOpen} onClose={() => setTransferModalOpen(false)} title={'Transferir / Dividir - ' + (detailAccount?.label || '')} maxWidthClass="max-w-2xl">
+        <div className="flex flex-col gap-4">
+          <div>
+            <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Artigos a mover</label>
+            <div className="flex flex-col gap-1.5 max-h-[220px] overflow-y-auto scrollbar-thin">
+              {detailLines.map((l) => {
+                const selected = transferSelection[l.id] !== undefined;
+                return (
+                  <div key={l.id} className="flex items-center gap-3 bg-bg-inset border border-border rounded-md px-3 py-2">
+                    <input type="checkbox" checked={selected} onChange={() => toggleTransferLine(l)} className="w-4 h-4 accent-accent cursor-pointer" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[12px] text-text-primary truncate">{l.name_snapshot}</p>
+                      <p className="text-[11px] text-text-muted font-mono">{formatKz(l.unit_price)} Kz/un - na conta: {l.quantity}</p>
+                    </div>
+                    {selected && (
+                      <input
+                        type="number" step="any" min="0" max={l.quantity}
+                        value={transferSelection[l.id]}
+                        onChange={(e) => updateTransferQuantity(l.id, e.target.value)}
+                        className="w-24 bg-bg-elevated border border-border rounded-md px-2.5 py-1.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors"
+                      />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div>
+            <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Destino</label>
+            <div className="flex items-center gap-2 flex-wrap mb-3">
+              {[
+                { key: 'account', label: 'Outra conta' },
+                ...(resources.length > 0 ? [{ key: 'table', label: 'Outra mesa livre' }] : []),
+                { key: 'split', label: 'Dividir (nova conta)' },
+              ].map((m) => (
+                <button
+                  key={m.key}
+                  type="button"
+                  onClick={() => setTransferMode(m.key)}
+                  className={'px-3.5 py-1.5 rounded-md text-[13px] font-medium transition-colors cursor-pointer ' + (transferMode === m.key ? 'bg-accent text-white' : 'bg-bg-elevated border border-border text-text-muted hover:text-text-primary')}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+            {transferMode === 'account' && (
+              <Select value={transferTargetAccountId} onChange={setTransferTargetAccountId} options={transferAccountOptions} placeholder="Selecionar conta" />
+            )}
+            {transferMode === 'table' && (
+              <Select value={transferTargetResourceId} onChange={setTransferTargetResourceId} options={freeResourceOptions} placeholder="Selecionar mesa livre" />
+            )}
+            {transferMode === 'split' && (
+              <div className="flex flex-col gap-1.5">
+                <input
+                  value={transferNewLabel}
+                  onChange={(e) => setTransferNewLabel(e.target.value)}
+                  placeholder="Nome da nova conta"
+                  className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors"
+                />
+                <p className="text-text-muted text-[12px]">A nova conta fica na mesma mesa e no mesmo ponto de venda - feche cada conta com o seu pagamento.</p>
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-between items-center bg-bg-inset border border-border rounded-md px-4 py-3">
+            <span className="text-text-muted text-[13px]">Total a mover</span>
+            <span className="font-mono font-semibold text-text-primary text-lg">{formatKz(transferTotal)} Kz</span>
+          </div>
+
+          {transferError && (
+            <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{transferError}</div>
+          )}
+          <button
+            type="button"
+            onClick={handleTransferSubmit}
+            disabled={transferSaving}
+            className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer"
+          >
+            {transferSaving ? <Loader2 size={17} className="animate-spin" /> : <ArrowRightLeft size={17} />}
+            {transferSaving ? 'A transferir...' : 'Confirmar'}
           </button>
         </div>
       </Modal>

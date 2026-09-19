@@ -40,3 +40,8 @@ export async function closeAccount(accountId, payload) {
   const res = await apiClient.post('/open-accounts/' + accountId + '/close', payload);
   return res.data;
 }
+
+export async function transferAccountLines(accountId, payload) {
+  const res = await apiClient.post('/open-accounts/' + accountId + '/transfer', payload);
+  return res.data;
+}
