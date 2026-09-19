@@ -172,3 +172,14 @@ async def test_delete_company_removes_permission_rows(db):
     grants = (await db.execute(select(RolePermission).where(RolePermission.company_id == company_id))).scalars().all()
     seeds = (await db.execute(select(CompanyPermissionSeed).where(CompanyPermissionSeed.company_id == company_id))).scalars().all()
     assert grants == [] and seeds == []
+
+
+def test_catalog_is_well_formed():
+    """Unique codes in module:action form; defaults only name editable roles
+    (GESTOR is implicit, SUPER_ADMIN has no company-level grants)."""
+    codes = [entry[0] for entry in PERMISSION_CATALOG]
+    assert len(codes) == len(set(codes)), "duplicate permission codes"
+    for code, label, category, defaults in PERMISSION_CATALOG:
+        assert re.fullmatch(r"[a-z_]+:[a-z_]+", code), code
+        assert label and category, code
+        assert set(defaults) <= set(permission_service.EDITABLE_ROLES), (code, defaults)

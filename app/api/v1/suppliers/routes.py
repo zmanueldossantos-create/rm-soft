@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.api.deps import require_role
+from app.api.deps import require_permission
 from app.models.user import User
 from app.schemas.supplier import SupplierCreateRequest, SupplierUpdateRequest, SupplierResponse
 from app.services.supplier_service import (
@@ -18,14 +18,13 @@ router = APIRouter(prefix="/api/v1/suppliers", tags=["suppliers"])
 # needed by ARMAZENISTA (picks a supplier when recording a Guia de Entrada)
 # and CONTABILISTA (reconciling purchase history) - see the roles audit
 # discussion earlier this session.
-READ_ROLES = ("GESTOR", "ARMAZENISTA", "CONTABILISTA")
 
 
 @router.post("", response_model=SupplierResponse, status_code=status.HTTP_201_CREATED)
 async def post_create_supplier(
     payload: SupplierCreateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("GESTOR")),
+    current_user: User = Depends(require_permission("suppliers:manage")),
 ):
     try:
         return await create_supplier(
@@ -39,7 +38,7 @@ async def post_create_supplier(
 @router.get("", response_model=list[SupplierResponse])
 async def get_suppliers(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*READ_ROLES)),
+    current_user: User = Depends(require_permission("suppliers:view")),
 ):
     return await list_suppliers(db, current_user.company_id)
 
@@ -49,7 +48,7 @@ async def patch_supplier(
     supplier_id: uuid.UUID,
     payload: SupplierUpdateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("GESTOR")),
+    current_user: User = Depends(require_permission("suppliers:manage")),
 ):
     try:
         return await update_supplier(
@@ -66,7 +65,7 @@ async def patch_supplier(
 async def post_toggle_supplier(
     supplier_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("GESTOR")),
+    current_user: User = Depends(require_permission("suppliers:manage")),
 ):
     try:
         return await toggle_supplier_status(db, current_user.company_id, supplier_id)

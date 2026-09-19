@@ -7,7 +7,7 @@ from datetime import date as date_type
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
-from app.api.deps import require_role
+from app.api.deps import require_permission
 from app.models.user import User
 from app.schemas.movement_document import (
     MovementDocumentCreateRequest, MovementDocumentResponse, MovementDocumentDetailResponse,
@@ -29,14 +29,13 @@ from app.services.movement_document_service import (
 )
 
 router = APIRouter(prefix="/api/v1/movements", tags=["movements"])
-ALLOWED_ROLES = ("GESTOR", "CAIXA")
 
 
 @router.post("", response_model=MovementDocumentResponse, status_code=status.HTTP_201_CREATED)
 async def create_movement_document(
     payload: MovementDocumentCreateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("movements:create")),
 ):
     try:
         document = await create_stock_movement_document(
@@ -67,14 +66,14 @@ async def create_movement_document(
 @router.get("", response_model=list[MovementDocumentResponse])
 async def get_movement_documents(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("movements:view")),
 ):
     return await list_movement_documents(db, current_user.company_id)
 
 
 @router.get("/excel-template")
 async def download_movement_excel_template(
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("movements:import")),
 ):
     """Downloads a blank Excel template for automatic Entrada/Saida import."""
     content = generate_movement_excel_template()
@@ -91,7 +90,7 @@ async def download_movement_excel_template(
 async def get_movement_document_detail(
     document_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("movements:view")),
 ):
     try:
         document, lines = await get_movement_document_with_lines(db, current_user.company_id, document_id)
@@ -111,7 +110,7 @@ async def import_movement_document(
     description: str | None = Form(None),
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("movements:import")),
 ):
     """Creates a stock movement document from an uploaded Excel file (automatic Entrada/Saida)."""
     file_bytes = await file.read()

@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.api.deps import require_role
+from app.api.deps import require_permission
 from app.models.user import User
 from app.schemas.stock import (
     StockLevelResponse,
@@ -52,13 +52,12 @@ from app.services.stock_service import (
 
 router = APIRouter(prefix="/api/v1/stock", tags=["stock"])
 
-ALLOWED_ROLES = ("GESTOR", "ARMAZENISTA")
 
 
 @router.get("/warehouses", response_model=list[WarehouseResponse])
 async def get_warehouses(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("warehouses:view")),
 ):
     """Lists all of the company's warehouses (central + one per activity)."""
     return await list_warehouses(db, current_user.company_id)
@@ -68,7 +67,7 @@ async def get_warehouses(
 async def post_warehouse(
     payload: WarehouseCreateFullRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("warehouses:create")),
 ):
     """Creates a new secondary warehouse for the company."""
     return await create_warehouse(
@@ -82,7 +81,7 @@ async def post_warehouse(
 async def get_stock_levels(
     warehouse_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("stock:view")),
 ):
     """Lists current stock quantity for every product in the given warehouse."""
     return await list_stock_levels(db, current_user.company_id, warehouse_id)
@@ -98,7 +97,7 @@ async def get_stock_movements(
     limit: int = 50,
     offset: int = 0,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("stock:view")),
 ):
     """Lists recent stock movements (audit trail), filtered and paginated."""
     return await list_stock_movements(db, current_user.company_id, warehouse_id, year, month, date_from, date_to, limit, offset)
@@ -107,7 +106,7 @@ async def get_stock_movements(
 @router.get("/movements/available-periods")
 async def get_movements_available_periods(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("stock:view")),
 ):
     """Returns the distinct (year, month) pairs that have stock movements - populates the Ano/Mes filters."""
     return await get_movement_periods(db, current_user.company_id)
@@ -117,7 +116,7 @@ async def get_movements_available_periods(
 async def post_receive_stock(
     payload: StockReceiveRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("stock:receive")),
 ):
     """Records incoming stock (purchase/production) into the CENTRAL warehouse."""
     try:
@@ -136,7 +135,7 @@ async def post_receive_stock(
 async def post_transfer_stock(
     payload: StockTransferRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("GESTOR", "ARMAZENISTA")),
+    current_user: User = Depends(require_permission("stock:transfer")),
 ):
     """Internally moves stock between any two of the company's warehouses."""
     try:
@@ -158,7 +157,7 @@ async def post_transfer_stock(
 async def post_stock_loss(
     payload: StockLossRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("GESTOR", "ARMAZENISTA")),
+    current_user: User = Depends(require_permission("stock:loss")),
 ):
     """Records a stock write-off with no sale - expiry, breakage, theft, or other."""
     try:
@@ -181,7 +180,7 @@ async def post_stock_loss(
 async def post_adjust_stock(
     payload: StockAdjustRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("GESTOR")),
+    current_user: User = Depends(require_permission("stock:adjust")),
 ):
     """Manually corrects stock to an exact quantity in a specific warehouse - GESTOR only, reason required."""
     try:
@@ -200,7 +199,7 @@ async def patch_warehouse(
     warehouse_id: uuid.UUID,
     payload: WarehouseCreateFullRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("GESTOR")),
+    current_user: User = Depends(require_permission("warehouses:manage")),
 ):
     """Full edit of a secondary warehouse - GESTOR only. The central warehouse cannot be edited."""
     try:
@@ -222,7 +221,7 @@ async def patch_warehouse(
 async def patch_warehouse_toggle_status(
     warehouse_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("GESTOR")),
+    current_user: User = Depends(require_permission("warehouses:manage")),
 ):
     """Activates/deactivates a secondary warehouse - GESTOR only."""
     try:
@@ -239,7 +238,7 @@ async def get_production_estimate(
     warehouse_id: uuid.UUID,
     product_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("production:view")),
 ):
     """Estimates how many units can be produced from the warehouse's current ingredient stock."""
     try:
@@ -255,7 +254,7 @@ async def get_production_estimate(
 @router.get("/dashboard")
 async def get_dashboard(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("stock:view")),
 ):
     """Aggregated stock overview across all warehouses - totals, low-stock alerts, value."""
     return await get_stock_dashboard(db, current_user.company_id)
@@ -268,7 +267,7 @@ async def get_production_history(
     date_from: str | None = None,
     date_to: str | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("production:view")),
 ):
     """Lists past production runs (finished good + ingredients consumed per batch).
     Optional filters: year/month ("Periodo") and/or date_from/date_to ("Intervalo", YYYY-MM-DD)."""
@@ -279,7 +278,7 @@ async def get_production_history(
 async def post_produce_stock(
     payload: ProduceStockRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("production:produce")),
 ):
     """Transforms ingredients into a finished product - all-or-nothing, blocks if any ingredient is insufficient."""
     try:

@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.api.deps import require_role
+from app.api.deps import require_permission
 from app.models.user import User
 from app.schemas.product import ProductCreateRequest, ProductUpdateRequest, ProductResponse
 from app.schemas.recipe import RecipeSetRequest, RecipeIngredientResponse
@@ -36,14 +36,13 @@ from app.services.product_service import (
 
 router = APIRouter(prefix="/api/v1/products", tags=["products"])
 
-ALLOWED_ROLES = ("GESTOR",)
 
 
 @router.post("", response_model=ProductResponse, status_code=status.HTTP_201_CREATED)
 async def create_new_product(
     payload: ProductCreateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("products:manage")),
 ):
     """Creates a product within the caller's company."""
     try:
@@ -88,7 +87,7 @@ async def get_products(
     # CAIXA needs read access too - a cashier must see the product catalog to sell
     # (Caixa, Contas Abertas). ARMAZENISTA needs it too - Consumo Interno's product
     # picker calls this same list. Only GESTOR can create/edit products.
-    current_user: User = Depends(require_role("GESTOR", "CAIXA", "ARMAZENISTA")),
+    current_user: User = Depends(require_permission("products:view")),
 ):
     """Lists all products belonging to the caller's company."""
     return await list_products(db, current_user.company_id)
@@ -99,7 +98,7 @@ async def edit_product(
     product_id: uuid.UUID,
     payload: ProductUpdateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("products:manage")),
 ):
     """Updates a product's editable fields, scoped to the caller's company."""
     try:
@@ -143,7 +142,7 @@ async def edit_product(
 async def toggle_status(
     product_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("products:manage")),
 ):
     """Activates or deactivates a product."""
     try:
@@ -157,7 +156,7 @@ async def toggle_status(
 async def get_product_recipe(
     product_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("GESTOR")),
+    current_user: User = Depends(require_permission("recipes:view")),
 ):
     """Lists the ingredients (Bill of Materials) for a finished product."""
     return await get_recipe(db, current_user.company_id, product_id)
@@ -168,7 +167,7 @@ async def put_product_recipe(
     product_id: uuid.UUID,
     payload: RecipeSetRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("GESTOR")),
+    current_user: User = Depends(require_permission("recipes:manage")),
 ):
     """Replaces the finished product's entire recipe with the given ingredients."""
     try:
@@ -185,7 +184,7 @@ async def put_product_recipe(
 @router.get("/with-recipe", response_model=list[ProductResponse])
 async def get_products_with_recipe(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("GESTOR", "ARMAZENISTA")),
+    current_user: User = Depends(require_permission("recipes:list")),
 ):
     """Lists the products that currently have a recipe defined - i.e. can be produced."""
     ids = await list_products_with_recipe(db, current_user.company_id)
@@ -204,7 +203,7 @@ async def upload_product_image(
     product_id: uuid.UUID,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("products:manage")),
 ):
     """Uploads/replaces a product's image. Stored locally (Phase 1), same pattern as the company logo."""
     ext = os.path.splitext(file.filename or "")[1].lower()
@@ -241,7 +240,7 @@ async def upload_product_image(
 async def delete_product_image(
     product_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("products:manage")),
 ):
     """Removes a product's image - deletes the file on disk and clears image_path."""
     try:
