@@ -8,6 +8,7 @@ import { listCashMovementReasons, createCashMovementReason, updateCashMovementRe
 import { listResourceTypes, createResourceType, updateResourceType, toggleResourceTypeStatus } from '../api/booking';
 import { listConsumptionReasons, createConsumptionReason, updateConsumptionReason, toggleConsumptionReasonStatus } from '../api/internalConsumption';
 import { extractErrorMessage } from '../utils/errors';
+import { useCan } from '../utils/permissions';
 
 function ToggleSwitch({ checked, onChange, disabled }) {
   const trackClass = 'relative w-9 h-5 rounded-full transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ' + (checked ? 'bg-success' : 'bg-border');
@@ -44,16 +45,29 @@ const CATALOGS = [
   } },
 ];
 
+// Permission codes per catalog: 'view' decides whether its card is shown, 'manage' whether
+// create / edit / toggle are enabled inside it.
+const CATALOG_PERMS = {
+  product_categories: { view: 'product_categories:view', manage: 'product_categories:manage' },
+  service_types: { view: 'service_types:view', manage: 'service_types:manage' },
+  cash_movement_reasons: { view: 'tesouraria:reasons_view', manage: 'tesouraria:reasons_manage' },
+  resource_types: { view: 'resource_types:view', manage: 'resource_types:manage' },
+  consumption_reasons: { view: 'consumption_reasons:view', manage: 'consumption_reasons:manage' },
+};
+
 const emptyForm = { name: '', not_available_purchases: false, not_available_pos: false, not_available_sales: false };
 const emptyNameOnlyForm = { name: '', requires_service: false };
 const emptyReasonForm = { name: '', direction: 'SAIDA' };
 
 export default function Categorias() {
+  const can = useCan();
+  const visibleCatalogs = CATALOGS.filter((c) => can(CATALOG_PERMS[c.key].view));
   const [counts, setCounts] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   const [activeCatalog, setActiveCatalog] = useState(null);
+  const canManage = activeCatalog ? can(CATALOG_PERMS[activeCatalog.key].manage) : false;
   const [items, setItems] = useState([]);
   const [itemsLoading, setItemsLoading] = useState(false);
   const [togglingId, setTogglingId] = useState(null);
@@ -73,9 +87,9 @@ export default function Categorias() {
     setLoading(true);
     setError('');
     try {
-      const results = await Promise.all(CATALOGS.map((c) => c.api.list()));
+      const results = await Promise.allSettled(visibleCatalogs.map((c) => c.api.list()));
       const newCounts = {};
-      CATALOGS.forEach((c, i) => { newCounts[c.key] = results[i].length; });
+      visibleCatalogs.forEach((c, i) => { if (results[i].status === 'fulfilled') newCounts[c.key] = results[i].value.length; });
       setCounts(newCounts);
     } catch (err) {
       setError(extractErrorMessage(err, 'Erro ao carregar categorias'));
@@ -222,7 +236,7 @@ export default function Categorias() {
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-          {CATALOGS.map((c) => (
+          {visibleCatalogs.map((c) => (
             <button
               key={c.key}
               onClick={() => openCatalog(c)}
@@ -233,6 +247,7 @@ export default function Categorias() {
               <p className="text-text-muted text-[12px] font-mono">{counts[c.key] ?? 0} itens</p>
             </button>
           ))}
+          {can('tesouraria:payment_prefs_view') && (
           <button
             onClick={openPaymentMethodsModal}
             className="bg-bg-elevated border border-border hover:border-accent rounded-lg p-5 text-left transition-colors cursor-pointer"
@@ -241,11 +256,13 @@ export default function Categorias() {
             <p className="font-display font-semibold text-text-primary text-sm mb-1">Métodos de Pagamento</p>
             <p className="text-text-muted text-[12px] font-mono">{paymentMethods.length} itens</p>
           </button>
+          )}
         </div>
       )}
 
       <Modal open={!!activeCatalog} onClose={closeCatalogModal} title={activeCatalog?.label || ''} maxWidthClass="max-w-2xl">
         <div className="flex flex-col gap-4">
+          {canManage && (
           <button
             onClick={openCreateForm}
             className="flex items-center justify-center gap-2 bg-accent hover:bg-accent-hover text-white font-semibold text-sm px-4 py-2.5 rounded-md transition-colors cursor-pointer self-start"
@@ -253,6 +270,7 @@ export default function Categorias() {
             <Plus size={16} />
             Novo
           </button>
+          )}
 
           {itemsLoading ? (
             <div className="flex items-center justify-center py-8 text-text-muted text-sm">
@@ -266,8 +284,8 @@ export default function Categorias() {
                 <div key={item.id} className="flex items-center justify-between gap-2 border border-border rounded-md px-3.5 py-2.5">
                   <span className="text-[13px] text-text-primary truncate">{item.name}</span>
                   <div className="flex items-center gap-2 shrink-0">
-                    <ToggleSwitch checked={item.is_active} disabled={togglingId === item.id} onChange={() => handleToggle(item.id)} />
-                    <button onClick={() => openEditForm(item)} className="flex items-center justify-center w-7 h-7 rounded-md border border-border text-text-muted hover:text-text-primary hover:border-accent transition-colors cursor-pointer">
+                    <ToggleSwitch checked={item.is_active} disabled={togglingId === item.id || !canManage} onChange={() => handleToggle(item.id)} />
+                    <button onClick={() => openEditForm(item)} disabled={!canManage} className="flex items-center justify-center w-7 h-7 rounded-md border border-border text-text-muted hover:text-text-primary hover:border-accent transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
                       <Pencil size={12} />
                     </button>
                   </div>
@@ -295,7 +313,7 @@ export default function Categorias() {
                     <span className="text-[13px] text-text-primary">{m.name}</span>
                     {m.is_cash && <span className="text-[10px] font-semibold uppercase tracking-wide text-success bg-success/10 px-1.5 py-0.5 rounded">Numerario</span>}
                   </div>
-                  <ToggleSwitch checked={m.available_at_pos} disabled={togglingPaymentMethodId === m.id} onChange={() => handleTogglePaymentMethod(m)} />
+                  <ToggleSwitch checked={m.available_at_pos} disabled={togglingPaymentMethodId === m.id || !can('tesouraria:payment_prefs_manage')} onChange={() => handleTogglePaymentMethod(m)} />
                 </div>
               ))}
             </div>

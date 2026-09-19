@@ -7,7 +7,7 @@ import { listStockLevels, receiveStock, adjustStock, transferStock, recordStockL
 import { provincesApi, municipalitiesApi } from '../api/catalogs';
 import { listProducts } from '../api/products';
 import { extractErrorMessage } from '../utils/errors';
-import { useAuthStore } from '../store/authStore';
+import { useCan } from '../utils/permissions';
 
 const LOSS_CATEGORIES = [
   { value: 'EXPIRACAO', label: 'Expiração' },
@@ -21,7 +21,7 @@ function formatQty(value) {
 }
 
 function WarehouseCard({ warehouse, isCentral, onEditClick, onToggleStatus, togglingId }) {
-  const user = useAuthStore((state) => state.user);
+  const can = useCan();
 
   return (
     <div className="bg-bg-elevated border border-border rounded-lg px-5 py-4 flex items-center justify-between gap-4 flex-wrap">
@@ -41,7 +41,7 @@ function WarehouseCard({ warehouse, isCentral, onEditClick, onToggleStatus, togg
         </div>
       </div>
 
-      {user?.role === 'GESTOR' && !isCentral && (
+      {can('warehouses:manage') && !isCentral && (
         <div className="flex items-center gap-2">
           <button
             onClick={() => onEditClick(warehouse)}

@@ -221,7 +221,7 @@ def test_frontend_permission_codes_exist_in_catalog():
     hidden for other roles - catch it statically."""
     src_dir = Path(__file__).resolve().parent.parent / "frontend" / "src"
     catalog_codes = {entry[0] for entry in PERMISSION_CATALOG}
-    pattern = re.compile(r"(?:can\(|perm[:=])\s*['\"]([a-z_]+:[a-z_]+)['\"]")
+    pattern = re.compile(r"(?:can\(|perm[:=]|\b(?:view|manage):)\s*['\"]([a-z_]+:[a-z_]+)['\"]")
     used: dict[str, str] = {}
     for path in src_dir.rglob("*.js*"):
         for code in pattern.findall(path.read_text(encoding="utf-8")):
