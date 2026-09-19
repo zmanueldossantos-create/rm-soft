@@ -837,14 +837,14 @@ export default function Invoices() {
                             { label: 'Ticket 80mm', icon: <Receipt size={14} />, onClick: () => openPdfViewer(inv.id, 'thermal', 'RM SOFT - ' + inv.series + '-' + inv.number + ' (Ticket)') },
                             { label: 'A4', icon: <Printer size={14} />, onClick: () => openPdfViewer(inv.id, 'a4', 'RM SOFT - ' + inv.series + '-' + inv.number + ' (A4)') },
                             ...((inv.invoice_type === 'FACTURA' || inv.invoice_type === 'FACTURA_RECIBO') && inv.document_status !== 'ANULADO' ? [
-                              { label: 'Emitir Nota de Credito', icon: <RotateCcw size={14} />, onClick: () => openNcModalFromRow(inv.id) },
-                              { label: 'Emitir Nota de Debito', icon: <FilePlus size={14} />, onClick: () => openNdModalFromRow(inv.id) },
-                              { label: 'Emitir Recibo', icon: <Receipt size={14} />, onClick: () => openRcModalFromRow(inv.id) },
+                              { perm: 'invoices:credit_note', label: 'Emitir Nota de Credito', icon: <RotateCcw size={14} />, onClick: () => openNcModalFromRow(inv.id) },
+                              { perm: 'invoices:debit_note', label: 'Emitir Nota de Debito', icon: <FilePlus size={14} />, onClick: () => openNdModalFromRow(inv.id) },
+                              { perm: 'invoices:receipt', label: 'Emitir Recibo', icon: <Receipt size={14} />, onClick: () => openRcModalFromRow(inv.id) },
                             ] : []),
                             ...(inv.invoice_type === 'PRO_FORMA' && !inv.converted_to_invoice_id ? [
-                              { label: 'Converter em Fatura', icon: <FileText size={14} />, onClick: () => openConvertModalFromRow(inv.id) },
+                              { perm: 'invoices:proforma_convert', label: 'Converter em Fatura', icon: <FileText size={14} />, onClick: () => openConvertModalFromRow(inv.id) },
                             ] : []),
-                          ]} />
+                          ].filter((item) => !item.perm || can(item.perm))} />
                         </div>
                       </td>
                     </tr>

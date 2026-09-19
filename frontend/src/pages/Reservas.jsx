@@ -436,12 +436,14 @@ export default function Reservas() {
                       <CheckCircle2 size={13} />
                       Check-in
                     </button>
+                    {can('bookings:update') && (
                     <Select
                       value=""
                       onChange={(v) => handleStatusChange(b.id, v)}
                       options={Object.entries(STATUS_LABELS).filter(([k]) => k !== b.status && k !== 'EM_CURSO').map(([k, label]) => ({ value: k, label }))}
                       placeholder="Alterar estado"
                     />
+                    )}
                   </>
                 ) : (
                   <span className="text-text-muted text-[11px] italic">Estado final</span>
@@ -526,7 +528,7 @@ export default function Reservas() {
                   placeholder="Cliente (opcional)"
                 />
               </div>
-              <button type="button" onClick={openCustomerModal} className="flex items-center justify-center w-10 h-10 rounded-md border border-border text-text-muted hover:text-accent hover:border-accent transition-colors cursor-pointer shrink-0">
+              <button type="button" onClick={openCustomerModal} disabled={!can('customers:create')} className="flex items-center justify-center w-10 h-10 rounded-md border border-border text-text-muted hover:text-accent hover:border-accent transition-colors cursor-pointer shrink-0 disabled:opacity-40 disabled:cursor-not-allowed">
                 <Plus size={15} />
               </button>
             </div>

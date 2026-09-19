@@ -1283,7 +1283,7 @@ export default function Caixa() {
 
               <button
                 onClick={() => setSaleConfirmModalOpen(true)}
-                disabled={cart.length === 0 || proFormaSaving || checkoutSaving || (selectedInvoiceType === 'FACTURA_RECIBO' && posPaymentMethods.length > 0 && paymentsRemaining !== 0)}
+                disabled={cart.length === 0 || proFormaSaving || checkoutSaving || (selectedInvoiceType === 'FACTURA_RECIBO' && posPaymentMethods.length > 0 && paymentsRemaining !== 0) || (selectedInvoiceType === 'PRO_FORMA' ? !can('pos:proforma') : !can('pos:checkout'))}
                 className="bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer"
               >
                 {(proFormaSaving || checkoutSaving) && <Loader2 size={16} className="animate-spin" />}
@@ -1527,7 +1527,8 @@ export default function Caixa() {
                 else if (selectedInvoiceType === 'FACTURA') handleConfirmFt();
                 else handleConfirmSale();
               }}
-              className="flex-1 bg-accent hover:bg-accent-hover text-white font-semibold text-sm rounded-md py-3 transition-colors cursor-pointer"
+              disabled={(selectedInvoiceType === 'PRO_FORMA' ? !can('pos:proforma') : ((selectedInvoiceType !== 'FACTURA' && paymentMode === 'liquidation') ? !can('pos:liquidate') : !can('pos:checkout')))}
+              className="flex-1 bg-accent hover:bg-accent-hover text-white font-semibold text-sm rounded-md py-3 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Confirmar
             </button>
@@ -1783,7 +1784,7 @@ export default function Caixa() {
 
             <button
               type="submit"
-              disabled={movementSaving}
+              disabled={movementSaving || !can('tesouraria:record')}
               className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer"
             >
               {movementSaving ? <Loader2 size={17} className="animate-spin" /> : <ArrowLeftRight size={17} />}
