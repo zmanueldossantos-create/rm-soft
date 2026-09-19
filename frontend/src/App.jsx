@@ -30,6 +30,7 @@ import Permissoes from './pages/Permissoes';
 import ContasAbertas from './pages/ContasAbertas';
 import Layout from './components/Layout';
 import { useAuthStore } from './store/authStore';
+import RequirePermission from './components/RequirePermission';
 
 function ProtectedRoute({ children }) {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -39,6 +40,11 @@ function ProtectedRoute({ children }) {
 function SuperAdminRoute({ children }) {
   const user = useAuthStore((state) => state.user);
   return user?.role === 'SUPER_ADMIN' ? children : <Navigate to="/dashboard" replace />;
+}
+
+function GestorRoute({ children }) {
+  const user = useAuthStore((state) => state.user);
+  return user?.role === 'GESTOR' ? children : <Navigate to="/dashboard" replace />;
 }
 
 export default function App() {
@@ -55,32 +61,32 @@ export default function App() {
           }
         >
           <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/products" element={<Products />} />
-          <Route path="/materia-prima" element={<MateriaPrima />} />
-          <Route path="/producao" element={<Producao />} />
-          <Route path="/producao/historico" element={<ProductionHistory />} />
-          <Route path="/caixa" element={<Caixa />} />
-          <Route path="/configuracoes" element={<Configuracoes />} />
-          <Route path="/categorias" element={<Categorias />} />
-          <Route path="/services" element={<Services />} />
-          <Route path="/invoices/new" element={<NovaFatura />} />
-          <Route path="/customers" element={<Customers />} />
-          <Route path="/fiscal-periods" element={<FiscalPeriods />} />
-          <Route path="/saf-t" element={<SaftExport />} />
-          <Route path="/invoices" element={<Invoices />} />
-          <Route path="/company-settings" element={<CompanySettings />} />
-          <Route path="/stock" element={<Stock />} />
-          <Route path="/stock/dashboard" element={<StockDashboard />} />
-          <Route path="/stock-movements" element={<StockMovements />} />
-          <Route path="/users" element={<Users />} />
-          <Route path="/tesouraria" element={<Tesouraria />} />
-          <Route path="/recursos" element={<Recursos />} />
-          <Route path="/reservas" element={<Reservas />} />
-          <Route path="/ocupacao" element={<Ocupacao />} />
-          <Route path="/consumo-interno" element={<ConsumoInterno />} />
-          <Route path="/fornecedores" element={<Fornecedores />} />
-          <Route path="/permissoes" element={<Permissoes />} />
-          <Route path="/contas-abertas" element={<ContasAbertas />} />
+          <Route path="/products" element={<RequirePermission perm="products:manage"><Products /></RequirePermission>} />
+          <Route path="/materia-prima" element={<RequirePermission perm="products:manage"><MateriaPrima /></RequirePermission>} />
+          <Route path="/producao" element={<RequirePermission perm="recipes:view"><Producao /></RequirePermission>} />
+          <Route path="/producao/historico" element={<RequirePermission perm="recipes:view"><ProductionHistory /></RequirePermission>} />
+          <Route path="/caixa" element={<RequirePermission perm="pos:view"><Caixa /></RequirePermission>} />
+          <Route path="/configuracoes" element={<SuperAdminRoute><Configuracoes /></SuperAdminRoute>} />
+          <Route path="/categorias" element={<RequirePermission perm="product_categories:manage"><Categorias /></RequirePermission>} />
+          <Route path="/services" element={<RequirePermission perm="services:manage"><Services /></RequirePermission>} />
+          <Route path="/invoices/new" element={<RequirePermission perm="invoices:issue"><NovaFatura /></RequirePermission>} />
+          <Route path="/customers" element={<RequirePermission perm="customers:manage"><Customers /></RequirePermission>} />
+          <Route path="/fiscal-periods" element={<RequirePermission perm="fiscal_periods:view"><FiscalPeriods /></RequirePermission>} />
+          <Route path="/saf-t" element={<RequirePermission perm="saf_t:export"><SaftExport /></RequirePermission>} />
+          <Route path="/invoices" element={<RequirePermission perm="invoices:view"><Invoices /></RequirePermission>} />
+          <Route path="/company-settings" element={<RequirePermission perm="company:view"><CompanySettings /></RequirePermission>} />
+          <Route path="/stock" element={<RequirePermission perm="warehouses:view"><Stock /></RequirePermission>} />
+          <Route path="/stock/dashboard" element={<RequirePermission perm="stock:view"><StockDashboard /></RequirePermission>} />
+          <Route path="/stock-movements" element={<RequirePermission perm="stock:view"><StockMovements /></RequirePermission>} />
+          <Route path="/users" element={<GestorRoute><Users /></GestorRoute>} />
+          <Route path="/tesouraria" element={<RequirePermission perm="tesouraria:reasons_manage"><Tesouraria /></RequirePermission>} />
+          <Route path="/recursos" element={<RequirePermission perm="resources:manage"><Recursos /></RequirePermission>} />
+          <Route path="/reservas" element={<RequirePermission perm="bookings:view"><Reservas /></RequirePermission>} />
+          <Route path="/ocupacao" element={<RequirePermission perm="hotel:occupancy_view"><Ocupacao /></RequirePermission>} />
+          <Route path="/consumo-interno" element={<RequirePermission perm="internal_consumption:view"><ConsumoInterno /></RequirePermission>} />
+          <Route path="/fornecedores" element={<RequirePermission perm="suppliers:manage"><Fornecedores /></RequirePermission>} />
+          <Route path="/permissoes" element={<GestorRoute><Permissoes /></GestorRoute>} />
+          <Route path="/contas-abertas" element={<RequirePermission perm="open_accounts:view"><ContasAbertas /></RequirePermission>} />
           <Route
             path="/admin/companies"
             element={

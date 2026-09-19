@@ -221,7 +221,7 @@ def test_frontend_permission_codes_exist_in_catalog():
     hidden for other roles - catch it statically."""
     src_dir = Path(__file__).resolve().parent.parent / "frontend" / "src"
     catalog_codes = {entry[0] for entry in PERMISSION_CATALOG}
-    pattern = re.compile(r"(?:can\(|perm:)\s*['\"]([a-z_]+:[a-z_]+)['\"]")
+    pattern = re.compile(r"(?:can\(|perm[:=])\s*['\"]([a-z_]+:[a-z_]+)['\"]")
     used: dict[str, str] = {}
     for path in src_dir.rglob("*.js*"):
         for code in pattern.findall(path.read_text(encoding="utf-8")):
@@ -229,3 +229,20 @@ def test_frontend_permission_codes_exist_in_catalog():
     assert used, "no permission codes found in the frontend - is the pattern out of date?"
     unknown = {code: file for code, file in used.items() if code not in catalog_codes}
     assert not unknown, f"frontend permission codes missing from PERMISSION_CATALOG: {unknown}"
+
+
+
+def test_every_frontend_route_is_guarded():
+    """Every routed screen except login, root and the dashboard must sit behind a
+    guard (RequirePermission, GestorRoute or SuperAdminRoute). The dashboard is
+    left open on purpose: it is the redirect target, guarding it could loop."""
+    app_jsx = (Path(__file__).resolve().parent.parent / "frontend" / "src" / "App.jsx").read_text(encoding="utf-8")
+    open_paths = {"/login", "/", "/dashboard"}
+    unguarded = []
+    for chunk in re.split(r"(?=<Route\b)", app_jsx):
+        m = re.match(r'<Route\s+path="([^"]+)"', chunk)
+        if not m or m.group(1) in open_paths:
+            continue
+        if not re.search(r"RequirePermission|GestorRoute|SuperAdminRoute", chunk):
+            unguarded.append(m.group(1))
+    assert not unguarded, f"frontend routes without a guard: {unguarded}"
