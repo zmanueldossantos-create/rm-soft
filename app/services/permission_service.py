@@ -121,6 +121,8 @@ PERMISSION_CATALOG: list[tuple[str, str, str, list[str]]] = [
     ("document_series:manage", "Criar, editar e ativar/desativar series de documentos", "Faturacao", []),
     ("establishments:view", "Ver estabelecimentos", "Empresa", []),
     ("establishments:manage", "Criar, editar e ativar/desativar estabelecimentos", "Empresa", []),
+    ("catalogs:view_reference", "Ver catalogos de referencia (paises, moedas, bancos, IVA, unidades, tipos de documento...)", "Catalogos de Referencia", []),
+    ("catalogs:view_billing", "Ver metodos e condicoes de pagamento, retencoes e denominacoes", "Catalogos de Referencia", ["CAIXA"]),
 ]
 
 

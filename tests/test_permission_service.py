@@ -246,3 +246,20 @@ def test_every_frontend_route_is_guarded():
         if not re.search(r"RequirePermission|GestorRoute|SuperAdminRoute", chunk):
             unguarded.append(m.group(1))
     assert not unguarded, f"frontend routes without a guard: {unguarded}"
+
+
+def test_require_role_is_limited_to_platform_level_modules():
+    """require_role stays only where access is tied to the role itself, not to
+    per-company grants: platform administration (admin, catalogs, vat SUPER_ADMIN
+    routes), user management (auth) and the permission admin screen (permissions).
+    Any other module must use require_permission so the matrix can configure it."""
+    routes_dir = Path(__file__).resolve().parent.parent / "app" / "api" / "v1"
+    allowed = {"admin", "auth", "catalogs", "permissions", "vat"}
+    offenders = []
+    for path in routes_dir.rglob("*.py"):
+        if path.parent.name in allowed:
+            continue
+        code_lines = [l for l in path.read_text(encoding="utf-8").splitlines() if not l.lstrip().startswith("#")]
+        if any("require_role(" in l for l in code_lines):
+            offenders.append(str(path.relative_to(routes_dir)))
+    assert not offenders, f"modules still on require_role: {offenders}"

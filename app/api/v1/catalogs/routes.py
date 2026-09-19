@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.api.deps import require_role
+from app.api.deps import require_permission, require_role
 from app.models.user import User
 from app.schemas.catalog import (
     CountryRequest, CountryResponse,
@@ -38,7 +38,7 @@ def _not_found(e: Exception):
 # ---------- Country ----------
 
 @router.get("/countries", response_model=list[CountryResponse])
-async def get_countries(db: AsyncSession = Depends(get_db), current_user: User = Depends(require_role("SUPER_ADMIN", "GESTOR"))):
+async def get_countries(db: AsyncSession = Depends(get_db), current_user: User = Depends(require_permission("catalogs:view_reference", also_allow_roles=("SUPER_ADMIN",)))):
     return await catalog_service.list_countries(db)
 
 
@@ -66,7 +66,7 @@ async def toggle_country(item_id: uuid.UUID, db: AsyncSession = Depends(get_db),
 # ---------- Currency ----------
 
 @router.get("/currencies", response_model=list[CurrencyResponse])
-async def get_currencies(db: AsyncSession = Depends(get_db), current_user: User = Depends(require_role("SUPER_ADMIN", "GESTOR"))):
+async def get_currencies(db: AsyncSession = Depends(get_db), current_user: User = Depends(require_permission("catalogs:view_reference", also_allow_roles=("SUPER_ADMIN",)))):
     return await catalog_service.list_currencies(db)
 
 
@@ -94,7 +94,7 @@ async def toggle_currency(item_id: uuid.UUID, db: AsyncSession = Depends(get_db)
 # ---------- Province ----------
 
 @router.get("/provinces", response_model=list[ProvinceResponse])
-async def get_provinces(country_id: uuid.UUID | None = None, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_role("SUPER_ADMIN", "GESTOR"))):
+async def get_provinces(country_id: uuid.UUID | None = None, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_permission("catalogs:view_reference", also_allow_roles=("SUPER_ADMIN",)))):
     return await catalog_service.list_provinces(db, country_id)
 
 
@@ -122,7 +122,7 @@ async def toggle_province(item_id: uuid.UUID, db: AsyncSession = Depends(get_db)
 # ---------- Municipality ----------
 
 @router.get("/municipalities", response_model=list[MunicipalityResponse])
-async def get_municipalities(province_id: uuid.UUID | None = None, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_role("SUPER_ADMIN", "GESTOR"))):
+async def get_municipalities(province_id: uuid.UUID | None = None, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_permission("catalogs:view_reference", also_allow_roles=("SUPER_ADMIN",)))):
     return await catalog_service.list_municipalities(db, province_id)
 
 
@@ -150,7 +150,7 @@ async def toggle_municipality(item_id: uuid.UUID, db: AsyncSession = Depends(get
 # ---------- Bank ----------
 
 @router.get("/banks", response_model=list[BankResponse])
-async def get_banks(db: AsyncSession = Depends(get_db), current_user: User = Depends(require_role("SUPER_ADMIN", "GESTOR"))):
+async def get_banks(db: AsyncSession = Depends(get_db), current_user: User = Depends(require_permission("catalogs:view_reference", also_allow_roles=("SUPER_ADMIN",)))):
     return await catalog_service.list_banks(db)
 
 
@@ -178,7 +178,7 @@ async def toggle_bank(item_id: uuid.UUID, db: AsyncSession = Depends(get_db), cu
 # ---------- PaymentMethodCatalog ----------
 
 @router.get("/payment-methods", response_model=list[PaymentMethodCatalogResponse])
-async def get_payment_methods(db: AsyncSession = Depends(get_db), current_user: User = Depends(require_role("SUPER_ADMIN", "GESTOR", "CAIXA"))):
+async def get_payment_methods(db: AsyncSession = Depends(get_db), current_user: User = Depends(require_permission("catalogs:view_billing", also_allow_roles=("SUPER_ADMIN",)))):
     return await catalog_service.list_payment_methods(db)
 
 
@@ -206,7 +206,7 @@ async def toggle_payment_method(item_id: uuid.UUID, db: AsyncSession = Depends(g
 # ---------- PaymentTerm ----------
 
 @router.get("/payment-terms", response_model=list[PaymentTermResponse])
-async def get_payment_terms(db: AsyncSession = Depends(get_db), current_user: User = Depends(require_role("SUPER_ADMIN", "GESTOR", "CAIXA"))):
+async def get_payment_terms(db: AsyncSession = Depends(get_db), current_user: User = Depends(require_permission("catalogs:view_billing", also_allow_roles=("SUPER_ADMIN",)))):
     return await catalog_service.list_payment_terms(db)
 
 
@@ -234,7 +234,7 @@ async def toggle_payment_term(item_id: uuid.UUID, db: AsyncSession = Depends(get
 # ---------- VatCode ----------
 
 @router.get("/vat-codes", response_model=list[VatCodeResponse])
-async def get_vat_codes(db: AsyncSession = Depends(get_db), current_user: User = Depends(require_role("SUPER_ADMIN", "GESTOR"))):
+async def get_vat_codes(db: AsyncSession = Depends(get_db), current_user: User = Depends(require_permission("catalogs:view_reference", also_allow_roles=("SUPER_ADMIN",)))):
     return await catalog_service.list_vat_codes(db)
 
 
@@ -268,7 +268,7 @@ async def toggle_vat_code(item_id: uuid.UUID, db: AsyncSession = Depends(get_db)
 # ---------- DocumentType ----------
 
 @router.get("/document-types", response_model=list[DocumentTypeResponse])
-async def get_document_types(db: AsyncSession = Depends(get_db), current_user: User = Depends(require_role("SUPER_ADMIN", "GESTOR"))):
+async def get_document_types(db: AsyncSession = Depends(get_db), current_user: User = Depends(require_permission("catalogs:view_reference", also_allow_roles=("SUPER_ADMIN",)))):
     return await catalog_service.list_document_types(db)
 
 
@@ -296,7 +296,7 @@ async def toggle_document_type(item_id: uuid.UUID, db: AsyncSession = Depends(ge
 # ---------- MovementType ----------
 
 @router.get("/movement-types", response_model=list[MovementTypeResponse])
-async def get_movement_types(db: AsyncSession = Depends(get_db), current_user: User = Depends(require_role("SUPER_ADMIN", "GESTOR"))):
+async def get_movement_types(db: AsyncSession = Depends(get_db), current_user: User = Depends(require_permission("catalogs:view_reference", also_allow_roles=("SUPER_ADMIN",)))):
     return await catalog_service.list_movement_types(db)
 
 
@@ -324,7 +324,7 @@ async def toggle_movement_type(item_id: uuid.UUID, db: AsyncSession = Depends(ge
 # ---------- UnitOfMeasureCatalog ----------
 
 @router.get("/units", response_model=list[UnitOfMeasureCatalogResponse])
-async def get_units(db: AsyncSession = Depends(get_db), current_user: User = Depends(require_role("SUPER_ADMIN", "GESTOR"))):
+async def get_units(db: AsyncSession = Depends(get_db), current_user: User = Depends(require_permission("catalogs:view_reference", also_allow_roles=("SUPER_ADMIN",)))):
     return await catalog_service.list_units(db)
 
 
@@ -352,7 +352,7 @@ async def toggle_unit(item_id: uuid.UUID, db: AsyncSession = Depends(get_db), cu
 # ---------- WithholdingTax ----------
 
 @router.get("/withholding-taxes", response_model=list[WithholdingTaxResponse])
-async def get_withholding_taxes(db: AsyncSession = Depends(get_db), current_user: User = Depends(require_role("SUPER_ADMIN", "GESTOR", "CAIXA"))):
+async def get_withholding_taxes(db: AsyncSession = Depends(get_db), current_user: User = Depends(require_permission("catalogs:view_billing", also_allow_roles=("SUPER_ADMIN",)))):
     return await catalog_service.list_withholding_taxes(db)
 
 
@@ -378,7 +378,7 @@ async def toggle_withholding_tax(item_id: uuid.UUID, db: AsyncSession = Depends(
 
 # ---------- Denomination ----------
 @router.get("/denominations", response_model=list[DenominationResponse])
-async def get_denominations_catalog(db: AsyncSession = Depends(get_db), current_user: User = Depends(require_role("SUPER_ADMIN", "GESTOR", "CAIXA"))):
+async def get_denominations_catalog(db: AsyncSession = Depends(get_db), current_user: User = Depends(require_permission("catalogs:view_billing", also_allow_roles=("SUPER_ADMIN",)))):
     return await catalog_service.list_denominations_catalog(db)
 @router.post("/denominations", response_model=DenominationResponse, status_code=status.HTTP_201_CREATED)
 async def post_denomination(payload: DenominationRequest, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_role("SUPER_ADMIN"))):
