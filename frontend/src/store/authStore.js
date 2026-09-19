@@ -28,6 +28,8 @@ export const useAuthStore = create((set) => ({
   refreshToken: stored?.refreshToken || null,
   user: stored?.user || null,
   isAuthenticated: !!stored?.accessToken,
+  // Permission codes of the logged-in user (from /permissions/mine); null = not loaded yet.
+  permissions: null,
 
   login: (accessToken, refreshToken, user) => {
     saveToStorage({ accessToken, refreshToken, user });
@@ -36,7 +38,7 @@ export const useAuthStore = create((set) => ({
 
   logout: () => {
     clearStorage();
-    set({ accessToken: null, refreshToken: null, user: null, isAuthenticated: false });
+    set({ accessToken: null, refreshToken: null, user: null, isAuthenticated: false, permissions: null });
   },
 
   setUser: (user) => {
@@ -46,4 +48,6 @@ export const useAuthStore = create((set) => ({
       return { user };
     });
   },
+
+  setPermissions: (permissions) => set({ permissions }),
 }));

@@ -59,7 +59,7 @@ export default function Permissoes() {
         Permissoes
       </h2>
       <p className="text-text-muted text-sm mb-6">
-        Configure o que cada perfil pode fazer. Apenas o modulo Consumo Interno usa este sistema por agora (piloto) - os restantes modulos continuam com permissoes fixas.
+        Configure o que cada perfil pode fazer. O perfil Gestor tem sempre todas as permissoes. As alteracoes aplicam-se aos outros utilizadores ao recarregar a pagina ou no proximo inicio de sessao.
       </p>
 
       {error && (

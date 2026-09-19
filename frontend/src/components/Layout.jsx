@@ -1,10 +1,12 @@
-﻿import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { Building2, LogOut, LayoutDashboard, Sun, Moon, Package, Users, Calendar, Receipt, Settings, Package2, UserCog, History, FileText, Landmark, LayoutGrid, Store, Wheat, Factory, Wallet, SlidersHorizontal, Tags, Wrench, ChevronDown, Cog, Plus, ArrowLeftRight, Calculator, ClipboardList, Gauge, PiggyBank, CreditCard, Boxes, CalendarClock, Wallet2, PackageMinus, Truck, ShieldCheck } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useThemeStore } from '../store/themeStore';
 import { getCurrentPeriod } from '../api/fiscal';
+import { getMyPermissions } from '../api/permissions';
+import { useCan } from '../utils/permissions';
 import Footer from './Footer';
 
 function NavLink({ to, icon: Icon, label, active }) {
@@ -112,8 +114,10 @@ export default function Layout() {
   const location = useLocation();
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
+  const setPermissions = useAuthStore((state) => state.setPermissions);
   const theme = useThemeStore((state) => state.theme);
   const toggleTheme = useThemeStore((state) => state.toggleTheme);
+  const can = useCan();
   const [periodLabel, setPeriodLabel] = useState(null);
 
   useEffect(() => {
@@ -121,6 +125,17 @@ export default function Layout() {
       getCurrentPeriod()
         .then((data) => setPeriodLabel(data.label))
         .catch(() => setPeriodLabel(null));
+    }
+  }, [user?.role]);
+
+  // Loads this user's permission codes once per session (Layout mounts after
+  // login). Fails closed: if the call fails, non-GESTOR users see no gated
+  // items - the backend refuses their requests anyway.
+  useEffect(() => {
+    if (user?.role && user.role !== 'SUPER_ADMIN') {
+      getMyPermissions()
+        .then(setPermissions)
+        .catch(() => setPermissions([]));
     }
   }, [user?.role]);
 
@@ -132,6 +147,27 @@ export default function Layout() {
   function isActive(path) {
     return location.pathname === path || location.pathname.startsWith(path + '/');
   }
+
+  // Menu groups - each item is shown only if the user holds its permission.
+  const productionItems = [
+    { to: '/producao', icon: Factory, label: 'Produtos configurados', perm: 'recipes:view' },
+    { to: '/producao/historico', icon: ClipboardList, label: 'Resumo de Produção', perm: 'recipes:view' },
+  ].filter((item) => can(item.perm));
+
+  const stockItems = [
+    { to: '/stock/dashboard', icon: Gauge, label: 'Resumo de Stock', perm: 'stock:view' },
+    { to: '/stock', icon: Package2, label: 'Armazéns e Stock', perm: 'warehouses:view' },
+    { to: '/stock-movements', icon: History, label: 'Histórico de Movimentos', perm: 'stock:view' },
+  ].filter((item) => can(item.perm));
+
+  const settingsItems = [
+    { to: '/company-settings', icon: Building2, label: 'Empresa', perm: 'company:view' },
+    { to: '/categorias', icon: Tags, label: 'Catálogos', perm: 'product_categories:manage' },
+  ].filter((item) => can(item.perm));
+
+  const accountingItems = [
+    { to: '/fiscal-periods', icon: Calendar, label: 'Periodos/Exercicio', perm: 'fiscal_periods:view' },
+  ].filter((item) => can(item.perm));
 
   return (
     <div className="min-h-screen bg-bg-primary">
@@ -149,104 +185,76 @@ export default function Layout() {
             {user?.role === 'SUPER_ADMIN' && (
               <NavLink to="/configuracoes" icon={SlidersHorizontal} label="Configurações" active={isActive('/configuracoes')} />
             )}
-            {user?.role === 'GESTOR' && (
+            {(can('products:manage') || can('services:manage')) && (
               <>
                 <div className="w-px h-5 bg-border mx-1 shrink-0 self-center" />
-                <NavLink to="/products" icon={Package} label="Produtos" active={isActive('/products')} />
-                <NavLink to="/services" icon={Wrench} label="Serviços" active={isActive('/services')} />
+                {can('products:manage') && (
+                  <NavLink to="/products" icon={Package} label="Produtos" active={isActive('/products')} />
+                )}
+                {can('services:manage') && (
+                  <NavLink to="/services" icon={Wrench} label="Serviços" active={isActive('/services')} />
+                )}
               </>
             )}
-            {user?.role === 'GESTOR' && (
+            {can('products:manage') && (
               <NavLink to="/materia-prima" icon={Wheat} label="Matéria-prima" active={isActive('/materia-prima')} />
             )}
-            {user?.role === 'GESTOR' && (
+            {productionItems.length > 0 && (
               <>
-                <NavGroup
-                icon={Factory}
-                label="Produção"
-                isActive={isActive}
-                items={[
-                  { to: '/producao', icon: Factory, label: 'Produtos configurados' },
-                  { to: '/producao/historico', icon: ClipboardList, label: 'Resumo de Produção' },
-                ]}
-              />
+                <NavGroup icon={Factory} label="Produção" isActive={isActive} items={productionItems} />
                 <div className="w-px h-5 bg-border mx-1 shrink-0 self-center" />
               </>
             )}
-            {user?.role === 'GESTOR' && (
+            {can('customers:manage') && (
               <NavLink to="/customers" icon={Users} label="Clientes" active={isActive('/customers')} />
             )}
-            {(user?.role === 'GESTOR' || user?.role === 'CAIXA') && (
+            {can('pos:view') && (
               <NavLink to="/caixa" icon={Wallet} label="Caixa" active={isActive('/caixa')} />
             )}
-            {(user?.role === 'GESTOR' || user?.role === 'CAIXA') && (
+            {can('invoices:view') && (
               <NavLink to="/invoices" icon={Receipt} label="Faturas" active={isActive('/invoices')} />
             )}
-            {(user?.role === 'GESTOR' || user?.role === 'ARMAZENISTA') && (
+            {stockItems.length > 0 && (
               <>
                 <div className="w-px h-5 bg-border mx-1 shrink-0 self-center" />
-                <NavGroup
-                  icon={Package2}
-                  label="Gestão de Stocks"
-                  isActive={isActive}
-                  items={[
-                    { to: '/stock/dashboard', icon: Gauge, label: 'Resumo de Stock' },
-                    { to: '/stock', icon: Package2, label: 'Armazéns e Stock' },
-                    { to: '/stock-movements', icon: History, label: 'Histórico de Movimentos' },
-                  ]}
-                />
+                <NavGroup icon={Package2} label="Gestão de Stocks" isActive={isActive} items={stockItems} />
                 <div className="w-px h-5 bg-border mx-1 shrink-0 self-center" />
               </>
             )}
             {user?.role === 'GESTOR' && (
               <NavLink to="/users" icon={UserCog} label="Utilizadores" active={isActive('/users')} />
             )}
-            {user?.role === 'GESTOR' && (
-              <NavGroup
-                icon={Cog}
-                label="Configurações"
-                isActive={isActive}
-                items={[
-                  { to: '/company-settings', icon: Building2, label: 'Empresa' },
-                  { to: '/categorias', icon: Tags, label: 'Catálogos' },
-                ]}
-              />
+            {settingsItems.length > 0 && (
+              <NavGroup icon={Cog} label="Configurações" isActive={isActive} items={settingsItems} />
             )}
-            {user?.role === 'GESTOR' && (
-              <NavGroup
-                icon={Calculator}
-                label="Contabilidade"
-                isActive={isActive}
-                items={[
-                  { to: '/fiscal-periods', icon: Calendar, label: 'Periodos/Exercicio' },
-                ]}
-              />
+            {accountingItems.length > 0 && (
+              <NavGroup icon={Calculator} label="Contabilidade" isActive={isActive} items={accountingItems} />
             )}
-            {user?.role === 'GESTOR' && (
+            {can('tesouraria:reasons_manage') && (
               <NavLink to="/tesouraria" icon={PiggyBank} label="Tesouraria" active={isActive('/tesouraria')} />
             )}
-            {user?.role === 'GESTOR' && (
+            {can('resources:manage') && (
               <NavLink to="/recursos" icon={Boxes} label="Recursos" active={isActive('/recursos')} />
             )}
-            {(user?.role === 'GESTOR' || user?.role === 'CAIXA') && (
+            {can('bookings:view') && (
               <NavLink to="/reservas" icon={CalendarClock} label="Reservas" active={isActive('/reservas')} />
             )}
-            {user?.role === 'GESTOR' && (
+            {can('hotel:occupancy_view') && (
               <NavLink to="/ocupacao" icon={History} label="Ocupação" active={isActive('/ocupacao')} />
             )}
-            {(user?.role === 'GESTOR' || user?.role === 'ARMAZENISTA') && (
+            {can('internal_consumption:view') && (
               <NavLink to="/consumo-interno" icon={PackageMinus} label="Consumo Interno" active={isActive('/consumo-interno')} />
             )}
-            {user?.role === 'GESTOR' && (
+            {can('suppliers:manage') && (
               <NavLink to="/fornecedores" icon={Truck} label="Fornecedores" active={isActive('/fornecedores')} />
             )}
             {user?.role === 'GESTOR' && (
               <NavLink to="/permissoes" icon={ShieldCheck} label="Permissoes" active={isActive('/permissoes')} />
             )}
-            {(user?.role === 'GESTOR' || user?.role === 'CAIXA') && (
+            {can('open_accounts:view') && (
               <NavLink to="/contas-abertas" icon={Wallet2} label="Contas Abertas" active={isActive('/contas-abertas')} />
             )}
-            {user?.role === 'GESTOR' && (
+            {can('saf_t:export') && (
               <NavLink to="/saf-t" icon={FileText} label="SAF-T" active={isActive('/saf-t')} />
             )}
           </div>
@@ -287,4 +295,3 @@ export default function Layout() {
     </div>
   );
 }
-

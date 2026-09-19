@@ -213,3 +213,19 @@ async def test_require_permission_also_allow_roles_skips_company_lookup(db):
     with pytest.raises(HTTPException) as exc_info:
         await strict(current_user=super_admin, db=db)
     assert exc_info.value.status_code == 403
+
+
+def test_frontend_permission_codes_exist_in_catalog():
+    """The frontend gates menu items with plain-string codes. GESTOR sees
+    everything regardless, so a typo would only show up as an item silently
+    hidden for other roles - catch it statically."""
+    src_dir = Path(__file__).resolve().parent.parent / "frontend" / "src"
+    catalog_codes = {entry[0] for entry in PERMISSION_CATALOG}
+    pattern = re.compile(r"(?:can\(|perm:)\s*['\"]([a-z_]+:[a-z_]+)['\"]")
+    used: dict[str, str] = {}
+    for path in src_dir.rglob("*.js*"):
+        for code in pattern.findall(path.read_text(encoding="utf-8")):
+            used[code] = path.name
+    assert used, "no permission codes found in the frontend - is the pattern out of date?"
+    unknown = {code: file for code, file in used.items() if code not in catalog_codes}
+    assert not unknown, f"frontend permission codes missing from PERMISSION_CATALOG: {unknown}"
