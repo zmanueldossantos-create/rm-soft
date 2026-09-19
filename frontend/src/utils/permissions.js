@@ -9,7 +9,7 @@ export function useCan() {
   const role = useAuthStore((state) => state.user?.role);
   const permissions = useAuthStore((state) => state.permissions);
   const can = (code) => role === 'GESTOR' || (Array.isArray(permissions) && permissions.includes(code));
-  // can.any(['a:b', 'c:d']) - true if the user holds at least one of the codes.
+  // can.any(codes) - true if the user holds at least one of the given codes.
   can.any = (codes) => codes.some((code) => can(code));
   return can;
 }
