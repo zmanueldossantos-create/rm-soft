@@ -224,7 +224,11 @@ def test_frontend_permission_codes_exist_in_catalog():
     pattern = re.compile(r"(?:can\(|perm[:=]|\b(?:view|manage):)\s*['\"]([a-z_]+:[a-z_]+)['\"]")
     used: dict[str, str] = {}
     for path in src_dir.rglob("*.js*"):
-        for code in pattern.findall(path.read_text(encoding="utf-8")):
+        text = path.read_text(encoding="utf-8")
+        found = pattern.findall(text)
+        for group in re.findall(r"(?:anyOf=\{|can\.any\(|perms:\s*)\[([^\]]*)\]", text):
+            found += re.findall(r"['\"]([a-z_]+:[a-z_]+)['\"]", group)
+        for code in found:
             used[code] = path.name
     assert used, "no permission codes found in the frontend - is the pattern out of date?"
     unknown = {code: file for code, file in used.items() if code not in catalog_codes}

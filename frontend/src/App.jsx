@@ -67,7 +67,7 @@ export default function App() {
           <Route path="/producao/historico" element={<RequirePermission perm="recipes:view"><ProductionHistory /></RequirePermission>} />
           <Route path="/caixa" element={<RequirePermission perm="pos:view"><Caixa /></RequirePermission>} />
           <Route path="/configuracoes" element={<SuperAdminRoute><Configuracoes /></SuperAdminRoute>} />
-          <Route path="/categorias" element={<RequirePermission perm="product_categories:manage"><Categorias /></RequirePermission>} />
+          <Route path="/categorias" element={<RequirePermission anyOf={['product_categories:manage', 'service_types:manage', 'tesouraria:reasons_manage', 'resource_types:manage', 'consumption_reasons:manage', 'tesouraria:payment_prefs_manage']}><Categorias /></RequirePermission>} />
           <Route path="/services" element={<RequirePermission perm="services:manage"><Services /></RequirePermission>} />
           <Route path="/invoices/new" element={<RequirePermission perm="invoices:issue"><NovaFatura /></RequirePermission>} />
           <Route path="/customers" element={<RequirePermission perm="customers:manage"><Customers /></RequirePermission>} />

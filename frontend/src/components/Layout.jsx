@@ -152,22 +152,22 @@ export default function Layout() {
   const productionItems = [
     { to: '/producao', icon: Factory, label: 'Produtos configurados', perm: 'recipes:view' },
     { to: '/producao/historico', icon: ClipboardList, label: 'Resumo de Produção', perm: 'recipes:view' },
-  ].filter((item) => can(item.perm));
+  ].filter((item) => (item.perms ? can.any(item.perms) : can(item.perm)));
 
   const stockItems = [
     { to: '/stock/dashboard', icon: Gauge, label: 'Resumo de Stock', perm: 'stock:view' },
     { to: '/stock', icon: Package2, label: 'Armazéns e Stock', perm: 'warehouses:view' },
     { to: '/stock-movements', icon: History, label: 'Histórico de Movimentos', perm: 'stock:view' },
-  ].filter((item) => can(item.perm));
+  ].filter((item) => (item.perms ? can.any(item.perms) : can(item.perm)));
 
   const settingsItems = [
     { to: '/company-settings', icon: Building2, label: 'Empresa', perm: 'company:view' },
-    { to: '/categorias', icon: Tags, label: 'Catálogos', perm: 'product_categories:manage' },
-  ].filter((item) => can(item.perm));
+    { to: '/categorias', icon: Tags, label: 'Catálogos', perms: ['product_categories:manage', 'service_types:manage', 'tesouraria:reasons_manage', 'resource_types:manage', 'consumption_reasons:manage', 'tesouraria:payment_prefs_manage'] },
+  ].filter((item) => (item.perms ? can.any(item.perms) : can(item.perm)));
 
   const accountingItems = [
     { to: '/fiscal-periods', icon: Calendar, label: 'Periodos/Exercicio', perm: 'fiscal_periods:view' },
-  ].filter((item) => can(item.perm));
+  ].filter((item) => (item.perms ? can.any(item.perms) : can(item.perm)));
 
   return (
     <div className="min-h-screen bg-bg-primary">

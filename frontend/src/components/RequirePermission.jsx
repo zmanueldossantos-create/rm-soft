@@ -2,14 +2,14 @@ import { Navigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 
-// Route guard: shows the page only if the user holds `perm`, otherwise sends
+// Route guard: shows the page only if the user holds `perm` (or any code of `anyOf`), otherwise sends
 // them to the dashboard (which is never guarded - guarding it could loop).
 // GESTOR always passes, as in the backend. SUPER_ADMIN has no company
 // permissions at all, so company screens redirect. While a non-GESTOR user's
 // permission list is still loading (null) we show a spinner instead of
 // redirecting - otherwise reloading /caixa would bounce a CAIXA to the
 // dashboard before the list arrives. The backend stays the real gatekeeper.
-export default function RequirePermission({ perm, children }) {
+export default function RequirePermission({ perm, anyOf, children }) {
   const role = useAuthStore((state) => state.user?.role);
   const permissions = useAuthStore((state) => state.permissions);
 
@@ -23,5 +23,6 @@ export default function RequirePermission({ perm, children }) {
       </div>
     );
   }
-  return permissions.includes(perm) ? children : <Navigate to="/dashboard" replace />;
+  const codes = anyOf || [perm];
+  return codes.some((code) => permissions.includes(code)) ? children : <Navigate to="/dashboard" replace />;
 }
