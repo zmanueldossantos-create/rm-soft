@@ -149,24 +149,26 @@ def test_every_api_route_is_protected():
 
 @pytest.mark.asyncio
 async def test_delete_company_removes_permission_rows(db):
-    """Deleting a company must not be blocked by its role_permissions /
-    company_permission_seeds rows (foreign keys without cascade)."""
+    """delete_company must clear the company's role_permissions and
+    company_permission_seeds rows (foreign keys without cascade). Uses a bare
+    company (no default warehouse, modules...) so it isolates exactly this
+    cleanup - delete_company's other gaps are tracked separately."""
+    from app.models.company import Company
+    from app.models.company_permission_seed import CompanyPermissionSeed
     from app.services.company_service import delete_company
 
-    company = await create_company(
-        db,
-        name="Empresa Para Apagar Lda",
-        nif="5000123457",
-        email="apagar@teste.co.ao",
-        phone_number="+244923000011",
-        gestor_full_name="Gestor Apagar",
-        gestor_phone_number="+244923000012",
-        gestor_password="Teste@2026",
-    )
+    company = Company(name="Empresa Para Apagar Lda", nif="5000123457", email="apagar@teste.co.ao", phone_number="+244923000011")
+    db.add(company)
+    await db.flush()
     company_id = company.id
-    assert (await db.execute(select(RolePermission).where(RolePermission.company_id == company_id))).scalars().all()
+    await _seed(db, company_id)
+
+    grants = (await db.execute(select(RolePermission).where(RolePermission.company_id == company_id))).scalars().all()
+    seeds = (await db.execute(select(CompanyPermissionSeed).where(CompanyPermissionSeed.company_id == company_id))).scalars().all()
+    assert grants and seeds
 
     await delete_company(db, company_id)
 
-    remaining = (await db.execute(select(RolePermission).where(RolePermission.company_id == company_id))).scalars().all()
-    assert remaining == []
+    grants = (await db.execute(select(RolePermission).where(RolePermission.company_id == company_id))).scalars().all()
+    seeds = (await db.execute(select(CompanyPermissionSeed).where(CompanyPermissionSeed.company_id == company_id))).scalars().all()
+    assert grants == [] and seeds == []
