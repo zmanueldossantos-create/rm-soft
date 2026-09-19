@@ -118,7 +118,7 @@ def test_every_require_permission_code_exists_in_catalog():
     catalog_codes = {entry[0] for entry in PERMISSION_CATALOG}
     used: dict[str, str] = {}
     for path in routes_dir.rglob("*.py"):
-        for code in re.findall(r'require_permission\(\s*"([^"]+)"\s*\)', path.read_text(encoding="utf-8")):
+        for code in re.findall(r'require_permission\(\s*"([^"]+)"', path.read_text(encoding="utf-8")):
             used[code] = path.name
     unknown = {code: file for code, file in used.items() if code not in catalog_codes}
     assert not unknown, f"require_permission codes missing from PERMISSION_CATALOG: {unknown}"
@@ -190,6 +190,26 @@ def test_every_catalog_permission_is_enforced_by_a_route():
     routes_dir = Path(__file__).resolve().parent.parent / "app" / "api" / "v1"
     used: set[str] = set()
     for path in routes_dir.rglob("*.py"):
-        used |= set(re.findall(r'require_permission\(\s*"([^"]+)"\s*\)', path.read_text(encoding="utf-8")))
+        used |= set(re.findall(r'require_permission\(\s*"([^"]+)"', path.read_text(encoding="utf-8")))
     unused = {entry[0] for entry in PERMISSION_CATALOG} - used
     assert not unused, f"catalog permissions no route enforces: {sorted(unused)}"
+
+
+
+@pytest.mark.asyncio
+async def test_require_permission_also_allow_roles_skips_company_lookup(db):
+    """A platform-level role listed in also_allow_roles (SUPER_ADMIN, no company,
+    no grants) passes; without the option the same user is refused."""
+    from types import SimpleNamespace
+    from fastapi import HTTPException
+    from app.api.deps import require_permission
+
+    super_admin = SimpleNamespace(role=UserRole.SUPER_ADMIN, company_id=None)
+
+    allowed = require_permission("tesouraria:reasons_view", also_allow_roles=("SUPER_ADMIN",))
+    assert await allowed(current_user=super_admin, db=db) is super_admin
+
+    strict = require_permission("tesouraria:reasons_view")
+    with pytest.raises(HTTPException) as exc_info:
+        await strict(current_user=super_admin, db=db)
+    assert exc_info.value.status_code == 403

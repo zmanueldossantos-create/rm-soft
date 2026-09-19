@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.api.deps import require_role
+from app.api.deps import require_permission
 from app.models.user import User
 from app.models.movement_type import MovementDirection
 from app.models.cash_movement import CashMovementType
@@ -62,8 +62,6 @@ from app.services.daily_report_service import get_daily_report
 
 router = APIRouter(prefix="/api/v1/tesouraria", tags=["tesouraria"])
 
-ALLOWED_ROLES = ("GESTOR",)
-ALLOWED_ROLES_READ = ("GESTOR", "CAIXA")
 
 
 # ---------- Cash movement reasons ----------
@@ -72,10 +70,10 @@ ALLOWED_ROLES_READ = ("GESTOR", "CAIXA")
 async def get_cash_movement_reasons(
     direction: MovementDirection | None = None,
     db: AsyncSession = Depends(get_db),
-    # SUPER_ADMIN included here (but not in ALLOWED_ROLES_READ generally, which
-    # also gates movement creation/listing below) so Configuracoes.jsx's catalog
-    # screen can list reasons - read-only exception for this one route.
-    current_user: User = Depends(require_role(*ALLOWED_ROLES_READ, "SUPER_ADMIN")),
+    # SUPER_ADMIN is also allowed - read-only exception for this one route, so
+    # Configuracoes.jsx's catalog screen can list reasons. SUPER_ADMIN has no
+    # company grants, hence also_allow_roles instead of a role permission.
+    current_user: User = Depends(require_permission("tesouraria:reasons_view", also_allow_roles=("SUPER_ADMIN",))),
 ):
     return await list_cash_movement_reasons(db, current_user.company_id, direction)
 
@@ -84,7 +82,7 @@ async def get_cash_movement_reasons(
 async def create_new_cash_movement_reason(
     payload: CashMovementReasonCreateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("tesouraria:reasons_manage")),
 ):
     try:
         return await create_cash_movement_reason(
@@ -99,7 +97,7 @@ async def edit_cash_movement_reason(
     reason_id: uuid.UUID,
     payload: CashMovementReasonCreateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("tesouraria:reasons_manage")),
 ):
     try:
         return await update_cash_movement_reason(
@@ -113,7 +111,7 @@ async def edit_cash_movement_reason(
 async def toggle_cash_movement_reason(
     reason_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("tesouraria:reasons_manage")),
 ):
     try:
         return await toggle_reason_status(db, current_user.company_id, reason_id)
@@ -127,7 +125,7 @@ async def toggle_cash_movement_reason(
 async def post_cash_movement(
     payload: CashMovementCreateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES_READ)),
+    current_user: User = Depends(require_permission("tesouraria:record")),
 ):
     try:
         return await create_cash_movement(
@@ -161,7 +159,7 @@ async def post_cash_movement(
 async def get_cash_movements(
     pos_id: uuid.UUID | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES_READ)),
+    current_user: User = Depends(require_permission("tesouraria:view")),
 ):
     return await list_cash_movements(db, current_user.company_id, pos_id)
 
@@ -171,7 +169,7 @@ async def get_cash_movements(
 @router.get("/my-association", response_model=UserCashPointAccessResponse | None)
 async def get_my_cash_point_association(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("GESTOR", "CAIXA", "ARMAZENISTA", "CONTABILISTA")),
+    current_user: User = Depends(require_permission("tesouraria:my_association")),
 ):
     """Any authenticated (non-SUPER_ADMIN) user can check their own association -
     used by Caixa.jsx to know which POS to lock onto / whether to show the picker."""
@@ -182,7 +180,7 @@ async def get_my_cash_point_association(
 @router.get("/associations", response_model=list[UserCashPointAccessResponse])
 async def get_cash_point_associations(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("tesouraria:associations_manage")),
 ):
     return await list_cash_point_access(db, current_user.company_id)
 
@@ -192,7 +190,7 @@ async def put_cash_point_association(
     user_id: uuid.UUID,
     payload: AssignCashPointRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("tesouraria:associations_manage")),
 ):
     """Assigns (or reassigns) a user to exactly one POS."""
     try:
@@ -207,7 +205,7 @@ async def put_cash_point_association(
 async def delete_cash_point_association(
     user_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("tesouraria:associations_manage")),
 ):
     try:
         await unassign_user(db, current_user.company_id, user_id)
@@ -220,7 +218,7 @@ async def delete_cash_point_association(
 @router.get("/payment-method-preferences", response_model=list[PaymentMethodPreferenceResponse])
 async def get_payment_method_preferences(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("GESTOR", "CAIXA")),
+    current_user: User = Depends(require_permission("tesouraria:payment_prefs_view")),
 ):
     return await list_payment_method_preferences(db, current_user.company_id)
 
@@ -230,7 +228,7 @@ async def put_payment_method_preference(
     payment_method_id: uuid.UUID,
     payload: PaymentMethodPreferenceUpdateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("GESTOR")),
+    current_user: User = Depends(require_permission("tesouraria:payment_prefs_manage")),
 ):
     await set_payment_method_preference(db, current_user.company_id, payment_method_id, payload.available_at_pos)
     updated = await list_payment_method_preferences(db, current_user.company_id)
@@ -243,7 +241,7 @@ async def put_payment_method_preference(
 async def get_pending_receptions(
     pos_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES_READ)),
+    current_user: User = Depends(require_permission("tesouraria:view")),
 ):
     return await list_pending_receptions(db, current_user.company_id, pos_id)
 
@@ -253,7 +251,7 @@ async def post_receive_movement(
     movement_id: uuid.UUID,
     pos_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES_READ)),
+    current_user: User = Depends(require_permission("tesouraria:receive")),
 ):
     try:
         return await receive_cash_movement(db, current_user.company_id, movement_id, pos_id, current_user.id)
@@ -269,7 +267,7 @@ async def post_receive_movement(
 async def get_pending_emissions(
     pos_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES_READ)),
+    current_user: User = Depends(require_permission("tesouraria:view")),
 ):
     return await list_pending_emissions(db, current_user.company_id, pos_id)
 
@@ -279,7 +277,7 @@ async def delete_pending_movement(
     movement_id: uuid.UUID,
     pos_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES_READ)),
+    current_user: User = Depends(require_permission("tesouraria:cancel_movement")),
 ):
     try:
         await cancel_cash_movement(db, current_user.company_id, movement_id, pos_id)
@@ -297,6 +295,6 @@ async def get_pos_daily_report(
     date_from: date,
     date_to: date,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES_READ)),
+    current_user: User = Depends(require_permission("tesouraria:daily_report")),
 ):
     return await get_daily_report(db, current_user.company_id, pos_id, date_from, date_to)

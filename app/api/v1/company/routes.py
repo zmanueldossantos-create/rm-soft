@@ -13,7 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.api.deps import require_role
+from app.api.deps import require_permission
 from app.models.user import User
 from app.models.company import Company
 from app.schemas.company_settings import CompanyContactUpdateRequest, CompanyContactResponse
@@ -36,7 +36,7 @@ def _duplicate_field_message(error: IntegrityError) -> str:
 @router.get("/me/bank-accounts", response_model=list[BankAccountResponse])
 async def get_my_company_bank_accounts(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("GESTOR", "CAIXA")),
+    current_user: User = Depends(require_permission("company_bank_accounts:view")),
 ):
     """Read-only - GESTOR (and CAIXA, needed for the Caixa screen's FT payment block) see their own company's bank accounts; management stays SUPER_ADMIN-only."""
     return await list_bank_accounts(db, current_user.company_id)
@@ -45,7 +45,7 @@ async def get_my_company_bank_accounts(
 @router.get("/me", response_model=CompanyContactResponse)
 async def get_my_company(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("GESTOR")),
+    current_user: User = Depends(require_permission("company:view")),
 ):
     """Returns the caller's own company info."""
     result = await db.execute(select(Company).where(Company.id == current_user.company_id))
@@ -56,7 +56,7 @@ async def get_my_company(
 async def update_my_company_contact(
     payload: CompanyContactUpdateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("GESTOR")),
+    current_user: User = Depends(require_permission("company:manage")),
 ):
     """Updates the caller's own company contact info (address/phone/email only)."""
     result = await db.execute(select(Company).where(Company.id == current_user.company_id))
@@ -111,7 +111,7 @@ MAX_LOGO_SIZE_BYTES = 2 * 1024 * 1024  # 2MB
 async def upload_my_company_logo(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("GESTOR")),
+    current_user: User = Depends(require_permission("company:manage")),
 ):
     """Uploads/replaces the caller's own company logo. Stored locally (Phase 1)."""
     ext = os.path.splitext(file.filename or "")[1].lower()
@@ -149,7 +149,7 @@ async def upload_my_company_logo(
 @router.delete("/me/logo", response_model=CompanyContactResponse)
 async def remove_my_company_logo(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("GESTOR")),
+    current_user: User = Depends(require_permission("company:manage")),
 ):
     """Removes the caller's own company logo."""
     result = await db.execute(select(Company).where(Company.id == current_user.company_id))
@@ -171,7 +171,7 @@ async def remove_my_company_logo(
 async def add_my_company_bank_account(
     payload: BankAccountInput,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("GESTOR")),
+    current_user: User = Depends(require_permission("company_bank_accounts:manage")),
 ):
     """GESTOR manages their own company's bank accounts directly - no SUPER_ADMIN needed for this."""
     return await add_bank_account(db, current_user.company_id, payload.bank_id, payload.account_number, payload.iban, payload.currency_id)
@@ -182,7 +182,7 @@ async def patch_my_company_bank_account(
     account_id: uuid.UUID,
     payload: BankAccountInput,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("GESTOR")),
+    current_user: User = Depends(require_permission("company_bank_accounts:manage")),
 ):
     try:
         return await update_bank_account(db, account_id, payload.bank_id, payload.account_number, payload.iban, payload.currency_id)
@@ -194,7 +194,7 @@ async def patch_my_company_bank_account(
 async def toggle_my_company_bank_account(
     account_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("GESTOR")),
+    current_user: User = Depends(require_permission("company_bank_accounts:manage")),
 ):
     try:
         return await toggle_bank_account(db, account_id)

@@ -84,17 +84,20 @@ def require_role(*allowed_roles: str):
     return role_checker
 
 
-def require_permission(code: str):
+def require_permission(code: str, *, also_allow_roles: tuple[str, ...] = ()):
     """
     Dependency factory - dynamic counterpart to require_role, checking a
     per-company RolePermission grant instead of a hardcoded role tuple. See
-    app.services.permission_service for the full design rationale (pilot
-    scope: only Consumo Interno's routes use this for now).
+    app.services.permission_service for the full design rationale (used by every company-scoped route).
     """
     async def permission_checker(
         current_user: User = Depends(get_current_user),
         db: AsyncSession = Depends(get_db),
     ) -> User:
+        # Platform-level roles listed in also_allow_roles (e.g. SUPER_ADMIN, which has no
+        # company and therefore no grants) pass without a permission lookup.
+        if current_user.role.value in also_allow_roles:
+            return current_user
         if current_user.company_id is None or not await has_permission(db, current_user.company_id, current_user.role.value, code):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

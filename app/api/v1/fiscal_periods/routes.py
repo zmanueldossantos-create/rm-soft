@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.api.deps import require_role
+from app.api.deps import require_permission
 from app.models.user import User
 from app.schemas.fiscal_period import (
     FiscalYearResponse,
@@ -40,7 +40,7 @@ router = APIRouter(prefix="/api/v1/fiscal", tags=["fiscal"])
 @router.get("/years/next", response_model=NextFiscalYearResponse)
 async def get_next_year(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("GESTOR")),
+    current_user: User = Depends(require_permission("fiscal_periods:manage")),
 ):
     """What year would open next, or null if one is already open."""
     next_year = await get_next_fiscal_year(db, current_user.company_id)
@@ -50,7 +50,7 @@ async def get_next_year(
 @router.post("/years", response_model=FiscalYearResponse, status_code=status.HTTP_201_CREATED)
 async def create_fiscal_year(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("GESTOR")),
+    current_user: User = Depends(require_permission("fiscal_periods:manage")),
 ):
     try:
         return await open_fiscal_year(db, current_user.company_id)
@@ -61,7 +61,7 @@ async def create_fiscal_year(
 @router.get("/years", response_model=list[FiscalYearResponse])
 async def get_fiscal_years(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("GESTOR")),
+    current_user: User = Depends(require_permission("fiscal_periods:view")),
 ):
     return await list_fiscal_years(db, current_user.company_id)
 
@@ -70,7 +70,7 @@ async def get_fiscal_years(
 async def close_year(
     fiscal_year_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("GESTOR")),
+    current_user: User = Depends(require_permission("fiscal_periods:close")),
 ):
     try:
         return await close_fiscal_year(db, current_user.company_id, fiscal_year_id)
@@ -84,7 +84,7 @@ async def close_year(
 async def get_next_month(
     fiscal_year_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("GESTOR")),
+    current_user: User = Depends(require_permission("fiscal_periods:manage")),
 ):
     """What month would open next within this year, or null if unavailable."""
     next_month = await get_next_fiscal_month(db, fiscal_year_id)
@@ -95,7 +95,7 @@ async def get_next_month(
 async def create_fiscal_period(
     fiscal_year_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("GESTOR")),
+    current_user: User = Depends(require_permission("fiscal_periods:manage")),
 ):
     try:
         return await open_fiscal_period(db, current_user.company_id, fiscal_year_id)
@@ -109,7 +109,7 @@ async def create_fiscal_period(
 async def get_fiscal_periods(
     fiscal_year_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("GESTOR")),
+    current_user: User = Depends(require_permission("fiscal_periods:view")),
 ):
     return await list_fiscal_periods(db, current_user.company_id, fiscal_year_id)
 
@@ -118,7 +118,7 @@ async def get_fiscal_periods(
 async def close_period(
     period_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("GESTOR")),
+    current_user: User = Depends(require_permission("fiscal_periods:close")),
 ):
     try:
         return await close_fiscal_period(db, current_user.company_id, period_id)
@@ -129,7 +129,7 @@ async def close_period(
 @router.get("/current-period")
 async def get_current_period(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("GESTOR", "CAIXA", "ARMAZENISTA", "CONTABILISTA")),
+    current_user: User = Depends(require_permission("fiscal_periods:current")),
 ):
     """
     Returns the currently open period label (e.g. "Agosto 2026") for the

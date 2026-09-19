@@ -15,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.api.deps import require_role
+from app.api.deps import require_permission, require_role
 from app.models.user import User
 from app.models.vat import VAT
 from app.schemas.vat import VatResponse, VatRateCreateRequest, VatRateUpdateRequest
@@ -34,7 +34,7 @@ router = APIRouter(prefix="/api/v1/vat", tags=["vat"])
 @router.get("", response_model=list[VatResponse])
 async def get_vat_rates(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("GESTOR", "CAIXA")),
+    current_user: User = Depends(require_permission("vat:view")),
 ):
     """Lists the active VAT rates for the caller's company (read-only)."""
     result = await db.execute(

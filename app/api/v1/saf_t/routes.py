@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.api.deps import require_role
+from app.api.deps import require_permission
 from app.models.user import User
 from app.services.saf_t_export_service import export_saf_t_for_period, CompanyNotFoundError
 
@@ -17,7 +17,7 @@ async def export_saf_t(
     year: int,
     month: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("GESTOR")),
+    current_user: User = Depends(require_permission("saf_t:export")),
 ):
     """
     Generates and returns the SAF-T AuditFile XML for one calendar month
