@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.api.deps import require_role
+from app.api.deps import require_permission
 from app.models.user import User
 from app.schemas.activity import ActivityCreateRequest, ActivityUpdateRequest, ActivityResponse
 from app.schemas.module import ModuleResponse
@@ -40,7 +40,7 @@ router = APIRouter(prefix="/api/v1/activities", tags=["activities"])
 async def get_activities(
     db: AsyncSession = Depends(get_db),
     # ARMAZENISTA needs this too - Consumo Interno's activity tabs call this list.
-    current_user: User = Depends(require_role("GESTOR", "CAIXA", "ARMAZENISTA")),
+    current_user: User = Depends(require_permission("activities:view")),
 ):
     """Lists the company's configured activities (e.g. Padaria, Bar, Hotel)."""
     return await list_activities(db, current_user.company_id)
@@ -49,7 +49,7 @@ async def get_activities(
 @router.get("/available-modules", response_model=list[ModuleResponse])
 async def get_available_modules(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("GESTOR")),
+    current_user: User = Depends(require_permission("activities:manage")),
 ):
     """Lists the Modules the company has been granted by SUPER_ADMIN - to configure as Activities."""
     return await list_company_modules(db, current_user.company_id)
@@ -59,7 +59,7 @@ async def get_available_modules(
 async def create_new_activity(
     payload: ActivityCreateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("GESTOR")),
+    current_user: User = Depends(require_permission("activities:manage")),
 ):
     """Configures a new activity for a Module the company has been granted."""
     try:
@@ -77,7 +77,7 @@ async def edit_activity(
     activity_id: uuid.UUID,
     payload: ActivityUpdateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("GESTOR")),
+    current_user: User = Depends(require_permission("activities:manage")),
 ):
     """Updates an activity's name and series code."""
     try:
@@ -92,7 +92,7 @@ async def edit_activity(
 async def toggle_activity(
     activity_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("GESTOR")),
+    current_user: User = Depends(require_permission("activities:manage")),
 ):
     """Activates or deactivates an activity."""
     try:
@@ -107,7 +107,7 @@ async def toggle_activity(
 async def get_points_of_sale(
     activity_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("GESTOR", "CAIXA")),
+    current_user: User = Depends(require_permission("pos_terminals:view")),
 ):
     """Lists the POS configured under this activity (CAIXA needs this to pick one when opening the register)."""
     return await list_points_of_sale(db, current_user.company_id, activity_id)
@@ -118,7 +118,7 @@ async def create_new_pos(
     activity_id: uuid.UUID,
     payload: PosCreateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("GESTOR")),
+    current_user: User = Depends(require_permission("pos_terminals:manage")),
 ):
     """Creates a new POS under this activity - several POS can share the same activity's stock/warehouse."""
     try:
@@ -134,7 +134,7 @@ async def edit_pos(
     pos_id: uuid.UUID,
     payload: PosUpdateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("GESTOR")),
+    current_user: User = Depends(require_permission("pos_terminals:manage")),
 ):
     """Renames a POS."""
     try:
@@ -149,7 +149,7 @@ async def edit_pos(
 async def toggle_pos(
     pos_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("GESTOR")),
+    current_user: User = Depends(require_permission("pos_terminals:manage")),
 ):
     """Activates or deactivates a POS."""
     try:

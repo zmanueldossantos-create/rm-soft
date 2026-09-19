@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.api.deps import require_role
+from app.api.deps import require_permission
 from app.models.user import User
 from app.models.booking import BookingStatus
 from app.schemas.booking import (
@@ -30,7 +30,6 @@ from app.services.activity_service import ActivityNotFoundError
 
 router = APIRouter(prefix="/api/v1", tags=["bookings"])
 
-ALLOWED_ROLES = ("GESTOR", "CAIXA")
 
 
 # ---------- Resource types (managed catalog) ----------
@@ -39,7 +38,7 @@ ALLOWED_ROLES = ("GESTOR", "CAIXA")
 async def post_create_resource_type(
     payload: ResourceTypeCreateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("GESTOR")),
+    current_user: User = Depends(require_permission("resource_types:manage")),
 ):
     try:
         return await create_resource_type(db, current_user.company_id, payload.name, payload.requires_service)
@@ -50,7 +49,7 @@ async def post_create_resource_type(
 @router.get("/resource-types", response_model=list[ResourceTypeResponse])
 async def get_resource_types(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("resource_types:view")),
 ):
     return await list_resource_types(db, current_user.company_id)
 
@@ -60,7 +59,7 @@ async def patch_resource_type(
     resource_type_id: uuid.UUID,
     payload: ResourceTypeUpdateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("GESTOR")),
+    current_user: User = Depends(require_permission("resource_types:manage")),
 ):
     try:
         return await update_resource_type(db, current_user.company_id, resource_type_id, payload.name, payload.requires_service)
@@ -74,7 +73,7 @@ async def patch_resource_type(
 async def post_toggle_resource_type(
     resource_type_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("GESTOR")),
+    current_user: User = Depends(require_permission("resource_types:manage")),
 ):
     try:
         return await toggle_resource_type_status(db, current_user.company_id, resource_type_id)
@@ -88,7 +87,7 @@ async def post_toggle_resource_type(
 async def post_create_resource(
     payload: ResourceCreateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("GESTOR")),
+    current_user: User = Depends(require_permission("resources:manage")),
 ):
     try:
         return await create_resource(db, current_user.company_id, payload.activity_id, payload.resource_type_id, payload.name, payload.capacity)
@@ -103,10 +102,7 @@ async def get_resources(
     activity_id: uuid.UUID | None = None,
     resource_type_id: uuid.UUID | None = None,
     db: AsyncSession = Depends(get_db),
-    # Explicit list (not the shared ALLOWED_ROLES) - ARMAZENISTA needs read-only
-    # access here for Consumo Interno's resource picker, but shouldn't gain the
-    # broader booking-management access ALLOWED_ROLES grants to the rest of this file.
-    current_user: User = Depends(require_role("GESTOR", "CAIXA", "ARMAZENISTA")),
+    current_user: User = Depends(require_permission("resources:view")),
 ):
     return await list_resources(db, current_user.company_id, activity_id, resource_type_id)
 
@@ -116,7 +112,7 @@ async def patch_resource(
     resource_id: uuid.UUID,
     payload: ResourceUpdateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("GESTOR")),
+    current_user: User = Depends(require_permission("resources:manage")),
 ):
     try:
         return await update_resource(db, current_user.company_id, resource_id, payload.name, payload.capacity)
@@ -128,7 +124,7 @@ async def patch_resource(
 async def post_toggle_resource(
     resource_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("GESTOR")),
+    current_user: User = Depends(require_permission("resources:manage")),
 ):
     try:
         return await toggle_resource_status(db, current_user.company_id, resource_id)
@@ -142,7 +138,7 @@ async def post_toggle_resource(
 async def post_create_booking(
     payload: BookingCreateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("bookings:create")),
 ):
     try:
         return await create_booking(
@@ -167,7 +163,7 @@ async def get_bookings(
     date_from: datetime | None = None,
     date_to: datetime | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("bookings:view")),
 ):
     return await list_bookings(db, current_user.company_id, resource_id, date_from, date_to)
 
@@ -177,7 +173,7 @@ async def patch_booking_status(
     booking_id: uuid.UUID,
     payload: BookingStatusUpdateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("bookings:update")),
 ):
     try:
         new_status = BookingStatus(payload.status)
@@ -194,7 +190,7 @@ async def patch_booking_reschedule(
     booking_id: uuid.UUID,
     payload: BookingRescheduleRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("bookings:update")),
 ):
     try:
         return await reschedule_booking(

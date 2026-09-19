@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.api.deps import require_role
+from app.api.deps import require_permission
 from app.models.user import User
 from app.schemas.service_type import ServiceTypeRequest, ServiceTypeResponse
 from app.services.service_type_service import (
@@ -21,15 +21,12 @@ from app.services.service_type_service import (
 )
 
 router = APIRouter(prefix="/api/v1/service-types", tags=["service-types"])
-ALLOWED_ROLES = ("GESTOR",)
 
 
 @router.get("", response_model=list[ServiceTypeResponse])
 async def get_service_types(
     db: AsyncSession = Depends(get_db),
-    # Explicit list, not the shared ALLOWED_ROLES - CAIXA needs read access here,
-    # same reasoning as product_categories' get_product_categories fix.
-    current_user: User = Depends(require_role("GESTOR", "CAIXA")),
+    current_user: User = Depends(require_permission("service_types:view")),
 ):
     return await list_service_types(db, current_user.company_id)
 
@@ -38,7 +35,7 @@ async def get_service_types(
 async def post_service_type(
     payload: ServiceTypeRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("service_types:manage")),
 ):
     try:
         return await create_service_type(
@@ -54,7 +51,7 @@ async def patch_service_type(
     service_type_id: uuid.UUID,
     payload: ServiceTypeRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("service_types:manage")),
 ):
     try:
         return await update_service_type(
@@ -71,7 +68,7 @@ async def patch_service_type(
 async def toggle_service_type_status(
     service_type_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("service_types:manage")),
 ):
     try:
         return await toggle_service_type(db, current_user.company_id, service_type_id)

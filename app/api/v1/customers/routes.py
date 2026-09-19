@@ -45,9 +45,6 @@ async def get_suggested_code(
 async def create_new_customer(
     payload: CustomerCreateRequest,
     db: AsyncSession = Depends(get_db),
-    # Explicit list, not the shared ALLOWED_ROLES - CAIXA needs to create a
-    # customer inline (Reservas' quick-add "Hospede" modal) without gaining the
-    # broader customer-management access ALLOWED_ROLES grants elsewhere in this file.
     current_user: User = Depends(require_permission("customers:create")),
 ):
     """Creates a customer within the caller's company."""

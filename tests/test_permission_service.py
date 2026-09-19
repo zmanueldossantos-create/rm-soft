@@ -183,3 +183,13 @@ def test_catalog_is_well_formed():
         assert re.fullmatch(r"[a-z_]+:[a-z_]+", code), code
         assert label and category, code
         assert set(defaults) <= set(permission_service.EDITABLE_ROLES), (code, defaults)
+
+def test_every_catalog_permission_is_enforced_by_a_route():
+    """A catalog entry that no route checks would show a checkbox in the admin
+    matrix that changes nothing - catch it statically."""
+    routes_dir = Path(__file__).resolve().parent.parent / "app" / "api" / "v1"
+    used: set[str] = set()
+    for path in routes_dir.rglob("*.py"):
+        used |= set(re.findall(r'require_permission\(\s*"([^"]+)"\s*\)', path.read_text(encoding="utf-8")))
+    unused = {entry[0] for entry in PERMISSION_CATALOG} - used
+    assert not unused, f"catalog permissions no route enforces: {sorted(unused)}"

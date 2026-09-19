@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.api.deps import require_role
+from app.api.deps import require_permission
 from app.models.user import User
 from app.schemas.service import ServiceCreateRequest, ServiceUpdateRequest, ServiceResponse
 from app.services.service_service import (
@@ -22,14 +22,13 @@ from app.services.service_service import (
 )
 
 router = APIRouter(prefix="/api/v1/services", tags=["services"])
-ALLOWED_ROLES = ("GESTOR",)
 
 
 @router.post("", response_model=ServiceResponse, status_code=status.HTTP_201_CREATED)
 async def create_new_service(
     payload: ServiceCreateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("services:manage")),
 ):
     """Creates a service within the caller's company."""
     try:
@@ -63,7 +62,7 @@ async def get_services(
     db: AsyncSession = Depends(get_db),
     # CAIXA needs read access too - a cashier must see the service catalog to sell
     # (Caixa, Contas Abertas) even though only GESTOR can create/edit services.
-    current_user: User = Depends(require_role("GESTOR", "CAIXA")),
+    current_user: User = Depends(require_permission("services:view")),
 ):
     """Lists all services belonging to the caller's company."""
     return await list_services(db, current_user.company_id)
@@ -74,7 +73,7 @@ async def edit_service(
     service_id: uuid.UUID,
     payload: ServiceUpdateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("services:manage")),
 ):
     """Updates a service's editable fields, scoped to the caller's company."""
     try:
@@ -108,7 +107,7 @@ async def edit_service(
 async def toggle_status(
     service_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("services:manage")),
 ):
     """Activates or deactivates a service."""
     try:
