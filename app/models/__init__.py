@@ -9,6 +9,9 @@ from app.models.user import User
 from app.models.vat import VAT
 from app.models.product import Product
 from app.models.customer import Customer, CustomerStatus
+from app.models.supplier import Supplier
+from app.models.permission import Permission
+from app.models.role_permission import RolePermission
 from app.models.fiscal_year import FiscalYear
 from app.models.fiscal_period import FiscalPeriod
 from app.models.invoice import Invoice
@@ -61,7 +64,7 @@ from app.models.denomination import Denomination, DenominationType
 from app.models.cash_denomination_count import CashDenominationCount, CashDenominationCountLine, DenominationCountType
 
 __all__ = [
-    "Company", "User", "VAT", "Product", "Customer", "CustomerStatus",
+    "Company", "User", "VAT", "Product", "Customer", "CustomerStatus", "Supplier", "Permission", "RolePermission",
     "FiscalYear", "FiscalPeriod", "Invoice", "InvoiceLine",
     "Warehouse", "Stock", "StockMovement", "ResourceTypeCatalog", "ConsumptionReasonCatalog", "InternalConsumption", "Resource", "Booking", "OpenAccount", "OpenAccountLine", "PlatformSettings", "FiscalRegime", "Activity", "RecipeIngredient", "CashSession", "Payment", "Country", "Currency", "Province", "Municipality", "Bank", "PaymentMethodCatalog", "CompanyPaymentMethodPreference", "PaymentTerm", "VatCode", "DocumentType", "UnitOfMeasureCatalog", "WithholdingTax", "CompanyBankAccount", "CustomerBankAccountLink", "ProductCategory", "ServiceType", "Service", "ProductServiceStatus", "Establishment", "DocumentSeries", "ContingencyIndicator", "Module", "CompanyModule", "PointOfSale", "CashMovementReason", "CashMovement", "CashMovementType", "UserCashPointAccess", "Denomination", "DenominationType", "CashDenominationCount", "CashDenominationCountLine", "DenominationCountType",
 ]

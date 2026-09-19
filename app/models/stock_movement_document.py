@@ -22,6 +22,10 @@ class StockMovementDocument(Base):
     company_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("companies.id"), nullable=False, index=True)
     movement_type_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("movement_types.id"), nullable=False)
     warehouse_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("warehouses.id"), nullable=False)
+    # Optional - set on a supplier receipt (Guia de Entrada), left null on an
+    # internal transfer between the company's own warehouses (e.g. Armazem
+    # Principal -> Hotel), which isn't a purchase. See Supplier model docstring.
+    supplier_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("suppliers.id"), nullable=True, index=True)
 
     series: Mapped[str] = mapped_column(String(20), nullable=False)
     number: Mapped[int] = mapped_column(Integer, nullable=False)

@@ -4,6 +4,7 @@ import { listActivities } from '../api/activity';
 import { listProducts } from '../api/products';
 import { listResources } from '../api/booking';
 import { listConsumptionReasons, recordConsumption, listInternalConsumption } from '../api/internalConsumption';
+import { getMyPermissions } from '../api/permissions';
 import { extractErrorMessage } from '../utils/errors';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
@@ -23,6 +24,7 @@ export default function ConsumoInterno() {
   const [resources, setResources] = useState([]);
   const [reasons, setReasons] = useState([]);
   const [entries, setEntries] = useState([]);
+  const [canRecord, setCanRecord] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -42,6 +44,7 @@ export default function ConsumoInterno() {
     }).catch((err) => setError(extractErrorMessage(err, 'Erro ao carregar atividades')));
     listProducts().then((data) => setProducts(data.filter((p) => p.is_active && p.internal_use_only))).catch(() => {});
     listConsumptionReasons().then((data) => setReasons(data.filter((r) => r.is_active))).catch(() => {});
+    getMyPermissions().then((perms) => setCanRecord(perms.includes('internal_consumption:record'))).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -109,14 +112,16 @@ export default function ConsumoInterno() {
           <PackageMinus size={22} className="text-accent" />
           Consumo Interno
         </h2>
-        <button
-          onClick={openCreateForm}
-          disabled={!selectedActivityId}
-          className="flex items-center gap-2 bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-medium text-sm px-4 py-2 rounded-md transition-colors cursor-pointer"
-        >
-          <Plus size={16} />
-          Registar consumo
-        </button>
+        {canRecord && (
+          <button
+            onClick={openCreateForm}
+            disabled={!selectedActivityId}
+            className="flex items-center gap-2 bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-medium text-sm px-4 py-2 rounded-md transition-colors cursor-pointer"
+          >
+            <Plus size={16} />
+            Registar consumo
+          </button>
+        )}
       </div>
       <p className="text-text-muted text-sm mb-6">Consumiveis usados internamente (limpeza, amenities...) - nao gera fatura, apenas deduz stock</p>
 

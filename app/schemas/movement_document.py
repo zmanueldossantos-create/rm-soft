@@ -19,6 +19,7 @@ class MovementDocumentCreateRequest(BaseModel):
     warehouse_id: uuid.UUID
     movement_date: date | None = None
     description: str | None = None
+    supplier_id: uuid.UUID | None = None
     lines: list[MovementDocumentLineRequest]
 
     @field_validator("lines")
@@ -48,6 +49,7 @@ class MovementDocumentResponse(BaseModel):
     id: uuid.UUID
     movement_type_id: uuid.UUID
     warehouse_id: uuid.UUID
+    supplier_id: uuid.UUID | None
     series: str
     number: int
     movement_date: date

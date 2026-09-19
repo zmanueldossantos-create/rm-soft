@@ -75,6 +75,7 @@ async def create_stock_movement_document(
     lines_input: list[dict],
     movement_date: date | None = None,
     description: str | None = None,
+    supplier_id: uuid.UUID | None = None,
 ) -> StockMovementDocument:
     """
     lines_input items: {product_id, quantity, purchase_price, sale_price}
@@ -161,6 +162,7 @@ async def create_stock_movement_document(
         company_id=company_id,
         movement_type_id=movement_type_id,
         warehouse_id=warehouse_id,
+        supplier_id=supplier_id,
         series=f"{movement_type.code}{movement_date.year}",
         number=next_number,
         movement_date=movement_date,

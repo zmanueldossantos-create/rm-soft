@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.api.deps import require_role
+from app.api.deps import require_permission
 from app.models.user import User
 from app.schemas.internal_consumption import (
     ConsumptionReasonCreateRequest, ConsumptionReasonUpdateRequest, ConsumptionReasonResponse,
@@ -23,7 +23,11 @@ from app.services.stock_service import InsufficientStockError
 
 router = APIRouter(prefix="/api/v1", tags=["internal-consumption"])
 
-ALLOWED_ROLES = ("GESTOR", "ARMAZENISTA")
+# PILOT MODULE for the dynamic permission system - every Depends() below
+# checks a per-company RolePermission grant (admin-configurable) instead of
+# a hardcoded role tuple. See app.services.permission_service for the
+# design rationale and PILOT_PERMISSIONS for the seeded defaults (which
+# reproduce the old require_role(...) behaviour exactly out of the box).
 
 
 # ---------- Consumption reasons (managed catalog) ----------
@@ -32,7 +36,7 @@ ALLOWED_ROLES = ("GESTOR", "ARMAZENISTA")
 async def post_create_consumption_reason(
     payload: ConsumptionReasonCreateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("GESTOR")),
+    current_user: User = Depends(require_permission("consumption_reasons:manage")),
 ):
     try:
         return await create_consumption_reason(db, current_user.company_id, payload.name)
@@ -43,7 +47,7 @@ async def post_create_consumption_reason(
 @router.get("/consumption-reasons", response_model=list[ConsumptionReasonResponse])
 async def get_consumption_reasons(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("consumption_reasons:view")),
 ):
     return await list_consumption_reasons(db, current_user.company_id)
 
@@ -53,7 +57,7 @@ async def patch_consumption_reason(
     reason_id: uuid.UUID,
     payload: ConsumptionReasonUpdateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("GESTOR")),
+    current_user: User = Depends(require_permission("consumption_reasons:manage")),
 ):
     try:
         return await update_consumption_reason(db, current_user.company_id, reason_id, payload.name)
@@ -67,7 +71,7 @@ async def patch_consumption_reason(
 async def post_toggle_consumption_reason(
     reason_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("GESTOR")),
+    current_user: User = Depends(require_permission("consumption_reasons:manage")),
 ):
     try:
         return await toggle_consumption_reason_status(db, current_user.company_id, reason_id)
@@ -81,7 +85,7 @@ async def post_toggle_consumption_reason(
 async def post_record_consumption(
     payload: InternalConsumptionCreateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("internal_consumption:record")),
 ):
     try:
         record = await record_consumption(
@@ -105,6 +109,6 @@ async def get_internal_consumption(
     date_from: datetime | None = None,
     date_to: datetime | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("internal_consumption:view")),
 ):
     return await list_consumptions(db, current_user.company_id, activity_id, date_from, date_to)

@@ -1,7 +1,7 @@
 ﻿import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { createPortal } from 'react-dom';
-import { Building2, LogOut, LayoutDashboard, Sun, Moon, Package, Users, Calendar, Receipt, Settings, Package2, UserCog, History, FileText, Landmark, LayoutGrid, Store, Wheat, Factory, Wallet, SlidersHorizontal, Tags, Wrench, ChevronDown, Cog, Plus, ArrowLeftRight, Calculator, ClipboardList, Gauge, PiggyBank, CreditCard, Boxes, CalendarClock, Wallet2, PackageMinus } from 'lucide-react';
+import { Building2, LogOut, LayoutDashboard, Sun, Moon, Package, Users, Calendar, Receipt, Settings, Package2, UserCog, History, FileText, Landmark, LayoutGrid, Store, Wheat, Factory, Wallet, SlidersHorizontal, Tags, Wrench, ChevronDown, Cog, Plus, ArrowLeftRight, Calculator, ClipboardList, Gauge, PiggyBank, CreditCard, Boxes, CalendarClock, Wallet2, PackageMinus, Truck, ShieldCheck } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useThemeStore } from '../store/themeStore';
 import { getCurrentPeriod } from '../api/fiscal';
@@ -236,6 +236,12 @@ export default function Layout() {
             )}
             {(user?.role === 'GESTOR' || user?.role === 'ARMAZENISTA') && (
               <NavLink to="/consumo-interno" icon={PackageMinus} label="Consumo Interno" active={isActive('/consumo-interno')} />
+            )}
+            {user?.role === 'GESTOR' && (
+              <NavLink to="/fornecedores" icon={Truck} label="Fornecedores" active={isActive('/fornecedores')} />
+            )}
+            {user?.role === 'GESTOR' && (
+              <NavLink to="/permissoes" icon={ShieldCheck} label="Permissoes" active={isActive('/permissoes')} />
             )}
             {(user?.role === 'GESTOR' || user?.role === 'CAIXA') && (
               <NavLink to="/contas-abertas" icon={Wallet2} label="Contas Abertas" active={isActive('/contas-abertas')} />

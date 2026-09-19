@@ -6,6 +6,7 @@ import { createMovementDocument, downloadMovementExcelTemplate } from '../api/mo
 import { listProducts } from '../api/products';
 import { listWarehouses } from '../api/stock';
 import { movementTypesApi, unitsApi } from '../api/catalogs';
+import { listSuppliers } from '../api/suppliers';
 import { extractErrorMessage } from '../utils/errors';
 
 const inputClass = "w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors";
@@ -29,6 +30,8 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection, def
   const [warehouseId, setWarehouseId] = useState(defaultWarehouseId || '');
   const [movementDate, setMovementDate] = useState(new Date().toISOString().slice(0, 10));
   const [description, setDescription] = useState('');
+  const [suppliers, setSuppliers] = useState([]);
+  const [supplierId, setSupplierId] = useState('');
   const [lines, setLines] = useState([{ product_id: '', quantity: '1', purchase_price: '0', sale_price: '0' }]);
   const [usedExcelImport, setUsedExcelImport] = useState(false);
   const [excelFileName, setExcelFileName] = useState('');
@@ -41,16 +44,18 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection, def
   useEffect(() => {
     async function loadData() {
       try {
-        const [productsData, typesData, warehousesData, unitsData] = await Promise.all([
+        const [productsData, typesData, warehousesData, unitsData, suppliersData] = await Promise.all([
           listProducts(),
           movementTypesApi.list(),
           listWarehouses(),
           unitsApi.list(),
+          filterDirection === 'ENTRADA' ? listSuppliers() : Promise.resolve([]),
         ]);
         setProducts(productsData.filter((p) => p.is_active));
         setMovementTypes(typesData.filter((t) => t.is_active && t.direction === filterDirection));
         setWarehouses(warehousesData.filter((w) => w.is_active));
         setUnits(unitsData);
+        setSuppliers(suppliersData.filter((s) => s.is_active));
       } catch (err) {
         setFormError(extractErrorMessage(err, 'Erro ao carregar dados'));
       } finally {
@@ -166,6 +171,7 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection, def
         warehouse_id: warehouseId,
         movement_date: movementDate,
         description: description || null,
+        supplier_id: filterDirection === 'ENTRADA' ? (supplierId || null) : null,
         lines: lines.map((l) => ({
           product_id: l.product_id,
           quantity: parseFloat(l.quantity),
@@ -205,7 +211,18 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection, def
           <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Data do movimento *</label>
           <input type="date" value={movementDate} onChange={(e) => setMovementDate(e.target.value)} required className={inputClass} />
         </div>
-        <div className="sm:col-span-5">
+        {filterDirection === 'ENTRADA' && (
+          <div className="sm:col-span-2">
+            <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Fornecedor (opcional)</label>
+            <Select
+              value={supplierId}
+              onChange={setSupplierId}
+              options={suppliers.map((s) => ({ value: s.id, label: s.name }))}
+              placeholder="Nenhum"
+            />
+          </div>
+        )}
+        <div className={filterDirection === 'ENTRADA' ? 'sm:col-span-3' : 'sm:col-span-5'}>
           <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Descrição</label>
           <input value={description} onChange={(e) => setDescription(e.target.value)} className={inputClass} />
         </div>

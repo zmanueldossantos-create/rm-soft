@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.security import decode_token
 from app.models.user import User
+from app.services.permission_service import has_permission
 
 
 class PortugueseHTTPBearer(HTTPBearer):
@@ -81,3 +82,24 @@ def require_role(*allowed_roles: str):
         return current_user
 
     return role_checker
+
+
+def require_permission(code: str):
+    """
+    Dependency factory - dynamic counterpart to require_role, checking a
+    per-company RolePermission grant instead of a hardcoded role tuple. See
+    app.services.permission_service for the full design rationale (pilot
+    scope: only Consumo Interno's routes use this for now).
+    """
+    async def permission_checker(
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db),
+    ) -> User:
+        if current_user.company_id is None or not await has_permission(db, current_user.company_id, current_user.role.value, code):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Nao tem permissao para aceder a este recurso",
+            )
+        return current_user
+
+    return permission_checker

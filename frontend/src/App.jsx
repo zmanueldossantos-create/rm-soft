@@ -25,6 +25,8 @@ import Recursos from './pages/Recursos';
 import Reservas from './pages/Reservas';
 import Ocupacao from './pages/Ocupacao';
 import ConsumoInterno from './pages/ConsumoInterno';
+import Fornecedores from './pages/Fornecedores';
+import Permissoes from './pages/Permissoes';
 import ContasAbertas from './pages/ContasAbertas';
 import Layout from './components/Layout';
 import { useAuthStore } from './store/authStore';
@@ -76,6 +78,8 @@ export default function App() {
           <Route path="/reservas" element={<Reservas />} />
           <Route path="/ocupacao" element={<Ocupacao />} />
           <Route path="/consumo-interno" element={<ConsumoInterno />} />
+          <Route path="/fornecedores" element={<Fornecedores />} />
+          <Route path="/permissoes" element={<Permissoes />} />
           <Route path="/contas-abertas" element={<ContasAbertas />} />
           <Route
             path="/admin/companies"

@@ -27,6 +27,8 @@ from app.api.v1.bookings.routes import router as bookings_router
 from app.api.v1.open_accounts.routes import router as open_accounts_router
 from app.api.v1.hotel.routes import router as hotel_router
 from app.api.v1.internal_consumption.routes import router as internal_consumption_router
+from app.api.v1.suppliers.routes import router as suppliers_router
+from app.api.v1.permissions.routes import router as permissions_router
 from app.api.v1.pos.routes import router as pos_router
 from app.api.v1.catalogs.routes import router as catalogs_router
 from app.api.v1.product_categories.routes import router as product_categories_router
@@ -36,14 +38,34 @@ from app.api.v1.establishments.routes import router as establishments_router
 from app.api.v1.document_series.routes import router as document_series_router
 from app.api.v1.tesouraria.routes import router as tesouraria_router
 from app.api.v1.moedeiro.routes import router as moedeiro_router
+from app.core.database import AsyncSessionLocal
+from app.models.company import Company
+from app.services.permission_service import seed_permission_catalog, seed_default_role_permissions
+from sqlalchemy import select as sa_select
 
 settings = get_settings()
 
 app = FastAPI(
     title=settings.APP_NAME,
-    description="RM System - Conforme RGIFT 2.0 (AGT)",
     version="7.0.0",
 )
+
+
+@app.on_event("startup")
+async def seed_permissions_on_startup() -> None:
+    """
+    Idempotent - keeps the platform-wide Permission catalog and each
+    existing company's default RolePermission grants up to date on every
+    boot. Safe to run repeatedly (see permission_service's docstrings) -
+    new companies get their own seed at creation time (company_service),
+    this only backfills companies that existed before the permission
+    system shipped.
+    """
+    async with AsyncSessionLocal() as db:
+        await seed_permission_catalog(db)
+        companies_result = await db.execute(sa_select(Company.id))
+        for (company_id,) in companies_result.all():
+            await seed_default_role_permissions(db, company_id)
 
 app.add_middleware(
     CORSMiddleware,
@@ -70,6 +92,8 @@ app.include_router(bookings_router)
 app.include_router(open_accounts_router)
 app.include_router(hotel_router)
 app.include_router(internal_consumption_router)
+app.include_router(suppliers_router)
+app.include_router(permissions_router)
 app.include_router(pos_router)
 app.include_router(catalogs_router)
 app.include_router(product_categories_router)
