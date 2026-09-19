@@ -66,6 +66,7 @@ function WarehouseCard({ warehouse, isCentral, onEditClick, onToggleStatus, togg
 }
 
 export default function Stock() {
+  const can = useCan();
   const [warehouses, setWarehouses] = useState([]);
   const [selectedWarehouseId, setSelectedWarehouseId] = useState('');
   const [levels, setLevels] = useState([]);
@@ -375,7 +376,8 @@ export default function Stock() {
         <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={openNewWarehouseModal}
-            className="flex items-center gap-2 border border-border hover:border-accent text-text-primary font-medium text-sm px-4 py-2.5 rounded-md transition-colors cursor-pointer"
+            disabled={!can('warehouses:create')}
+            className="flex items-center gap-2 border border-border hover:border-accent text-text-primary font-medium text-sm px-4 py-2.5 rounded-md transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Plus size={16} />
             Novo Armazem
@@ -383,7 +385,8 @@ export default function Stock() {
           {warehouses.length > 1 && (
             <button
               onClick={openTransferModal}
-              className="flex items-center gap-2 border border-border hover:border-accent text-text-primary font-medium text-sm px-4 py-2.5 rounded-md transition-colors cursor-pointer"
+              disabled={!can('stock:transfer')}
+              className="flex items-center gap-2 border border-border hover:border-accent text-text-primary font-medium text-sm px-4 py-2.5 rounded-md transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <ArrowRightLeft size={16} />
               Transferir
@@ -391,14 +394,16 @@ export default function Stock() {
           )}
           <button
             onClick={openLossModal}
-            className="flex items-center gap-2 border border-border hover:border-danger hover:text-danger text-text-primary font-medium text-sm px-4 py-2.5 rounded-md transition-colors cursor-pointer"
+            disabled={!can('stock:loss')}
+            className="flex items-center gap-2 border border-border hover:border-danger hover:text-danger text-text-primary font-medium text-sm px-4 py-2.5 rounded-md transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Trash2 size={16} />
             Registar perda
           </button>
           <button
             onClick={openAdjustModal}
-            className="flex items-center gap-2 border border-border hover:border-accent text-text-primary font-medium text-sm px-4 py-2.5 rounded-md transition-colors cursor-pointer"
+            disabled={!can('stock:adjust')}
+            className="flex items-center gap-2 border border-border hover:border-accent text-text-primary font-medium text-sm px-4 py-2.5 rounded-md transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <SlidersHorizontal size={16} />
             Ajustar
@@ -406,7 +411,8 @@ export default function Stock() {
           {isCentralSelected && (
             <button
               onClick={openReceiveModal}
-              className="flex items-center gap-2 bg-accent hover:bg-accent-hover text-white font-semibold text-sm px-4 py-2.5 rounded-md transition-colors cursor-pointer"
+              disabled={!can('stock:receive')}
+              className="flex items-center gap-2 bg-accent hover:bg-accent-hover text-white font-semibold text-sm px-4 py-2.5 rounded-md transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <ArrowDownToLine size={17} />
               Receção

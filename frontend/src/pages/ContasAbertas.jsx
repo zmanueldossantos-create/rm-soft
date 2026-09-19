@@ -1,5 +1,6 @@
 ﻿import { useState, useEffect } from 'react';
 import { Wallet2, Plus, Loader2, X, Trash2, CheckCircle2, Search, Minus } from 'lucide-react';
+import { useCan } from '../utils/permissions';
 import { listActivities } from '../api/activity';
 import { listPointsOfSale } from '../api/activity';
 import { listResources } from '../api/booking';
@@ -17,6 +18,7 @@ function formatKz(value) {
 }
 
 export default function ContasAbertas() {
+  const can = useCan();
   const [activities, setActivities] = useState([]);
   const [selectedActivityId, setSelectedActivityId] = useState('');
   const [pointsOfSale, setPointsOfSale] = useState([]);
@@ -238,7 +240,7 @@ export default function ContasAbertas() {
         </h2>
         <button
           onClick={openNewModal}
-          disabled={pointsOfSale.length === 0}
+          disabled={pointsOfSale.length === 0 || !can('open_accounts:open')}
           className="flex items-center gap-2 bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-medium text-sm px-4 py-2 rounded-md transition-colors cursor-pointer"
         >
           <Plus size={16} />
@@ -377,7 +379,7 @@ export default function ContasAbertas() {
             {itemTab === 'products' ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[160px] overflow-y-auto scrollbar-thin">
                 {filteredProducts.map((p) => (
-                  <button key={'p-' + p.id} onClick={() => handleAddItem(p, false)} disabled={addingItemId === p.id} className="bg-bg-inset border border-border hover:border-accent rounded-md px-2.5 py-2 text-left transition-colors cursor-pointer disabled:opacity-50">
+                  <button key={'p-' + p.id} onClick={() => handleAddItem(p, false)} disabled={addingItemId === p.id || !can('open_accounts:edit_lines')} className="bg-bg-inset border border-border hover:border-accent rounded-md px-2.5 py-2 text-left transition-colors cursor-pointer disabled:opacity-50">
                     <p className="font-mono text-[10px] text-text-muted mb-0.5">{p.code}</p>
                     <p className="text-[12px] text-text-primary truncate">{p.name}</p>
                     <div className="flex items-end justify-between mt-0.5">
@@ -394,7 +396,7 @@ export default function ContasAbertas() {
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[160px] overflow-y-auto scrollbar-thin">
                 {filteredServices.map((s) => (
-                  <button key={'s-' + s.id} onClick={() => handleAddItem(s, true)} disabled={addingItemId === s.id} className="bg-bg-inset border border-border hover:border-accent rounded-md px-2.5 py-2 text-left transition-colors cursor-pointer disabled:opacity-50">
+                  <button key={'s-' + s.id} onClick={() => handleAddItem(s, true)} disabled={addingItemId === s.id || !can('open_accounts:edit_lines')} className="bg-bg-inset border border-border hover:border-accent rounded-md px-2.5 py-2 text-left transition-colors cursor-pointer disabled:opacity-50">
                     <p className="font-mono text-[10px] text-text-muted mb-0.5">{s.code}</p>
                     <p className="text-[12px] text-text-primary truncate">{s.name}</p>
                     <p className="text-[11px] text-accent font-mono mt-0.5">{formatKz(s.price)} Kz</p>
@@ -418,16 +420,16 @@ export default function ContasAbertas() {
                       </div>
                       <div className="flex items-center gap-2.5">
                         <div className="flex items-center gap-1.5 bg-bg-elevated border border-border rounded-md px-1.5 py-1">
-                          <button onClick={() => handleChangeQuantity(l, -1)} className="text-text-muted hover:text-accent cursor-pointer">
+                          <button onClick={() => handleChangeQuantity(l, -1)} disabled={!can('open_accounts:edit_lines')} className="text-text-muted hover:text-accent cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
                             <Minus size={12} />
                           </button>
                           <span className="text-[12px] text-text-primary font-mono w-6 text-center">{l.quantity}</span>
-                          <button onClick={() => handleChangeQuantity(l, 1)} className="text-text-muted hover:text-accent cursor-pointer">
+                          <button onClick={() => handleChangeQuantity(l, 1)} disabled={!can('open_accounts:edit_lines')} className="text-text-muted hover:text-accent cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
                             <Plus size={12} />
                           </button>
                         </div>
                         <span className="font-mono text-[13px] text-text-primary font-semibold w-20 text-right">{formatKz(l.unit_price * l.quantity)} Kz</span>
-                        <button onClick={() => handleRemoveLine(l.id)} className="text-text-muted hover:text-danger cursor-pointer">
+                        <button onClick={() => handleRemoveLine(l.id)} disabled={!can('open_accounts:edit_lines')} className="text-text-muted hover:text-danger cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
                           <Trash2 size={13} />
                         </button>
                       </div>
@@ -448,7 +450,7 @@ export default function ContasAbertas() {
 
             <button
               onClick={openCloseModal}
-              disabled={detailLines.length === 0}
+              disabled={detailLines.length === 0 || !can('open_accounts:close')}
               className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer"
             >
               <CheckCircle2 size={17} />

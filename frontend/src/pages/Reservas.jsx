@@ -1,5 +1,6 @@
 ﻿import { useState, useEffect } from 'react';
 import { CalendarClock, Plus, Loader2, X, CheckCircle2, Pencil } from 'lucide-react';
+import { useCan } from '../utils/permissions';
 import { listActivities } from '../api/activity';
 import { listResources, listBookings, createBooking, updateBookingStatus, rescheduleBooking } from '../api/booking';
 import { listPointsOfSale } from '../api/activity';
@@ -34,6 +35,7 @@ function todayIso() {
 }
 
 export default function Reservas() {
+  const can = useCan();
   const [activities, setActivities] = useState([]);
   const [selectedActivityId, setSelectedActivityId] = useState('');
   const [resources, setResources] = useState([]);
@@ -337,7 +339,7 @@ export default function Reservas() {
         </h2>
         <button
           onClick={openCreateForm}
-          disabled={resources.length === 0}
+          disabled={resources.length === 0 || !can('bookings:create')}
           className="flex items-center gap-2 bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-medium text-sm px-4 py-2 rounded-md transition-colors cursor-pointer"
         >
           <Plus size={16} />
@@ -410,7 +412,8 @@ export default function Reservas() {
                 ) : b.status === 'EM_CURSO' ? (
                   <button
                     onClick={() => handleCheckOut(b.id)}
-                    className="flex items-center gap-1.5 bg-accent hover:bg-accent-hover text-white text-[12px] font-medium px-3 py-1.5 rounded-md transition-colors cursor-pointer"
+                    disabled={!can('hotel:checkout')}
+                    className="flex items-center gap-1.5 bg-accent hover:bg-accent-hover text-white text-[12px] font-medium px-3 py-1.5 rounded-md transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     <CheckCircle2 size={13} />
                     Check-out
@@ -419,14 +422,16 @@ export default function Reservas() {
                   <>
                     <button
                       onClick={() => openEditForm(b)}
-                      className="flex items-center gap-1.5 border border-border hover:border-accent text-text-primary text-[12px] font-medium px-3 py-1.5 rounded-md transition-colors cursor-pointer"
+                      disabled={!can('bookings:update')}
+                      className="flex items-center gap-1.5 border border-border hover:border-accent text-text-primary text-[12px] font-medium px-3 py-1.5 rounded-md transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       <Pencil size={12} />
                       Editar
                     </button>
                     <button
                       onClick={() => handleCheckIn(b.id)}
-                      className="flex items-center gap-1.5 bg-accent hover:bg-accent-hover text-white text-[12px] font-medium px-3 py-1.5 rounded-md transition-colors cursor-pointer"
+                      disabled={!can('hotel:checkin')}
+                      className="flex items-center gap-1.5 bg-accent hover:bg-accent-hover text-white text-[12px] font-medium px-3 py-1.5 rounded-md transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       <CheckCircle2 size={13} />
                       Check-in

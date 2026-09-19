@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, Fragment } from 'react';
+import { useCan } from '../utils/permissions';
 import { listDenominations, recordDenominationCount, getLatestDenominationCount } from '../api/moedeiro';
 import { listProductCategories } from '../api/productCategories';
 import { listServices } from '../api/services';
@@ -37,6 +38,7 @@ function formatKz(value) {
 }
 
 export default function Caixa() {
+  const can = useCan();
   const currentUser = useAuthStore((state) => state.user);
   const isGestor = currentUser?.role === 'GESTOR';
   const documentActionsRef = useRef(null);
@@ -867,7 +869,8 @@ export default function Caixa() {
           {session && (
             <button
               onClick={openCloseModal}
-              className="flex items-center gap-2 border border-border hover:border-danger hover:text-danger text-text-primary font-medium text-sm px-4 py-2 rounded-md transition-colors cursor-pointer"
+              disabled={!can('pos:close_session')}
+              className="flex items-center gap-2 border border-border hover:border-danger hover:text-danger text-text-primary font-medium text-sm px-4 py-2 rounded-md transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <LogOut size={15} />
               Fechar caixa
@@ -905,7 +908,7 @@ export default function Caixa() {
           <p className="text-text-muted text-sm mb-5">Não há nenhuma sessão de caixa aberta para este ponto de venda</p>
           <button
             onClick={openOpenModal}
-            disabled={!selectedPosId}
+            disabled={!selectedPosId || !can('pos:open_session')}
             className="inline-flex items-center gap-2 bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm px-5 py-3 rounded-md transition-colors cursor-pointer"
           >
             <Wallet size={17} />
@@ -976,7 +979,7 @@ export default function Caixa() {
                 </button>
                 <button
                   onClick={() => openMoedeiroModal('ABERTURA')}
-                  disabled={!session}
+                  disabled={!session || !can('moedeiro:record')}
                   className="flex flex-col items-center justify-center gap-1.5 bg-bg-inset border border-accent/20 hover:border-accent hover:bg-accent/5 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg py-3.5 text-center transition-colors cursor-pointer"
                 >
                   <Coins size={18} className="text-accent" />
@@ -984,7 +987,7 @@ export default function Caixa() {
                 </button>
                 <button
                   onClick={openMovementModal}
-                  disabled={!selectedPosId}
+                  disabled={!selectedPosId || !can('tesouraria:view')}
                   className="flex flex-col items-center justify-center gap-1.5 bg-bg-inset border border-accent/20 hover:border-accent hover:bg-accent/5 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg py-3.5 text-center transition-colors cursor-pointer"
                 >
                   <ArrowLeftRight size={18} className="text-accent" />
@@ -992,7 +995,7 @@ export default function Caixa() {
                 </button>
                 <button
                   onClick={openDailyReportModal}
-                  disabled={!selectedPosId}
+                  disabled={!selectedPosId || !can('tesouraria:daily_report')}
                   className="flex flex-col items-center justify-center gap-1.5 bg-bg-inset border border-accent/20 hover:border-accent hover:bg-accent/5 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg py-3.5 text-center transition-colors cursor-pointer"
                 >
                   <FileText size={18} className="text-accent" />
@@ -1085,8 +1088,9 @@ export default function Caixa() {
                 </div>
                 <button
                   onClick={openNewCustomerModal}
+                  disabled={!can('customers:create')}
                   aria-label="Novo cliente"
-                  className="shrink-0 flex items-center justify-center w-9 h-9 bg-accent hover:bg-accent-hover text-white rounded-md transition-colors cursor-pointer"
+                  className="shrink-0 flex items-center justify-center w-9 h-9 bg-accent hover:bg-accent-hover text-white rounded-md transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <Plus size={16} />
                 </button>
@@ -1412,7 +1416,7 @@ export default function Caixa() {
 
           <button
             onClick={handleConfirmSale}
-            disabled={checkoutSaving || paymentsRemaining !== 0}
+            disabled={checkoutSaving || paymentsRemaining !== 0 || (paymentMode === 'liquidation' ? !can('pos:liquidate') : !can('pos:checkout'))}
             className="bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer"
           >
             {checkoutSaving ? <Loader2 size={17} className="animate-spin" /> : <CheckCircle2 size={17} />}
@@ -1806,7 +1810,7 @@ export default function Caixa() {
                         <span className="font-mono text-[12px] text-text-primary font-semibold">{formatKz(m.amount)} Kz</span>
                         <button
                           onClick={() => handleReceiveMovement(m.id)}
-                          disabled={receivingId === m.id}
+                          disabled={receivingId === m.id || !can('tesouraria:receive')}
                           className="flex items-center gap-1 bg-accent hover:bg-accent-hover disabled:opacity-50 text-white text-[11px] font-medium px-2.5 py-1.5 rounded-md cursor-pointer"
                         >
                           {receivingId === m.id ? <Loader2 size={11} className="animate-spin" /> : <CheckCircle2 size={11} />}
@@ -1837,7 +1841,7 @@ export default function Caixa() {
                         <span className="font-mono text-[12px] text-text-primary font-semibold">{formatKz(m.amount)} Kz</span>
                         <button
                           onClick={() => handleCancelMovement(m.id)}
-                          disabled={cancellingId === m.id}
+                          disabled={cancellingId === m.id || !can('tesouraria:cancel_movement')}
                           className="flex items-center gap-1 border border-border hover:border-danger hover:text-danger text-text-muted disabled:opacity-50 text-[11px] font-medium px-2.5 py-1.5 rounded-md cursor-pointer"
                         >
                           {cancellingId === m.id ? <Loader2 size={11} className="animate-spin" /> : <X size={11} />}
@@ -2035,22 +2039,25 @@ export default function Caixa() {
                         <>
                           <button
                             onClick={() => documentActionsRef.current?.openNc(inv.id)}
+                            disabled={!can('invoices:credit_note')}
                             title="Emitir Nota de Credito"
-                            className="flex items-center justify-center w-8 h-8 rounded-md border border-border text-text-muted hover:text-accent hover:border-accent transition-colors cursor-pointer text-[10px] font-bold"
+                            className="flex items-center justify-center w-8 h-8 rounded-md border border-border text-text-muted hover:text-accent hover:border-accent transition-colors cursor-pointer text-[10px] font-bold disabled:opacity-40 disabled:cursor-not-allowed"
                           >
                             NC
                           </button>
                           <button
                             onClick={() => documentActionsRef.current?.openNd(inv.id)}
+                            disabled={!can('invoices:debit_note')}
                             title="Emitir Nota de Debito"
-                            className="flex items-center justify-center w-8 h-8 rounded-md border border-border text-text-muted hover:text-accent hover:border-accent transition-colors cursor-pointer text-[10px] font-bold"
+                            className="flex items-center justify-center w-8 h-8 rounded-md border border-border text-text-muted hover:text-accent hover:border-accent transition-colors cursor-pointer text-[10px] font-bold disabled:opacity-40 disabled:cursor-not-allowed"
                           >
                             ND
                           </button>
                           <button
                             onClick={() => documentActionsRef.current?.openRc(inv.id)}
+                            disabled={!can('invoices:receipt')}
                             title="Emitir Recibo"
-                            className="flex items-center justify-center w-8 h-8 rounded-md border border-border text-text-muted hover:text-accent hover:border-accent transition-colors cursor-pointer text-[10px] font-bold"
+                            className="flex items-center justify-center w-8 h-8 rounded-md border border-border text-text-muted hover:text-accent hover:border-accent transition-colors cursor-pointer text-[10px] font-bold disabled:opacity-40 disabled:cursor-not-allowed"
                           >
                             RC
                           </button>

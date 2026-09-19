@@ -1,5 +1,6 @@
 ﻿import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useCan } from '../utils/permissions';
 import { createPortal } from 'react-dom';
 import { Receipt, Plus, Loader2, Search, Trash2, FileText, Printer, Eye, X as XIcon, RefreshCw, RotateCcw, FilePlus, MoreVertical, ChevronLeft, ChevronRight } from 'lucide-react';
 import Modal from '../components/Modal';
@@ -100,6 +101,7 @@ function round2(v) {
 }
 
 export default function Invoices() {
+  const can = useCan();
   const navigate = useNavigate();
   const [invoices, setInvoices] = useState([]);
   const [products, setProducts] = useState([]);
@@ -682,7 +684,7 @@ export default function Invoices() {
         </div>
         <button
           onClick={() => navigate('/invoices/new')}
-          disabled={products.length === 0}
+          disabled={products.length === 0 || !can('invoices:issue')}
           className="flex items-center gap-2 bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-sm px-4 py-2.5 rounded-md transition-colors cursor-pointer"
         >
           <Plus size={17} />
@@ -795,7 +797,7 @@ export default function Invoices() {
                               <button
                                 type="button"
                                 onClick={() => handleResubmit(inv.id)}
-                                disabled={resubmittingId === inv.id}
+                                disabled={resubmittingId === inv.id || !can('invoices:resubmit')}
                                 title="Reenviar para a AGT"
                                 className="inline-flex items-center justify-center w-6 h-6 rounded text-text-muted hover:text-accent disabled:opacity-50 transition-colors cursor-pointer"
                               >
@@ -1168,7 +1170,8 @@ export default function Invoices() {
                 <button
                   type="button"
                   onClick={openNcModal}
-                  className="flex items-center gap-1.5 border border-border hover:border-danger text-danger text-sm px-3.5 py-2 rounded-md transition-colors cursor-pointer"
+                  disabled={!can('invoices:credit_note')}
+                  className="flex items-center gap-1.5 border border-border hover:border-danger text-danger text-sm px-3.5 py-2 rounded-md transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <RotateCcw size={14} /> Emitir Nota de Credito
                 </button>
@@ -1177,7 +1180,8 @@ export default function Invoices() {
                 <button
                   type="button"
                   onClick={openNdModal}
-                  className="flex items-center gap-1.5 border border-border hover:border-accent text-accent text-sm px-3.5 py-2 rounded-md transition-colors cursor-pointer"
+                  disabled={!can('invoices:debit_note')}
+                  className="flex items-center gap-1.5 border border-border hover:border-accent text-accent text-sm px-3.5 py-2 rounded-md transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <FilePlus size={14} /> Emitir Nota de Debito
                 </button>
@@ -1186,7 +1190,8 @@ export default function Invoices() {
                 <button
                   type="button"
                   onClick={openRcModal}
-                  className="flex items-center gap-1.5 border border-border hover:border-success text-success text-sm px-3.5 py-2 rounded-md transition-colors cursor-pointer"
+                  disabled={!can('invoices:receipt')}
+                  className="flex items-center gap-1.5 border border-border hover:border-success text-success text-sm px-3.5 py-2 rounded-md transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <Receipt size={14} /> Emitir Recibo
                 </button>
@@ -1195,7 +1200,8 @@ export default function Invoices() {
                 <button
                   type="button"
                   onClick={openConvertModal}
-                  className="flex items-center gap-1.5 border border-border hover:border-accent text-accent text-sm px-3.5 py-2 rounded-md transition-colors cursor-pointer"
+                  disabled={!can('invoices:proforma_convert')}
+                  className="flex items-center gap-1.5 border border-border hover:border-accent text-accent text-sm px-3.5 py-2 rounded-md transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <FileText size={14} /> Converter em Fatura
                 </button>
