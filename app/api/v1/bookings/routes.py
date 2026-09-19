@@ -1,7 +1,7 @@
 ﻿import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -12,6 +12,7 @@ from app.schemas.booking import (
     ResourceCreateRequest, ResourceUpdateRequest, ResourceResponse,
     ResourceTypeCreateRequest, ResourceTypeUpdateRequest, ResourceTypeResponse,
     BookingCreateRequest, BookingRescheduleRequest, BookingStatusUpdateRequest, BookingResponse,
+    ResourceStatusResponse,
 )
 from app.services.resource_service import (
     create_resource, get_resource_or_raise, list_resources, update_resource, toggle_resource_status,
@@ -27,6 +28,7 @@ from app.services.booking_service import (
     ServiceRequiredError, IncompatibleServiceError,
 )
 from app.services.activity_service import ActivityNotFoundError
+from app.services.resource_status_service import list_resource_statuses
 
 router = APIRouter(prefix="/api/v1", tags=["bookings"])
 
@@ -209,3 +211,15 @@ async def patch_booking_reschedule(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     except IncompatibleServiceError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.get("/resources/status", response_model=list[ResourceStatusResponse])
+async def get_resources_status(
+    activity_id: uuid.UUID,
+    window_minutes: int = Query(60, ge=0, le=1440),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("resources:view")),
+):
+    """Derived status of an activity's active resources (LIVRE / OCUPADA / RESERVADA) - the
+    floor plan of a restaurant. window_minutes: how far ahead a booking counts as RESERVADA."""
+    return await list_resource_statuses(db, current_user.company_id, activity_id, window_minutes=window_minutes)

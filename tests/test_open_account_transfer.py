@@ -233,3 +233,41 @@ async def test_removing_a_transferred_line_is_not_blocked_and_keeps_the_audit_ro
     assert (await db.execute(select(OpenAccountLine).where(OpenAccountLine.id == moved_id))).scalar_one_or_none() is None
     audit = (await db.execute(select(OpenAccountTransfer))).scalars().all()
     assert len(audit) == 1 and audit[0].target_line_id == moved_id and float(audit[0].quantity) == 1
+
+
+@pytest.mark.asyncio
+async def test_add_line_survives_duplicate_lines_left_by_a_transfer(db, company_with_essentials):
+    """A transfer never merges lines, so a target can hold two lines for the same product;
+    add_line must then bump one of them instead of failing on 'more than one row'."""
+    from app.models.product import Product, ProductType
+    from app.services.open_account_service import add_line
+
+    ctx = company_with_essentials
+    company_id, user_id = ctx["company"].id, ctx["gestor"].id
+    product = Product(
+        company_id=company_id, code="OA-001", name="Cerveja", vat_id=ctx["vat_ise"].id, price=500,
+        min_stock_threshold=0, product_type=ProductType.BEM,
+    )
+    db.add(product)
+    await db.commit()
+    await db.refresh(product)
+    product_id = product.id
+
+    src = await _account(db, ctx, "Mesa 1")
+    dst = await _account(db, ctx, "Mesa 2")
+    src_id, dst_id = src.id, dst.id
+    for account_id in (src_id, dst_id):
+        db.add(OpenAccountLine(
+            account_id=account_id, product_id=product_id, name_snapshot="Cerveja", quantity=2, unit_price=500, added_by_user_id=user_id,
+        ))
+    await db.commit()
+    src_line = (await db.execute(select(OpenAccountLine).where(OpenAccountLine.account_id == src_id))).scalars().one()
+
+    await transfer_lines(db, company_id, src_id, user_id, [{"line_id": src_line.id, "quantity": 1}], target_account_id=dst_id)
+    assert len((await db.execute(select(OpenAccountLine).where(OpenAccountLine.account_id == dst_id))).scalars().all()) == 2
+
+    await add_line(db, company_id, dst_id, user_id, 1, product_id=product_id)
+
+    lines = (await db.execute(select(OpenAccountLine).where(OpenAccountLine.account_id == dst_id))).scalars().all()
+    assert len(lines) == 2
+    assert sum(float(l.quantity) for l in lines) == 4.0

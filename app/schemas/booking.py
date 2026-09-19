@@ -118,3 +118,17 @@ class BookingResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ResourceStatusResponse(BaseModel):
+    resource_id: uuid.UUID
+    name: str
+    capacity: int | None
+    status: str  # LIVRE | OCUPADA | RESERVADA - derived on demand, see resource_status_service
+    open_accounts: int
+    open_total: float
+    opened_at: datetime | None
+    booking_id: uuid.UUID | None
+    booking_starts_at: datetime | None
+    booking_ends_at: datetime | None
+    booking_status: str | None
