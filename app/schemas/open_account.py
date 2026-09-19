@@ -1,7 +1,7 @@
 ﻿import uuid
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class OpenAccountCreateRequest(BaseModel):
@@ -65,3 +65,25 @@ class OpenAccountClosePaymentInput(BaseModel):
 class OpenAccountCloseRequest(BaseModel):
     invoice_type: str = "FACTURA_RECIBO"
     payments: list[OpenAccountClosePaymentInput] = []
+
+
+class OpenAccountTransferItem(BaseModel):
+    line_id: uuid.UUID
+    quantity: float = Field(gt=0)
+
+
+class OpenAccountTransferRequest(BaseModel):
+    # Lines (or parts of lines) to move. Destination: an existing open account
+    # (target_account_id) or a new one created on the fly - on target_resource_id
+    # (another table; the label defaults to its name) or, without it, on the SAME
+    # resource as the source under new_label (a split of the bill).
+    items: list[OpenAccountTransferItem] = Field(min_length=1)
+    target_account_id: uuid.UUID | None = None
+    target_resource_id: uuid.UUID | None = None
+    new_label: str | None = None
+
+
+class OpenAccountTransferResponse(BaseModel):
+    source_account: OpenAccountResponse
+    target_account: OpenAccountResponse
+    source_closed: bool

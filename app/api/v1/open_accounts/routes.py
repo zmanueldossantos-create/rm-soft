@@ -9,14 +9,15 @@ from app.models.user import User
 from app.schemas.open_account import (
     OpenAccountCreateRequest, OpenAccountResponse,
     OpenAccountLineCreateRequest, OpenAccountLineUpdateRequest, OpenAccountLineResponse,
-    OpenAccountCloseRequest,
+    OpenAccountCloseRequest, OpenAccountTransferRequest, OpenAccountTransferResponse,
 )
 from app.services.open_account_service import (
     open_account, get_account_or_raise, list_open_accounts, list_account_lines,
-    add_line, update_line_quantity, remove_line, close_account,
-    OpenAccountNotFoundError, AccountAlreadyClosedError, EmptyAccountError, ItemNotFoundError,
+    add_line, update_line_quantity, remove_line, close_account, transfer_lines,
+    OpenAccountNotFoundError, AccountAlreadyClosedError, EmptyAccountError, ItemNotFoundError, InvalidTransferError,
 )
 from app.services.point_of_sale_service import PosNotFoundError
+from app.services.resource_service import ResourceNotFoundError
 from app.services.pos_service import NoOpenSessionError
 from app.services.invoice_service import PaymentAmountMismatchError, StockUnavailableError, SeriesNotConfiguredError
 
@@ -145,3 +146,29 @@ async def post_close_account(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except SeriesNotConfiguredError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+
+
+@router.post("/{account_id}/transfer", response_model=OpenAccountTransferResponse)
+async def post_transfer_lines(
+    account_id: uuid.UUID,
+    payload: OpenAccountTransferRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("open_accounts:transfer")),
+):
+    try:
+        source, target, source_closed = await transfer_lines(
+            db, current_user.company_id, account_id, current_user.id,
+            [{"line_id": i.line_id, "quantity": i.quantity} for i in payload.items],
+            payload.target_account_id, payload.target_resource_id, payload.new_label,
+        )
+    except (OpenAccountNotFoundError, ItemNotFoundError, ResourceNotFoundError) as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except AccountAlreadyClosedError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except InvalidTransferError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    return OpenAccountTransferResponse(
+        source_account=OpenAccountResponse.model_validate(source),
+        target_account=OpenAccountResponse.model_validate(target),
+        source_closed=source_closed,
+    )

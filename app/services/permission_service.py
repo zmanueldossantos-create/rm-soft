@@ -123,6 +123,7 @@ PERMISSION_CATALOG: list[tuple[str, str, str, list[str]]] = [
     ("establishments:manage", "Criar, editar e ativar/desativar estabelecimentos", "Empresa", []),
     ("catalogs:view_reference", "Ver catalogos de referencia (paises, moedas, bancos, IVA, unidades, tipos de documento...)", "Catalogos de Referencia", []),
     ("catalogs:view_billing", "Ver metodos e condicoes de pagamento, retencoes e denominacoes", "Catalogos de Referencia", ["CAIXA"]),
+    ("open_accounts:transfer", "Transferir e dividir linhas entre contas", "Contas Abertas", ["CAIXA"]),
 ]
 
 
