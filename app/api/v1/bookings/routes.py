@@ -146,6 +146,7 @@ async def post_create_booking(
         return await create_booking(
             db, current_user.company_id, payload.resource_id, current_user.id,
             payload.starts_at, payload.ends_at, payload.customer_id, payload.service_id, payload.notes,
+            payload.guest_name, payload.party_size,
         )
     except ResourceNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
@@ -198,6 +199,7 @@ async def patch_booking_reschedule(
         return await reschedule_booking(
             db, current_user.company_id, booking_id, payload.starts_at, payload.ends_at,
             payload.service_id, payload.notes, payload.customer_id,
+            payload.guest_name, payload.party_size,
         )
     except BookingNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))

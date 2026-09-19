@@ -20,7 +20,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import String, DateTime, Enum, ForeignKey, func
+from sqlalchemy import String, Integer, DateTime, Enum, ForeignKey, func
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import UUID
 
@@ -49,6 +49,11 @@ class Booking(Base):
     ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     status: Mapped[BookingStatus] = mapped_column(Enum(BookingStatus), default=BookingStatus.PENDENTE, nullable=False)
     notes: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # Free-text guest details, independent of the Customer (fiscal) link: a table booked for
+    # "Familia Silva - 6" needs no Customer record, and a hotel can keep "Consumidor Final" as
+    # the fiscal customer while still knowing who actually stays.
+    guest_name: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    party_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     created_by_user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

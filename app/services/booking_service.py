@@ -30,6 +30,12 @@ class InvalidBookingRangeError(Exception):
 _ACTIVE_STATUSES = (BookingStatus.PENDENTE, BookingStatus.CONFIRMADA, BookingStatus.EM_CURSO)
 
 
+def _clean_guest_name(value: str | None) -> str | None:
+    """Free-text guest name: trimmed, and blank means 'none'."""
+    cleaned = (value or "").strip()
+    return cleaned[:150] or None
+
+
 async def _has_overlap(
     db: AsyncSession, resource_id: uuid.UUID, starts_at: datetime, ends_at: datetime,
     exclude_booking_id: uuid.UUID | None = None,
@@ -84,6 +90,7 @@ async def create_booking(
     db: AsyncSession, company_id: uuid.UUID, resource_id: uuid.UUID, created_by_user_id: uuid.UUID,
     starts_at: datetime, ends_at: datetime, customer_id: uuid.UUID | None = None,
     service_id: uuid.UUID | None = None, notes: str | None = None,
+    guest_name: str | None = None, party_size: int | None = None,
 ) -> Booking:
     if ends_at <= starts_at:
         raise InvalidBookingRangeError("A data/hora de fim deve ser posterior ao inicio")
@@ -97,6 +104,7 @@ async def create_booking(
     booking = Booking(
         company_id=company_id, resource_id=resource_id, customer_id=customer_id, service_id=service_id,
         starts_at=starts_at, ends_at=ends_at, notes=notes, created_by_user_id=created_by_user_id,
+        guest_name=_clean_guest_name(guest_name), party_size=party_size,
     )
     db.add(booking)
     await db.commit()
@@ -144,6 +152,7 @@ class BookingNotEditableError(Exception):
 async def reschedule_booking(
     db: AsyncSession, company_id: uuid.UUID, booking_id: uuid.UUID, starts_at: datetime, ends_at: datetime,
     service_id: uuid.UUID | None = None, notes: str | None = None, customer_id: uuid.UUID | None = None,
+    guest_name: str | None = None, party_size: int | None = None,
 ) -> Booking:
     """Full booking edit - dates (with the usual overlap check), service and notes,
     all in one call. The caller (the edit form) always sends the current value of
@@ -173,6 +182,8 @@ async def reschedule_booking(
     booking.service_id = service_id
     booking.notes = notes
     booking.customer_id = customer_id
+    booking.guest_name = _clean_guest_name(guest_name)
+    booking.party_size = party_size
     await db.commit()
     await db.refresh(booking)
     return booking

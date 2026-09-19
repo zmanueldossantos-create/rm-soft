@@ -1,7 +1,7 @@
 ﻿import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 
 class ResourceCreateRequest(BaseModel):
@@ -89,6 +89,8 @@ class BookingCreateRequest(BaseModel):
     customer_id: uuid.UUID | None = None
     service_id: uuid.UUID | None = None
     notes: str | None = None
+    guest_name: str | None = Field(default=None, max_length=150)
+    party_size: int | None = Field(default=None, ge=1, le=1000)
 
 
 class BookingRescheduleRequest(BaseModel):
@@ -97,6 +99,8 @@ class BookingRescheduleRequest(BaseModel):
     service_id: uuid.UUID | None = None
     notes: str | None = None
     customer_id: uuid.UUID | None = None
+    guest_name: str | None = Field(default=None, max_length=150)
+    party_size: int | None = Field(default=None, ge=1, le=1000)
 
 
 class BookingStatusUpdateRequest(BaseModel):
@@ -113,6 +117,8 @@ class BookingResponse(BaseModel):
     ends_at: datetime
     status: str
     notes: str | None
+    guest_name: str | None = None
+    party_size: int | None = None
     created_by_user_id: uuid.UUID
     created_at: datetime
 
@@ -132,3 +138,5 @@ class ResourceStatusResponse(BaseModel):
     booking_starts_at: datetime | None
     booking_ends_at: datetime | None
     booking_status: str | None
+    booking_guest_name: str | None = None
+    booking_party_size: int | None = None

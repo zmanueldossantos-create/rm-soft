@@ -101,5 +101,7 @@ async def list_resource_statuses(
             "booking_starts_at": booking.starts_at if booking else None,
             "booking_ends_at": booking.ends_at if booking else None,
             "booking_status": booking.status.value if booking else None,
+            "booking_guest_name": booking.guest_name if booking else None,
+            "booking_party_size": booking.party_size if booking else None,
         })
     return rows
