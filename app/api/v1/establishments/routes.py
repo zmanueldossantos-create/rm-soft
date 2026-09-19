@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.api.deps import require_role
+from app.api.deps import require_permission
 from app.models.user import User
 from app.schemas.establishment import EstablishmentRequest, EstablishmentResponse
 from app.services.establishment_service import (
@@ -19,13 +19,12 @@ from app.services.establishment_service import (
 )
 
 router = APIRouter(prefix="/api/v1/establishments", tags=["establishments"])
-ALLOWED_ROLES = ("GESTOR",)
 
 
 @router.get("", response_model=list[EstablishmentResponse])
 async def get_establishments(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("establishments:view")),
 ):
     return await list_establishments(db, current_user.company_id)
 
@@ -34,7 +33,7 @@ async def get_establishments(
 async def post_establishment(
     payload: EstablishmentRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("establishments:manage")),
 ):
     return await create_establishment(db, current_user.company_id, payload.code, payload.name, payload.description)
 
@@ -44,7 +43,7 @@ async def patch_establishment(
     establishment_id: uuid.UUID,
     payload: EstablishmentRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("establishments:manage")),
 ):
     try:
         return await update_establishment(db, current_user.company_id, establishment_id, payload.code, payload.name, payload.description)
@@ -56,7 +55,7 @@ async def patch_establishment(
 async def toggle_establishment_status(
     establishment_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("establishments:manage")),
 ):
     try:
         return await toggle_establishment(db, current_user.company_id, establishment_id)

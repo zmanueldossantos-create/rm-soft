@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.api.deps import require_role
+from app.api.deps import require_permission
 from app.models.user import User
 from app.models.company import Company
 from app.schemas.document_series import DocumentSeriesCreateRequest, DocumentSeriesUpdateRequest, DocumentSeriesResponse
@@ -25,13 +25,12 @@ from app.services.document_series_service import (
 )
 
 router = APIRouter(prefix="/api/v1/document-series", tags=["document-series"])
-ALLOWED_ROLES = ("GESTOR",)
 
 
 @router.get("", response_model=list[DocumentSeriesResponse])
 async def get_series(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("document_series:view")),
 ):
     return await list_series(db, current_user.company_id)
 
@@ -40,7 +39,7 @@ async def get_series(
 async def post_series(
     payload: DocumentSeriesCreateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("document_series:manage")),
 ):
     """Returns a list: usually one series, or several when document_type_id is omitted ("Todos")."""
     company_result = await db.execute(select(Company).where(Company.id == current_user.company_id))
@@ -73,7 +72,7 @@ async def post_series(
 async def toggle_series_status(
     series_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("document_series:manage")),
 ):
     try:
         return await toggle_series(db, current_user.company_id, series_id)
@@ -86,7 +85,7 @@ async def patch_series(
     series_id: uuid.UUID,
     payload: DocumentSeriesUpdateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*ALLOWED_ROLES)),
+    current_user: User = Depends(require_permission("document_series:manage")),
 ):
     try:
         return await update_series(db, current_user.company_id, series_id, payload.description, payload.contingency_indicator, payload.is_predefined)
