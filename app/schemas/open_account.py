@@ -19,6 +19,7 @@ class OpenAccountResponse(BaseModel):
     activity_id: uuid.UUID
     pos_id: uuid.UUID
     resource_id: uuid.UUID | None
+    booking_id: uuid.UUID | None = None
     customer_id: uuid.UUID | None
     label: str
     notes: str | None

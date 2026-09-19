@@ -16,7 +16,7 @@ from app.models.point_of_sale import PointOfSale
 from app.models.resource import Resource
 from app.models.resource_type_catalog import ResourceTypeCatalog
 from app.services.open_account_service import (
-    open_account, transfer_lines, AccountAlreadyClosedError, InvalidTransferError, ItemNotFoundError,
+    open_account, transfer_lines, remove_line, AccountAlreadyClosedError, InvalidTransferError, ItemNotFoundError,
 )
 
 
@@ -213,3 +213,23 @@ async def test_closed_accounts_are_refused(db, company_with_essentials):
     await db.commit()
     with pytest.raises(AccountAlreadyClosedError):
         await transfer_lines(db, company_id, src_id, user_id, items, new_label="Nova")
+
+
+@pytest.mark.asyncio
+async def test_removing_a_transferred_line_is_not_blocked_and_keeps_the_audit_row(db, company_with_essentials):
+    ctx = company_with_essentials
+    company_id, user_id = ctx["company"].id, ctx["gestor"].id
+    src = await _account(db, ctx, "Mesa 1")
+    dst = await _account(db, ctx, "Mesa 2")
+    line = await _line(db, ctx, src, "Cerveja", 3, 500)
+    src_id, dst_id, line_id = src.id, dst.id, line.id
+
+    await transfer_lines(db, company_id, src_id, user_id, [{"line_id": line_id, "quantity": 1}], target_account_id=dst_id)
+    moved = (await db.execute(select(OpenAccountLine).where(OpenAccountLine.account_id == dst_id))).scalars().one()
+    moved_id = moved.id
+
+    await remove_line(db, company_id, dst_id, moved_id)  # the customer changes their mind
+
+    assert (await db.execute(select(OpenAccountLine).where(OpenAccountLine.id == moved_id))).scalar_one_or_none() is None
+    audit = (await db.execute(select(OpenAccountTransfer))).scalars().all()
+    assert len(audit) == 1 and audit[0].target_line_id == moved_id and float(audit[0].quantity) == 1

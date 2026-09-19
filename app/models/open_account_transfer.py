@@ -25,8 +25,10 @@ class OpenAccountTransfer(Base):
     company_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("companies.id"), nullable=False, index=True)
     source_account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("open_accounts.id"), nullable=False, index=True)
     target_account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("open_accounts.id"), nullable=False, index=True)
-    source_line_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("open_account_lines.id"), nullable=False)
-    target_line_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("open_account_lines.id"), nullable=False)
+    # Plain references, no foreign key: removing an item deletes its line (remove_line) and must
+    # never be blocked by the audit trail, which keeps its own name/quantity/price snapshot.
+    source_line_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    target_line_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
 
     name_snapshot: Mapped[str] = mapped_column(String(255), nullable=False)
     quantity: Mapped[float] = mapped_column(Numeric(12, 3), nullable=False)
