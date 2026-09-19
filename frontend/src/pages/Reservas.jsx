@@ -62,7 +62,7 @@ export default function Reservas() {
   const [posPickerSaving, setPosPickerSaving] = useState(false);
 
   const [formOpen, setFormOpen] = useState(false);
-  const [form, setForm] = useState({ activityId: '', resourceId: '', serviceId: '', customerId: '', date: todayIso(), endDate: todayIso(), startTime: '14:00', endTime: '12:00', notes: '' });
+  const [form, setForm] = useState({ activityId: '', resourceId: '', serviceId: '', customerId: '', date: todayIso(), endDate: todayIso(), startTime: '14:00', endTime: '12:00', notes: '', guestName: '', partySize: '' });
   const [formResources, setFormResources] = useState([]);
   const [editingBookingId, setEditingBookingId] = useState(null);
   const [formError, setFormError] = useState('');
@@ -124,7 +124,7 @@ export default function Reservas() {
   function openCreateForm() {
     const today = todayIso();
     setEditingBookingId(null);
-    setForm({ activityId: selectedActivityId, resourceId: '', serviceId: '', customerId: '', date: today, endDate: today, startTime: '14:00', endTime: '12:00', notes: '' });
+    setForm({ activityId: selectedActivityId, resourceId: '', serviceId: '', customerId: '', date: today, endDate: today, startTime: '14:00', endTime: '12:00', notes: '', guestName: '', partySize: '' });
     setFormError('');
     setFormOpen(true);
   }
@@ -144,9 +144,32 @@ export default function Reservas() {
       startTime: startsParts.time,
       endTime: endsParts.time,
       notes: b.notes || '',
+      guestName: b.guest_name || '',
+      partySize: b.party_size ? String(b.party_size) : '',
     });
     setFormError('');
     setFormOpen(true);
+  }
+
+  // A table (resource type without a required service) is booked for a couple of hours on the
+  // same day, unlike a hotel room (check-in 14:00, check-out 12:00 the next day). While the
+  // times are still the untouched hotel defaults, picking such a resource switches to a
+  // same-day slot: next full hour for today (12:00 for a future date), two hours long.
+  function handleResourceChange(resourceId) {
+    setForm((prev) => {
+      const next = { ...prev, resourceId };
+      if (editingBookingId) return next;
+      const resource = formResources.find((r) => r.id === resourceId);
+      const type = resourceTypesCatalog.find((rt) => rt.id === resource?.resource_type_id);
+      const untouched = prev.startTime === '14:00' && prev.endTime === '12:00' && prev.date === prev.endDate;
+      if (type && !type.requires_service && untouched) {
+        const startHour = prev.date === todayIso() ? Math.min(new Date().getHours() + 1, 21) : 12;
+        const pad = (n) => String(n).padStart(2, '0');
+        next.startTime = pad(startHour) + ':00';
+        next.endTime = pad(startHour + 2) + ':00';
+      }
+      return next;
+    });
   }
 
   async function handleSubmit(e) {
@@ -164,6 +187,10 @@ export default function Reservas() {
       setFormError('No mesmo dia, a hora de saida deve ser posterior a hora de entrada');
       return;
     }
+    if (form.partySize && !(parseInt(form.partySize, 10) >= 1)) {
+      setFormError('O numero de pessoas deve ser pelo menos 1');
+      return;
+    }
     if (selectedResourceType?.requires_service && !form.serviceId) {
       setFormError(`Este tipo de recurso (${selectedResourceType.name}) exige um servico associado a reserva`);
       return;
@@ -173,7 +200,7 @@ export default function Reservas() {
       const startsAt = form.date + 'T' + form.startTime + ':00';
       const endsAt = form.endDate + 'T' + form.endTime + ':00';
       if (editingBookingId) {
-        await rescheduleBooking(editingBookingId, startsAt, endsAt, form.serviceId || null, form.notes || null, form.customerId || null);
+        await rescheduleBooking(editingBookingId, startsAt, endsAt, form.serviceId || null, form.notes || null, form.customerId || null, form.guestName.trim() || null, form.partySize ? parseInt(form.partySize, 10) : null);
       } else {
         await createBooking({
           resource_id: form.resourceId,
@@ -182,6 +209,8 @@ export default function Reservas() {
           starts_at: startsAt,
           ends_at: endsAt,
           notes: form.notes || null,
+          guest_name: form.guestName.trim() || null,
+          party_size: form.partySize ? parseInt(form.partySize, 10) : null,
         });
       }
       setFormOpen(false);
@@ -403,6 +432,9 @@ export default function Reservas() {
               <div>
                 <p className="text-text-primary font-medium text-sm">{resourceName(b.resource_id)}</p>
                 <p className="text-text-muted text-[12px] font-mono mt-0.5">{formatDateTime(b.starts_at)} - {formatDateTime(b.ends_at)}</p>
+                {(b.guest_name || b.party_size) && (
+                  <p className="text-text-primary text-[12px] mt-0.5">{b.guest_name}{b.party_size ? (b.guest_name ? ' - ' : '') + b.party_size + ' pax' : ''}</p>
+                )}
                 {b.notes && <p className="text-text-muted text-[12px] mt-0.5">{b.notes}</p>}
               </div>
               <div className="flex items-center gap-2">
@@ -472,7 +504,7 @@ export default function Reservas() {
               <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Recurso *</label>
               <Select
                 value={form.resourceId}
-                onChange={(v) => setForm((p) => ({ ...p, resourceId: v }))}
+                onChange={handleResourceChange}
                 options={(editingBookingId ? resources : formResources).map((r) => ({ value: r.id, label: r.name }))}
                 placeholder="Selecionar"
               />
@@ -533,6 +565,23 @@ export default function Reservas() {
               </button>
             </div>
           </div>
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Nome do hospede (opcional)</label>
+              <input value={form.guestName} onChange={(e) => setForm((p) => ({ ...p, guestName: e.target.value }))} maxLength={150} placeholder="Ex: Familia Silva" className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
+            </div>
+            <div className="w-32">
+              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">N. de pessoas</label>
+              <input type="number" min="1" step="1" value={form.partySize} onChange={(e) => setForm((p) => ({ ...p, partySize: e.target.value }))} className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
+            </div>
+          </div>
+          {(() => {
+            const res = (editingBookingId ? resources : formResources).find((r) => r.id === form.resourceId);
+            const pax = parseInt(form.partySize, 10);
+            return res?.capacity && pax > res.capacity ? (
+              <p className="text-accent text-[12px] -mt-2">Aviso: este recurso tem capacidade para {res.capacity} pessoas</p>
+            ) : null;
+          })()}
           <div>
             <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Notas (opcional)</label>
             <input value={form.notes} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))} className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />

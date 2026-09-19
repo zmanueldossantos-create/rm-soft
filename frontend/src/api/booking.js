@@ -68,8 +68,8 @@ export async function updateBookingStatus(bookingId, newStatus) {
   return res.data;
 }
 
-export async function rescheduleBooking(bookingId, startsAt, endsAt, serviceId = null, notes = null, customerId = null) {
-  const res = await apiClient.patch('/bookings/' + bookingId + '/reschedule', { starts_at: startsAt, ends_at: endsAt, service_id: serviceId, notes, customer_id: customerId });
+export async function rescheduleBooking(bookingId, startsAt, endsAt, serviceId = null, notes = null, customerId = null, guestName = null, partySize = null) {
+  const res = await apiClient.patch('/bookings/' + bookingId + '/reschedule', { starts_at: startsAt, ends_at: endsAt, service_id: serviceId, notes, customer_id: customerId, guest_name: guestName, party_size: partySize });
   return res.data;
 }
 
