@@ -72,3 +72,9 @@ export async function rescheduleBooking(bookingId, startsAt, endsAt, serviceId =
   const res = await apiClient.patch('/bookings/' + bookingId + '/reschedule', { starts_at: startsAt, ends_at: endsAt, service_id: serviceId, notes, customer_id: customerId });
   return res.data;
 }
+
+// Derived status of an activity's resources (LIVRE / OCUPADA / RESERVADA) - e.g. a restaurant floor plan.
+export async function listResourceStatuses(activityId, windowMinutes = 60) {
+  const res = await apiClient.get('/resources/status', { params: { activity_id: activityId, window_minutes: windowMinutes } });
+  return res.data;
+}

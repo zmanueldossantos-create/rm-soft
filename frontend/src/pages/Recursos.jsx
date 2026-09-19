@@ -2,7 +2,7 @@
 import { Boxes, Plus, Pencil, Loader2 } from 'lucide-react';
 import Select from '../components/Select';
 import { listActivities } from '../api/activity';
-import { listResources, createResource, updateResource, toggleResourceStatus, listResourceTypes, listBookings } from '../api/booking';
+import { listResources, createResource, updateResource, toggleResourceStatus, listResourceTypes, listResourceStatuses } from '../api/booking';
 import { extractErrorMessage } from '../utils/errors';
 import Modal from '../components/Modal';
 
@@ -16,12 +16,23 @@ function ToggleSwitch({ checked, onChange, disabled }) {
   );
 }
 
+const STATUS_LABEL = { LIVRE: 'Livre', OCUPADA: 'Ocupado', RESERVADA: 'Reservado' };
+const STATUS_STYLE = {
+  LIVRE: 'text-success bg-success/10',
+  OCUPADA: 'text-danger bg-danger/10',
+  RESERVADA: 'text-accent bg-accent/10',
+};
+
+function formatKz(value) {
+  return Number(value || 0).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 export default function Recursos() {
   const [activities, setActivities] = useState([]);
   const [selectedActivityId, setSelectedActivityId] = useState('');
   const [resources, setResources] = useState([]);
   const [resourceTypes, setResourceTypes] = useState([]);
-  const [occupiedResourceIds, setOccupiedResourceIds] = useState(new Set());
+  const [statusByResource, setStatusByResource] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [togglingId, setTogglingId] = useState(null);
@@ -58,12 +69,11 @@ export default function Recursos() {
     } finally {
       setLoading(false);
     }
-    // Live occupancy status (Livre/Ocupado) - derived from EM_CURSO bookings,
-    // never stored on Resource itself (see hotel_service design note: a second
-    // source of truth would drift out of sync with Booking.status).
-    listBookings().then((data) => {
-      setOccupiedResourceIds(new Set(data.filter((b) => b.status === 'EM_CURSO').map((b) => b.resource_id)));
-    }).catch(() => {});
+    // Derived status (Livre / Ocupado / Reservado) computed by the backend from open
+    // accounts and active bookings - never stored on Resource itself.
+    listResourceStatuses(selectedActivityId).then((rows) => {
+      setStatusByResource(Object.fromEntries(rows.map((row) => [row.resource_id, row])));
+    }).catch(() => setStatusByResource({}));
   }
 
   function openCreateForm() {
@@ -175,13 +185,25 @@ export default function Recursos() {
                 <div className="flex items-center gap-2 mb-1">
                   <p className="font-mono text-[10px] text-text-muted uppercase tracking-wide">{typeName(r.resource_type_id)}</p>
                   {r.is_active && (
-                    <span className={'text-[10px] font-semibold px-1.5 py-0.5 rounded-full ' + (occupiedResourceIds.has(r.id) ? 'text-danger bg-danger/10' : 'text-success bg-success/10')}>
-                      {occupiedResourceIds.has(r.id) ? 'Ocupado' : 'Livre'}
+                    <span className={'text-[10px] font-semibold px-1.5 py-0.5 rounded-full ' + (STATUS_STYLE[statusByResource[r.id]?.status] || STATUS_STYLE.LIVRE)}>
+                      {STATUS_LABEL[statusByResource[r.id]?.status] || 'Livre'}
                     </span>
                   )}
                 </div>
                 <p className="font-display font-medium text-text-primary text-sm truncate">{r.name}</p>
                 {r.capacity && <p className="text-text-muted text-[12px] mt-0.5">Capacidade: {r.capacity}</p>}
+                {r.is_active && statusByResource[r.id]?.status === 'OCUPADA' && (
+                  <p className="text-text-muted text-[12px] mt-0.5 font-mono">
+                    {statusByResource[r.id].open_accounts} conta(s) - {formatKz(statusByResource[r.id].open_total)} Kz
+                  </p>
+                )}
+                {r.is_active && statusByResource[r.id]?.status === 'RESERVADA' && (
+                  <p className="text-text-muted text-[12px] mt-0.5">
+                    {new Date(statusByResource[r.id].booking_starts_at).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}
+                    {statusByResource[r.id].booking_guest_name ? ' - ' + statusByResource[r.id].booking_guest_name : ''}
+                    {statusByResource[r.id].booking_party_size ? ' (' + statusByResource[r.id].booking_party_size + ' pax)' : ''}
+                  </p>
+                )}
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <ToggleSwitch checked={r.is_active} disabled={togglingId === r.id} onChange={() => handleToggle(r.id)} />
