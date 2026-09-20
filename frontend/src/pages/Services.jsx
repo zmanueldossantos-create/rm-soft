@@ -8,6 +8,7 @@ import { listResourceTypes } from '../api/booking';
 import { listVatRates } from '../api/vat';
 import { unitsApi, withholdingTaxesApi, vatCodesApi } from '../api/catalogs';
 import { extractErrorMessage } from '../utils/errors';
+import { useCan } from '../utils/permissions';
 
 function ToggleSwitch({ checked, onChange, disabled }) {
   const trackClass = 'relative w-10 h-5.5 rounded-full transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ' + (checked ? 'bg-success' : 'bg-border');
@@ -40,6 +41,7 @@ const emptyForm = {
 };
 
 export default function Services() {
+  const can = useCan();
   const [services, setServices] = useState([]);
   const [serviceTypes, setServiceTypes] = useState([]);
   const [resourceTypes, setResourceTypes] = useState([]);
@@ -63,12 +65,19 @@ export default function Services() {
   const [typeSaving, setTypeSaving] = useState(false);
   const [typeFormError, setTypeFormError] = useState('');
 
+  // Resource types belong to the Recursos capability: a company without it has none, and the
+  // server answers 403 - which used to make the whole screen fail. Only asked when granted,
+  // and an error just means an empty list.
+  function loadResourceTypes() {
+    return can('resource_types:view') ? listResourceTypes().catch(() => []) : Promise.resolve([]);
+  }
+
   async function loadData() {
     setLoading(true);
     setError('');
     try {
       const [servicesData, typesData, resourceTypesData, vatData, unitsData, taxesData, vatCodesData] = await Promise.all([
-        listServices(), listServiceTypes(), listResourceTypes(), listVatRates(), unitsApi.list(), withholdingTaxesApi.list(), vatCodesApi.list(),
+        listServices(), listServiceTypes(), loadResourceTypes(), listVatRates(), unitsApi.list(), withholdingTaxesApi.list(), vatCodesApi.list(),
       ]);
       setServices(servicesData);
       setServiceTypes(typesData.filter((t) => t.is_active));
@@ -344,11 +353,13 @@ export default function Services() {
             </Field>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <Field label="Tipo de recurso associado (opcional)">
-              <Select value={form.resourceTypeId} onChange={(v) => updateField('resourceTypeId', v)} options={resourceTypes.map((t) => ({ value: t.id, label: t.name }))} placeholder="Nenhum - servico generico" />
-            </Field>
-          </div>
+          {can('resource_types:view') && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <Field label="Tipo de recurso associado (opcional)">
+                <Select value={form.resourceTypeId} onChange={(v) => updateField('resourceTypeId', v)} options={resourceTypes.map((t) => ({ value: t.id, label: t.name }))} placeholder="Nenhum - servico generico" />
+              </Field>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Field label="Preço (Kz)">
