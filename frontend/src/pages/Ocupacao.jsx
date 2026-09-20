@@ -32,7 +32,10 @@ export default function Ocupacao() {
     listActivities().then((data) => {
       const active = data.filter((a) => a.is_active);
       setActivities(active);
-      if (active.length > 0) setSelectedActivityId(active[0].id);
+      // One active activity: selected for the user. Otherwise the choice stays free - and the spinner
+      // must not wait for a load that only starts once an activity is picked.
+      if (active.length === 1) setSelectedActivityId(active[0].id);
+      else setLoading(false);
     }).catch((err) => setError(extractErrorMessage(err, 'Erro ao carregar atividades')));
   }, []);
 

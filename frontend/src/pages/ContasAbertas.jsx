@@ -89,7 +89,8 @@ export default function ContasAbertas() {
     listActivities().then((data) => {
       const active = data.filter((a) => a.is_active);
       setActivities(active);
-      if (active.length > 0) setSelectedActivityId(active[0].id);
+      // One active activity: selected for the user. Otherwise the choice stays free.
+      if (active.length === 1) setSelectedActivityId(active[0].id);
     }).catch((err) => setError(extractErrorMessage(err, 'Erro ao carregar atividades')));
     listProducts().then((data) => setProducts(data.filter((p) => p.is_active && !p.is_raw_material && !p.not_available_pos && !p.internal_use_only))).catch(() => {});
     listServices().then((data) => setServices(data.filter((s) => s.is_active))).catch(() => {});
@@ -487,7 +488,7 @@ export default function ContasAbertas() {
       ) : accounts.length === 0 ? (
         <div className="bg-bg-elevated border border-border rounded-lg p-10 text-center">
           <Wallet2 size={28} className="text-text-muted mx-auto mb-3" />
-          <p className="text-text-primary font-medium mb-1">Nenhuma conta aberta</p>
+          <p className="text-text-primary font-medium mb-1">{!selectedActivityId ? (activities.length === 0 ? 'Nenhuma atividade ativa' : 'Selecione uma atividade') : 'Nenhuma conta aberta'}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
