@@ -1,7 +1,7 @@
 """Pydantic schemas for Service (Video 3)."""
 import uuid
 from datetime import datetime
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 
 def _validate_code(v: str) -> str:
@@ -27,6 +27,7 @@ class ServiceCreateRequest(BaseModel):
     description: str | None = None
     unit_of_measure_id: uuid.UUID | None = None
     price: float | None = None
+    duration_minutes: int | None = Field(default=None, ge=5, le=1440)
     brand: str | None = None
     withholding_tax_id: uuid.UUID | None = None
     subject_to_return: bool = False
@@ -66,6 +67,7 @@ class ServiceResponse(BaseModel):
     description: str | None
     unit_of_measure_id: uuid.UUID | None
     price: float | None
+    duration_minutes: int | None = None
     brand: str | None
     withholding_tax_id: uuid.UUID | None
     subject_to_return: bool

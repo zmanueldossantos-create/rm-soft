@@ -68,6 +68,7 @@ async def create_service(
     not_available_pos: bool = False,
     status: str = "ACTIVO",
     exemption_reason_id: uuid.UUID | None = None,
+    duration_minutes: int | None = None,
 ) -> Service:
     await _check_fields_available(db, company_id, code, name)
     await _check_exemption_reason(db, vat_id, exemption_reason_id)
@@ -75,7 +76,7 @@ async def create_service(
     service = Service(
         company_id=company_id, code=code, name=name, vat_id=vat_id,
         service_type_id=service_type_id, resource_type_id=resource_type_id, description=description,
-        unit_of_measure_id=unit_of_measure_id, price=price, brand=brand,
+        unit_of_measure_id=unit_of_measure_id, price=price, brand=brand, duration_minutes=duration_minutes,
         withholding_tax_id=withholding_tax_id, subject_to_return=subject_to_return,
         not_available_pos=not_available_pos, status=status,
         exemption_reason_id=exemption_reason_id,
@@ -119,6 +120,7 @@ async def update_service(
     not_available_pos: bool = False,
     status: str = "ACTIVO",
     exemption_reason_id: uuid.UUID | None = None,
+    duration_minutes: int | None = None,
 ) -> Service:
     service = await get_service_or_raise(db, company_id, service_id)
     await _check_fields_available(db, company_id, code, name, exclude_id=service_id)
@@ -132,6 +134,7 @@ async def update_service(
     service.description = description
     service.unit_of_measure_id = unit_of_measure_id
     service.price = price
+    service.duration_minutes = duration_minutes
     service.brand = brand
     service.withholding_tax_id = withholding_tax_id
     service.subject_to_return = subject_to_return

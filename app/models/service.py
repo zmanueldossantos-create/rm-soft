@@ -7,7 +7,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import String, Numeric, Boolean, DateTime, ForeignKey, Enum, func, UniqueConstraint
+from sqlalchemy import String, Numeric, Boolean, Integer, DateTime, ForeignKey, Enum, func, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import UUID
 
@@ -44,6 +44,9 @@ class Service(Base):
     description: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     unit_of_measure_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("unit_of_measure_catalog.id"), nullable=True)
     price: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
+    # Optional default length of a booking for this service (massage 60 min, haircut 30 min...).
+    # The reservation form uses it to fill in the end time; null = no default length.
+    duration_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     vat_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("vat_rates.id"), nullable=False)
     # Required whenever the selected VAT rate is 0% (isento) - see Product.exemption_reason_id.
     exemption_reason_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("vat_codes.id"), nullable=True)
