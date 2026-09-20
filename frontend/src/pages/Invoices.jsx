@@ -684,7 +684,10 @@ export default function Invoices() {
         </div>
         <button
           onClick={() => navigate('/invoices/new')}
-          disabled={products.length === 0 || !can('invoices:issue')}
+          // No dependency on products: a services-only company (or one that only has raw materials)
+          // has none, and /invoices/new handles service lines - its own form keeps 'Criar Fatura'
+          // disabled until every line has an item.
+          disabled={!can('invoices:issue')}
           className="flex items-center gap-2 bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-sm px-4 py-2.5 rounded-md transition-colors cursor-pointer"
         >
           <Plus size={17} />
