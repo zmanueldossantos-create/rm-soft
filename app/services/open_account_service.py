@@ -90,6 +90,8 @@ async def add_line(
         item = result.scalar_one_or_none()
         if item is None:
             raise ItemNotFoundError("Produto nao encontrado")
+        if item.is_raw_material:
+            raise ItemNotFoundError("Materia-prima nao pode ser adicionada a uma conta")
         name_snapshot, unit_price = item.name, float(item.price)
     elif service_id is not None:
         result = await db.execute(select(Service).where(Service.id == service_id, Service.company_id == company_id))

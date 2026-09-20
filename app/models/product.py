@@ -52,7 +52,9 @@ class Product(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     company_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("companies.id"), nullable=False, index=True)
-    vat_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("vat_rates.id"), nullable=False)
+    # A raw material (is_raw_material) carries no VAT rate: it is never sold. Every other product
+    # must have one - enforced by product_service._check_vat_rule.
+    vat_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("vat_rates.id"), nullable=True)
     # Required whenever the selected VAT rate is 0% (isento) - AGT/SAF-T
     # legally requires a justification code (the official 28-code catalog,
     # see VatCode / Configuracoes) for every exempt line.

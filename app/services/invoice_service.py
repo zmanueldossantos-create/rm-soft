@@ -269,6 +269,9 @@ async def create_invoice(
             product = product_result.scalar_one_or_none()
             if product is None:
                 raise ProductNotFoundError("Produto nao encontrado ou inativo")
+            if product.is_raw_material:
+                # Raw materials are only ever consumed by production - and carry no VAT rate.
+                raise ProductNotFoundError("Materia-prima nao pode ser vendida ou faturada")
             vat_result = await db.execute(select(VAT).where(VAT.id == product.vat_id))
             vat = vat_result.scalar_one_or_none()
             vat_rate = float(vat.rate) if vat else 0.0
@@ -711,6 +714,9 @@ async def create_debit_note(
             product = product_result.scalar_one_or_none()
             if product is None:
                 raise ProductNotFoundError("Produto nao encontrado ou inativo")
+            if product.is_raw_material:
+                # Raw materials are only ever consumed by production - and carry no VAT rate.
+                raise ProductNotFoundError("Materia-prima nao pode ser vendida ou faturada")
             vat_result = await db.execute(select(VAT).where(VAT.id == product.vat_id))
             vat = vat_result.scalar_one_or_none()
             vat_rate = float(vat.rate) if vat else 0.0
@@ -1008,6 +1014,9 @@ async def create_pro_forma(
             product = product_result.scalar_one_or_none()
             if product is None:
                 raise ProductNotFoundError("Produto nao encontrado ou inativo")
+            if product.is_raw_material:
+                # Raw materials are only ever consumed by production - and carry no VAT rate.
+                raise ProductNotFoundError("Materia-prima nao pode ser vendida ou faturada")
             vat_result = await db.execute(select(VAT).where(VAT.id == product.vat_id))
             vat = vat_result.scalar_one_or_none()
             vat_rate = float(vat.rate) if vat else 0.0

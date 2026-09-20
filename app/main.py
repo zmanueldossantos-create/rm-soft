@@ -42,6 +42,8 @@ from app.core.database import AsyncSessionLocal
 from app.models.company import Company
 from app.services.permission_service import seed_permission_catalog, seed_default_role_permissions
 from app.services.sector_service import seed_sector_catalog, ModuleNotAvailableError
+from app.services.product_service import ExemptionReasonRequiredError as ProductExemptionReasonRequiredError
+from app.services.service_service import ExemptionReasonRequiredError as ServiceExemptionReasonRequiredError
 from sqlalchemy import select as sa_select
 
 settings = get_settings()
@@ -57,6 +59,18 @@ app = FastAPI(
 async def module_not_available_handler(request, exc):
     from fastapi.responses import JSONResponse
     return JSONResponse(status_code=422, content={"detail": str(exc)})
+
+
+# Only the create routes of products / services translated these errors: an update of an exempt (0%)
+# article without a reason - or of a product without a VAT rate - ended as a 500. Same answer as the
+# create routes: 422 with the message.
+async def _unprocessable_handler(request, exc):
+    from fastapi.responses import JSONResponse
+    return JSONResponse(status_code=422, content={"detail": str(exc)})
+
+
+app.add_exception_handler(ProductExemptionReasonRequiredError, _unprocessable_handler)
+app.add_exception_handler(ServiceExemptionReasonRequiredError, _unprocessable_handler)
 
 
 @app.on_event("startup")

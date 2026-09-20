@@ -30,8 +30,22 @@ class ExemptionReasonRequiredError(Exception):
     pass
 
 
-async def _check_exemption_reason(db: AsyncSession, vat_id: uuid.UUID, exemption_reason_id: uuid.UUID | None) -> None:
+class VatRequiredError(ExemptionReasonRequiredError):
+    """A product that can be sold needs a VAT rate. Subclass of ExemptionReasonRequiredError so the
+    422 answer given for that error applies to it as well."""
+
+
+def _check_vat_rule(vat_id: uuid.UUID | None, is_raw_material: bool) -> None:
+    """A raw material is never sold (invoice, POS and open accounts refuse it), so it carries no VAT
+    rate. Every other product must have one."""
+    if vat_id is None and not is_raw_material:
+        raise VatRequiredError("Taxa de IVA obrigatoria para este produto")
+
+
+async def _check_exemption_reason(db: AsyncSession, vat_id: uuid.UUID | None, exemption_reason_id: uuid.UUID | None) -> None:
     """AGT/SAF-T requires a justification code for every exempt (0%) line - see VatCode/Configuracoes."""
+    if vat_id is None:
+        return
     result = await db.execute(select(VAT).where(VAT.id == vat_id))
     vat = result.scalar_one_or_none()
     if vat is not None and float(vat.rate) == 0 and exemption_reason_id is None:
@@ -77,7 +91,7 @@ async def create_product(
     code: str,
     name: str,
     barcode: str | None,
-    vat_id: uuid.UUID,
+    vat_id: uuid.UUID | None,
     price: float,
     min_stock_threshold: float,
     expiry_date: date | None,
@@ -101,7 +115,11 @@ async def create_product(
 ) -> Product:
     """Creates a product within the caller's company."""
     await _check_all_fields_available(db, company_id, code, name, barcode)
-    await _check_exemption_reason(db, vat_id, exemption_reason_id)
+    _check_vat_rule(vat_id, is_raw_material)
+    if is_raw_material:
+        exemption_reason_id = None  # a raw material is never sold: no exemption to justify
+    else:
+        await _check_exemption_reason(db, vat_id, exemption_reason_id)
 
     product = Product(
         company_id=company_id,
@@ -161,7 +179,7 @@ async def update_product(
     code: str,
     name: str,
     barcode: str | None,
-    vat_id: uuid.UUID,
+    vat_id: uuid.UUID | None,
     price: float,
     min_stock_threshold: float,
     expiry_date: date | None,
@@ -186,7 +204,11 @@ async def update_product(
     """Updates a product's editable fields, scoped to the caller's company."""
     product = await get_product_or_raise(db, company_id, product_id)
     await _check_all_fields_available(db, company_id, code, name, barcode, exclude_id=product_id)
-    await _check_exemption_reason(db, vat_id, exemption_reason_id)
+    _check_vat_rule(vat_id, is_raw_material)
+    if is_raw_material:
+        exemption_reason_id = None  # a raw material is never sold: no exemption to justify
+    else:
+        await _check_exemption_reason(db, vat_id, exemption_reason_id)
 
     product.code = code
     product.name = name

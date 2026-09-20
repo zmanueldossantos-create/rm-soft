@@ -29,7 +29,7 @@ class ProductCreateRequest(BaseModel):
     code: str
     name: str
     barcode: str | None = None
-    vat_id: uuid.UUID
+    vat_id: uuid.UUID | None = None
     price: float
     min_stock_threshold: float = 0
     expiry_date: date | None = None
@@ -96,7 +96,7 @@ class ProductUpdateRequest(BaseModel):
     code: str
     name: str
     barcode: str | None = None
-    vat_id: uuid.UUID
+    vat_id: uuid.UUID | None = None
     price: float
     min_stock_threshold: float = 0
     expiry_date: date | None = None
@@ -164,7 +164,7 @@ class ProductResponse(BaseModel):
     code: str
     name: str
     barcode: str | None
-    vat_id: uuid.UUID
+    vat_id: uuid.UUID | None = None
     price: float
     min_stock_threshold: float
     expiry_date: date | None
