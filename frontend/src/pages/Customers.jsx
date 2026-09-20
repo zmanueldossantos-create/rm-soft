@@ -44,7 +44,7 @@ const STATUS_COLOR = {
 };
 
 const emptyForm = {
-  customerCode: '', legalPersonType: 'JURIDICA', name: '', nif: '', isFinalConsumer: false,
+  customerCode: '', legalPersonType: '', name: '', nif: '', isFinalConsumer: false,
   email: '', phone: '', description: '', registrationDate: new Date().toISOString().slice(0, 10),
   fiscalName: '', currencyId: '', countryId: '', provinceId: '', city: '', address: '',
   paymentTermId: '', paymentMethodId: '', withholdingTaxId: '', status: 'ACTIVO',
@@ -183,6 +183,16 @@ export default function Customers() {
 
   function updateField(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }));
+  }
+
+  // No default: the user must choose. Leaving "Pessoa singular" also clears "Consumidor Final" -
+  // the checkbox is hidden for a pessoa coletiva, but the flag would still force the generic NIF.
+  function handleLegalPersonTypeChange(value) {
+    setForm((prev) => ({
+      ...prev,
+      legalPersonType: value,
+      isFinalConsumer: value === 'FISICA' ? prev.isFinalConsumer : false,
+    }));
   }
 
   function handleFinalConsumerChange(checked) {
@@ -331,7 +341,7 @@ export default function Customers() {
     return (bank ? bank.acronym : '?') + ' - ' + account.account_number + ' · ' + account.iban;
   }
 
-  const isFormValid = form.name && (form.isFinalConsumer || form.nif) && (form.isFinalConsumer || form.phone);
+  const isFormValid = form.legalPersonType && form.name && (form.isFinalConsumer || form.nif) && (form.isFinalConsumer || form.phone);
 
   return (
     <main className="max-w-[1600px] mx-auto px-4 sm:px-6 md:px-8 py-6 sm:py-9">
@@ -454,7 +464,7 @@ export default function Customers() {
                   <input value={form.customerCode} disabled className={readOnlyClass} />
                 </Field>
                 <Field label="Personalidade jurídica *">
-                  <Select value={form.legalPersonType} onChange={(v) => updateField('legalPersonType', v)} options={[{ value: 'JURIDICA', label: 'Pessoa coletiva' }, { value: 'FISICA', label: 'Pessoa singular' }]} />
+                  <Select value={form.legalPersonType} onChange={handleLegalPersonTypeChange} options={[{ value: 'JURIDICA', label: 'Pessoa coletiva' }, { value: 'FISICA', label: 'Pessoa singular' }]} placeholder="Selecionar" />
                 </Field>
               </div>
 
