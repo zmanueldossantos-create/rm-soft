@@ -446,7 +446,7 @@ export default function Products() {
             </Field>
             {isExemptVat && (
               <Field label="Motivo de isenção *">
-                <Select value={form.exemptionReasonId} onChange={(v) => updateField('exemptionReasonId', v)} options={vatCodes.map((c) => ({ value: c.id, label: c.code + ' - ' + c.name }))} placeholder="Selecionar motivo" />
+                <Select value={form.exemptionReasonId} onChange={(v) => updateField('exemptionReasonId', v)} options={vatCodes.filter((c) => Number(c.rate) === 0).map((c) => ({ value: c.id, label: c.code + ' - ' + c.name }))} placeholder="Selecionar motivo" />
               </Field>
             )}
             {editingId && (
