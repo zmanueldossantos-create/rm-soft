@@ -36,6 +36,7 @@ const emptyForm = {
   price: '', brand: '', vatId: '', withholdingTaxId: '',
   subjectToReturn: false, notAvailablePos: false, status: 'ACTIVO',
   exemptionReasonId: '',
+  durationMinutes: '',
 };
 
 export default function Services() {
@@ -116,6 +117,7 @@ export default function Services() {
       description: service.description || '',
       unitOfMeasureId: service.unit_of_measure_id || '',
       price: service.price != null ? String(service.price) : '',
+      durationMinutes: service.duration_minutes != null ? String(service.duration_minutes) : '',
       brand: service.brand || '',
       vatId: service.vat_id,
       withholdingTaxId: service.withholding_tax_id || '',
@@ -176,6 +178,7 @@ export default function Services() {
       not_available_pos: form.notAvailablePos,
       status: form.status,
       exemption_reason_id: form.exemptionReasonId || null,
+      duration_minutes: form.durationMinutes !== '' ? parseInt(form.durationMinutes, 10) : null,
     };
 
     try {
@@ -350,6 +353,9 @@ export default function Services() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Field label="Preço (Kz)">
               <input type="number" step="0.01" min="0" value={form.price} onChange={(e) => updateField('price', e.target.value)} className={inputClass} />
+            </Field>
+            <Field label="Duração (minutos)" hint="Opcional - preenche a hora de fim nas reservas">
+              <input type="number" step="1" min="5" max="1440" value={form.durationMinutes} onChange={(e) => updateField('durationMinutes', e.target.value)} className={inputClass} />
             </Field>
             <Field label="Retenção">
               <Select value={form.withholdingTaxId} onChange={(v) => updateField('withholdingTaxId', v)} options={withholdingTaxes.map((w) => ({ value: w.id, label: w.name }))} placeholder="Sem retenção" />

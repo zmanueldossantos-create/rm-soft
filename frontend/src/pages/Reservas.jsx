@@ -62,7 +62,7 @@ export default function Reservas() {
   const [posPickerSaving, setPosPickerSaving] = useState(false);
 
   const [formOpen, setFormOpen] = useState(false);
-  const [form, setForm] = useState({ activityId: '', resourceId: '', serviceId: '', customerId: '', date: todayIso(), endDate: todayIso(), startTime: '14:00', endTime: '12:00', notes: '', guestName: '', partySize: '' });
+  const [form, setForm] = useState({ activityId: '', resourceId: '', serviceId: '', customerId: '', date: todayIso(), endDate: todayIso(), startTime: '14:00', endTime: '12:00', notes: '', guestName: '', partySize: '', endTouched: false });
   const [formResources, setFormResources] = useState([]);
   const [editingBookingId, setEditingBookingId] = useState(null);
   const [formError, setFormError] = useState('');
@@ -124,7 +124,7 @@ export default function Reservas() {
   function openCreateForm() {
     const today = todayIso();
     setEditingBookingId(null);
-    setForm({ activityId: selectedActivityId, resourceId: '', serviceId: '', customerId: '', date: today, endDate: today, startTime: '14:00', endTime: '12:00', notes: '', guestName: '', partySize: '' });
+    setForm({ activityId: selectedActivityId, resourceId: '', serviceId: '', customerId: '', date: today, endDate: today, startTime: '14:00', endTime: '12:00', notes: '', guestName: '', partySize: '', endTouched: false });
     setFormError('');
     setFormOpen(true);
   }
@@ -170,6 +170,25 @@ export default function Reservas() {
       }
       return next;
     });
+  }
+
+  // When the chosen service has a default duration, the end time follows the start
+  // (start + duration, possibly on the next day) until the end is edited by hand.
+  // Never applied when editing an existing booking. UTC arithmetic on the naive
+  // date/time strings, so browser daylight-saving rules cannot shift the result.
+  function withAutoEnd(next) {
+    if (editingBookingId || next.endTouched || !next.serviceId) return next;
+    const service = services.find((s) => s.id === next.serviceId);
+    if (!service || !service.duration_minutes || !next.date || !next.startTime) return next;
+    const [y, mo, d] = next.date.split('-').map(Number);
+    const [hh, mm] = next.startTime.split(':').map(Number);
+    const end = new Date(Date.UTC(y, mo - 1, d, hh, mm) + service.duration_minutes * 60000);
+    const pad = (n) => String(n).padStart(2, '0');
+    return {
+      ...next,
+      endDate: end.getUTCFullYear() + '-' + pad(end.getUTCMonth() + 1) + '-' + pad(end.getUTCDate()),
+      endTime: pad(end.getUTCHours()) + ':' + pad(end.getUTCMinutes()),
+    };
   }
 
   async function handleSubmit(e) {
@@ -518,24 +537,24 @@ export default function Reservas() {
                 min={editingBookingId ? undefined : todayIso()}
                 onChange={(e) => {
                   const newDate = e.target.value;
-                  setForm((p) => ({ ...p, date: newDate, endDate: p.endDate < newDate ? newDate : p.endDate }));
+                  setForm((p) => withAutoEnd({ ...p, date: newDate, endDate: p.endDate < newDate ? newDate : p.endDate }));
                 }}
                 required className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors"
               />
             </div>
             <div className="flex-1">
               <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Data fim *</label>
-              <input type="date" value={form.endDate} min={form.date || undefined} onChange={(e) => setForm((p) => ({ ...p, endDate: e.target.value }))} required className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
+              <input type="date" value={form.endDate} min={form.date || undefined} onChange={(e) => setForm((p) => ({ ...p, endDate: e.target.value, endTouched: true }))} required className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
             </div>
           </div>
           <div className="flex gap-3">
             <div className="flex-1">
               <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Hora de entrada (no dia de inicio) *</label>
-              <input type="time" value={form.startTime} onChange={(e) => setForm((p) => ({ ...p, startTime: e.target.value }))} required className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
+              <input type="time" value={form.startTime} onChange={(e) => setForm((p) => withAutoEnd({ ...p, startTime: e.target.value }))} required className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
             </div>
             <div className="flex-1">
               <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Hora de saida (no dia de fim) *</label>
-              <input type="time" value={form.endTime} onChange={(e) => setForm((p) => ({ ...p, endTime: e.target.value }))} required className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
+              <input type="time" value={form.endTime} onChange={(e) => setForm((p) => ({ ...p, endTime: e.target.value, endTouched: true }))} required className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
             </div>
           </div>
           <div>
@@ -544,8 +563,8 @@ export default function Reservas() {
             </label>
             <Select
               value={form.serviceId}
-              onChange={(v) => setForm((p) => ({ ...p, serviceId: v }))}
-              options={availableServices.map((s) => ({ value: s.id, label: s.name }))}
+              onChange={(v) => setForm((p) => withAutoEnd({ ...p, serviceId: v }))}
+              options={availableServices.map((s) => ({ value: s.id, label: s.name + (s.duration_minutes ? ' (' + s.duration_minutes + ' min)' : '') }))}
               placeholder="Nenhum"
             />
           </div>
