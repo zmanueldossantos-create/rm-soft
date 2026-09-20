@@ -36,7 +36,10 @@ async def export_saf_t_for_period(db: AsyncSession, company_id: uuid.UUID, year:
     start_date = date(year, month, 1)
     end_date = date(year, month, monthrange(year, month)[1])
 
-    customers_result = await db.execute(select(Customer).where(Customer.company_id == company_id))
+    # Stable order: the SAF-T CustomerID is the position in this list, so it must not shift between exports.
+    customers_result = await db.execute(
+        select(Customer).where(Customer.company_id == company_id).order_by(Customer.created_at, Customer.id)
+    )
     customers = customers_result.scalars().all()
 
     products_result = await db.execute(select(Product).where(Product.company_id == company_id))

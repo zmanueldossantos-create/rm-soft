@@ -126,6 +126,9 @@ def generate_saf_t_xml(
     master_files = _el(root, "MasterFiles")
 
     has_walk_in_sale = any(inv.get("customer_id") is None for inv in invoices)
+    # The company may already hold its own "Consumidor final" customer (NIF 999999999): a walk-in sale then
+    # points at it and no second generic entry is added (two records with the same tax ID otherwise).
+    own_final_consumer = next((c for c in customers if c["nif"] == FINAL_CONSUMER_TAX_ID), None)
 
     # SAF-T CustomerID must be short (max 30 chars) - our internal UUIDs are
     # too long, so we assign sequential short IDs here and remember the
@@ -137,7 +140,8 @@ def generate_saf_t_xml(
         _el(customer_el, "CustomerID", customer_short_id[c["id"]])
         _el(customer_el, "AccountID", "Desconhecido")
         _el(customer_el, "CustomerTaxID", c["nif"])
-        _el(customer_el, "CompanyName", c["name"])
+        # XSD: the generic final-consumer customer is designated "Consumidor final".
+        _el(customer_el, "CompanyName", "Consumidor final" if c["nif"] == FINAL_CONSUMER_TAX_ID else c["name"])
         _el(customer_el, "Contact", "Desconhecido")
         billing = _el(customer_el, "BillingAddress")
         _el(billing, "BuildingNumber", "S/N")
@@ -151,7 +155,7 @@ def generate_saf_t_xml(
         _el(customer_el, "Email", c.get("email") or "Desconhecido")
         _el(customer_el, "SelfBillingIndicator", "0")
 
-    if has_walk_in_sale:
+    if has_walk_in_sale and own_final_consumer is None:
         generic = _el(master_files, "Customer")
         _el(generic, "CustomerID", FINAL_CONSUMER_ID)
         _el(generic, "AccountID", "Desconhecido")
@@ -221,7 +225,8 @@ def generate_saf_t_xml(
         _el(invoice_el, "SourceID", "RMSOFT")
         _el(invoice_el, "SystemEntryDate", inv["created_at"].strftime("%Y-%m-%dT%H:%M:%S"))
         real_customer_id = inv.get("customer_id")
-        short_customer_id = customer_short_id.get(real_customer_id, FINAL_CONSUMER_ID) if real_customer_id else FINAL_CONSUMER_ID
+        walk_in_id = customer_short_id[own_final_consumer["id"]] if own_final_consumer else FINAL_CONSUMER_ID
+        short_customer_id = customer_short_id.get(real_customer_id, walk_in_id) if real_customer_id else walk_in_id
         _el(invoice_el, "CustomerID", short_customer_id)
 
         for idx, line in enumerate(inv["lines"], start=1):
