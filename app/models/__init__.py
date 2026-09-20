@@ -70,3 +70,4 @@ __all__ = [
 ]
 from app.models.company_permission_seed import CompanyPermissionSeed  # noqa: F401
 from app.models.open_account_transfer import OpenAccountTransfer  # noqa: F401
+from app.models.module_capability import ModuleCapability  # noqa: F401

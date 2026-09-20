@@ -24,7 +24,10 @@ from app.services.fiscal_regime_service import (
     toggle_fiscal_regime_status,
     FiscalRegimeNotFoundError,
 )
-from app.schemas.module import ModuleCreateRequest, ModuleUpdateRequest, ModuleResponse
+from app.schemas.module import (
+    ModuleCreateRequest, ModuleUpdateRequest, ModuleResponse,
+    ModuleCapabilitiesRequest, ModuleCapabilitiesResponse, AdminOverviewResponse,
+)
 from app.services.module_service import (
     list_modules,
     create_module,
@@ -33,6 +36,10 @@ from app.services.module_service import (
     ModuleNotFoundError,
 )
 from app.services.company_module_service import list_company_modules, set_company_modules
+from app.services.sector_service import (
+    build_overview, set_module_capabilities, reset_module_capabilities,
+    UnknownCapabilityError, NoSectorDefaultsError,
+)
 from app.services.company_service import get_company_gestor
 from app.schemas.auth import UserResponse
 from app.services.company_service import (
@@ -399,3 +406,46 @@ async def toggle_bank_account_status(
         return await toggle_bank_account(db, account_id)
     except BankAccountNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.get("/overview", response_model=AdminOverviewResponse)
+async def get_admin_overview(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role("SUPER_ADMIN")),
+):
+    """Global view: capabilities, modules (sectors), companies with what is active for each,
+    and the impact list (capabilities switched off while the company already has data)."""
+    return await build_overview(db)
+
+
+@router.put("/modules/{module_id}/capabilities", response_model=ModuleCapabilitiesResponse)
+async def put_module_capabilities(
+    module_id: uuid.UUID,
+    payload: ModuleCapabilitiesRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role("SUPER_ADMIN")),
+):
+    """Sets which capabilities a module gives (dependencies are added automatically)."""
+    try:
+        codes = await set_module_capabilities(db, module_id, payload.capabilities)
+    except ModuleNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except UnknownCapabilityError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    return ModuleCapabilitiesResponse(module_id=module_id, capabilities=codes)
+
+
+@router.post("/modules/{module_id}/capabilities/reset", response_model=ModuleCapabilitiesResponse)
+async def post_reset_module_capabilities(
+    module_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role("SUPER_ADMIN")),
+):
+    """Back to the default capabilities of the module's sector."""
+    try:
+        codes = await reset_module_capabilities(db, module_id)
+    except ModuleNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except NoSectorDefaultsError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    return ModuleCapabilitiesResponse(module_id=module_id, capabilities=codes)

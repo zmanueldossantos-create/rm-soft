@@ -13,6 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.permission_service import grant_default_role_permissions
+from app.services.sector_service import ensure_modules_grantable
 from app.models.role_permission import RolePermission
 from app.models.company_permission_seed import CompanyPermissionSeed
 from app.models.company import Company, LegalPersonType, InvoiceIssuanceMode
@@ -159,6 +160,7 @@ async def create_company(
     """
     await _check_all_fields_available(db, name, nif, email, phone_number)
     _validate_currencies(primary_currency_id, secondary_currency_id)
+    await ensure_modules_grantable(db, module_ids or [])
 
     company = Company(
         name=name,

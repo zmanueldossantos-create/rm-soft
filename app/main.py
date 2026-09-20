@@ -41,6 +41,7 @@ from app.api.v1.moedeiro.routes import router as moedeiro_router
 from app.core.database import AsyncSessionLocal
 from app.models.company import Company
 from app.services.permission_service import seed_permission_catalog, seed_default_role_permissions
+from app.services.sector_service import seed_sector_catalog, ModuleNotAvailableError
 from sqlalchemy import select as sa_select
 
 settings = get_settings()
@@ -50,6 +51,12 @@ app = FastAPI(
     description="RM System - Conforme RGIFT 2.0 (AGT)",
     version="7.0.0",
 )
+
+
+@app.exception_handler(ModuleNotAvailableError)
+async def module_not_available_handler(request, exc):
+    from fastapi.responses import JSONResponse
+    return JSONResponse(status_code=422, content={"detail": str(exc)})
 
 
 @app.on_event("startup")
@@ -63,6 +70,7 @@ async def seed_permissions_on_startup() -> None:
     system shipped.
     """
     async with AsyncSessionLocal() as db:
+        await seed_sector_catalog(db)
         await seed_permission_catalog(db)
         companies_result = await db.execute(sa_select(Company.id))
         for (company_id,) in companies_result.all():

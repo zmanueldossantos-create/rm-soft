@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.company_module import CompanyModule
 from app.models.module import Module
+from app.services.sector_service import ensure_modules_grantable
 
 
 async def list_company_modules(db: AsyncSession, company_id: uuid.UUID) -> list[Module]:
@@ -31,6 +32,7 @@ async def set_company_modules(db: AsyncSession, company_id: uuid.UUID, module_id
     (historical invoices must remain intact); it only blocks NEW Activity
     creation for modules no longer granted.
     """
+    await ensure_modules_grantable(db, module_ids)
     existing_result = await db.execute(select(CompanyModule).where(CompanyModule.company_id == company_id))
     existing = {cm.module_id: cm for cm in existing_result.scalars().all()}
 

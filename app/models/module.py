@@ -21,6 +21,9 @@ class Module(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)  # e.g. "Hotel", "Padaria"
+    # Stable sector code (app.core.capabilities.SECTORS: HOTEL, BAR...) - null for a module the
+    # SUPER_ADMIN created by hand. Names stay free; behaviour comes from ModuleCapability rows.
+    code: Mapped[str | None] = mapped_column(String(30), nullable=True, unique=True)
     description: Mapped[str | None] = mapped_column(String(500), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 

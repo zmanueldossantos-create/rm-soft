@@ -42,3 +42,20 @@ class ModuleResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ModuleCapabilitiesRequest(BaseModel):
+    capabilities: list[str]
+
+
+class ModuleCapabilitiesResponse(BaseModel):
+    module_id: uuid.UUID
+    capabilities: list[str]
+
+
+class AdminOverviewResponse(BaseModel):
+    core: dict
+    capabilities: list[dict]
+    modules: list[dict]
+    companies: list[dict]
+    impact: list[dict]
