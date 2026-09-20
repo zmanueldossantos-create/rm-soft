@@ -1,9 +1,9 @@
 ﻿import { useState, useEffect } from 'react';
-import { Wallet2, Plus, Loader2, X, Trash2, CheckCircle2, Search, Minus, ArrowRightLeft } from 'lucide-react';
+import { Wallet2, Plus, Loader2, X, Trash2, CheckCircle2, Search, Minus, ArrowRightLeft, LayoutGrid, RefreshCw } from 'lucide-react';
 import { useCan } from '../utils/permissions';
 import { listActivities } from '../api/activity';
 import { listPointsOfSale } from '../api/activity';
-import { listResources } from '../api/booking';
+import { listResources, listResourceStatuses } from '../api/booking';
 import { listProducts } from '../api/products';
 import { listServices } from '../api/services';
 import { listPaymentMethodPreferences } from '../api/tesouraria';
@@ -15,6 +15,22 @@ import Select from '../components/Select';
 
 function formatKz(value) {
   return Number(value || 0).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+const TABLE_STATUS_LABEL = { LIVRE: 'Livre', OCUPADA: 'Ocupado', RESERVADA: 'Reservado' };
+const TABLE_BADGE_STYLE = {
+  LIVRE: 'text-success bg-success/10',
+  OCUPADA: 'text-danger bg-danger/10',
+  RESERVADA: 'text-accent bg-accent/10',
+};
+const TABLE_CARD_STYLE = {
+  LIVRE: 'bg-bg-elevated border-success/40 hover:border-success',
+  OCUPADA: 'bg-danger/5 border-danger/40 hover:border-danger',
+  RESERVADA: 'bg-accent/5 border-accent/40 hover:border-accent',
+};
+
+function formatTime(value) {
+  return new Date(value).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
 }
 
 export default function ContasAbertas() {
@@ -49,6 +65,17 @@ export default function ContasAbertas() {
   const [closePayments, setClosePayments] = useState([]);
   const [closeError, setCloseError] = useState('');
   const [closeSaving, setCloseSaving] = useState(false);
+  const [viewMode, setViewMode] = useState('accounts');
+  const [tableStatuses, setTableStatuses] = useState([]);
+  const [tablePicker, setTablePicker] = useState(null);
+
+  // The floor plan reflects live state (accounts opened / closed, bookings about to start),
+  // so it refreshes itself every 30 seconds while it is on screen.
+  useEffect(() => {
+    if (viewMode !== 'tables' || !selectedActivityId) return undefined;
+    const timer = setInterval(() => { loadAccounts(); }, 30000);
+    return () => clearInterval(timer);
+  }, [viewMode, selectedActivityId]);
   const [transferModalOpen, setTransferModalOpen] = useState(false);
   const [transferSelection, setTransferSelection] = useState({});
   const [transferMode, setTransferMode] = useState('account');
@@ -81,6 +108,7 @@ export default function ContasAbertas() {
     setError('');
     try {
       setAccounts(await listOpenAccounts(selectedActivityId));
+      await loadStatuses();
     } catch (err) {
       setError(extractErrorMessage(err, 'Erro ao carregar contas'));
     } finally {
@@ -234,6 +262,40 @@ export default function ContasAbertas() {
     }
   }
 
+  // ---- Floor plan (derived table status, see resource_status_service) ----
+  const showTables = viewMode === 'tables' && resources.length > 0;
+
+  async function loadStatuses() {
+    if (!selectedActivityId) return;
+    try {
+      setTableStatuses(await listResourceStatuses(selectedActivityId));
+    } catch {
+      setTableStatuses([]);
+    }
+  }
+
+  function openNewModalForResource(resourceId, notes = '') {
+    if (pointsOfSale.length === 0) {
+      setError('Nenhum ponto de venda ativo nesta atividade');
+      return;
+    }
+    setNewForm({ posId: pointsOfSale[0]?.id || '', label: '', resourceId, notes });
+    setNewError('');
+    setNewModalOpen(true);
+  }
+
+  function handleTableClick(table) {
+    if (table.status === 'OCUPADA') {
+      const tableAccounts = accounts.filter((a) => a.resource_id === table.resource_id);
+      if (tableAccounts.length === 1) openDetail(tableAccounts[0]);
+      else if (tableAccounts.length > 1) setTablePicker({ resourceId: table.resource_id, name: table.name, accounts: tableAccounts });
+      return;
+    }
+    if (!can('open_accounts:open')) return;
+    const guest = [table.booking_guest_name, table.booking_party_size ? table.booking_party_size + ' pax' : null].filter(Boolean).join(' - ');
+    openNewModalForResource(table.resource_id, table.status === 'RESERVADA' && guest ? 'Reserva: ' + guest : '');
+  }
+
   // ---- Transfer / split (see open_account_service.transfer_lines) ----
   const transferAccountOptions = detailAccount
     ? accounts.filter((a) => a.id !== detailAccount.id && a.pos_id === detailAccount.pos_id && !a.booking_id).map((a) => ({ value: a.id, label: a.label }))
@@ -338,11 +400,86 @@ export default function ContasAbertas() {
         </div>
       )}
 
+      {resources.length > 0 && (
+        <div className="flex items-center gap-2 mb-4 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setViewMode('accounts')}
+            className={'px-3.5 py-1.5 rounded-md text-[13px] font-medium transition-colors cursor-pointer ' + (viewMode === 'accounts' ? 'bg-accent text-white' : 'bg-bg-elevated border border-border text-text-muted hover:text-text-primary')}
+          >
+            Contas
+          </button>
+          <button
+            type="button"
+            onClick={() => { setViewMode('tables'); loadAccounts(); }}
+            className={'px-3.5 py-1.5 rounded-md text-[13px] font-medium transition-colors cursor-pointer ' + (viewMode === 'tables' ? 'bg-accent text-white' : 'bg-bg-elevated border border-border text-text-muted hover:text-text-primary')}
+          >
+            <span className="inline-flex items-center gap-1.5">
+              <LayoutGrid size={14} />
+              Mesas / Recursos
+            </span>
+          </button>
+          {showTables && (
+            <button
+              type="button"
+              onClick={() => loadAccounts()}
+              aria-label="Atualizar"
+              title="Atualizar"
+              className="flex items-center justify-center w-8 h-8 rounded-md border border-border text-text-muted hover:text-text-primary hover:border-accent transition-colors cursor-pointer"
+            >
+              <RefreshCw size={14} />
+            </button>
+          )}
+        </div>
+      )}
+
       {error && (
         <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r mb-4">{error}</div>
       )}
 
-      {loading ? (
+      {showTables ? (
+        tableStatuses.length === 0 ? (
+          <div className="bg-bg-elevated border border-border rounded-lg p-10 text-center">
+            <LayoutGrid size={28} className="text-text-muted mx-auto mb-3" />
+            <p className="text-text-primary font-medium mb-1">Nenhuma mesa ativa nesta atividade</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+            {tableStatuses.map((tb) => (
+              <button
+                key={tb.resource_id}
+                type="button"
+                onClick={() => handleTableClick(tb)}
+                disabled={tb.status !== 'OCUPADA' && !can('open_accounts:open')}
+                className={'rounded-lg border p-4 text-left transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ' + (TABLE_CARD_STYLE[tb.status] || TABLE_CARD_STYLE.LIVRE)}
+              >
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <p className="font-display font-semibold text-text-primary text-sm truncate">{tb.name}</p>
+                  <span className={'text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ' + (TABLE_BADGE_STYLE[tb.status] || TABLE_BADGE_STYLE.LIVRE)}>
+                    {TABLE_STATUS_LABEL[tb.status] || 'Livre'}
+                  </span>
+                </div>
+                {tb.capacity ? <p className="text-text-muted text-[12px]">{tb.capacity} lugares</p> : null}
+                {tb.status === 'OCUPADA' && (
+                  <p className="text-text-primary text-[12px] font-mono mt-1">
+                    {tb.open_accounts} conta(s) - {formatKz(tb.open_total)} Kz
+                  </p>
+                )}
+                {tb.status === 'OCUPADA' && tb.opened_at && (
+                  <p className="text-text-muted text-[11px] font-mono">desde {formatTime(tb.opened_at)}</p>
+                )}
+                {tb.booking_id && (
+                  <p className={'text-[11px] mt-1 ' + (tb.status === 'RESERVADA' ? 'text-accent font-medium' : 'text-text-muted')}>
+                    Reserva {formatTime(tb.booking_starts_at)}
+                    {tb.booking_guest_name ? ' - ' + tb.booking_guest_name : ''}
+                    {tb.booking_party_size ? ' (' + tb.booking_party_size + ' pax)' : ''}
+                  </p>
+                )}
+              </button>
+            ))}
+          </div>
+        )
+      ) : loading ? (
         <div className="flex items-center justify-center py-16 text-text-muted text-sm">
           <Loader2 size={18} className="animate-spin mr-2" />
           A carregar...
@@ -677,6 +814,31 @@ export default function ContasAbertas() {
             {transferSaving ? <Loader2 size={17} className="animate-spin" /> : <ArrowRightLeft size={17} />}
             {transferSaving ? 'A transferir...' : 'Confirmar'}
           </button>
+        </div>
+      </Modal>
+      <Modal open={!!tablePicker} onClose={() => setTablePicker(null)} title={'Contas - ' + (tablePicker?.name || '')}>
+        <div className="flex flex-col gap-2">
+          {tablePicker?.accounts.map((a) => (
+            <button
+              key={a.id}
+              type="button"
+              onClick={() => { setTablePicker(null); openDetail(a); }}
+              className="flex items-center justify-between bg-bg-inset border border-border hover:border-accent rounded-md px-3.5 py-2.5 text-left transition-colors cursor-pointer"
+            >
+              <span className="text-[13px] text-text-primary">{a.label}</span>
+              <span className="text-[12px] text-text-muted font-mono">{formatTime(a.opened_at)}</span>
+            </button>
+          ))}
+          {can('open_accounts:open') && (
+            <button
+              type="button"
+              onClick={() => { const resourceId = tablePicker?.resourceId; setTablePicker(null); if (resourceId) openNewModalForResource(resourceId); }}
+              className="flex items-center justify-center gap-2 border border-border hover:border-accent text-text-primary font-medium text-sm rounded-md py-2.5 transition-colors cursor-pointer"
+            >
+              <Plus size={15} />
+              Nova conta nesta mesa
+            </button>
+          )}
         </div>
       </Modal>
     </main>
