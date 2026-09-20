@@ -253,6 +253,7 @@ async def create_invoice(
             line_product_id = None
             line_service_id = service.id
             line_retention_pct = 0.0
+            line_retention_name = None
             # AGT rule (Ulemo 8.8): withholding is exclusive to Service lines, requires the
             # article's own withholding_tax_id to be set ("Sujeito"), and only applies when
             # the customer is pessoa coletiva - never computed for Products or for a
@@ -262,6 +263,7 @@ async def create_invoice(
                 wh = wh_result.scalar_one_or_none()
                 if wh and float(wh.rate) > 0:
                     line_retention_pct = float(wh.rate)
+                    line_retention_name = wh.name
         else:
             product_result = await db.execute(
                 select(Product).where(Product.id == product_id, Product.company_id == company_id, Product.is_active == True)
@@ -280,6 +282,7 @@ async def create_invoice(
             line_product_id = product.id
             line_service_id = None
             line_retention_pct = 0.0
+            line_retention_name = None
 
         discount_percent = float(line_input.get("discount_percent", 0) or 0)
         gross_subtotal = round(quantity * unit_price, 2)
@@ -304,6 +307,9 @@ async def create_invoice(
             line_subtotal=line_subtotal,
             line_vat=line_vat,
             line_total=line_total,
+            retention_name_snapshot=line_retention_name if line_retention > 0 else None,
+            retention_rate=line_retention_pct if line_retention > 0 else None,
+            retention_amount=line_retention if line_retention > 0 else None,
         ))
 
     subtotal_total = round(subtotal_total, 2)
@@ -687,6 +693,7 @@ async def create_debit_note(
         service_id = line_input.get("service_id")
         quantity = float(line_input["quantity"])
         line_retention_pct = 0.0
+        line_retention_name = None
 
         if service_id:
             service_result = await db.execute(
@@ -707,6 +714,7 @@ async def create_debit_note(
                 wh = wh_result.scalar_one_or_none()
                 if wh and float(wh.rate) > 0:
                     line_retention_pct = float(wh.rate)
+                    line_retention_name = wh.name
         else:
             product_result = await db.execute(
                 select(Product).where(Product.id == product_id, Product.company_id == company_id, Product.is_active == True)
@@ -748,6 +756,9 @@ async def create_debit_note(
             line_subtotal=line_subtotal,
             line_vat=line_vat,
             line_total=line_total,
+            retention_name_snapshot=line_retention_name if line_retention > 0 else None,
+            retention_rate=line_retention_pct if line_retention > 0 else None,
+            retention_amount=line_retention if line_retention > 0 else None,
         ))
 
     subtotal_total = round(subtotal_total, 2)

@@ -36,6 +36,12 @@ class InvoiceLine(Base):
     line_vat: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
     line_total: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
 
+    # Withholding applied on this line, copied when the invoice is issued (like vat_rate_snapshot): later
+    # changes of the withholding catalog must not alter an issued document. Empty when nothing was withheld.
+    retention_name_snapshot: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    retention_rate: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
+    retention_amount: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     def __repr__(self) -> str:

@@ -66,6 +66,9 @@ class InvoiceLineResponse(BaseModel):
     line_subtotal: float
     line_vat: float
     line_total: float
+    retention_name_snapshot: str | None = None
+    retention_rate: float | None = None
+    retention_amount: float | None = None
 
     class Config:
         from_attributes = True
