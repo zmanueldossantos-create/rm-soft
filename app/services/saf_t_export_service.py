@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.company import Company
 from app.models.customer import Customer
 from app.models.product import Product
+from app.models.service import Service
 from app.models.vat import VAT
 from app.models.invoice import Invoice
 from app.models.invoice_line import InvoiceLine
@@ -40,6 +41,14 @@ async def export_saf_t_for_period(db: AsyncSession, company_id: uuid.UUID, year:
 
     products_result = await db.execute(select(Product).where(Product.company_id == company_id))
     products = products_result.scalars().all()
+
+    # Services are sellable articles too: a service line has no product_id, so it used to be exported with
+    # ProductCode "N/A" - which matches no MasterFiles/Product (XSD keyref InvoiceProductCodeConstraint) -
+    # and the service itself never reached MasterFiles.
+    services_result = await db.execute(select(Service).where(Service.company_id == company_id))
+    services = services_result.scalars().all()
+    product_code_by_id = {p.id: p.code for p in products}
+    service_code_by_id = {s.id: s.code for s in services}
 
     vat_result = await db.execute(select(VAT).where(VAT.company_id == company_id))
     vat_rates = vat_result.scalars().all()
@@ -76,7 +85,7 @@ async def export_saf_t_for_period(db: AsyncSession, company_id: uuid.UUID, year:
             "customer_id": str(inv.customer_id) if inv.customer_id else None,
             "lines": [
                 {
-                    "product_code": next((p.code for p in products if p.id == l.product_id), "N/A"),
+                    "product_code": product_code_by_id.get(l.product_id) or service_code_by_id.get(l.service_id) or "N/A",
                     "product_name": l.product_name_snapshot,
                     "quantity": float(l.quantity),
                     "unit_price": float(l.unit_price),
@@ -108,6 +117,8 @@ async def export_saf_t_for_period(db: AsyncSession, company_id: uuid.UUID, year:
         for c in customers
     ]
     products_data = [{"code": p.code, "name": p.name, "product_type": p.product_type.value} for p in products]
+    known_codes = {d["code"] for d in products_data}
+    products_data += [{"code": s.code, "name": s.name, "product_type": "SERVICO"} for s in services if s.code not in known_codes]
     vat_data = [{"name": v.name, "rate": float(v.rate)} for v in vat_rates]
 
     return generate_saf_t_xml(

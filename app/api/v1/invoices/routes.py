@@ -470,7 +470,7 @@ async def download_invoice_pdf(
     else:
         pdf_bytes = generate_invoice_pdf_thermal(invoice_dict, lines_dict, company_dict, customer)
 
-    filename = f"{invoice.series}-{str(invoice.number).zfill(invoice.number_digits)}-{format}.pdf"
+    filename = f"{invoice.series}-{invoice.number}-{format}.pdf"
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",

@@ -387,7 +387,7 @@ async def create_invoice(
     # cannot be fulfilled, the whole invoice (and its lines) rolls back
     # together, never leaving a partial sale or a partial stock deduction.
     # SAF-T XSD requires the space: "{DocType} {series_code}/{number}".
-    invoice_reference = f"{doc_code} {series}/{str(next_number).zfill(number_digits)}"
+    invoice_reference = f"{doc_code} {series}/{next_number}"
     try:
         for line_input in lines_input:
             # Services have no physical inventory - never deduct stock for them (either a
@@ -544,7 +544,7 @@ async def create_credit_note(
     next_number = await get_next_number(db, series_row)
     number_digits = activity.number_digits
 
-    invoice_reference = f"NC {series_row.series_code}/{str(next_number).zfill(number_digits)}"
+    invoice_reference = f"NC {series_row.series_code}/{next_number}"
     atcud = _simulate_atcud(company_id, series_row.series_code, next_number)
     invoice_hash = _simulate_hash(company_id, series_row.series_code, next_number, grand_total, business_date)
     qr_code_data = _simulate_qr_payload(company_id, series_row.series_code, next_number, grand_total, atcud)

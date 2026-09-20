@@ -169,7 +169,7 @@ def generate_invoice_pdf_thermal(invoice: dict, lines: list[dict], company: dict
 
     # --- Document type/number, date, attendant ---
     doc_title = DOCUMENT_TYPE_LABELS.get(invoice["invoice_type"], invoice["invoice_type"])
-    doc_number = f"{invoice['series']}/{str(invoice['number']).zfill(invoice.get('number_digits', 3))}"
+    doc_number = f"{invoice['series']}/{invoice['number']}"
     two_col(doc_title, doc_number, size=8, bold=True)
     two_col("Data e Hora:", invoice.get("business_date", "-"), size=7.5)
     two_col("Atendido por:", company["name"][:24], size=7.5)
@@ -316,7 +316,7 @@ def generate_invoice_pdf_a4(invoice: dict, lines: list[dict], company: dict, cus
         cy -= 4 * mm
 
     right_x = page_width - margin
-    doc_title = f"{DOCUMENT_TYPE_LABELS.get(invoice['invoice_type'], invoice['invoice_type'])}: {invoice['series']}/{str(invoice['number']).zfill(invoice.get('number_digits', 3))}"
+    doc_title = f"{DOCUMENT_TYPE_LABELS.get(invoice['invoice_type'], invoice['invoice_type'])}: {invoice['series']}/{invoice['number']}"
     ry = y
     c.setFillColor(ACCENT)
     c.setFont("Helvetica-Bold", 12)

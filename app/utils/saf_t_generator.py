@@ -199,7 +199,7 @@ def generate_saf_t_xml(
     for inv in invoices:
         saft_type = INVOICE_TYPE_MAP.get(inv["invoice_type"], "FT")
         invoice_el = _el(sales_invoices, "Invoice")
-        _el(invoice_el, "InvoiceNo", f"{saft_type} {inv['series']}/{str(inv['number']).zfill(inv.get('number_digits', 3))}")
+        _el(invoice_el, "InvoiceNo", f"{saft_type} {inv['series']}/{inv['number']}")
 
         status = _el(invoice_el, "DocumentStatus")
         _el(status, "InvoiceStatus", "N")
