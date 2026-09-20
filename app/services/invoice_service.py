@@ -509,6 +509,7 @@ async def create_credit_note(
 
         line_objects.append(InvoiceLine(
             product_id=ref_line.product_id,
+            service_id=ref_line.service_id,
             product_name_snapshot=ref_line.product_name_snapshot,
             quantity=quantity,
             unit_price=unit_price,

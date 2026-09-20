@@ -90,6 +90,11 @@ def generate_saf_t_xml(
                     "line_vat": float, "line_total": float}],
     }
     """
+    # Only documents that map to a SAF-T InvoiceType belong in SalesInvoices. A pro-forma (working document)
+    # or a receipt used to fall through to "FT" - a non-fiscal document reported as an invoice. They stay out
+    # until their own sections (WorkingDocuments, Payments) are generated.
+    invoices = [inv for inv in invoices if inv["invoice_type"] in INVOICE_TYPE_MAP]
+
     root = etree.Element(_q("AuditFile"), nsmap=NSMAP)
 
     # ---------- Header ----------
@@ -196,8 +201,11 @@ def generate_saf_t_xml(
     source_documents = _el(root, "SourceDocuments")
     sales_invoices = _el(source_documents, "SalesInvoices")
     _el(sales_invoices, "NumberOfEntries", len(invoices))
-    _el(sales_invoices, "TotalDebit", "0.00")
-    total_credit = sum(float(inv["total"]) for inv in invoices)
+    # XSD: TotalDebit / TotalCredit are the sums of the DebitAmount / CreditAmount elements, i.e. net of tax.
+    # A credit note carries its lines as DebitAmount; every other document as CreditAmount.
+    total_debit = sum(float(i["subtotal"]) for i in invoices if INVOICE_TYPE_MAP[i["invoice_type"]] == "NC")
+    total_credit = sum(float(i["subtotal"]) for i in invoices if INVOICE_TYPE_MAP[i["invoice_type"]] != "NC")
+    _el(sales_invoices, "TotalDebit", _money(total_debit))
     _el(sales_invoices, "TotalCredit", _money(total_credit))
 
     for inv in invoices:
@@ -239,7 +247,7 @@ def generate_saf_t_xml(
             _el(line_el, "UnitPrice", _money(line["unit_price"]))
             _el(line_el, "TaxPointDate", inv["business_date"].isoformat())
             _el(line_el, "Description", line["product_name"])
-            _el(line_el, "CreditAmount", _money(line["line_subtotal"]))
+            _el(line_el, "DebitAmount" if saft_type == "NC" else "CreditAmount", _money(line["line_subtotal"]))
 
             tax = _el(line_el, "Tax")
             _el(tax, "TaxType", "IVA")
