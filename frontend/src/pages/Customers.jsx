@@ -63,6 +63,7 @@ export default function Customers() {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
+  const [createdMessage, setCreatedMessage] = useState('');
   const [nifLookupLoading, setNifLookupLoading] = useState(false);
   const [nifLookupMessage, setNifLookupMessage] = useState('');
 
@@ -119,6 +120,7 @@ export default function Customers() {
   }, [customers, search]);
 
   async function openCreateModal() {
+    setCreatedMessage('');
     setEditingId(null);
     setForm(emptyForm);
     setActiveTab('identificacao');
@@ -176,6 +178,7 @@ export default function Customers() {
     setCustomerBankLinks([]);
     setPendingBankAccountIds([]);
     setCustomerInvoices([]);
+    setCreatedMessage('');
   }
 
   function updateField(field, value) {
@@ -279,6 +282,7 @@ export default function Customers() {
   async function handleSubmit(e) {
     e.preventDefault();
     setFormError('');
+    setCreatedMessage('');
     setSaving(true);
     try {
       if (editingId) {
@@ -290,6 +294,7 @@ export default function Customers() {
           await addCustomerBankLink(created.id, accountId);
         }
         // Stay open, reset to a fresh form so another customer can be created right away.
+        setCreatedMessage('Cliente "' + created.name + '" criado com sucesso');
         setForm(emptyForm);
         setActiveTab('identificacao');
         setPendingBankAccountIds([]);
@@ -421,6 +426,9 @@ export default function Customers() {
 
       <Modal open={modalOpen} onClose={closeModal} title={editingId ? 'Editar cliente' : 'Novo cliente'} maxWidthClass="max-w-3xl">
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          {createdMessage && (
+            <div className="bg-success/10 border-l-2 border-success text-success px-3.5 py-2.5 text-[13px] rounded-r">{createdMessage}</div>
+          )}
           <div className="flex items-center bg-bg-inset border border-border rounded-md p-0.5 self-start flex-wrap">
             {[
               ['identificacao', 'Identificação'],
