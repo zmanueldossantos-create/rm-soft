@@ -185,6 +185,9 @@ export default function Layout() {
             {user?.role === 'SUPER_ADMIN' && (
               <NavLink to="/configuracoes" icon={SlidersHorizontal} label="Configurações" active={isActive('/configuracoes')} />
             )}
+            {user?.role === 'SUPER_ADMIN' && (
+              <NavLink to="/visao-global" icon={LayoutGrid} label="Visao global" active={isActive('/visao-global')} />
+            )}
             {(can('products:manage') || can('services:manage')) && (
               <>
                 <div className="w-px h-5 bg-border mx-1 shrink-0 self-center" />

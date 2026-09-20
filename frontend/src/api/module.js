@@ -30,3 +30,19 @@ export async function setCompanyModules(companyId, moduleIds) {
   const res = await apiClient.put('/admin/companies/' + companyId + '/modules', moduleIds);
   return res.data;
 }
+
+// SUPER_ADMIN global view: capabilities, sectors (modules), companies and impact.
+export async function getAdminOverview() {
+  const res = await apiClient.get('/admin/overview');
+  return res.data;
+}
+
+export async function setModuleCapabilities(moduleId, capabilities) {
+  const res = await apiClient.put('/admin/modules/' + moduleId + '/capabilities', { capabilities });
+  return res.data;
+}
+
+export async function resetModuleCapabilities(moduleId) {
+  const res = await apiClient.post('/admin/modules/' + moduleId + '/capabilities/reset');
+  return res.data;
+}

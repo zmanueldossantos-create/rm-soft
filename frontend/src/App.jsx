@@ -27,6 +27,7 @@ import Ocupacao from './pages/Ocupacao';
 import ConsumoInterno from './pages/ConsumoInterno';
 import Fornecedores from './pages/Fornecedores';
 import Permissoes from './pages/Permissoes';
+import VisaoGlobal from './pages/VisaoGlobal';
 import ContasAbertas from './pages/ContasAbertas';
 import Layout from './components/Layout';
 import { useAuthStore } from './store/authStore';
@@ -67,6 +68,7 @@ export default function App() {
           <Route path="/producao/historico" element={<RequirePermission perm="recipes:view"><ProductionHistory /></RequirePermission>} />
           <Route path="/caixa" element={<RequirePermission perm="pos:view"><Caixa /></RequirePermission>} />
           <Route path="/configuracoes" element={<SuperAdminRoute><Configuracoes /></SuperAdminRoute>} />
+          <Route path="/visao-global" element={<SuperAdminRoute><VisaoGlobal /></SuperAdminRoute>} />
           <Route path="/categorias" element={<RequirePermission anyOf={['product_categories:manage', 'service_types:manage', 'tesouraria:reasons_manage', 'resource_types:manage', 'consumption_reasons:manage', 'tesouraria:payment_prefs_manage']}><Categorias /></RequirePermission>} />
           <Route path="/services" element={<RequirePermission perm="services:manage"><Services /></RequirePermission>} />
           <Route path="/invoices/new" element={<RequirePermission perm="invoices:issue"><NovaFatura /></RequirePermission>} />
