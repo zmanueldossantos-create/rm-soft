@@ -47,7 +47,10 @@ export default function Recursos() {
     listActivities().then((data) => {
       const active = data.filter((a) => a.is_active);
       setActivities(active);
-      if (active.length > 0) setSelectedActivityId(active[0].id);
+      // One active activity: nothing to choose, it is selected for the user. Otherwise the choice stays free -
+      // and the spinner must not wait for a load that only starts once an activity is picked.
+      if (active.length === 1) setSelectedActivityId(active[0].id);
+      else setLoading(false);
     }).catch((err) => setError(extractErrorMessage(err, 'Erro ao carregar atividades')));
     // Resource types are managed under Configuracoes > Catalogos > Tipos de Recurso -
     // this screen only reads the catalog to populate the selector below.
@@ -174,8 +177,8 @@ export default function Recursos() {
       ) : resources.length === 0 ? (
         <div className="bg-bg-elevated border border-border rounded-lg p-10 text-center">
           <Boxes size={28} className="text-text-muted mx-auto mb-3" />
-          <p className="text-text-primary font-medium mb-1">Nenhum recurso registado</p>
-          <p className="text-text-muted text-sm">Crie o primeiro recurso desta atividade para comecar a gerir reservas</p>
+          <p className="text-text-primary font-medium mb-1">{!selectedActivityId ? (activities.length === 0 ? 'Nenhuma atividade ativa' : 'Selecione uma atividade') : 'Nenhum recurso registado'}</p>
+          {selectedActivityId && <p className="text-text-muted text-sm">Crie o primeiro recurso desta atividade para comecar a gerir reservas</p>}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">

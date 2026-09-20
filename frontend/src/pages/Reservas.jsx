@@ -153,7 +153,8 @@ export default function Reservas() {
     listActivities().then((data) => {
       const active = data.filter((a) => a.is_active);
       setActivities(active);
-      if (active.length > 0) setSelectedActivityId(active[0].id);
+      // One active activity: selected for the user. Otherwise the choice stays free.
+      if (active.length === 1) setSelectedActivityId(active[0].id);
     }).catch((err) => setError(extractErrorMessage(err, 'Erro ao carregar atividades')));
     listServices().then((data) => setServices(data.filter((s) => s.is_active))).catch(() => {});
     listResourceTypes().then(setResourceTypesCatalog).catch(() => {});
@@ -686,6 +687,10 @@ export default function Reservas() {
           Agenda
         </button>
       </div>
+
+      {!selectedActivityId && activities.length > 1 && (
+        <p className="text-text-muted text-[13px] mb-4">Selecione uma atividade para ver os recursos e as reservas</p>
+      )}
 
       <div className="flex items-end gap-2.5 mb-5 flex-wrap">
         <div className="w-56">

@@ -127,7 +127,8 @@ export default function NovaFatura() {
         setDocumentTypes(docTypesData);
         setBanks(banksData);
         setWithholdingTaxes(whData);
-        if (activitiesData.length === 1) setActivityId(activitiesData[0].id);
+        const activeOnes = activitiesData.filter((a) => a.is_active);
+        if (activeOnes.length === 1) setActivityId(activeOnes[0].id);
       } catch (err) {
         setLoadError(extractErrorMessage(err, 'Erro ao carregar dados'));
       } finally {
