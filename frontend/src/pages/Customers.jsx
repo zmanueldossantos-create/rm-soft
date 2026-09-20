@@ -648,7 +648,7 @@ export default function Customers() {
                   <tbody>
                     {customerInvoices.map((inv) => (
                       <tr key={inv.id} className="border-b border-border last:border-0">
-                        <td className="px-2 py-2 font-mono text-text-primary">{inv.series}/{String(inv.number).padStart(inv.number_digits, '0')}</td>
+                        <td className="px-2 py-2 font-mono text-text-primary">{inv.series}/{inv.number}</td>
                         <td className="px-2 py-2 font-mono text-text-muted">{inv.business_date}</td>
                         <td className="px-2 py-2 font-mono text-text-primary text-right">{Number(inv.total).toFixed(2)}</td>
                         <td className="px-2 py-2 text-text-muted">{inv.status}</td>

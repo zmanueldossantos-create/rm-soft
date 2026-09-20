@@ -189,7 +189,7 @@ export default function NovaFatura() {
     const series = documentSeries.find((s) => s.document_type_id === docType.id && s.year === currentYear && s.is_active);
     if (!series) return null;
     const nextNumber = series.current_number + 1;
-    const padded = String(nextNumber).padStart(series.number_digits || 1, '0');
+    const padded = String(nextNumber);
     return { code, series: series.series_code, number: nextNumber, label: `${code} ${series.series_code}/${padded}` };
   }, [invoiceType, businessDate, documentSeries, documentTypes]);
 
