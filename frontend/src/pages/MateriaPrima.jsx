@@ -3,7 +3,6 @@ import { Wheat, Plus, Loader2, Search, Pencil } from 'lucide-react';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
 import { listProducts, createProduct, updateProduct, toggleProductStatus } from '../api/products';
-import { listVatRates } from '../api/vat';
 import { unitsApi } from '../api/catalogs';
 import { extractErrorMessage } from '../utils/errors';
 
@@ -27,7 +26,6 @@ const emptyForm = {
 export default function MateriaPrima() {
   const [materials, setMaterials] = useState([]);
   const [units, setUnits] = useState([]);
-  const [defaultVatId, setDefaultVatId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
@@ -43,9 +41,8 @@ export default function MateriaPrima() {
     setLoading(true);
     setError('');
     try {
-      const [productsData, vatData, unitsData] = await Promise.all([listProducts(), listVatRates(), unitsApi.list()]);
+      const [productsData, unitsData] = await Promise.all([listProducts(), unitsApi.list()]);
       setMaterials(productsData.filter((p) => p.is_raw_material));
-      if (vatData.length > 0) setDefaultVatId(vatData[0].id);
       setUnits(unitsData);
     } catch (err) {
       setError(extractErrorMessage(err, 'Erro ao carregar materias-primas'));
@@ -103,7 +100,9 @@ export default function MateriaPrima() {
       code: form.code,
       name: form.name,
       barcode: null,
-      vat_id: defaultVatId,
+      // A raw material is never sold, so it carries no VAT rate (the server accepts a missing one only
+      // for is_raw_material) and no exemption reason.
+      vat_id: null,
       price: 0,
       min_stock_threshold: parseFloat(form.min_stock_threshold || '0'),
       expiry_date: null,
@@ -112,6 +111,7 @@ export default function MateriaPrima() {
       unit_of_measure_id: form.unit_of_measure_id || null,
       batch_yield: 1,
       is_raw_material: true,
+      not_available_pos: true,
     };
 
     try {
@@ -287,7 +287,7 @@ export default function MateriaPrima() {
 
           <button
             type="submit"
-            disabled={saving || !form.code || !form.name || !defaultVatId}
+            disabled={saving || !form.code || !form.name}
             className="mt-1 bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors"
           >
             {saving ? <Loader2 size={17} className="animate-spin" /> : <Plus size={17} />}
