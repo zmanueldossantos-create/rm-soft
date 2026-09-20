@@ -9,7 +9,7 @@ import {
 } from '../api/admin';
 import { extractErrorMessage } from '../utils/errors';
 import { listFiscalRegimes } from '../api/fiscalRegime';
-import { listModules, getCompanyModules, setCompanyModules } from '../api/module';
+import { listModules, getCompanyModules, setCompanyModules, getAdminOverview } from '../api/module';
 import { resetUserPassword } from '../api/users';
 import { listCompanyVatRates, createCompanyVatRate, updateCompanyVatRate, toggleCompanyVatRate } from '../api/vat';
 import { countriesApi, provincesApi, municipalitiesApi, currenciesApi, banksApi } from '../api/catalogs';
@@ -80,6 +80,9 @@ export default function AdminCompanies() {
 
   const [regimes, setRegimes] = useState([]);
   const [modules, setModules] = useState([]);
+  // Sector readiness (from the SUPER_ADMIN overview): id -> { is_ready, ready_note }. A sector
+  // still in development is greyed out below - the server refuses it anyway.
+  const [sectorInfo, setSectorInfo] = useState({});
   const [countries, setCountries] = useState([]);
   const [provinces, setProvinces] = useState([]);
   const [municipalities, setMunicipalities] = useState([]);
@@ -122,6 +125,7 @@ export default function AdminCompanies() {
   useEffect(() => {
     listFiscalRegimes().then((data) => setRegimes(data.filter((r) => r.is_active))).catch(() => {});
     listModules().then((data) => setModules(data.filter((m) => m.is_active))).catch(() => {});
+    getAdminOverview().then((ov) => setSectorInfo(Object.fromEntries(ov.modules.map((m) => [m.id, m])))).catch(() => {});
     countriesApi.list().then((data) => setCountries(data.filter((c) => c.is_active))).catch(() => {});
     provincesApi.list().then((data) => setProvinces(data.filter((p) => p.is_active))).catch(() => {});
     municipalitiesApi.list().then((data) => setMunicipalities(data.filter((m) => m.is_active))).catch(() => {});
@@ -735,12 +739,22 @@ export default function AdminCompanies() {
             <div className="min-h-[420px]">
               <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-2 block">Módulos ativos</label>
               <div className="grid grid-cols-2 gap-2">
-                {modules.map((m) => (
-                  <label key={m.id} className="flex items-center gap-2.5 cursor-pointer select-none border border-border rounded-md px-3 py-2.5 hover:border-accent transition-colors">
-                    <input type="checkbox" checked={form.moduleIds.includes(m.id)} onChange={() => toggleModuleSelection(m.id)} className="w-4 h-4 accent-accent cursor-pointer" />
-                    <span className="text-sm text-text-primary">{m.name}</span>
-                  </label>
-                ))}
+                {modules.map((m) => {
+                  const info = sectorInfo[m.id];
+                  const selected = form.moduleIds.includes(m.id);
+                  const blocked = !!info && !info.is_ready && !selected;
+                  return (
+                    <label
+                      key={m.id}
+                      title={blocked ? (info.ready_note || 'Em desenvolvimento') : undefined}
+                      className={'flex items-center gap-2.5 select-none border border-border rounded-md px-3 py-2.5 transition-colors ' + (blocked ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:border-accent')}
+                    >
+                      <input type="checkbox" checked={selected} disabled={blocked} onChange={() => toggleModuleSelection(m.id)} className="w-4 h-4 accent-accent cursor-pointer" />
+                      <span className="text-sm text-text-primary">{m.name}</span>
+                      {info && !info.is_ready && <span className="text-[10px] text-accent">(em desenvolvimento)</span>}
+                    </label>
+                  );
+                })}
               </div>
             </div>
           )}
