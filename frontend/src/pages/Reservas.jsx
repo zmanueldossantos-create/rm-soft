@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect } from 'react';
-import { CalendarClock, Plus, Loader2, X, CheckCircle2, Pencil } from 'lucide-react';
+import { CalendarClock, Plus, Loader2, X, CheckCircle2, Pencil, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useCan } from '../utils/permissions';
 import { listActivities } from '../api/activity';
 import { listResources, listBookings, createBooking, updateBookingStatus, rescheduleBooking } from '../api/booking';
@@ -32,6 +32,52 @@ const STATUS_COLORS = {
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
+}
+
+const HOUR_PX = 48;
+const AGENDA_DEFAULT_START = 8;
+const AGENDA_DEFAULT_END = 20;
+const AGENDA_STATUS_STYLE = {
+  PENDENTE: 'bg-accent/15 border-accent text-accent',
+  CONFIRMADA: 'bg-success/15 border-success text-success',
+  EM_CURSO: 'bg-accent/25 border-accent text-accent',
+  CONCLUIDA: 'bg-bg-inset border-border text-text-muted',
+};
+const WEEKDAYS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab', 'Dom'];
+
+function pad2(n) {
+  return String(n).padStart(2, '0');
+}
+
+// Date arithmetic on plain YYYY-MM-DD strings, done in UTC so the browser timezone
+// (and daylight-saving rules) can never shift a day.
+function addDays(dateStr, n) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d + n));
+  return dt.getUTCFullYear() + '-' + pad2(dt.getUTCMonth() + 1) + '-' + pad2(dt.getUTCDate());
+}
+
+function weekStart(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  return addDays(dateStr, -((dow + 6) % 7));
+}
+
+function agendaDays(dateStr, weekMode) {
+  if (!weekMode) return [dateStr];
+  const start = weekStart(dateStr);
+  return Array.from({ length: 7 }, (_, i) => addDays(start, i));
+}
+
+function toMinutes(time) {
+  const [h, m] = time.split(':').map(Number);
+  return h * 60 + m;
+}
+
+function formatDayLabel(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  return WEEKDAYS[(dow + 6) % 7] + ' ' + pad2(d) + '/' + pad2(m);
 }
 
 export default function Reservas() {
@@ -67,6 +113,41 @@ export default function Reservas() {
   const [editingBookingId, setEditingBookingId] = useState(null);
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
+
+  const [viewMode, setViewMode] = useState('list');
+  const [agendaDate, setAgendaDate] = useState(todayIso());
+  const [agendaBookings, setAgendaBookings] = useState([]);
+  const [agendaLoading, setAgendaLoading] = useState(false);
+  const [agendaVersion, setAgendaVersion] = useState(0);
+
+  // The agenda (day = one column per resource, week = one column per day for the chosen
+  // resource) loads its own bookings. One day either side of the visible range is fetched
+  // and filtered by Luanda date on screen, so the naive date-time filters can never hide
+  // a booking that crosses midnight. Late responses of an earlier navigation are ignored.
+  useEffect(() => {
+    if (viewMode !== 'agenda') return undefined;
+    let cancelled = false;
+    const days = agendaDays(agendaDate, !!selectedResourceId);
+    const filters = {
+      dateFrom: addDays(days[0], -1) + 'T00:00:00',
+      dateTo: addDays(days[days.length - 1], 1) + 'T23:59:59',
+    };
+    if (selectedResourceId) filters.resourceId = selectedResourceId;
+    setAgendaLoading(true);
+    listBookings(filters)
+      .then((data) => {
+        if (cancelled) return;
+        const resourceIds = new Set(resources.map((r) => r.id));
+        setAgendaBookings(selectedResourceId ? data : data.filter((b) => resourceIds.has(b.resource_id)));
+      })
+      .catch((err) => {
+        if (!cancelled) setError(extractErrorMessage(err, 'Erro ao carregar agenda'));
+      })
+      .finally(() => {
+        if (!cancelled) setAgendaLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [viewMode, agendaDate, selectedResourceId, resources, agendaVersion]);
 
   useEffect(() => {
     listActivities().then((data) => {
@@ -233,6 +314,7 @@ export default function Reservas() {
         });
       }
       setFormOpen(false);
+      setAgendaVersion((v) => v + 1);
       await loadBookings();
     } catch (err) {
       setFormError(extractErrorMessage(err, editingBookingId ? 'Erro ao guardar alteracoes' : 'Erro ao criar reserva'));
@@ -378,6 +460,184 @@ export default function Reservas() {
     return { date: `${get('year')}-${get('month')}-${get('day')}`, time: `${get('hour')}:${get('minute')}` };
   }
 
+  function openCreateFormAt(resourceId, date, startMinutes) {
+    const startTime = pad2(Math.floor(startMinutes / 60)) + ':' + pad2(startMinutes % 60);
+    let endDate = date;
+    let endTotal = startMinutes + 60;
+    if (endTotal >= 1440) {
+      endDate = addDays(date, 1);
+      endTotal -= 1440;
+    }
+    setEditingBookingId(null);
+    setForm({
+      activityId: selectedActivityId, resourceId, serviceId: '', customerId: '',
+      date, endDate, startTime, endTime: pad2(Math.floor(endTotal / 60)) + ':' + pad2(endTotal % 60),
+      notes: '', guestName: '', partySize: '', endTouched: false,
+    });
+    setFormError('');
+    setFormOpen(true);
+  }
+
+  function renderAgenda() {
+    const weekMode = !!selectedResourceId;
+    const days = agendaDays(agendaDate, weekMode);
+    const nowParts = luandaDateParts(new Date().toISOString());
+    const nowMin = toMinutes(nowParts.time);
+    const canCreate = can('bookings:create');
+
+    const columns = weekMode
+      ? days.map((day) => ({ key: day, title: formatDayLabel(day), subtitle: null, day, resourceId: selectedResourceId }))
+      : resources.map((r) => ({ key: r.id, title: r.name, subtitle: r.capacity ? r.capacity + ' lugares' : null, day: agendaDate, resourceId: r.id }));
+
+    const visible = agendaBookings.filter((b) => b.status !== 'CANCELADA' && b.status !== 'NO_SHOW');
+    const segsByCol = columns.map((col) => visible
+      .filter((b) => b.resource_id === col.resourceId)
+      .map((b) => {
+        const s = luandaDateParts(b.starts_at);
+        const e = luandaDateParts(b.ends_at);
+        if (s.date > col.day || e.date < col.day) return null;
+        const startMin = s.date < col.day ? 0 : toMinutes(s.time);
+        const endMin = e.date > col.day ? 1440 : toMinutes(e.time);
+        if (endMin <= startMin) return null;
+        return { b, startMin, endMin, startsHere: s.date === col.day, endsHere: e.date === col.day };
+      })
+      .filter(Boolean));
+
+    let startHour = AGENDA_DEFAULT_START;
+    let endHour = AGENDA_DEFAULT_END;
+    segsByCol.flat().forEach((sg) => {
+      startHour = Math.min(startHour, Math.floor(sg.startMin / 60));
+      endHour = Math.max(endHour, Math.ceil(sg.endMin / 60));
+    });
+    const hours = Array.from({ length: endHour - startHour }, (_, i) => startHour + i);
+    const totalHeight = (endHour - startHour) * HOUR_PX;
+
+    function handleSlotClick(col, ev) {
+      if (!canCreate || col.day < nowParts.date) return;
+      const rect = ev.currentTarget.getBoundingClientRect();
+      const offset = Math.max(0, ev.clientY - rect.top);
+      const minutes = startHour * 60 + Math.floor(offset / (HOUR_PX / 2)) * 30;
+      openCreateFormAt(col.resourceId, col.day, Math.min(minutes, 23 * 60 + 30));
+    }
+
+    return (
+      <div>
+        <div className="flex items-center gap-2 mb-4 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setAgendaDate(addDays(agendaDate, weekMode ? -7 : -1))}
+            aria-label="Anterior"
+            className="flex items-center justify-center w-9 h-9 rounded-md border border-border text-text-muted hover:text-text-primary hover:border-accent transition-colors cursor-pointer"
+          >
+            <ChevronLeft size={16} />
+          </button>
+          <input
+            type="date"
+            value={agendaDate}
+            onChange={(ev) => { if (ev.target.value) setAgendaDate(ev.target.value); }}
+            className="bg-bg-inset border border-border rounded-md px-3.5 py-2 text-sm text-text-primary outline-none focus:border-accent transition-colors"
+          />
+          <button
+            type="button"
+            onClick={() => setAgendaDate(addDays(agendaDate, weekMode ? 7 : 1))}
+            aria-label="Seguinte"
+            className="flex items-center justify-center w-9 h-9 rounded-md border border-border text-text-muted hover:text-text-primary hover:border-accent transition-colors cursor-pointer"
+          >
+            <ChevronRight size={16} />
+          </button>
+          <button
+            type="button"
+            onClick={() => setAgendaDate(nowParts.date)}
+            className="px-3.5 py-1.5 rounded-md text-[13px] font-medium bg-bg-elevated border border-border text-text-muted hover:text-text-primary transition-colors cursor-pointer"
+          >
+            Hoje
+          </button>
+          {weekMode && (
+            <button
+              type="button"
+              onClick={() => setSelectedResourceId('')}
+              className="px-3.5 py-1.5 rounded-md text-[13px] font-medium bg-bg-elevated border border-border text-text-muted hover:text-text-primary transition-colors cursor-pointer"
+            >
+              Ver todos os recursos
+            </button>
+          )}
+          {agendaLoading && <Loader2 size={16} className="animate-spin text-accent" />}
+          <span className="text-text-muted text-[12px]">
+            {weekMode ? 'Semana de ' + formatDayLabel(days[0]) + ' - recurso selecionado' : 'Dia ' + formatDayLabel(agendaDate) + ' - selecione um recurso para ver a semana'}
+          </span>
+        </div>
+
+        {columns.length === 0 ? (
+          <div className="bg-bg-elevated border border-border rounded-lg p-10 text-center">
+            <CalendarClock size={28} className="text-text-muted mx-auto mb-3" />
+            <p className="text-text-primary font-medium mb-1">Nenhum recurso ativo nesta atividade</p>
+          </div>
+        ) : (
+          <div className="bg-bg-elevated border border-border rounded-lg overflow-x-auto">
+            <div style={{ minWidth: 56 + columns.length * 140 }}>
+              <div className="flex border-b border-border bg-bg-inset">
+                <div className="w-14 shrink-0" />
+                {columns.map((col) => (
+                  <div key={col.key} className={'flex-1 min-w-[140px] px-3 py-2 border-l border-border ' + (weekMode && col.day === nowParts.date ? 'bg-accent/10' : '')}>
+                    <p className="text-[13px] font-medium text-text-primary truncate">{col.title}</p>
+                    {col.subtitle && <p className="text-[11px] text-text-muted">{col.subtitle}</p>}
+                  </div>
+                ))}
+              </div>
+              <div className="flex">
+                <div className="w-14 shrink-0 relative" style={{ height: totalHeight }}>
+                  {hours.map((h) => (
+                    <span key={h} className="absolute right-2 text-[10px] text-text-muted font-mono" style={{ top: (h - startHour) * HOUR_PX + 2 }}>{pad2(h)}:00</span>
+                  ))}
+                </div>
+                {columns.map((col, ci) => {
+                  const clickable = canCreate && col.day >= nowParts.date;
+                  const showNow = col.day === nowParts.date && nowMin >= startHour * 60 && nowMin <= endHour * 60;
+                  return (
+                    <div
+                      key={col.key}
+                      onClick={(ev) => handleSlotClick(col, ev)}
+                      className={'flex-1 min-w-[140px] relative border-l border-border ' + (clickable ? 'cursor-pointer hover:bg-accent/5' : '')}
+                      style={{ height: totalHeight }}
+                    >
+                      {hours.map((h) => (
+                        <div key={h} className="absolute inset-x-0 border-t border-border/60 pointer-events-none" style={{ top: (h - startHour) * HOUR_PX }} />
+                      ))}
+                      {showNow && (
+                        <div className="absolute inset-x-0 border-t-2 border-danger pointer-events-none z-10" style={{ top: (nowMin - startHour * 60) / 60 * HOUR_PX }} />
+                      )}
+                      {segsByCol[ci].map((sg) => {
+                        const b = sg.b;
+                        const s = luandaDateParts(b.starts_at);
+                        const e = luandaDateParts(b.ends_at);
+                        const who = b.guest_name || customers.find((c) => c.id === b.customer_id)?.name || '';
+                        const svc = services.find((x) => x.id === b.service_id)?.name || '';
+                        const editable = can('bookings:update') && (b.status === 'PENDENTE' || b.status === 'CONFIRMADA');
+                        return (
+                          <div
+                            key={b.id}
+                            onClick={(ev) => { ev.stopPropagation(); if (editable) openEditForm(b); }}
+                            title={formatDateTime(b.starts_at) + ' - ' + formatDateTime(b.ends_at) + (who ? ' - ' + who : '')}
+                            className={'absolute left-1 right-1 rounded-md border px-2 py-1 overflow-hidden text-[11px] leading-tight ' + (AGENDA_STATUS_STYLE[b.status] || AGENDA_STATUS_STYLE.PENDENTE) + (editable ? ' cursor-pointer' : ' cursor-default')}
+                            style={{ top: (sg.startMin - startHour * 60) / 60 * HOUR_PX, height: Math.max((sg.endMin - sg.startMin) / 60 * HOUR_PX - 2, 22) }}
+                          >
+                            <p className="font-mono font-semibold">{(sg.startsHere ? s.time : '00:00') + ' - ' + (sg.endsHere ? e.time : '24:00')}</p>
+                            {who && <p className="truncate">{who}{b.party_size ? ' (' + b.party_size + ' pax)' : ''}</p>}
+                            {svc && <p className="truncate opacity-80">{svc}</p>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <main className="max-w-[1600px] mx-auto px-4 sm:px-6 md:px-8 py-6 sm:py-9">
       <div className="flex items-center justify-between mb-1 flex-wrap gap-3">
@@ -410,6 +670,23 @@ export default function Reservas() {
         </div>
       )}
 
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        <button
+          type="button"
+          onClick={() => setViewMode('list')}
+          className={'px-3.5 py-1.5 rounded-md text-[13px] font-medium transition-colors cursor-pointer ' + (viewMode === 'list' ? 'bg-accent text-white' : 'bg-bg-elevated border border-border text-text-muted hover:text-text-primary')}
+        >
+          Lista
+        </button>
+        <button
+          type="button"
+          onClick={() => setViewMode('agenda')}
+          className={'px-3.5 py-1.5 rounded-md text-[13px] font-medium transition-colors cursor-pointer ' + (viewMode === 'agenda' ? 'bg-accent text-white' : 'bg-bg-elevated border border-border text-text-muted hover:text-text-primary')}
+        >
+          Agenda
+        </button>
+      </div>
+
       <div className="flex items-end gap-2.5 mb-5 flex-wrap">
         <div className="w-56">
           <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Recurso</label>
@@ -420,6 +697,8 @@ export default function Reservas() {
             placeholder="Todos os recursos"
           />
         </div>
+        {viewMode === 'list' && (
+          <>
         <div>
           <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">De</label>
           <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
@@ -428,13 +707,15 @@ export default function Reservas() {
           <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Ate</label>
           <input type="date" value={dateTo} min={dateFrom || undefined} onChange={(e) => setDateTo(e.target.value)} className="bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
         </div>
+          </>
+        )}
       </div>
 
       {error && (
         <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r mb-4">{error}</div>
       )}
 
-      {loading ? (
+      {viewMode === 'agenda' ? renderAgenda() : loading ? (
         <div className="flex items-center justify-center py-16 text-text-muted text-sm">
           <Loader2 size={18} className="animate-spin mr-2" />
           A carregar...
