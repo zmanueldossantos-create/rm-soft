@@ -17,6 +17,8 @@ class CountryResponse(BaseModel):
     code: str
     name: str
     is_active: bool
+    # Pre-fills the customer form (Dados Fiscais > Moeda) when a country is picked.
+    default_currency_id: uuid.UUID | None = None
 
     class Config:
         from_attributes = True
