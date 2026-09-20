@@ -482,6 +482,7 @@ async def create_credit_note(
 
     subtotal_total = 0.0
     vat_total = 0.0
+    retention_total = 0.0
     line_objects = []
     is_full_credit = True
 
@@ -500,12 +501,20 @@ async def create_credit_note(
 
         unit_price = float(ref_line.unit_price)
         vat_rate = float(ref_line.vat_rate_snapshot)
-        line_subtotal = round(quantity * unit_price, 2)
+        # The credited amount follows the ORIGINAL line (its line discount included), pro rata to the
+        # quantity credited: re-pricing quantity x unit_price ignored the discount and could credit more
+        # than was invoiced.
+        line_subtotal = round(float(ref_line.line_subtotal) * quantity / float(ref_line.quantity), 2)
         line_vat = round(line_subtotal * (vat_rate / 100), 2)
         line_total = round(line_subtotal + line_vat, 2)
+        # Withholding follows the rate the original line was issued with (snapshot on the line). Lines
+        # issued before the snapshot existed have none: nothing is withheld on their credit note.
+        ref_retention_rate = float(ref_line.retention_rate or 0)
+        line_retention = round(line_subtotal * (ref_retention_rate / 100), 2) if ref_retention_rate > 0 else 0.0
 
         subtotal_total += line_subtotal
         vat_total += line_vat
+        retention_total += line_retention
 
         line_objects.append(InvoiceLine(
             product_id=ref_line.product_id,
@@ -517,6 +526,10 @@ async def create_credit_note(
             line_subtotal=line_subtotal,
             line_vat=line_vat,
             line_total=line_total,
+            discount_percent=ref_line.discount_percent,
+            retention_name_snapshot=ref_line.retention_name_snapshot if line_retention > 0 else None,
+            retention_rate=ref_line.retention_rate if line_retention > 0 else None,
+            retention_amount=line_retention if line_retention > 0 else None,
         ))
 
     # A line from the original invoice not included at all in lines_input also makes this a partial credit.
@@ -525,6 +538,7 @@ async def create_credit_note(
 
     subtotal_total = round(subtotal_total, 2)
     vat_total = round(vat_total, 2)
+    retention_total = round(retention_total, 2)
     grand_total = round(subtotal_total + vat_total, 2)
 
     if grand_total > float(reference_invoice.total) + 0.01:
@@ -575,6 +589,7 @@ async def create_credit_note(
         document_reference=f"{INVOICE_TYPE_TO_DOC_CODE.get(reference_invoice.invoice_type.value, '')} {reference_invoice.series}/{reference_invoice.number}",
         credit_note_reason=CreditNoteReason(credit_note_reason),
         credit_note_cause=credit_note_cause,
+        retention_total=retention_total,
         issuance_mode=company.issuance_mode,
         atcud=atcud,
         invoice_hash=invoice_hash,

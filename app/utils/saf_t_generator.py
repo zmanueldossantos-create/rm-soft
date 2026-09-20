@@ -246,6 +246,13 @@ def generate_saf_t_xml(
             _el(line_el, "UnitOfMeasure", "UN")
             _el(line_el, "UnitPrice", _money(line["unit_price"]))
             _el(line_el, "TaxPointDate", inv["business_date"].isoformat())
+            # XSD: References is mandatory on the lines of a credit note (the credited document, in the
+            # numbering of its own InvoiceNo) with the reason - Reason is limited to 50 characters here.
+            if saft_type == "NC" and inv.get("document_reference"):
+                references = _el(line_el, "References")
+                _el(references, "Reference", inv["document_reference"][:60])
+                if inv.get("credit_note_cause"):
+                    _el(references, "Reason", inv["credit_note_cause"][:50])
             _el(line_el, "Description", line["product_name"])
             _el(line_el, "DebitAmount" if saft_type == "NC" else "CreditAmount", _money(line["line_subtotal"]))
 
