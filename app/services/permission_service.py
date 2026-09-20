@@ -18,6 +18,9 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.capabilities import CORE, capability_of_permission
+from app.core.config import get_settings
+
 from app.models.company_permission_seed import CompanyPermissionSeed
 from app.models.permission import Permission
 from app.models.role_permission import RolePermission
@@ -186,6 +189,10 @@ async def seed_default_role_permissions(db: AsyncSession, company_id: uuid.UUID)
 
 
 async def has_permission(db: AsyncSession, company_id: uuid.UUID, role: str, code: str) -> bool:
+    # The sector separation comes first and applies to every role, GESTOR included: a permission
+    # whose capability the company does not have is refused (no-op while ENFORCE_CAPABILITIES is off).
+    if not await capability_allows(db, company_id, code):
+        return False
     if role == ALWAYS_ALLOWED_ROLE:
         return True
     result = await db.execute(
@@ -202,6 +209,8 @@ async def get_permission_matrix(db: AsyncSession, company_id: uuid.UUID) -> list
     always listed as granted (locked column)."""
     permissions_result = await db.execute(select(Permission).order_by(Permission.category, Permission.label))
     permissions = list(permissions_result.scalars().all())
+    active_capabilities = await _active_capabilities_or_none(db, company_id)
+    permissions = [p for p in permissions if _is_allowed(active_capabilities, p.code)]
 
     grants_result = await db.execute(select(RolePermission).where(RolePermission.company_id == company_id))
     granted_roles_by_permission: dict[uuid.UUID, set[str]] = {}
@@ -238,7 +247,7 @@ async def set_role_permission(db: AsyncSession, company_id: uuid.UUID, role: str
     await db.commit()
 
 
-async def list_my_permissions(db: AsyncSession, company_id: uuid.UUID, role: str) -> list[str]:
+async def _list_my_permissions_unfiltered(db: AsyncSession, company_id: uuid.UUID, role: str) -> list[str]:
     """Permission codes granted to this role in this company - what a logged-in
     user calls to show/hide buttons and menu items. GESTOR gets every code."""
     if role == ALWAYS_ALLOWED_ROLE:
@@ -251,3 +260,50 @@ async def list_my_permissions(db: AsyncSession, company_id: uuid.UUID, role: str
         .where(RolePermission.company_id == company_id, RolePermission.role == UserRole(role))
     )
     return [row[0] for row in result.all()]
+
+
+# ---------- Sector separation (see app.core.capabilities) ----------
+
+def _capability_of(code: str) -> str:
+    """CORE or the capability that owns this permission. A prefix nobody classified is treated
+    as core rather than raising: tests/test_sectors.py guarantees every catalog permission is
+    classified, so this only protects a request from a 500."""
+    try:
+        return capability_of_permission(code)
+    except KeyError:
+        return CORE
+
+
+async def _active_capabilities_or_none(db: AsyncSession, company_id: uuid.UUID):
+    """None while ENFORCE_CAPABILITIES is off (everything is allowed), otherwise the set of
+    capability codes the company's granted, enabled, active modules give."""
+    if not get_settings().ENFORCE_CAPABILITIES:
+        return None
+    from app.services.sector_service import get_company_capabilities  # lazy: sector_service imports this module
+    return await get_company_capabilities(db, company_id)
+
+
+def _is_allowed(active, code: str) -> bool:
+    if active is None:
+        return True
+    capability = _capability_of(code)
+    return capability == CORE or capability in active
+
+
+async def capability_allows(db: AsyncSession, company_id: uuid.UUID, code: str) -> bool:
+    """False when the permission belongs to a capability the company does not have. Core
+    permissions never cost a query."""
+    if not get_settings().ENFORCE_CAPABILITIES:
+        return True
+    if _capability_of(code) == CORE:
+        return True
+    return _is_allowed(await _active_capabilities_or_none(db, company_id), code)
+
+
+async def list_my_permissions(db: AsyncSession, company_id: uuid.UUID, role: str) -> list[str]:
+    """Permission codes the role holds in this company AND that the company can use: the role's
+    grants (GESTOR: every code) minus what the company's sectors do not give. This is the list
+    the frontend builds the menu, the route guards and the buttons from."""
+    codes = await _list_my_permissions_unfiltered(db, company_id, role)
+    active = await _active_capabilities_or_none(db, company_id)
+    return [c for c in codes if _is_allowed(active, c)]

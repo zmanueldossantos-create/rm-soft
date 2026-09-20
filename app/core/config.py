@@ -15,6 +15,12 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     DEPLOYMENT_MODE: str = "local"  # "local" ou "saas"
 
+    # --- Separation par secteur (voir app.core.capabilities) ---
+    # False (defaut) : toutes les permissions d une entreprise fonctionnent, quels que soient ses modules.
+    # True : une permission dont la fonction n est donnee par aucun module actif de l entreprise est
+    # refusee (GESTOR compris) et retiree de /permissions/mine et de la matrice.
+    ENFORCE_CAPABILITIES: bool = False
+
     # --- Base de donnees ---
     DATABASE_URL: str
 

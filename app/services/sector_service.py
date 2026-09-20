@@ -13,6 +13,7 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.capabilities import CAPABILITIES, CORE, SECTORS, SECTORS_BY_CODE, capability_of_permission, expand_dependencies
+from app.core.config import get_settings
 from app.models.activity import Activity
 from app.models.company import Company
 from app.models.company_module import CompanyModule
@@ -254,6 +255,7 @@ async def build_overview(db: AsyncSession) -> dict:
         })
 
     return {
+        "enforce_capabilities": get_settings().ENFORCE_CAPABILITIES,
         "core": {"label": "Nucleo", "permissions": permissions_by_capability.get(CORE, [])},
         "capabilities": capability_entries,
         "modules": module_entries,

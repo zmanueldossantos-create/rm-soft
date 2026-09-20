@@ -341,9 +341,15 @@ export default function VisaoGlobal() {
       </div>
       <p className="text-text-muted text-sm mb-4">Setores, funcoes e empresas da plataforma</p>
 
-      <div className="bg-accent/10 border-l-2 border-accent text-accent px-3.5 py-2.5 text-[13px] rounded-r mb-4">
-        Vista de configuracao: as funcoes ainda nao escondem ecras nem bloqueiam acoes das empresas - a aplicacao e um passo seguinte, a validar com a aba Impacto.
-      </div>
+      {overview && overview.enforce_capabilities ? (
+        <div className="bg-success/10 border-l-2 border-success text-success px-3.5 py-2.5 text-[13px] rounded-r mb-4">
+          Separacao ativa: cada empresa so ve e usa as funcoes dos setores que tem. Os dados de uma funcao desativada nao sao apagados.
+        </div>
+      ) : (
+        <div className="bg-accent/10 border-l-2 border-accent text-accent px-3.5 py-2.5 text-[13px] rounded-r mb-4">
+          Separacao nao aplicada: as funcoes ainda nao escondem ecras nem bloqueiam acoes das empresas. Valide primeiro a aba Impacto.
+        </div>
+      )}
 
       {error && (
         <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r mb-4">{error}</div>

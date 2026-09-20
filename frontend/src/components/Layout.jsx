@@ -135,7 +135,7 @@ export default function Layout() {
     if (user?.role && user.role !== 'SUPER_ADMIN') {
       getMyPermissions()
         .then(setPermissions)
-        .catch(() => setPermissions([]));
+        .catch(() => { if (user.role !== 'GESTOR') setPermissions([]); });
     }
   }, [user?.role]);
 

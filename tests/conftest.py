@@ -205,3 +205,15 @@ async def company_with_essentials(db):
         "pm_numerario": pm_numerario,
         "pm_mb": pm_mb,
     }
+
+
+import pytest  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _capability_enforcement_off_by_default(monkeypatch):
+    """The suite tests business logic, not the sector separation: force ENFORCE_CAPABILITIES off
+    whatever the developer's .env says (tests/test_capability_enforcement.py turns it on where it
+    is the subject)."""
+    from app.core.config import get_settings
+    monkeypatch.setattr(get_settings(), "ENFORCE_CAPABILITIES", False)

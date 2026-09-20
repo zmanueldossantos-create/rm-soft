@@ -54,6 +54,7 @@ class ModuleCapabilitiesResponse(BaseModel):
 
 
 class AdminOverviewResponse(BaseModel):
+    enforce_capabilities: bool = False
     core: dict
     capabilities: list[dict]
     modules: list[dict]
