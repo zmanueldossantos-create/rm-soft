@@ -2047,24 +2047,8 @@ export default function Caixa() {
                       >
                         <Printer size={14} />
                       </button>
-                      {inv.document_status !== 'ANULADO' && (ruleOf(inv.invoice_type, 'accepts_credit_note') || ruleOf(inv.invoice_type, 'accepts_debit_note') || ruleOf(inv.invoice_type, 'accepts_receipt')) && (
+                      {inv.document_status !== 'ANULADO' && ruleOf(inv.invoice_type, 'accepts_receipt') && (
                         <>
-                          <button
-                            onClick={() => documentActionsRef.current?.openNc(inv.id)}
-                            disabled={!can('invoices:credit_note') || !ruleOf(inv.invoice_type, 'accepts_credit_note')}
-                            title="Emitir Nota de Credito"
-                            className="flex items-center justify-center w-8 h-8 rounded-md border border-border text-text-muted hover:text-accent hover:border-accent transition-colors cursor-pointer text-[10px] font-bold disabled:opacity-40 disabled:cursor-not-allowed"
-                          >
-                            NC
-                          </button>
-                          <button
-                            onClick={() => documentActionsRef.current?.openNd(inv.id)}
-                            disabled={!can('invoices:debit_note') || !ruleOf(inv.invoice_type, 'accepts_debit_note')}
-                            title="Emitir Nota de Debito"
-                            className="flex items-center justify-center w-8 h-8 rounded-md border border-border text-text-muted hover:text-accent hover:border-accent transition-colors cursor-pointer text-[10px] font-bold disabled:opacity-40 disabled:cursor-not-allowed"
-                          >
-                            ND
-                          </button>
                           <button
                             onClick={() => documentActionsRef.current?.openRc(inv.id)}
                             disabled={!can('invoices:receipt') || !ruleOf(inv.invoice_type, 'accepts_receipt') || !((Number(inv.total) - Number(inv.retention_total || 0) - Number(inv.amount_received || 0)) > 0.005)}
