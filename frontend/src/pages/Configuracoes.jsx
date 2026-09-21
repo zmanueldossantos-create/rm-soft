@@ -267,7 +267,7 @@ export default function Configuracoes() {
       case 'document_types': return { code: '', name: '', area: '', electronic_eligible: false, is_fiscal: true };
       case 'movement_types': return { code: '', name: '', direction: 'ENTRADA', is_auto: false, description: '' };
       case 'units': return { code: '', name: '' };
-      case 'withholding_taxes': return { name: '', rate: 0 };
+      case 'withholding_taxes': return { name: '', rate: 0, tax_type: '' };
       case 'fiscal_regimes': return { name: '', description: '', allows_nor: true, allows_red: true, allows_ise: true, allows_int: false, allows_out: false };
       case 'modules': return { name: '', description: '' };
       case 'denominations': return { currency_id: '', value: '', denomination_type: 'NOTA' };
@@ -313,6 +313,7 @@ export default function Configuracoes() {
       }
       if (activeCatalog.key === 'withholding_taxes') {
         payload.rate = parseFloat(payload.rate);
+        payload.tax_type = payload.tax_type || null;
       }
       if (editingId) {
         await activeCatalog.api.update(editingId, payload);
@@ -481,6 +482,18 @@ export default function Configuracoes() {
         <>
           <Field label="Nome *"><input value={form.name} onChange={(e) => updateField('name', e.target.value)} required className={inputClass} /></Field>
           <Field label="Taxa (%)"><input type="number" step="0.01" value={form.rate} onChange={(e) => updateField('rate', e.target.value)} className={inputClass} /></Field>
+          <Field label="Tipo de imposto (SAF-T)">
+            <select value={form.tax_type || ''} onChange={(e) => updateField('tax_type', e.target.value)} className={inputClass}>
+              <option value="">{'N\u00e3o definido (exportado como Outros)'}</option>
+              <option value="II">II - Imposto Industrial</option>
+              <option value="IPU">IPU - Imposto Predial Urbano</option>
+              <option value="IRT">IRT - Imposto sobre os Rendimentos do Trabalho</option>
+              <option value="IS">IS - Imposto de Selo</option>
+              <option value="IVA">IVA - IVA cativo</option>
+              <option value="IAC">{'IAC - Imposto sobre a Aplica\u00e7\u00e3o de Capitais'}</option>
+              <option value="OU">OU - Outros</option>
+            </select>
+          </Field>
         </>
       );
     }
