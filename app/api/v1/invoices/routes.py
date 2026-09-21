@@ -55,6 +55,8 @@ from app.services.invoice_service import (
     ProFormaAlreadyConvertedError,
 )
 
+from app.api.v1.issuable import ensure_issuable
+
 router = APIRouter(prefix="/api/v1/invoices", tags=["invoices"])
 
 
@@ -66,6 +68,7 @@ async def create_new_invoice(
     current_user: User = Depends(require_permission("invoices:issue")),
 ):
     """Creates an invoice with its lines, blocked if the fiscal period is closed."""
+    await ensure_issuable(db, payload.invoice_type, "invoices")
     try:
         invoice = await create_invoice(
             db,
@@ -224,6 +227,7 @@ async def create_new_pro_forma(
     current_user: User = Depends(require_permission("invoices:proforma")),
 ):
     """Creates a Fatura Pro-forma (FP) - a non-fiscal quote, never submitted to AGT."""
+    await ensure_issuable(db, "PRO_FORMA", "invoices")
     try:
         pro_forma = await create_pro_forma(
             db,
