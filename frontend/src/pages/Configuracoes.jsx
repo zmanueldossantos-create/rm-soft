@@ -173,6 +173,23 @@ const CATALOGS = [
   { key: 'modules', label: 'Módulos', icon: LayoutGrid, api: modulesApi },
 ];
 
+// Rules of a document type: [field, label, what it does, already read by the code]
+const RULE_INFO = [
+  ['electronic_eligible', 'Fatura\u00e7\u00e3o eletr\u00f3nica', 'Necess\u00e1rio para criar s\u00e9ries deste tipo no modo eletr\u00f3nico', true],
+  ['is_fiscal', 'Documento fiscal', 'Tipo fiscal. Desmarcado: o PDF indica que n\u00e3o serve como fatura', true],
+  ['paid_on_issue', 'Pago na emiss\u00e3o', 'Cria logo o pagamento ao emitir (ex.: Fatura/Recibo)', true],
+  ['sent_to_agt', 'Enviado \u00e0 AGT', 'Entra na fila de envio \u00e0 AGT e conta nos estados do painel', true],
+  ['deducts_stock', 'Deduz stock', 'Retira do stock os artigos vendidos', true],
+  ['accepts_receipt', 'Aceita recibo', 'Permite emitir recibos sobre este tipo', true],
+  ['accepts_credit_note', 'Aceita nota de cr\u00e9dito', 'Permite emitir notas de cr\u00e9dito sobre este tipo', true],
+  ['accepts_debit_note', 'Aceita nota de d\u00e9bito', 'Permite emitir notas de d\u00e9bito sobre este tipo', true],
+  ['convertible', 'Convert\u00edvel em FT/FR', 'Pode ser transformado em fatura (ex.: pro-forma)', false],
+  ['issuable_in_invoices', 'Emitido em Nova Fatura', 'Aparece na lista de tipos do ecr\u00e3 Nova Fatura', false],
+  ['issuable_at_pos', 'Emitido na Caixa', 'Aparece na lista de tipos da Caixa', false],
+  ['requires_origin', 'Exige documento de origem', 'Tem de referir um documento anterior (ex.: NC, ND, recibo)', false],
+  ['has_lines', 'Tem linhas de artigos', 'Desmarcado: documento sem linhas (ex.: recibo)', false],
+];
+
 export default function Configuracoes() {
   const [counts, setCounts] = useState({});
   const [loading, setLoading] = useState(true);
@@ -438,15 +455,21 @@ export default function Configuracoes() {
       );
     }
     if (key === 'document_types') {
-      const cb = (field, label) => (
-        <label key={field} className="flex items-center gap-2 cursor-pointer select-none">
-          <input type="checkbox" checked={!!form[field]} onChange={(e) => updateField(field, e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
-          <span className="text-sm text-text-primary">{label}</span>
+      const rule = ([field, label, hint, active]) => (
+        <label key={field} className="flex items-start gap-2 cursor-pointer select-none">
+          <input type="checkbox" checked={!!form[field]} onChange={(e) => updateField(field, e.target.checked)} className="w-4 h-4 mt-0.5 accent-accent cursor-pointer shrink-0" />
+          <span className="flex flex-col">
+            <span className="text-sm text-text-primary">
+              {label}
+              {!active && <span className="ml-1.5 text-[10px] uppercase tracking-wide text-text-muted border border-border rounded px-1 py-px">{'ainda n\u00e3o ativo'}</span>}
+            </span>
+            <span className="text-[12px] text-text-muted leading-snug">{hint}</span>
+          </span>
         </label>
       );
       return (
         <>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label={'C\u00f3digo *'}><input value={form.code} onChange={(e) => updateField('code', e.target.value)} required className={inputClass} /></Field>
             <Field label="Nome *"><input value={form.name} onChange={(e) => updateField('name', e.target.value)} required className={inputClass} /></Field>
             <Field label={'\u00c1rea'}>
@@ -459,6 +482,7 @@ export default function Configuracoes() {
                 <option value="WORKING">Documentos de trabalho (Working)</option>
                 <option value="NONE">{'N\u00e3o exportado'}</option>
               </select>
+              <p className="text-[12px] text-text-muted mt-1">{'Em que parte do ficheiro fiscal (SAF-T) o documento \u00e9 exportado'}</p>
             </Field>
             <Field label={'Sinal no volume de neg\u00f3cios'}>
               <select value={String(form.revenue_sign)} onChange={(e) => updateField('revenue_sign', e.target.value)} className={inputClass}>
@@ -466,17 +490,11 @@ export default function Configuracoes() {
                 <option value="-1">{'- Nota de cr\u00e9dito (subtrai)'}</option>
                 <option value="0">{'0 N\u00e3o conta'}</option>
               </select>
+              <p className="text-[12px] text-text-muted mt-1">{'No painel: soma (+), subtrai (-) ou n\u00e3o conta (0)'}</p>
             </Field>
           </div>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-2.5">
-            {cb('electronic_eligible', 'Fatura\u00e7\u00e3o eletr\u00f3nica')}
-            {cb('is_fiscal', 'Documento fiscal')}
-            {cb('paid_on_issue', 'Pago na emiss\u00e3o')}
-            {cb('sent_to_agt', 'Enviado \u00e0 AGT')}
-            {cb('deducts_stock', 'Deduz stock')}
-            {cb('accepts_receipt', 'Aceita recibo')}
-            {cb('accepts_credit_note', 'Aceita nota de cr\u00e9dito')}
-            {cb('accepts_debit_note', 'Aceita nota de d\u00e9bito')}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
+            {RULE_INFO.map(rule)}
           </div>
         </>
       );
