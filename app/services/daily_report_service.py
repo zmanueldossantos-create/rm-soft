@@ -16,6 +16,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.invoice import Invoice
+from app.models.document_type import DocumentType
+from app.services.document_rules import DOC_CODE_BY_INVOICE_TYPE
 from app.models.cash_session import CashSession
 from app.models.cash_movement import CashMovement, CashMovementType
 
@@ -48,6 +50,8 @@ async def get_daily_report(
         )
         .order_by(Invoice.created_at)
     )
+    # SAF-T section of each document type, from the catalog: a document of the Payments section settles another one.
+    section_by_code = {code: section for code, section in (await db.execute(select(DocumentType.code, DocumentType.saft_section))).all()}
     invoice_type_labels = {"FACTURA": "FT", "FACTURA_RECIBO": "FR", "PRO_FORMA": "PF", "NOTA_CREDITO": "NC", "NOTA_DEBITO": "ND", "RECIBO": "RC"}
     for inv in invoices_result.scalars().all():
         type_value = inv.invoice_type.value if hasattr(inv.invoice_type, "value") else str(inv.invoice_type)
@@ -59,7 +63,7 @@ async def get_daily_report(
             "description": f"{label} {inv.series}/{inv.number}",
             # A receipt settles an invoice (its total is the settled part, withholding included): the drawer
             # journal shows the cash actually received.
-            "amount": float(inv.amount_received or 0) if type_value == "RECIBO" else float(inv.total),
+            "amount": float(inv.amount_received or 0) if section_by_code.get(DOC_CODE_BY_INVOICE_TYPE.get(type_value, ""), "NONE") == "PAYMENTS" else float(inv.total),
             "direction": "entrada",
             "reference": f"{inv.series}/{inv.number}",
         })
