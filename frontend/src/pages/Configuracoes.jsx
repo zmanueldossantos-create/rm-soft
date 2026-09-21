@@ -455,13 +455,12 @@ export default function Configuracoes() {
       );
     }
     if (key === 'document_types') {
-      const rule = ([field, label, hint, active]) => (
+      const rule = ([field, label]) => (
         <label key={field} className="flex items-start gap-2 cursor-pointer select-none">
           <input type="checkbox" checked={!!form[field]} onChange={(e) => updateField(field, e.target.checked)} className="w-4 h-4 mt-0.5 accent-accent cursor-pointer shrink-0" />
           <span className="flex flex-col">
             <span className="text-sm text-text-primary">
               {label}
-              {!active && <span className="ml-1.5 text-[10px] uppercase tracking-wide text-text-muted border border-border rounded px-1 py-px">{'ainda n\u00e3o ativo'}</span>}
             </span>
           </span>
         </label>
