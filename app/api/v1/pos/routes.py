@@ -37,6 +37,7 @@ from app.services.cash_session_service import (
 from app.services.pos_service import checkout, liquidate_pending_invoice, create_pro_forma_from_pos, NoOpenSessionError
 from app.services.invoice_service import ReferenceInvoiceTypeNotEligibleError
 from app.api.v1.issuable import ensure_issuable, ensure_may_bill_later
+from app.services.pos_documents_service import list_pos_documents
 from app.services.point_of_sale_service import PosNotFoundError
 from app.services.invoice_service import (
     ActivityNotFoundError,
@@ -252,3 +253,14 @@ async def post_liquidate_pending_invoice(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     except ReferenceInvoiceTypeNotEligibleError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.get("/documents/{pos_id}", response_model=list[InvoiceResponse])
+async def get_pos_documents(
+    pos_id: uuid.UUID,
+    limit: int = 30,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("pos:view")),
+):
+    """Documents shown by the Caixa: those of this cash point's sessions, plus the invoices still awaiting a payment."""
+    return await list_pos_documents(db, current_user.company_id, pos_id, min(max(limit, 1), 100))
