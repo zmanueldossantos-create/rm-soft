@@ -193,6 +193,8 @@ async def create_new_receipt(
             amount=payload.amount,
             document_reference=payload.document_reference,
             observations=payload.observations,
+            payment_method_id=payload.payment_method_id,
+            cash_session_id=payload.cash_session_id,
         )
     except PeriodClosedError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))

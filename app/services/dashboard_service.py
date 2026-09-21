@@ -6,13 +6,19 @@ import uuid
 from datetime import date
 from calendar import monthrange
 
-from sqlalchemy import select, func
+from sqlalchemy import case, select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.invoice import Invoice, InvoiceStatus
+from app.models.invoice import Invoice, InvoiceStatus, InvoiceType
 from app.models.stock import Stock
 from app.models.product import Product
 from app.models.customer import Customer
+
+
+# Revenue counts the documents that are sales: a pro-forma is only a quote and a receipt settles an invoice that is
+# already counted; a credit note is subtracted (so an annulled invoice nets to zero).
+_NOT_SALES = (InvoiceType.PRO_FORMA, InvoiceType.RECIBO)
+_SIGNED_TOTAL = case((Invoice.invoice_type == InvoiceType.NOTA_CREDITO, -Invoice.total), else_=Invoice.total)
 
 
 async def get_dashboard_summary(db: AsyncSession, company_id: uuid.UUID) -> dict:
@@ -22,18 +28,20 @@ async def get_dashboard_summary(db: AsyncSession, company_id: uuid.UUID) -> dict
 
     # Revenue today
     revenue_today_result = await db.execute(
-        select(func.coalesce(func.sum(Invoice.total), 0)).where(
-            Invoice.company_id == company_id, Invoice.business_date == today
+        select(func.coalesce(func.sum(_SIGNED_TOTAL), 0)).where(
+            Invoice.company_id == company_id, Invoice.business_date == today,
+            Invoice.invoice_type.notin_(_NOT_SALES),
         )
     )
     revenue_today = float(revenue_today_result.scalar())
 
     # Revenue this month
     revenue_month_result = await db.execute(
-        select(func.coalesce(func.sum(Invoice.total), 0)).where(
+        select(func.coalesce(func.sum(_SIGNED_TOTAL), 0)).where(
             Invoice.company_id == company_id,
             Invoice.business_date >= month_start,
             Invoice.business_date <= month_end,
+            Invoice.invoice_type.notin_(_NOT_SALES),
         )
     )
     revenue_month = float(revenue_month_result.scalar())
@@ -44,6 +52,7 @@ async def get_dashboard_summary(db: AsyncSession, company_id: uuid.UUID) -> dict
             Invoice.company_id == company_id,
             Invoice.business_date >= month_start,
             Invoice.business_date <= month_end,
+            Invoice.invoice_type.notin_(_NOT_SALES),
         )
     )
     invoice_count_month = invoice_count_result.scalar()
@@ -54,6 +63,7 @@ async def get_dashboard_summary(db: AsyncSession, company_id: uuid.UUID) -> dict
             Invoice.company_id == company_id,
             Invoice.business_date >= month_start,
             Invoice.business_date <= month_end,
+            Invoice.invoice_type != InvoiceType.PRO_FORMA,  # a pro-forma is never submitted to the AGT
         ).group_by(Invoice.status)
     )
     status_counts = {status.value: 0 for status in InvoiceStatus}

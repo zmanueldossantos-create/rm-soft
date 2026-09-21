@@ -57,7 +57,9 @@ async def get_daily_report(
             "time": inv.created_at,
             "business_date": inv.business_date,
             "description": f"{label} {inv.series}/{inv.number}",
-            "amount": float(inv.total),
+            # A receipt settles an invoice (its total is the settled part, withholding included): the drawer
+            # journal shows the cash actually received.
+            "amount": float(inv.amount_received or 0) if type_value == "RECIBO" else float(inv.total),
             "direction": "entrada",
             "reference": f"{inv.series}/{inv.number}",
         })

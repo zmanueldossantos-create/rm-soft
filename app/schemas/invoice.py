@@ -178,6 +178,8 @@ class ReceiptCreateRequest(BaseModel):
     amount: float
     document_reference: str | None = None
     observations: str | None = None
+    payment_method_id: uuid.UUID | None = None
+    cash_session_id: uuid.UUID | None = None
 
     @field_validator("amount")
     @classmethod

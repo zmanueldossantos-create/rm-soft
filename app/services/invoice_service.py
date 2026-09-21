@@ -871,6 +871,8 @@ async def create_receipt(
     business_date: date | None = None,
     document_reference: str | None = None,
     observations: str | None = None,
+    payment_method_id: uuid.UUID | None = None,
+    cash_session_id: uuid.UUID | None = None,
 ) -> Invoice:
     """
     Creates a Recibo (RC) - a standalone payment acknowledgement against an already-issued
@@ -945,6 +947,26 @@ async def create_receipt(
     invoice_hash = _simulate_hash(company_id, series_row.series_code, next_number, amount, business_date)
     qr_code_data = _simulate_qr_payload(company_id, series_row.series_code, next_number, amount, atcud)
 
+    # The receipt settles the invoice pro rata: `amount` is the cash received and the rest of the settled share is
+    # the withholding kept by the customer. The receipt carries the settled part of the document (net, VAT, total,
+    # withholding) - what the SAF-T Payments section and the AGT e-invoicing API expect - and the cash itself in
+    # amount_received / Payment.
+    cash_due_total = float(reference_invoice.total) - float(reference_invoice.retention_total or 0)
+    settled_share = amount / cash_due_total if cash_due_total > 0 else 1.0
+    receipt_total = round(float(reference_invoice.total) * settled_share, 2)
+    receipt_vat = round(float(reference_invoice.vat_total) * settled_share, 2)
+    receipt_net = round(receipt_total - receipt_vat, 2)
+    receipt_retention = round(float(reference_invoice.retention_total or 0) * settled_share, 2)
+
+    # How the money was paid: the method given, else the invoice's own, else Numerario (as for a Fatura/Recibo).
+    method_id = payment_method_id or reference_invoice.payment_method_id
+    if payment_method_id is not None:
+        known = (await db.execute(select(PaymentMethodCatalog.id).where(PaymentMethodCatalog.id == payment_method_id))).scalar_one_or_none()
+        if known is None:
+            raise EmptyInvoiceError("Metodo de pagamento invalido")
+    if method_id is None:
+        method_id = (await db.execute(select(PaymentMethodCatalog.id).where(PaymentMethodCatalog.code == "NU"))).scalar_one_or_none()
+
     receipt = Invoice(
         company_id=company_id,
         activity_id=activity_id,
@@ -955,9 +977,11 @@ async def create_receipt(
         number=next_number,
         number_digits=number_digits,
         business_date=business_date,
-        subtotal=amount,
-        vat_total=0,
-        total=amount,
+        subtotal=receipt_net,
+        vat_total=receipt_vat,
+        total=receipt_total,
+        retention_total=receipt_retention,
+        cash_session_id=cash_session_id,
         status=InvoiceStatus.PENDENTE,
         document_status=DocumentLifecycleStatus.EMITIDO,
         reference_invoice_id=reference_invoice.id,
@@ -971,6 +995,9 @@ async def create_receipt(
         qr_code_data=qr_code_data,
     )
     db.add(receipt)
+    await db.flush()
+    if method_id is not None:
+        db.add(Payment(company_id=company_id, invoice_id=receipt.id, payment_method_id=method_id, amount=amount))
 
     # Accumulate the payment onto the original invoice - see Estado Pagamento derivation.
     reference_invoice.amount_received = round(already_received + amount, 2)
