@@ -1152,10 +1152,30 @@ export default function Invoices() {
                 <span className="text-text-muted">IVA</span>
                 <span className="font-mono text-text-primary">{formatMoney(detailInvoice.vat_total)}</span>
               </div>
+              {Number(detailInvoice.retention_total) > 0 && (
+                <div className="flex justify-between w-56 text-sm">
+                  <span className="text-text-muted">{'Reten\u00e7\u00f5es'}</span>
+                  <span className="font-mono text-text-primary">-{formatMoney(detailInvoice.retention_total)}</span>
+                </div>
+              )}
               <div className="flex justify-between w-56 text-base font-semibold">
                 <span className="text-text-primary">TOTAL</span>
                 <span className="font-mono text-accent">{formatMoney(detailInvoice.total)}</span>
               </div>
+              {detailInvoice.invoice_type === 'FACTURA' && (Number(detailInvoice.retention_total) > 0 || Number(detailInvoice.amount_received) > 0) && (
+                <>
+                  {Number(detailInvoice.amount_received) > 0 && (
+                    <div className="flex justify-between w-56 text-sm">
+                      <span className="text-text-muted">Valor recebido</span>
+                      <span className="font-mono text-text-primary">{formatMoney(detailInvoice.amount_received)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between w-56 text-sm">
+                    <span className="text-text-muted">Valor a pagar</span>
+                    <span className="font-mono text-text-primary">{formatMoney(Math.max(0, Math.round((Number(detailInvoice.total) - Number(detailInvoice.retention_total || 0) - Number(detailInvoice.amount_received || 0)) * 100) / 100))}</span>
+                  </div>
+                </>
+              )}
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
