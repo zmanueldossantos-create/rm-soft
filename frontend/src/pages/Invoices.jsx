@@ -157,6 +157,7 @@ export default function Invoices() {
   const [rcAmount, setRcAmount] = useState('');
   const [rcDocumentReference, setRcDocumentReference] = useState('');
   const [rcObservations, setRcObservations] = useState('');
+  const [rcPaymentMethodId, setRcPaymentMethodId] = useState('');
   const [rcSaving, setRcSaving] = useState(false);
   const [rcFormError, setRcFormError] = useState('');
 
@@ -353,6 +354,7 @@ export default function Invoices() {
     setRcAmount('');
     setRcDocumentReference((INVOICE_TYPE_CODE[detailInvoice.invoice_type] || detailInvoice.invoice_type) + ' ' + detailInvoice.series + '/' + detailInvoice.number);
     setRcObservations('');
+    setRcPaymentMethodId('');
     setRcFormError('');
     setRcModalOpen(true);
   }
@@ -363,6 +365,7 @@ export default function Invoices() {
     setRcAmount('');
     setRcDocumentReference((INVOICE_TYPE_CODE[data.invoice_type] || data.invoice_type) + ' ' + data.series + '/' + data.number);
     setRcObservations('');
+    setRcPaymentMethodId('');
     setRcFormError('');
     setRcModalOpen(true);
   }
@@ -378,6 +381,7 @@ export default function Invoices() {
         amount: parseFloat(rcAmount),
         document_reference: rcDocumentReference || null,
         observations: rcObservations || null,
+        payment_method_id: rcPaymentMethodId || null,
       });
       setRcModalOpen(false);
       await openDetailModal(detailInvoice.id);
@@ -1286,6 +1290,15 @@ export default function Invoices() {
             <div>
               <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Valor recebido *</label>
               <input type="number" step="0.01" min="0.01" value={rcAmount} onChange={(e) => setRcAmount(e.target.value)} required placeholder="0.00" className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors" />
+            </div>
+            <div>
+              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">{'M\u00e9todo de pagamento'}</label>
+              <select value={rcPaymentMethodId} onChange={(e) => setRcPaymentMethodId(e.target.value)} className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors">
+                <option value="">{'Igual \u00e0 fatura (predefini\u00e7\u00e3o)'}</option>
+                {paymentMethods.map((m) => (
+                  <option key={m.id} value={m.id}>{m.name}</option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Referencia</label>

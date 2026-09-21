@@ -2087,7 +2087,7 @@ export default function Caixa() {
           </a>
         </div>
       </Modal>
-      <DocumentActionModals ref={documentActionsRef} onSuccess={() => listRecentIssuedInvoices().then(setRecentInvoices).catch(() => {})} />
+      <DocumentActionModals cashSessionId={session?.id} ref={documentActionsRef} onSuccess={() => listRecentIssuedInvoices().then(setRecentInvoices).catch(() => {})} />
     </main>
   );
 }

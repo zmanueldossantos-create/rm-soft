@@ -1,8 +1,9 @@
-﻿import { useState, forwardRef, useImperativeHandle } from 'react';
+﻿import { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { X, Loader2, AlertTriangle } from 'lucide-react';
 import Modal from './Modal';
 import { getInvoiceDetail, createCreditNote, createDebitNote, createReceipt } from '../api/invoices';
 import { extractErrorMessage } from '../utils/errors';
+import { paymentMethodsApi } from '../api/catalogs';
 
 // Self-contained NC/ND/RC action modals against an already-issued invoice, usable
 // from any screen (Caixa's "Consultar documentos", Invoices.jsx) without leaving
@@ -10,7 +11,7 @@ import { extractErrorMessage } from '../utils/errors';
 // open{Nc,Nd,Rc}(invoiceId) via props.onReady(api) so the parent can trigger them,
 // and calls props.onSuccess() after a successful creation so the parent can refresh
 // its own document list.
-const DocumentActionModals = forwardRef(function DocumentActionModals({ onSuccess }, ref) {
+const DocumentActionModals = forwardRef(function DocumentActionModals({ onSuccess, cashSessionId }, ref) {
   const [ncModalOpen, setNcModalOpen] = useState(false);
   const [ncInvoice, setNcInvoice] = useState(null);
   const [ncLines, setNcLines] = useState([]);
@@ -34,6 +35,12 @@ const DocumentActionModals = forwardRef(function DocumentActionModals({ onSucces
   const [rcObservations, setRcObservations] = useState('');
   const [rcSaving, setRcSaving] = useState(false);
   const [rcError, setRcError] = useState('');
+  const [rcPaymentMethodId, setRcPaymentMethodId] = useState('');
+  const [paymentMethods, setPaymentMethods] = useState([]);
+
+  useEffect(() => {
+    paymentMethodsApi.list().then((data) => setPaymentMethods(data.filter((m) => m.is_active))).catch(() => {});
+  }, []);
 
   const INVOICE_TYPE_CODE = { FACTURA: 'FT', FACTURA_RECIBO: 'FR', PRO_FORMA: 'FP' };
 
@@ -148,8 +155,11 @@ const DocumentActionModals = forwardRef(function DocumentActionModals({ onSucces
         amount: parseFloat(rcAmount),
         document_reference: rcDocumentReference || null,
         observations: rcObservations || null,
+        payment_method_id: rcPaymentMethodId || null,
+        cash_session_id: cashSessionId || null,
       });
       setRcModalOpen(false);
+      setRcPaymentMethodId('');
       if (onSuccess) onSuccess();
     } catch (err) {
       setRcError(extractErrorMessage(err, 'Erro ao emitir recibo'));
@@ -242,6 +252,15 @@ const DocumentActionModals = forwardRef(function DocumentActionModals({ onSucces
             <div>
               <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Valor *</label>
               <input type="number" step="0.01" min="0.01" value={rcAmount} onChange={(e) => setRcAmount(e.target.value)} required className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent" />
+            </div>
+            <div>
+              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">{'M\u00e9todo de pagamento'}</label>
+              <select value={rcPaymentMethodId} onChange={(e) => setRcPaymentMethodId(e.target.value)} className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent">
+                <option value="">{'Igual \u00e0 fatura (predefini\u00e7\u00e3o)'}</option>
+                {paymentMethods.map((m) => (
+                  <option key={m.id} value={m.id}>{m.name}</option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Referencia do documento</label>
