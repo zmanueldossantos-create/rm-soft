@@ -846,7 +846,7 @@ export default function Invoices() {
                             ...((inv.invoice_type === 'FACTURA' || inv.invoice_type === 'FACTURA_RECIBO') && inv.document_status !== 'ANULADO' ? [
                               { perm: 'invoices:credit_note', label: 'Emitir Nota de Credito', icon: <RotateCcw size={14} />, onClick: () => openNcModalFromRow(inv.id) },
                               { perm: 'invoices:debit_note', label: 'Emitir Nota de Debito', icon: <FilePlus size={14} />, onClick: () => openNdModalFromRow(inv.id) },
-                              { perm: 'invoices:receipt', label: 'Emitir Recibo', icon: <Receipt size={14} />, onClick: () => openRcModalFromRow(inv.id) },
+                              ...(inv.invoice_type === 'FACTURA' && (Number(inv.total) - Number(inv.retention_total || 0) - Number(inv.amount_received || 0)) > 0.005 ? [{ perm: 'invoices:receipt', label: 'Emitir Recibo', icon: <Receipt size={14} />, onClick: () => openRcModalFromRow(inv.id) }] : []),
                             ] : []),
                             ...(inv.invoice_type === 'PRO_FORMA' && !inv.converted_to_invoice_id ? [
                               { perm: 'invoices:proforma_convert', label: 'Converter em Fatura', icon: <FileText size={14} />, onClick: () => openConvertModalFromRow(inv.id) },
@@ -1213,7 +1213,7 @@ export default function Invoices() {
                   <FilePlus size={14} /> Emitir Nota de Debito
                 </button>
               )}
-              {(detailInvoice.invoice_type === 'FACTURA' || detailInvoice.invoice_type === 'FACTURA_RECIBO') && detailInvoice.document_status !== 'ANULADO' && (
+              {detailInvoice.invoice_type === 'FACTURA' && detailInvoice.document_status !== 'ANULADO' && (Number(detailInvoice.total) - Number(detailInvoice.retention_total || 0) - Number(detailInvoice.amount_received || 0)) > 0.005 && (
                 <button
                   type="button"
                   onClick={openRcModal}

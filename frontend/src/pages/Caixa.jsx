@@ -2056,7 +2056,7 @@ export default function Caixa() {
                           </button>
                           <button
                             onClick={() => documentActionsRef.current?.openRc(inv.id)}
-                            disabled={!can('invoices:receipt')}
+                            disabled={!can('invoices:receipt') || inv.invoice_type !== 'FACTURA' || !((Number(inv.total) - Number(inv.retention_total || 0) - Number(inv.amount_received || 0)) > 0.005)}
                             title="Emitir Recibo"
                             className="flex items-center justify-center w-8 h-8 rounded-md border border-border text-text-muted hover:text-accent hover:border-accent transition-colors cursor-pointer text-[10px] font-bold disabled:opacity-40 disabled:cursor-not-allowed"
                           >
