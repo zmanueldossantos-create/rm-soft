@@ -6,6 +6,7 @@ import { listProductCategories } from '../api/productCategories';
 import { listServices } from '../api/services';
 import { listVatRates } from '../api/vat';
 import { withholdingTaxesApi, paymentTermsApi } from '../api/catalogs';
+import useDocumentRules from '../utils/documentRules';
 import { getMyCompanyBankAccounts } from '../api/company';
 import { createProFormaFromPos } from '../api/pos';
 import { listPaymentMethodPreferences } from '../api/tesouraria';
@@ -633,6 +634,7 @@ export default function Caixa() {
   const [saleConfirmModalOpen, setSaleConfirmModalOpen] = useState(false);
   const [selectedInvoiceType, setSelectedInvoiceType] = useState('FACTURA_RECIBO');
   const { typeOptions: posTypeOptions, liquidationOptions: posLiquidationOptions } = usePosDocumentTypes();
+  const ruleOf = useDocumentRules();
   // the selected types must be ones the catalog offers here
   useEffect(() => {
     if (!posTypeOptions.some((o) => o.value === selectedInvoiceType)) setSelectedInvoiceType(posTypeOptions[0].value);
@@ -2041,11 +2043,11 @@ export default function Caixa() {
                       >
                         <Printer size={14} />
                       </button>
-                      {(inv.invoice_type === 'FACTURA' || inv.invoice_type === 'FACTURA_RECIBO') && inv.document_status !== 'ANULADO' && (
+                      {inv.document_status !== 'ANULADO' && (ruleOf(inv.invoice_type, 'accepts_credit_note') || ruleOf(inv.invoice_type, 'accepts_debit_note') || ruleOf(inv.invoice_type, 'accepts_receipt')) && (
                         <>
                           <button
                             onClick={() => documentActionsRef.current?.openNc(inv.id)}
-                            disabled={!can('invoices:credit_note')}
+                            disabled={!can('invoices:credit_note') || !ruleOf(inv.invoice_type, 'accepts_credit_note')}
                             title="Emitir Nota de Credito"
                             className="flex items-center justify-center w-8 h-8 rounded-md border border-border text-text-muted hover:text-accent hover:border-accent transition-colors cursor-pointer text-[10px] font-bold disabled:opacity-40 disabled:cursor-not-allowed"
                           >
@@ -2053,7 +2055,7 @@ export default function Caixa() {
                           </button>
                           <button
                             onClick={() => documentActionsRef.current?.openNd(inv.id)}
-                            disabled={!can('invoices:debit_note')}
+                            disabled={!can('invoices:debit_note') || !ruleOf(inv.invoice_type, 'accepts_debit_note')}
                             title="Emitir Nota de Debito"
                             className="flex items-center justify-center w-8 h-8 rounded-md border border-border text-text-muted hover:text-accent hover:border-accent transition-colors cursor-pointer text-[10px] font-bold disabled:opacity-40 disabled:cursor-not-allowed"
                           >
@@ -2061,7 +2063,7 @@ export default function Caixa() {
                           </button>
                           <button
                             onClick={() => documentActionsRef.current?.openRc(inv.id)}
-                            disabled={!can('invoices:receipt') || inv.invoice_type !== 'FACTURA' || !((Number(inv.total) - Number(inv.retention_total || 0) - Number(inv.amount_received || 0)) > 0.005)}
+                            disabled={!can('invoices:receipt') || !ruleOf(inv.invoice_type, 'accepts_receipt') || !((Number(inv.total) - Number(inv.retention_total || 0) - Number(inv.amount_received || 0)) > 0.005)}
                             title="Emitir Recibo"
                             className="flex items-center justify-center w-8 h-8 rounded-md border border-border text-text-muted hover:text-accent hover:border-accent transition-colors cursor-pointer text-[10px] font-bold disabled:opacity-40 disabled:cursor-not-allowed"
                           >

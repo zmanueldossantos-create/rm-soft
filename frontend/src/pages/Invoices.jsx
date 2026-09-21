@@ -12,6 +12,7 @@ import { listActivities } from '../api/activity';
 import { listCustomers } from '../api/customers';
 import { listServices } from '../api/services';
 import { paymentTermsApi, paymentMethodsApi, documentTypesApi } from '../api/catalogs';
+import useDocumentRules from '../utils/documentRules';
 import { extractErrorMessage } from '../utils/errors';
 
 const STATUS_STYLE = {
@@ -115,6 +116,7 @@ export default function Invoices() {
   const [services, setServices] = useState([]);
   const [paymentMethods, setPaymentMethods] = useState([]);
   const [documentTypes, setDocumentTypes] = useState(null);
+  const ruleOf = useDocumentRules();
   useEffect(() => {
     // A user who cannot read the catalog keeps the default behaviour; the server enforces the rules anyway.
     documentTypesApi.list().then(setDocumentTypes).catch(() => {});
@@ -860,10 +862,10 @@ export default function Invoices() {
                             { label: 'Ver detalhe', icon: <Eye size={14} />, onClick: () => openDetailModal(inv.id) },
                             { label: 'Ticket 80mm', icon: <Receipt size={14} />, onClick: () => openPdfViewer(inv.id, 'thermal', 'RM SOFT - ' + inv.series + '-' + inv.number + ' (Ticket)') },
                             { label: 'A4', icon: <Printer size={14} />, onClick: () => openPdfViewer(inv.id, 'a4', 'RM SOFT - ' + inv.series + '-' + inv.number + ' (A4)') },
-                            ...((inv.invoice_type === 'FACTURA' || inv.invoice_type === 'FACTURA_RECIBO') && inv.document_status !== 'ANULADO' ? [
-                              { perm: 'invoices:credit_note', label: 'Emitir Nota de Credito', icon: <RotateCcw size={14} />, onClick: () => openNcModalFromRow(inv.id) },
-                              { perm: 'invoices:debit_note', label: 'Emitir Nota de Debito', icon: <FilePlus size={14} />, onClick: () => openNdModalFromRow(inv.id) },
-                              ...(inv.invoice_type === 'FACTURA' && (Number(inv.total) - Number(inv.retention_total || 0) - Number(inv.amount_received || 0)) > 0.005 ? [{ perm: 'invoices:receipt', label: 'Emitir Recibo', icon: <Receipt size={14} />, onClick: () => openRcModalFromRow(inv.id) }] : []),
+                            ...((ruleOf(inv.invoice_type, 'accepts_credit_note') || ruleOf(inv.invoice_type, 'accepts_debit_note')) && inv.document_status !== 'ANULADO' ? [
+                              ...(ruleOf(inv.invoice_type, 'accepts_credit_note') ? [{ perm: 'invoices:credit_note', label: 'Emitir Nota de Credito', icon: <RotateCcw size={14} />, onClick: () => openNcModalFromRow(inv.id) }] : []),
+                              ...(ruleOf(inv.invoice_type, 'accepts_debit_note') ? [{ perm: 'invoices:debit_note', label: 'Emitir Nota de Debito', icon: <FilePlus size={14} />, onClick: () => openNdModalFromRow(inv.id) }] : []),
+                              ...(ruleOf(inv.invoice_type, 'accepts_receipt') && (Number(inv.total) - Number(inv.retention_total || 0) - Number(inv.amount_received || 0)) > 0.005 ? [{ perm: 'invoices:receipt', label: 'Emitir Recibo', icon: <Receipt size={14} />, onClick: () => openRcModalFromRow(inv.id) }] : []),
                             ] : []),
                             ...(isConvertible(inv.invoice_type) && !inv.converted_to_invoice_id ? [
                               { perm: 'invoices:proforma_convert', label: 'Converter em Fatura', icon: <FileText size={14} />, onClick: () => openConvertModalFromRow(inv.id) },
@@ -1179,7 +1181,7 @@ export default function Invoices() {
                 <span className="text-text-primary">TOTAL</span>
                 <span className="font-mono text-accent">{formatMoney(detailInvoice.total)}</span>
               </div>
-              {detailInvoice.invoice_type === 'FACTURA' && (Number(detailInvoice.retention_total) > 0 || Number(detailInvoice.amount_received) > 0) && (
+              {ruleOf(detailInvoice.invoice_type, 'accepts_receipt') && (Number(detailInvoice.retention_total) > 0 || Number(detailInvoice.amount_received) > 0) && (
                 <>
                   {Number(detailInvoice.amount_received) > 0 && (
                     <div className="flex justify-between w-56 text-sm">
@@ -1210,7 +1212,7 @@ export default function Invoices() {
               >
                 <Printer size={14} /> A4
               </button>
-              {(detailInvoice.invoice_type === 'FACTURA' || detailInvoice.invoice_type === 'FACTURA_RECIBO') && detailInvoice.document_status !== 'ANULADO' && (
+              {ruleOf(detailInvoice.invoice_type, 'accepts_credit_note') && detailInvoice.document_status !== 'ANULADO' && (
                 <button
                   type="button"
                   onClick={openNcModal}
@@ -1220,7 +1222,7 @@ export default function Invoices() {
                   <RotateCcw size={14} /> Emitir Nota de Credito
                 </button>
               )}
-              {(detailInvoice.invoice_type === 'FACTURA' || detailInvoice.invoice_type === 'FACTURA_RECIBO') && detailInvoice.document_status !== 'ANULADO' && (
+              {ruleOf(detailInvoice.invoice_type, 'accepts_debit_note') && detailInvoice.document_status !== 'ANULADO' && (
                 <button
                   type="button"
                   onClick={openNdModal}
@@ -1230,7 +1232,7 @@ export default function Invoices() {
                   <FilePlus size={14} /> Emitir Nota de Debito
                 </button>
               )}
-              {detailInvoice.invoice_type === 'FACTURA' && detailInvoice.document_status !== 'ANULADO' && (Number(detailInvoice.total) - Number(detailInvoice.retention_total || 0) - Number(detailInvoice.amount_received || 0)) > 0.005 && (
+              {ruleOf(detailInvoice.invoice_type, 'accepts_receipt') && detailInvoice.document_status !== 'ANULADO' && (Number(detailInvoice.total) - Number(detailInvoice.retention_total || 0) - Number(detailInvoice.amount_received || 0)) > 0.005 && (
                 <button
                   type="button"
                   onClick={openRcModal}
