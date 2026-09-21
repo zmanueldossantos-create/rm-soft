@@ -22,9 +22,10 @@ import { listPendingProFormas, listRecentIssuedInvoices, fetchInvoicePdfBlob } f
 import { listPendingReceptions, receiveCashMovement, listPendingEmissions, cancelCashMovement, getDailyReport } from '../api/tesouraria';
 import DocumentActionModals from '../components/DocumentActionModals';
 import {
-  getMyCashPointAssociation,
+  getMyCashPointAssociation, listCashPointAssociations,
   createCashMovement, listCashMovementReasons, listCashMovements,
 } from '../api/tesouraria';
+import { listUsers } from '../api/users';
 import { useAuthStore } from '../store/authStore';
 import { extractErrorMessage } from '../utils/errors';
 
@@ -48,6 +49,9 @@ export default function Caixa() {
 
   const [pointsOfSale, setPointsOfSale] = useState([]);
   const [allActivePos, setAllActivePos] = useState([]);
+  const [holderNameByPos, setHolderNameByPos] = useState({});
+  // "cash point . user . activity" - tells apart the cash points named alike (one Caixa Geral per activity)
+  const posLabel = (p) => [p.name, holderNameByPos[p.id], p.activityName].filter(Boolean).join(' \u00b7 ');
   const [myAssociation, setMyAssociation] = useState(null);
   const [associationChecked, setAssociationChecked] = useState(false);
   const [selectedPosId, setSelectedPosId] = useState('');
@@ -155,6 +159,16 @@ export default function Caixa() {
         ...p, activityName: activityNameById[p.activity_id],
       }));
       setAllActivePos(activePos);
+      // who operates each cash point: only for users allowed to read the associations
+      if (can('tesouraria:associations_manage')) {
+        try {
+          const [usersData, associationsData] = await Promise.all([listUsers(), listCashPointAssociations()]);
+          const nameById = Object.fromEntries(usersData.map((u) => [u.id, u.full_name]));
+          setHolderNameByPos(Object.fromEntries(associationsData.map((a) => [a.pos_id, nameById[a.user_id]]).filter(([, name]) => name)));
+        } catch (err) {
+          // the label simply omits the holder
+        }
+      }
       setMyAssociation(association);
       setAssociationChecked(true);
 
@@ -838,11 +852,11 @@ export default function Caixa() {
             </button>
           )}
           {pointsOfSale.length > 1 && (
-            <div className="w-64">
-              <Select
+            <div className="w-[28rem] max-w-full">
+              <Select singleLine
                 value={selectedPosId}
                 onChange={handlePosChange}
-                options={pointsOfSale.map((p) => ({ value: p.id, label: p.name + ' - ' + p.activityName }))}
+                options={pointsOfSale.map((p) => ({ value: p.id, label: posLabel(p) }))}
                 placeholder="Ponto de venda"
               />
             </div>
@@ -1658,7 +1672,7 @@ export default function Caixa() {
                 <Select
                   value={movementForm.otherPosId}
                   onChange={(v) => setMovementForm((p) => ({ ...p, otherPosId: v }))}
-                  options={allActivePos.filter((p) => p.id !== selectedPosId).map((p) => ({ value: p.id, label: p.name + ' - ' + p.activityName }))}
+                  options={allActivePos.filter((p) => p.id !== selectedPosId).map((p) => ({ value: p.id, label: posLabel(p) }))}
                   placeholder="Selecionar"
                 />
               </div>
