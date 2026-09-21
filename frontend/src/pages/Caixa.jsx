@@ -638,10 +638,11 @@ export default function Caixa() {
   // behaviour of the selected document type, from the catalog (paid on issue: payments at the till)
   const paidOnIssue = ruleOf(selectedInvoiceType, 'paid_on_issue');
   const billsLater = !paidOnIssue && selectedInvoiceType !== 'PRO_FORMA';
-  // the selected types must be ones the catalog offers here
+  // offered = the catalog allows the type here AND the user may issue it (pro-forma: pos:proforma, a sale: pos:checkout)
+  const visibleTypeOptions = posTypeOptions.filter((o) => (o.value === 'PRO_FORMA' ? can('pos:proforma') : can('pos:checkout')));
   useEffect(() => {
-    if (!posTypeOptions.some((o) => o.value === selectedInvoiceType)) setSelectedInvoiceType(posTypeOptions[0].value);
-  }, [posTypeOptions, selectedInvoiceType]);
+    if (visibleTypeOptions.length && !visibleTypeOptions.some((o) => o.value === selectedInvoiceType)) setSelectedInvoiceType(visibleTypeOptions[0].value);
+  }, [visibleTypeOptions.map((o) => o.value).join(','), selectedInvoiceType]);
   useEffect(() => {
     if (!posLiquidationOptions.some((o) => o.value === liquidationTargetType)) setLiquidationTargetType(posLiquidationOptions[0].value);
   }, [posLiquidationOptions, liquidationTargetType]);
@@ -1082,7 +1083,7 @@ export default function Caixa() {
                     compact
                     value={selectedInvoiceType}
                     onChange={setSelectedInvoiceType}
-                    options={posTypeOptions}
+                    options={visibleTypeOptions}
                   />
                 </div>
               </div>
