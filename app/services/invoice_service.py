@@ -31,7 +31,7 @@ from datetime import date, datetime
 from sqlalchemy import select, func, extract
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.document_rules import rules_from_row
+from app.services.document_rules import get_document_rules, rules_from_row
 from app.core.tax_exemptions import TAX_EXEMPTION_REASONS
 from app.models.vat_code import VatCode
 from app.models.invoice import Invoice, InvoiceStatus, InvoiceType, DocumentLifecycleStatus, CreditNoteReason
@@ -499,7 +499,8 @@ async def create_credit_note(
     if reference_invoice is None:
         raise ReferenceInvoiceNotFoundError("Fatura de referencia nao encontrada")
 
-    if reference_invoice.invoice_type not in (InvoiceType.FACTURA, InvoiceType.FACTURA_RECIBO):
+    reference_rules = await get_document_rules(db, reference_invoice.invoice_type)
+    if not reference_rules.accepts_credit_note:
         raise ReferenceInvoiceTypeNotEligibleError(
             "A nota de credito so pode ser emitida para Factura ou Factura/Recibo"
         )
@@ -702,7 +703,8 @@ async def create_debit_note(
     if reference_invoice is None:
         raise ReferenceInvoiceNotFoundError("Fatura de referencia nao encontrada")
 
-    if reference_invoice.invoice_type not in (InvoiceType.FACTURA, InvoiceType.FACTURA_RECIBO):
+    reference_rules = await get_document_rules(db, reference_invoice.invoice_type)
+    if not reference_rules.accepts_debit_note:
         raise ReferenceInvoiceTypeNotEligibleError(
             "A nota de debito so pode ser emitida para Factura ou Factura/Recibo"
         )
@@ -924,7 +926,8 @@ async def create_receipt(
     if reference_invoice is None:
         raise ReferenceInvoiceNotFoundError("Fatura de referencia nao encontrada")
 
-    if reference_invoice.invoice_type != InvoiceType.FACTURA:
+    reference_rules = await get_document_rules(db, reference_invoice.invoice_type)
+    if not reference_rules.accepts_receipt:
         # A Fatura/Recibo is paid when it is issued: a receipt on top would collect the same money twice.
         raise ReferenceInvoiceTypeNotEligibleError(
             "O recibo so pode ser emitido para uma Factura (a Factura/Recibo ja esta paga)"
