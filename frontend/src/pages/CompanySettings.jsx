@@ -307,14 +307,14 @@ export default function CompanySettings() {
 
   function openCreatePos(activityId) {
     setEditingPosId(null);
-    setPosForm({ activityId, name: '', billetageEnabled: false });
+    setPosForm({ activityId, name: '', billetageEnabled: false, isDefault: false });
     setPosFormError('');
     setPosModalOpen(true);
   }
 
   function openEditPos(pos) {
     setEditingPosId(pos.id);
-    setPosForm({ activityId: pos.activity_id, name: pos.name, billetageEnabled: pos.billetage_enabled || false });
+    setPosForm({ activityId: pos.activity_id, name: pos.name, billetageEnabled: pos.billetage_enabled || false, isDefault: !!pos.is_default });
     setPosFormError('');
     setPosModalOpen(true);
   }
@@ -907,7 +907,7 @@ export default function CompanySettings() {
                                     <button onClick={() => openEditPos(p)} aria-label="Editar ponto de venda" className="inline-flex items-center justify-center w-7 h-7 rounded-md border border-border text-text-muted hover:text-text-primary hover:border-accent transition-colors cursor-pointer">
                                       <Pencil size={12} />
                                     </button>
-                                    <ToggleSwitch checked={p.is_active} disabled={posTogglingId === p.id} onChange={() => handleTogglePos(p.id, a.id)} />
+                                    <ToggleSwitch checked={p.is_active} disabled={posTogglingId === p.id || !!p.is_default} onChange={() => handleTogglePos(p.id, a.id)} />
                                   </div>
                                 </div>
                               ))}
@@ -1281,7 +1281,7 @@ export default function CompanySettings() {
           <div>
             <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Nome *</label>
             <input
-              value={posForm.name}
+              value={posForm.name} readOnly={posForm.isDefault} style={posForm.isDefault ? { opacity: 0.6, cursor: 'not-allowed' } : undefined}
               onChange={(e) => setPosForm((p) => ({ ...p, name: e.target.value }))}
               placeholder="Ex: Caixa 1, Balcao Rua"
               required
