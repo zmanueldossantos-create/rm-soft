@@ -35,6 +35,7 @@ from app.services.cash_session_service import (
     BilletageRequiredError,
 )
 from app.services.pos_service import checkout, liquidate_pending_invoice, create_pro_forma_from_pos, NoOpenSessionError
+from app.services.invoice_service import ReferenceInvoiceTypeNotEligibleError
 from app.api.v1.issuable import ensure_issuable
 from app.services.point_of_sale_service import PosNotFoundError
 from app.services.invoice_service import (
@@ -247,4 +248,6 @@ async def post_liquidate_pending_invoice(
     except PeriodClosedError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except PaymentAmountMismatchError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    except ReferenceInvoiceTypeNotEligibleError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
