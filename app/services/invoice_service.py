@@ -1110,7 +1110,9 @@ async def create_pro_forma(
 
     subtotal_total = 0.0
     vat_total = 0.0
+    pro_forma_retention = 0.0
     line_objects = []
+    customer_is_juridica = customer is not None and customer.legal_person_type == LegalPersonType.JURIDICA
 
     for line_input in lines_input:
         product_id = line_input.get("product_id")
@@ -1132,6 +1134,12 @@ async def create_pro_forma(
             line_product_id = None
             line_service_id = service.id
             line_exemption_code = await _exemption_code_for(db, service, vat_rate)
+            line_retention_pct, line_retention_name, line_retention_type = 0.0, None, None
+            # same rule as the invoice: a service with a withholding, sold to a pessoa coletiva
+            if service.withholding_tax_id and customer_is_juridica:
+                wh = (await db.execute(select(WithholdingTax).where(WithholdingTax.id == service.withholding_tax_id))).scalar_one_or_none()
+                if wh and float(wh.rate) > 0:
+                    line_retention_pct, line_retention_name, line_retention_type = float(wh.rate), wh.name, wh.tax_type
         else:
             product_result = await db.execute(
                 select(Product).where(Product.id == product_id, Product.company_id == company_id, Product.is_active == True)
@@ -1150,6 +1158,7 @@ async def create_pro_forma(
             line_product_id = product.id
             line_service_id = None
             line_exemption_code = await _exemption_code_for(db, product, vat_rate)
+            line_retention_pct, line_retention_name, line_retention_type = 0.0, None, None
 
         discount_percent = float(line_input.get("discount_percent", 0) or 0)
         gross_subtotal = round(quantity * unit_price, 2)
@@ -1157,9 +1166,11 @@ async def create_pro_forma(
         line_subtotal = round(gross_subtotal - line_discount, 2)
         line_vat = round(line_subtotal * (vat_rate / 100), 2)
         line_total = round(line_subtotal + line_vat, 2)
+        line_retention = round(line_subtotal * (line_retention_pct / 100), 2)
 
         subtotal_total += line_subtotal
         vat_total += line_vat
+        pro_forma_retention += line_retention
 
         line_objects.append(InvoiceLine(
             product_id=line_product_id,
@@ -1172,11 +1183,16 @@ async def create_pro_forma(
             line_subtotal=line_subtotal,
             line_vat=line_vat,
             line_total=line_total,
+            retention_name_snapshot=line_retention_name if line_retention > 0 else None,
+            retention_rate=line_retention_pct if line_retention > 0 else None,
+            retention_amount=line_retention if line_retention > 0 else None,
+            retention_type=line_retention_type if line_retention > 0 else None,
             exemption_code=line_exemption_code,
         ))
 
     subtotal_total = round(subtotal_total, 2)
     vat_total = round(vat_total, 2)
+    pro_forma_retention = round(pro_forma_retention, 2)
     gross_total = round(subtotal_total + vat_total, 2)
     global_discount_amount = round(gross_total * (discount_global_percent / 100), 2)
     grand_total = round(gross_total - global_discount_amount, 2)
@@ -1202,6 +1218,7 @@ async def create_pro_forma(
         subtotal=subtotal_total,
         vat_total=vat_total,
         total=grand_total,
+        retention_total=pro_forma_retention,
         discount_global_percent=discount_global_percent,
         status=InvoiceStatus.PENDENTE,
         document_status=DocumentLifecycleStatus.EMITIDO,
