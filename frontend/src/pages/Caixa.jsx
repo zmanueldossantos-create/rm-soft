@@ -635,6 +635,9 @@ export default function Caixa() {
   const [selectedInvoiceType, setSelectedInvoiceType] = useState('FACTURA_RECIBO');
   const { typeOptions: posTypeOptions, liquidationOptions: posLiquidationOptions } = usePosDocumentTypes();
   const ruleOf = useDocumentRules();
+  // behaviour of the selected document type, from the catalog (paid on issue: payments at the till)
+  const paidOnIssue = ruleOf(selectedInvoiceType, 'paid_on_issue');
+  const billsLater = !paidOnIssue && selectedInvoiceType !== 'PRO_FORMA';
   // the selected types must be ones the catalog offers here
   useEffect(() => {
     if (!posTypeOptions.some((o) => o.value === selectedInvoiceType)) setSelectedInvoiceType(posTypeOptions[0].value);
@@ -1225,7 +1228,7 @@ export default function Caixa() {
               {posPaymentMethods.length > 0 && (
                 <div className="flex flex-col gap-2 mb-4">
                   <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wide">Formas de pagamento</p>
-                  <div className={'flex flex-col gap-1.5' + (selectedInvoiceType !== 'FACTURA_RECIBO' ? ' opacity-40 pointer-events-none' : '')}>
+                  <div className={'flex flex-col gap-1.5' + (!paidOnIssue ? ' opacity-40 pointer-events-none' : '')}>
                     {posPaymentMethods.map((m) => {
                       const line = payments.find((p) => p.paymentMethodId === m.id);
                       return (
@@ -1235,7 +1238,7 @@ export default function Caixa() {
                               type="checkbox"
                               checked={!!line}
                               onChange={() => togglePaymentMethod(m.id)}
-                              disabled={selectedInvoiceType !== 'FACTURA_RECIBO'}
+                              disabled={!paidOnIssue}
                               className="w-4 h-4 accent-accent cursor-pointer"
                             />
                             <span className="text-[13px] text-text-primary">{m.name}</span>
@@ -1253,7 +1256,7 @@ export default function Caixa() {
                       );
                     })}
                   </div>
-                  {selectedInvoiceType === 'FACTURA_RECIBO' && (
+                  {paidOnIssue && (
                     <div className={'text-[12px] px-3 py-2 rounded-r border-l-2 ' + (paymentsRemaining === 0 ? 'bg-success/10 border-success text-success' : paymentsRemaining > 0 ? 'bg-accent/10 border-accent text-accent' : 'bg-danger/10 border-danger text-danger')}>
                       {paymentsRemaining === 0 ? 'Valor exato' : paymentsRemaining > 0 ? `Falta ${formatKz(paymentsRemaining)} Kz` : `Excede em ${formatKz(Math.abs(paymentsRemaining))} Kz`}
                     </div>
@@ -1263,7 +1266,7 @@ export default function Caixa() {
 
               <div className="flex flex-col gap-2.5 mb-4">
                 <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wide">Condicoes de faturacao (FT)</p>
-                <div className={'flex flex-col gap-2.5' + (selectedInvoiceType !== 'FACTURA' ? ' opacity-40 pointer-events-none' : '')}>
+                <div className={'flex flex-col gap-2.5' + (!billsLater ? ' opacity-40 pointer-events-none' : '')}>
                   <Select
                     value={ftPaymentTermId}
                     onChange={(termId) => {
@@ -1290,11 +1293,11 @@ export default function Caixa() {
 
               <button
                 onClick={() => setSaleConfirmModalOpen(true)}
-                disabled={cart.length === 0 || proFormaSaving || checkoutSaving || (selectedInvoiceType === 'FACTURA_RECIBO' && posPaymentMethods.length > 0 && paymentsRemaining !== 0) || (selectedInvoiceType === 'PRO_FORMA' ? !can('pos:proforma') : !can('pos:checkout'))}
+                disabled={cart.length === 0 || proFormaSaving || checkoutSaving || (paidOnIssue && posPaymentMethods.length > 0 && paymentsRemaining !== 0) || (selectedInvoiceType === 'PRO_FORMA' ? !can('pos:proforma') : !can('pos:checkout'))}
                 className="bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer"
               >
                 {(proFormaSaving || checkoutSaving) && <Loader2 size={16} className="animate-spin" />}
-                {selectedInvoiceType === 'PRO_FORMA' ? (proFormaSaving ? 'A gerar...' : 'Gerar pro-forma') : selectedInvoiceType === 'FACTURA' ? (checkoutSaving ? 'A faturar...' : 'Faturar') : (checkoutSaving ? 'A finalizar...' : 'Confirmar venda')}
+                {selectedInvoiceType === 'PRO_FORMA' ? (proFormaSaving ? 'A gerar...' : 'Gerar pro-forma') : billsLater ? (checkoutSaving ? 'A faturar...' : 'Faturar') : (checkoutSaving ? 'A finalizar...' : 'Confirmar venda')}
               </button>
             </div>
           </div>
@@ -1531,10 +1534,10 @@ export default function Caixa() {
               onClick={() => {
                 setSaleConfirmModalOpen(false);
                 if (selectedInvoiceType === 'PRO_FORMA') handleCreateProForma();
-                else if (selectedInvoiceType === 'FACTURA') handleConfirmFt();
+                else if (billsLater) handleConfirmFt();
                 else handleConfirmSale();
               }}
-              disabled={(selectedInvoiceType === 'PRO_FORMA' ? !can('pos:proforma') : ((selectedInvoiceType !== 'FACTURA' && paymentMode === 'liquidation') ? !can('pos:liquidate') : !can('pos:checkout')))}
+              disabled={(selectedInvoiceType === 'PRO_FORMA' ? !can('pos:proforma') : ((!billsLater && paymentMode === 'liquidation') ? !can('pos:liquidate') : !can('pos:checkout')))}
               className="flex-1 bg-accent hover:bg-accent-hover text-white font-semibold text-sm rounded-md py-3 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Confirmar
