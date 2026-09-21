@@ -645,7 +645,7 @@ export default function Configuracoes() {
         </div>
       </Modal>
 
-      <Modal maxWidthClass={activeCatalog.key === 'document_types' ? 'max-w-4xl' : undefined} open={formOpen} onClose={() => setFormOpen(false)} title={(editingId ? 'Editar' : 'Novo') + ' - ' + (activeCatalog?.label || '')}>
+      <Modal maxWidthClass={activeCatalog?.key === 'document_types' ? 'max-w-4xl' : undefined} open={formOpen} onClose={() => setFormOpen(false)} title={(editingId ? 'Editar' : 'Novo') + ' - ' + (activeCatalog?.label || '')}>
         {activeCatalog && (
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             {renderFormFields()}
