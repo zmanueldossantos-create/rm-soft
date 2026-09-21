@@ -7,7 +7,7 @@ import { ChevronDown, Check, Search } from 'lucide-react';
 // The options panel renders through a portal into document.body, positioned
 // via the trigger's bounding rect - this keeps it visible even inside
 // scrollable/overflow-clipped containers (e.g. a table with overflow-x-auto).
-export default function Select({ value, onChange, options, placeholder, compact = false, singleLine = false }) {
+export default function Select({ value, onChange, options, placeholder, compact = false, singleLine = false, disabled = false }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [coords, setCoords] = useState({ top: 0, left: 0, width: 0 });
@@ -74,8 +74,9 @@ export default function Select({ value, onChange, options, placeholder, compact 
     <div ref={containerRef} className="relative">
       <button
         type="button"
+        disabled={disabled}
         onClick={() => (open ? setOpen(false) : openDropdown())}
-        className={'w-full flex items-center justify-between bg-bg-inset border border-border rounded-md text-text-primary font-mono outline-none focus:border-accent focus:ring-2 focus:ring-accent/30 transition-colors cursor-pointer ' + (compact ? 'px-2.5 py-1 text-[12px]' : 'px-3.5 py-2.5 text-sm')}
+        className={'w-full flex items-center justify-between bg-bg-inset border border-border rounded-md text-text-primary font-mono outline-none focus:border-accent focus:ring-2 focus:ring-accent/30 transition-colors ' + (disabled ? 'opacity-70 cursor-not-allowed ' : 'cursor-pointer ') + (compact ? 'px-2.5 py-1 text-[12px]' : 'px-3.5 py-2.5 text-sm')}
       >
         <span className={(selected ? '' : 'text-text-muted') + (singleLine ? ' truncate min-w-0' : '')} title={singleLine && selected ? selected.label : undefined}>
           {selected ? selected.label : placeholder || 'Selecionar...'}

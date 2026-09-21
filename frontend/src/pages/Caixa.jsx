@@ -159,6 +159,10 @@ export default function Caixa() {
         ...p, activityName: activityNameById[p.activity_id],
       }));
       setAllActivePos(activePos);
+      // a user who cannot read the associations still sees who operates HIS cash point: himself
+      if (!can('tesouraria:associations_manage') && association?.pos_id && (currentUser?.full_name || currentUser?.name)) {
+        setHolderNameByPos({ [association.pos_id]: currentUser.full_name || currentUser.name });
+      }
       // who operates each cash point: only for users allowed to read the associations
       if (can('tesouraria:associations_manage')) {
         try {
@@ -851,9 +855,9 @@ export default function Caixa() {
               Fechar caixa
             </button>
           )}
-          {pointsOfSale.length > 1 && (
+          {pointsOfSale.length > 0 && (
             <div className="w-[28rem] max-w-full">
-              <Select singleLine
+              <Select singleLine disabled={!isGestor || pointsOfSale.length < 2}
                 value={selectedPosId}
                 onChange={handlePosChange}
                 options={pointsOfSale.map((p) => ({ value: p.id, label: posLabel(p) }))}
