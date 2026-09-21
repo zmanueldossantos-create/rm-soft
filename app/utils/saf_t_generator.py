@@ -31,6 +31,9 @@ NS = "urn:OECD:StandardAuditFile-Tax:AO_1.01_01"
 FINAL_CONSUMER_ID = "0"
 FINAL_CONSUMER_TAX_ID = "999999999"
 
+# XSD PaymentMechanism (the codes of the platform payment-method catalog); anything else is reported as "OU".
+PAYMENT_MECHANISMS = {"CC", "CD", "CH", "CI", "CO", "CS", "DE", "MB", "NU", "OU", "PR", "TB"}
+
 INVOICE_TYPE_MAP = {
     "FACTURA": "FT",
     "FACTURA_RECIBO": "FR",
@@ -107,6 +110,16 @@ def _write_lines(parent_el, inv: dict, saft_type: str) -> None:
         _el(line_el, "SettlementAmount", "0.00")
 
 
+def _write_withholding(parent_el, entries) -> None:
+    """Writes WithholdingTax elements: entries = [(WithholdingTaxType, description, amount)]."""
+    for tax_type, description, amount in entries:
+        withholding = _el(parent_el, "WithholdingTax")
+        _el(withholding, "WithholdingTaxType", tax_type)
+        if description:
+            _el(withholding, "WithholdingTaxDescription", description[:60])
+        _el(withholding, "WithholdingTaxAmount", _money(amount))
+
+
 def generate_saf_t_xml(
     company: dict,
     platform_settings: dict,
@@ -133,9 +146,10 @@ def generate_saf_t_xml(
     }
     """
     # Only documents that map to a SAF-T InvoiceType belong in SalesInvoices. A pro-forma is a working document
-    # (WorkingDocuments, WorkType PP - as in the AGT-validated Kiami exports); a receipt has no section yet
-    # (Payments) and stays out rather than being reported as an "FT".
+    # (WorkingDocuments, WorkType PP - as in the AGT-validated Kiami exports); a receipt is a payment (Payments,
+    # PaymentType RC), left out if the invoice it settles is unknown. None of them is reported as an "FT".
     working_docs = [inv for inv in invoices if inv["invoice_type"] == "PRO_FORMA"]
+    receipts = [inv for inv in invoices if inv["invoice_type"] == "RECIBO" and inv.get("reference_invoice_no")]
     invoices = [inv for inv in invoices if inv["invoice_type"] in INVOICE_TYPE_MAP]
 
     root = etree.Element(_q("AuditFile"), nsmap=NSMAP)
@@ -173,7 +187,7 @@ def generate_saf_t_xml(
     # ---------- MasterFiles ----------
     master_files = _el(root, "MasterFiles")
 
-    has_walk_in_sale = any(inv.get("customer_id") is None for inv in invoices + working_docs)
+    has_walk_in_sale = any(inv.get("customer_id") is None for inv in invoices + working_docs + receipts)
     # The company may already hold its own "Consumidor final" customer (NIF 999999999): a walk-in sale then
     # points at it and no second generic entry is added (two records with the same tax ID otherwise).
     own_final_consumer = next((c for c in customers if c["nif"] == FINAL_CONSUMER_TAX_ID), None)
@@ -336,5 +350,47 @@ def generate_saf_t_xml(
             _el(totals, "TaxPayable", _money(doc["vat_total"]))
             _el(totals, "NetTotal", _money(doc["subtotal"]))
             _el(totals, "GrossTotal", _money(doc["total"]))
+
+    # ---------- SourceDocuments.Payments (receipts) ----------
+    # A receipt settles an invoice: one line for the settled invoice (its InvoiceNo and date, the settled net amount),
+    # the settled totals, the cash by payment method and the withholding kept by the customer (XSD Payments).
+    if receipts:
+        walk_in_id = customer_short_id[own_final_consumer["id"]] if own_final_consumer else FINAL_CONSUMER_ID
+        payments_el = _el(source_documents, "Payments")
+        _el(payments_el, "NumberOfEntries", len(receipts))
+        _el(payments_el, "TotalDebit", "0.00")
+        _el(payments_el, "TotalCredit", _money(sum(float(r["subtotal"]) for r in receipts)))
+        for rc in receipts:
+            entry_date = rc["created_at"].strftime("%Y-%m-%dT%H:%M:%S")
+            payment_el = _el(payments_el, "Payment")
+            _el(payment_el, "PaymentRefNo", f"RC {rc['series']}/{rc['number']}")
+            _el(payment_el, "Period", rc["business_date"].month)
+            _el(payment_el, "TransactionDate", rc["business_date"].isoformat())
+            _el(payment_el, "PaymentType", "RC")
+            status = _el(payment_el, "DocumentStatus")
+            _el(status, "PaymentStatus", "N")
+            _el(status, "PaymentStatusDate", entry_date)
+            _el(status, "SourceID", "RMSOFT")
+            _el(status, "SourcePayment", "P")
+            for method in rc.get("payment_methods") or []:
+                method_el = _el(payment_el, "PaymentMethod")
+                _el(method_el, "PaymentMechanism", method["code"] if method["code"] in PAYMENT_MECHANISMS else "OU")
+                _el(method_el, "PaymentAmount", _money(method["amount"]))
+                _el(method_el, "PaymentDate", rc["business_date"].isoformat())
+            _el(payment_el, "SourceID", "RMSOFT")
+            _el(payment_el, "SystemEntryDate", entry_date)
+            real_customer_id = rc.get("customer_id")
+            _el(payment_el, "CustomerID", customer_short_id.get(real_customer_id, walk_in_id) if real_customer_id else walk_in_id)
+            line_el = _el(payment_el, "Line")
+            _el(line_el, "LineNumber", 1)
+            source = _el(line_el, "SourceDocumentID")
+            _el(source, "OriginatingON", rc["reference_invoice_no"])
+            _el(source, "InvoiceDate", rc["reference_invoice_date"].isoformat())
+            _el(line_el, "CreditAmount", _money(rc["subtotal"]))
+            totals = _el(payment_el, "DocumentTotals")
+            _el(totals, "TaxPayable", _money(rc["vat_total"]))
+            _el(totals, "NetTotal", _money(rc["subtotal"]))
+            _el(totals, "GrossTotal", _money(rc["total"]))
+            _write_withholding(payment_el, [(w["type"], w.get("name"), w["amount"]) for w in rc.get("withholding") or []])
 
     return etree.tostring(root, xml_declaration=True, encoding="utf-8", pretty_print=True)
