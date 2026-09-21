@@ -33,6 +33,8 @@ from app.services.point_of_sale_service import (
     PosNotFoundError,
 )
 
+from app.services.point_of_sale_service import DefaultPosNotModifiableError
+
 router = APIRouter(prefix="/api/v1/activities", tags=["activities"])
 
 
@@ -138,7 +140,10 @@ async def edit_pos(
 ):
     """Renames a POS."""
     try:
-        return await update_point_of_sale(db, current_user.company_id, pos_id, payload.name, billetage_enabled=payload.billetage_enabled)
+        try:
+            return await update_point_of_sale(db, current_user.company_id, pos_id, payload.name, billetage_enabled=payload.billetage_enabled)
+        except DefaultPosNotModifiableError as e:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except PosNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except PosAlreadyExistsError as e:
