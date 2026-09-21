@@ -50,7 +50,8 @@ async def test_exemption_code_is_copied_on_every_document(db, company_with_essen
     line_ids = [l.id for l in lines]
     credit_note = await create_credit_note(
         db, ctx["company"].id, ctx["activity"].id, reference_invoice_id=invoice_id,
-        credit_note_reason="ANL", credit_note_cause="Anulacao de teste",
+        # RTF, not ANL: a full ANL credit note annuls the invoice, and a debit note on an annulled invoice is refused.
+        credit_note_reason="RTF", credit_note_cause="Rectificacao de teste",
         lines_input=[{"invoice_line_id": i, "quantity": 1} for i in line_ids],
     )
     credit_note_id = credit_note.id
