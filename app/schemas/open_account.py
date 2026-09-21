@@ -64,7 +64,8 @@ class OpenAccountClosePaymentInput(BaseModel):
 
 
 class OpenAccountCloseRequest(BaseModel):
-    invoice_type: str = "FACTURA_RECIBO"
+    # None: the document type catalog decides (a type paid on issue - see default_paid_on_issue_type)
+    invoice_type: str | None = None
     payments: list[OpenAccountClosePaymentInput] = []
 
 
