@@ -234,6 +234,9 @@ export default function NovaFatura() {
     return { item, unitPrice, vatRate, unitLabel, gross, discountAmount, subtotal, vatAmount, total, retentionAmount };
   }
 
+  // "Paid on issue" rule of the catalog for the selected type (e.g. a Fatura/Recibo)
+  const paidOnIssue = !!documentTypes.find((d) => d.code === INVOICE_TYPE_CODE[invoiceType])?.paid_on_issue;
+
   const totals = useMemo(() => {
     let totalIliquido = 0;
     let totalDescontos = 0;
@@ -253,10 +256,12 @@ export default function NovaFatura() {
     const beforeGlobalDiscount = round2(totalIliquido + totalIva);
     const globalDiscountAmount = round2(beforeGlobalDiscount * ((parseFloat(discountGlobalPercent) || 0) / 100));
     const total = round2(beforeGlobalDiscount - globalDiscountAmount);
-    const received = parseFloat(amountReceived) || 0;
+    const dueNow = round2(total - totalRetencao);
+    // a document paid on issue (rule of the catalog) is settled in full: what is received is what is due
+    const received = paidOnIssue ? dueNow : (parseFloat(amountReceived) || 0);
     const valorAPagar = round2(total - totalRetencao - received);
-    return { totalIliquido, totalDescontos, totalIva, totalRetencao, globalDiscountAmount, total, valorAPagar };
-  }, [lines, productById, serviceById, vatById, whById, customerIsJuridica, discountGlobalPercent, amountReceived]);
+    return { totalIliquido, totalDescontos, totalIva, totalRetencao, globalDiscountAmount, total, valorAPagar, received };
+  }, [lines, productById, serviceById, vatById, whById, customerIsJuridica, discountGlobalPercent, amountReceived, paidOnIssue]);
 
   const vatSummary = useMemo(() => {
     const groups = {};
@@ -368,7 +373,7 @@ export default function NovaFatura() {
           payment_method_id: paymentMethodId || null,
           bank_account_id: bankAccountId || null,
           due_date: dueDate || null,
-          amount_received: amountReceived ? parseFloat(amountReceived) : null,
+          amount_received: paidOnIssue ? (totals.received > 0 ? totals.received : null) : (amountReceived ? parseFloat(amountReceived) : null),
           payment_date: paymentDate || null,
           observations: observations || null,
           document_reference: documentReference || null,
@@ -467,7 +472,7 @@ export default function NovaFatura() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Valor recebido</label>
-              <input type="number" step="0.01" min="0" value={amountReceived} onChange={(e) => setAmountReceived(e.target.value)} placeholder="0.00" className={inputClass} />
+              <input type="number" step="0.01" min="0" value={paidOnIssue ? totals.received : amountReceived} onChange={(e) => setAmountReceived(e.target.value)} placeholder="0.00" readOnly={paidOnIssue} className={inputClass + (paidOnIssue ? ' opacity-70 cursor-not-allowed' : '')} />
             </div>
             <div>
               <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Desconto global %</label>
