@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.api.deps import require_permission, require_role
 from app.models.user import User
+from app.api.deps import get_current_user
 from app.schemas.catalog import (
     CountryRequest, CountryResponse,
     CurrencyRequest, CurrencyResponse,
@@ -269,6 +270,13 @@ async def toggle_vat_code(item_id: uuid.UUID, db: AsyncSession = Depends(get_db)
 
 @router.get("/document-types", response_model=list[DocumentTypeResponse])
 async def get_document_types(db: AsyncSession = Depends(get_db), current_user: User = Depends(require_permission("catalogs:view_reference", also_allow_roles=("SUPER_ADMIN",)))):
+    return await catalog_service.list_document_types(db)
+
+
+@router.get("/document-rules", response_model=list[DocumentTypeResponse])
+async def get_document_rules_catalog(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """The document types with their rules, for every signed-in user: the screens (Caixa, Nova Fatura, Faturas) read the
+    rules to decide what they offer. Read-only - managing the catalog stays reserved to the super admin."""
     return await catalog_service.list_document_types(db)
 
 
