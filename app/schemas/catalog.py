@@ -201,6 +201,20 @@ class DocumentTypeResponse(BaseModel):
     electronic_eligible: bool
     is_fiscal: bool
     is_active: bool
+    rules_locked: bool = False
+    saft_section: str = "NONE"
+    revenue_sign: int = 0
+    requires_origin: bool = False
+    has_lines: bool = True
+    paid_on_issue: bool = False
+    sent_to_agt: bool = False
+    deducts_stock: bool = False
+    accepts_credit_note: bool = False
+    accepts_debit_note: bool = False
+    accepts_receipt: bool = False
+    convertible: bool = False
+    issuable_in_invoices: bool = False
+    issuable_at_pos: bool = False
 
     class Config:
         from_attributes = True
