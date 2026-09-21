@@ -53,6 +53,7 @@ from app.services.invoice_service import (
     convert_pro_forma_to_invoice,
     ProFormaNotFoundError,
     ProFormaAlreadyConvertedError,
+    PaymentAmountMismatchError,
 )
 
 from app.api.v1.issuable import ensure_issuable
@@ -92,7 +93,7 @@ async def create_new_invoice(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except ActivityNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except (ProductNotFoundError, CustomerNotFoundError, EmptyInvoiceError) as e:
+    except (ProductNotFoundError, CustomerNotFoundError, EmptyInvoiceError, PaymentAmountMismatchError) as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     except StockUnavailableError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))

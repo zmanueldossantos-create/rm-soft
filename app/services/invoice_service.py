@@ -370,6 +370,28 @@ async def create_invoice(
                 f"A soma dos pagamentos ({payments_sum}) nao corresponde ao montante a pagar ({cash_due_total})"
             )
 
+    # Amount received on the document. A Fatura/Recibo is paid in full when issued: any other amount is refused.
+    # A document not paid on issue (a Fatura) that records an amount received - a deposit or the whole payment - gets
+    # its payment too, so the money exists in the payments (cash, reports) as a receipt would have created it.
+    if amount_received:
+        if amount_received > cash_due_total + 0.01:
+            raise PaymentAmountMismatchError(
+                f"O valor recebido ({amount_received}) excede o montante a pagar ({cash_due_total})"
+            )
+        if rules.paid_on_issue:
+            if abs(amount_received - cash_due_total) > 0.01:
+                raise PaymentAmountMismatchError(
+                    "A Fatura/Recibo e paga na totalidade: para um pagamento parcial, emita uma Fatura e depois um Recibo"
+                )
+        elif not payments:
+            deposit_method_id = payment_method_id
+            if deposit_method_id is None:
+                deposit_method_id = (await db.execute(
+                    select(PaymentMethodCatalog.id).where(PaymentMethodCatalog.code == "NU")
+                )).scalar_one_or_none()
+            if deposit_method_id is not None:
+                payments = [{"payment_method_id": deposit_method_id, "amount": amount_received}]
+
     atcud = _simulate_atcud(company_id, series, next_number)
     invoice_hash = _simulate_hash(company_id, series, next_number, grand_total, business_date)
     qr_code_data = _simulate_qr_payload(company_id, series, next_number, grand_total, atcud)
