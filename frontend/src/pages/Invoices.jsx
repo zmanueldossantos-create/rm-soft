@@ -11,7 +11,7 @@ import { listProducts } from '../api/products';
 import { listActivities } from '../api/activity';
 import { listCustomers } from '../api/customers';
 import { listServices } from '../api/services';
-import { paymentTermsApi, paymentMethodsApi, documentTypesApi } from '../api/catalogs';
+import { paymentTermsApi, paymentMethodsApi, documentRulesApi } from '../api/catalogs';
 import useDocumentRules from '../utils/documentRules';
 import { extractErrorMessage } from '../utils/errors';
 
@@ -119,7 +119,7 @@ export default function Invoices() {
   const ruleOf = useDocumentRules();
   useEffect(() => {
     // A user who cannot read the catalog keeps the default behaviour; the server enforces the rules anyway.
-    documentTypesApi.list().then(setDocumentTypes).catch(() => {});
+    documentRulesApi.list().then(setDocumentTypes).catch(() => {});
   }, []);
   const DOC_CODES = { FACTURA: 'FT', FACTURA_RECIBO: 'FR', PRO_FORMA: 'FP' };
   // "convertible" rule of the catalog (a pro-forma by default) and the invoices a conversion can produce

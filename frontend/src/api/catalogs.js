@@ -20,6 +20,20 @@ export const paymentTermsApi = makeCatalogApi('payment-terms');
 export const vatCodesApi = makeCatalogApi('vat-codes');
 
 export const documentTypesApi = makeCatalogApi('document-types');
+
+// Document types with their rules, readable by every signed-in user (the screens decide what they offer from them).
+// One shared request for all the screens, renewed after a minute (the super admin may change a rule).
+let rulesCache = { at: 0, promise: null };
+export const documentRulesApi = {
+  list: () => {
+    if (!rulesCache.promise || Date.now() - rulesCache.at > 60000) {
+      const promise = apiClient.get('/catalogs/document-rules').then((res) => res.data);
+      rulesCache = { at: Date.now(), promise };
+      promise.catch(() => { if (rulesCache.promise === promise) rulesCache = { at: 0, promise: null }; });
+    }
+    return rulesCache.promise;
+  },
+};
 export const unitsApi = makeCatalogApi('units');
 export const withholdingTaxesApi = makeCatalogApi('withholding-taxes');
 export const movementTypesApi = makeCatalogApi('movement-types');

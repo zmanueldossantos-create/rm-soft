@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { documentTypesApi } from '../api/catalogs';
+import { documentRulesApi } from '../api/catalogs';
 
 // Document types the Caixa offers, from the document type catalog ("issuable at POS" rule): [stored type, code, label]
 const TYPES = [['FACTURA_RECIBO', 'FR', 'Fatura/Recibo'], ['FACTURA', 'FT', 'Fatura'], ['PRO_FORMA', 'FP', 'Pro-forma']];
@@ -19,7 +19,7 @@ export default function usePosDocumentTypes() {
   const [docTypes, setDocTypes] = useState(null);
   useEffect(() => {
     // A user who cannot read the catalog keeps the default lists; the server enforces the rules anyway.
-    documentTypesApi.list().then(setDocTypes).catch(() => {});
+    documentRulesApi.list().then(setDocTypes).catch(() => {});
   }, []);
   return useMemo(() => {
     if (!docTypes) return { typeOptions: FALLBACK, liquidationOptions: FALLBACK_LIQUIDATION, defaultPaidType: 'FACTURA_RECIBO' };

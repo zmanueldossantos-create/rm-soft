@@ -9,7 +9,7 @@ import { listServices } from '../api/services';
 import { listActivities } from '../api/activity';
 import { listCustomers } from '../api/customers';
 import { listVatRates } from '../api/vat';
-import { paymentTermsApi, paymentMethodsApi, unitsApi, documentTypesApi, banksApi, withholdingTaxesApi } from '../api/catalogs';
+import { paymentTermsApi, paymentMethodsApi, unitsApi, documentRulesApi, banksApi, withholdingTaxesApi } from '../api/catalogs';
 import { getMyCompany, getMyCompanyBankAccounts } from '../api/company';
 import { listDocumentSeries } from '../api/documentSeries';
 import { extractErrorMessage } from '../utils/errors';
@@ -111,7 +111,7 @@ export default function NovaFatura() {
       try {
         const [activitiesData, customersData, productsData, servicesData, vatData, unitsData, termsData, methodsData, bankData, companyData, seriesData, docTypesData, banksData, whData] = await Promise.all([
           listActivities(), listCustomers(), listProducts(), listServices(), listVatRates(), unitsApi.list(),
-          paymentTermsApi.list(), paymentMethodsApi.list(), getMyCompanyBankAccounts(), getMyCompany(), listDocumentSeries(), documentTypesApi.list(), banksApi.list(), withholdingTaxesApi.list(),
+          paymentTermsApi.list(), paymentMethodsApi.list(), getMyCompanyBankAccounts(), getMyCompany(), listDocumentSeries(), documentRulesApi.list(), banksApi.list(), withholdingTaxesApi.list(),
         ]);
         setActivities(activitiesData.filter((a) => a.is_active));
         setCustomers(customersData.filter((c) => c.is_active));

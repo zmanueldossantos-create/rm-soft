@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { documentTypesApi } from '../api/catalogs';
+import { documentRulesApi } from '../api/catalogs';
 
 // Stored invoice type -> catalog code (the same mapping the server uses)
 export const DOC_CODE_BY_TYPE = {
@@ -17,7 +17,7 @@ const DEFAULTS = {
 export default function useDocumentRules() {
   const [docTypes, setDocTypes] = useState(null);
   useEffect(() => {
-    documentTypesApi.list().then(setDocTypes).catch(() => {});
+    documentRulesApi.list().then(setDocTypes).catch(() => {});
   }, []);
   return (invoiceType, rule) => {
     const row = docTypes && docTypes.find((d) => d.code === DOC_CODE_BY_TYPE[invoiceType]);
