@@ -107,7 +107,7 @@ PERMISSION_CATALOG: list[tuple[str, str, str, list[str]]] = [
     ("tesouraria:cancel_movement", "Cancelar movimentos de tesouraria", "Tesouraria", ["CAIXA"]),
     ("tesouraria:daily_report", "Ver relatorio diario de tesouraria", "Tesouraria", ["CAIXA"]),
     ("tesouraria:my_association", "Ver a minha associacao a caixa", "Tesouraria", ["CAIXA", "ARMAZENISTA", "CONTABILISTA"]),
-    ("tesouraria:associations_manage", "Gerir associacoes de utilizadores a caixas", "Tesouraria", []),
+    ("tesouraria:associations_manage", "Associar utilizadores as caixas (pontos de venda)", "Atividades", []),
     ("tesouraria:payment_prefs_view", "Ver metodos de pagamento da empresa", "Tesouraria", ["CAIXA"]),
     ("tesouraria:payment_prefs_manage", "Configurar metodos de pagamento da empresa", "Tesouraria", []),
     ("fiscal_periods:view", "Ver exercicios e periodos fiscais", "Contabilidade", []),
@@ -137,7 +137,8 @@ class ProtectedRoleError(Exception):
 
 async def _ensure_catalog(db: AsyncSession) -> dict[str, Permission]:
     """Inserts (flush only, no commit) any catalog entry missing from the
-    platform-wide Permission table and returns every permission by code."""
+    platform-wide Permission table, aligns the label and category of the existing ones with the catalog,
+    and returns every permission by code."""
     result = await db.execute(select(Permission))
     by_code = {p.code: p for p in result.scalars().all()}
     for code, label, category, _ in PERMISSION_CATALOG:
@@ -145,6 +146,12 @@ async def _ensure_catalog(db: AsyncSession) -> dict[str, Permission]:
             permission = Permission(code=code, label=label, category=category)
             db.add(permission)
             by_code[code] = permission
+        else:
+            # a permission can be renamed or moved: keep the label and the category in line with the catalog
+            existing = by_code[code]
+            if existing.label != label or existing.category != category:
+                existing.label = label
+                existing.category = category
     await db.flush()
     return by_code
 
