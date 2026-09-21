@@ -41,6 +41,7 @@ class InvoiceLine(Base):
     retention_name_snapshot: Mapped[str | None] = mapped_column(String(150), nullable=True)
     retention_rate: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
     retention_amount: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
+    retention_type: Mapped[str | None] = mapped_column(String(3), nullable=True)  # SAF-T WithholdingTaxType
 
     # Code of the exemption motive (M04, M11...) of a 0% line, copied when the document is issued - the SAF-T
     # needs it (with its official reason) on every exempt line. Empty on a taxed line.

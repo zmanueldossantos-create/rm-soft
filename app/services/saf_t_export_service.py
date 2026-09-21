@@ -100,6 +100,9 @@ async def export_saf_t_for_period(db: AsyncSession, company_id: uuid.UUID, year:
                     "line_vat": float(l.line_vat),
                     "line_total": float(l.line_total),
                     "exemption_code": l.exemption_code,
+                    "retention_type": l.retention_type,
+                    "retention_name": l.retention_name_snapshot,
+                    "retention_amount": float(l.retention_amount) if l.retention_amount is not None else None,
                 }
                 for l in lines
             ],

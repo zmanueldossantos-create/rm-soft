@@ -287,6 +287,22 @@ def generate_saf_t_xml(
         _el(totals, "NetTotal", _money(inv["subtotal"]))
         _el(totals, "GrossTotal", _money(inv["total"]))
 
+        # XSD: WithholdingTax (after DocumentTotals) - one entry per type of tax withheld, summed over the
+        # lines. The type comes from the catalog (copied on the line); a withholding without a known type is
+        # reported as "OU" (other), which stays valid.
+        withheld: dict[str, dict] = {}
+        for line in inv["lines"]:
+            amount = line.get("retention_amount")
+            if amount:
+                entry = withheld.setdefault(line.get("retention_type") or "OU", {"amount": 0.0, "name": line.get("retention_name")})
+                entry["amount"] += float(amount)
+        for tax_type, entry in withheld.items():
+            withholding = _el(invoice_el, "WithholdingTax")
+            _el(withholding, "WithholdingTaxType", tax_type)
+            if entry["name"]:
+                _el(withholding, "WithholdingTaxDescription", entry["name"][:60])
+            _el(withholding, "WithholdingTaxAmount", _money(entry["amount"]))
+
     # ---------- SourceDocuments.WorkingDocuments (pro-formas) ----------
     # Structure and element order follow the XSD and the AGT-validated Kiami exports: WorkType PP, WorkStatus
     # N - or F once the pro-forma has been invoiced. A walk-in pro-forma points at the same customer as a walk-in

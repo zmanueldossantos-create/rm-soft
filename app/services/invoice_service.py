@@ -268,6 +268,7 @@ async def create_invoice(
             line_service_id = service.id
             line_retention_pct = 0.0
             line_retention_name = None
+            line_retention_type = None
             line_exemption_code = await _exemption_code_for(db, service, vat_rate)
             # AGT rule (Ulemo 8.8): withholding is exclusive to Service lines, requires the
             # article's own withholding_tax_id to be set ("Sujeito"), and only applies when
@@ -279,6 +280,7 @@ async def create_invoice(
                 if wh and float(wh.rate) > 0:
                     line_retention_pct = float(wh.rate)
                     line_retention_name = wh.name
+                    line_retention_type = wh.tax_type
         else:
             product_result = await db.execute(
                 select(Product).where(Product.id == product_id, Product.company_id == company_id, Product.is_active == True)
@@ -298,6 +300,7 @@ async def create_invoice(
             line_service_id = None
             line_retention_pct = 0.0
             line_retention_name = None
+            line_retention_type = None
             line_exemption_code = await _exemption_code_for(db, product, vat_rate)
 
         discount_percent = float(line_input.get("discount_percent", 0) or 0)
@@ -326,6 +329,7 @@ async def create_invoice(
             retention_name_snapshot=line_retention_name if line_retention > 0 else None,
             retention_rate=line_retention_pct if line_retention > 0 else None,
             retention_amount=line_retention if line_retention > 0 else None,
+            retention_type=line_retention_type if line_retention > 0 else None,
             exemption_code=line_exemption_code,
         ))
 
@@ -547,6 +551,7 @@ async def create_credit_note(
             retention_name_snapshot=ref_line.retention_name_snapshot if line_retention > 0 else None,
             retention_rate=ref_line.retention_rate if line_retention > 0 else None,
             retention_amount=line_retention if line_retention > 0 else None,
+            retention_type=ref_line.retention_type if line_retention > 0 else None,
             exemption_code=ref_line.exemption_code,
         ))
 
@@ -728,6 +733,7 @@ async def create_debit_note(
         quantity = float(line_input["quantity"])
         line_retention_pct = 0.0
         line_retention_name = None
+        line_retention_type = None
 
         if service_id:
             service_result = await db.execute(
@@ -750,6 +756,7 @@ async def create_debit_note(
                 if wh and float(wh.rate) > 0:
                     line_retention_pct = float(wh.rate)
                     line_retention_name = wh.name
+                    line_retention_type = wh.tax_type
         else:
             product_result = await db.execute(
                 select(Product).where(Product.id == product_id, Product.company_id == company_id, Product.is_active == True)
@@ -795,6 +802,7 @@ async def create_debit_note(
             retention_name_snapshot=line_retention_name if line_retention > 0 else None,
             retention_rate=line_retention_pct if line_retention > 0 else None,
             retention_amount=line_retention if line_retention > 0 else None,
+            retention_type=line_retention_type if line_retention > 0 else None,
             exemption_code=line_exemption_code,
         ))
 
