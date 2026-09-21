@@ -42,6 +42,10 @@ class InvoiceLine(Base):
     retention_rate: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
     retention_amount: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
 
+    # Code of the exemption motive (M04, M11...) of a 0% line, copied when the document is issued - the SAF-T
+    # needs it (with its official reason) on every exempt line. Empty on a taxed line.
+    exemption_code: Mapped[str | None] = mapped_column(String(3), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     def __repr__(self) -> str:

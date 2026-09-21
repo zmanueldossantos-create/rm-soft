@@ -31,6 +31,8 @@ from datetime import date, datetime
 from sqlalchemy import select, func, extract
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.tax_exemptions import TAX_EXEMPTION_REASONS
+from app.models.vat_code import VatCode
 from app.models.invoice import Invoice, InvoiceStatus, InvoiceType, DocumentLifecycleStatus, CreditNoteReason
 from app.models.invoice_line import InvoiceLine
 from app.models.product import Product
@@ -135,6 +137,18 @@ def _simulate_hash(company_id: uuid.UUID, series: str, number: int, total: float
 def _simulate_qr_payload(company_id: uuid.UUID, series: str, number: int, total: float, atcud: str) -> str:
     """Simulated QR code payload - correct field structure, non-homologated."""
     return f"A:SIMULATED*B:{company_id}*C:{series}/{number}*D:{total}*E:{atcud}"
+
+
+async def _exemption_code_for(db: AsyncSession, article, vat_rate: float) -> str | None:
+    """Code of the exemption motive of a 0% article (M04, M11...), copied on the line like vat_rate_snapshot - the
+    SAF-T needs it on every exempt line. Only official codes are kept: anything else (e.g. the catalog's "NA")
+    cannot be exported."""
+    if vat_rate != 0 or article.exemption_reason_id is None:
+        return None
+    vat_code = (await db.execute(select(VatCode).where(VatCode.id == article.exemption_reason_id))).scalar_one_or_none()
+    if vat_code is None or vat_code.code not in TAX_EXEMPTION_REASONS:
+        return None
+    return vat_code.code
 
 
 async def create_invoice(
@@ -254,6 +268,7 @@ async def create_invoice(
             line_service_id = service.id
             line_retention_pct = 0.0
             line_retention_name = None
+            line_exemption_code = await _exemption_code_for(db, service, vat_rate)
             # AGT rule (Ulemo 8.8): withholding is exclusive to Service lines, requires the
             # article's own withholding_tax_id to be set ("Sujeito"), and only applies when
             # the customer is pessoa coletiva - never computed for Products or for a
@@ -283,6 +298,7 @@ async def create_invoice(
             line_service_id = None
             line_retention_pct = 0.0
             line_retention_name = None
+            line_exemption_code = await _exemption_code_for(db, product, vat_rate)
 
         discount_percent = float(line_input.get("discount_percent", 0) or 0)
         gross_subtotal = round(quantity * unit_price, 2)
@@ -310,6 +326,7 @@ async def create_invoice(
             retention_name_snapshot=line_retention_name if line_retention > 0 else None,
             retention_rate=line_retention_pct if line_retention > 0 else None,
             retention_amount=line_retention if line_retention > 0 else None,
+            exemption_code=line_exemption_code,
         ))
 
     subtotal_total = round(subtotal_total, 2)
@@ -530,6 +547,7 @@ async def create_credit_note(
             retention_name_snapshot=ref_line.retention_name_snapshot if line_retention > 0 else None,
             retention_rate=ref_line.retention_rate if line_retention > 0 else None,
             retention_amount=line_retention if line_retention > 0 else None,
+            exemption_code=ref_line.exemption_code,
         ))
 
     # A line from the original invoice not included at all in lines_input also makes this a partial credit.
@@ -725,6 +743,7 @@ async def create_debit_note(
             item_name = service.name
             line_product_id = None
             line_service_id = service.id
+            line_exemption_code = await _exemption_code_for(db, service, vat_rate)
             if service.withholding_tax_id and customer_is_juridica:
                 wh_result = await db.execute(select(WithholdingTax).where(WithholdingTax.id == service.withholding_tax_id))
                 wh = wh_result.scalar_one_or_none()
@@ -748,6 +767,7 @@ async def create_debit_note(
             item_name = product.name
             line_product_id = product.id
             line_service_id = None
+            line_exemption_code = await _exemption_code_for(db, product, vat_rate)
 
         discount_percent = float(line_input.get("discount_percent", 0) or 0)
         gross_subtotal = round(quantity * unit_price, 2)
@@ -775,6 +795,7 @@ async def create_debit_note(
             retention_name_snapshot=line_retention_name if line_retention > 0 else None,
             retention_rate=line_retention_pct if line_retention > 0 else None,
             retention_amount=line_retention if line_retention > 0 else None,
+            exemption_code=line_exemption_code,
         ))
 
     subtotal_total = round(subtotal_total, 2)
@@ -1034,6 +1055,7 @@ async def create_pro_forma(
             item_name = service.name
             line_product_id = None
             line_service_id = service.id
+            line_exemption_code = await _exemption_code_for(db, service, vat_rate)
         else:
             product_result = await db.execute(
                 select(Product).where(Product.id == product_id, Product.company_id == company_id, Product.is_active == True)
@@ -1051,6 +1073,7 @@ async def create_pro_forma(
             item_name = product.name
             line_product_id = product.id
             line_service_id = None
+            line_exemption_code = await _exemption_code_for(db, product, vat_rate)
 
         discount_percent = float(line_input.get("discount_percent", 0) or 0)
         gross_subtotal = round(quantity * unit_price, 2)
@@ -1073,6 +1096,7 @@ async def create_pro_forma(
             line_subtotal=line_subtotal,
             line_vat=line_vat,
             line_total=line_total,
+            exemption_code=line_exemption_code,
         ))
 
     subtotal_total = round(subtotal_total, 2)

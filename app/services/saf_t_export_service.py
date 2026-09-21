@@ -99,6 +99,7 @@ async def export_saf_t_for_period(db: AsyncSession, company_id: uuid.UUID, year:
                     "line_subtotal": float(l.line_subtotal),
                     "line_vat": float(l.line_vat),
                     "line_total": float(l.line_total),
+                    "exemption_code": l.exemption_code,
                 }
                 for l in lines
             ],

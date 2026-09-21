@@ -69,6 +69,7 @@ class InvoiceLineResponse(BaseModel):
     retention_name_snapshot: str | None = None
     retention_rate: float | None = None
     retention_amount: float | None = None
+    exemption_code: str | None = None
 
     class Config:
         from_attributes = True
