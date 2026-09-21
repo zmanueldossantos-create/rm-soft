@@ -915,9 +915,10 @@ async def create_receipt(
     if reference_invoice is None:
         raise ReferenceInvoiceNotFoundError("Fatura de referencia nao encontrada")
 
-    if reference_invoice.invoice_type not in (InvoiceType.FACTURA, InvoiceType.FACTURA_RECIBO):
+    if reference_invoice.invoice_type != InvoiceType.FACTURA:
+        # A Fatura/Recibo is paid when it is issued: a receipt on top would collect the same money twice.
         raise ReferenceInvoiceTypeNotEligibleError(
-            "O recibo so pode ser emitido para Factura ou Factura/Recibo"
+            "O recibo so pode ser emitido para uma Factura (a Factura/Recibo ja esta paga)"
         )
 
     if reference_invoice.document_status == DocumentLifecycleStatus.ANULADO:
