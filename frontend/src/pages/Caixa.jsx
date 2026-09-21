@@ -639,7 +639,11 @@ export default function Caixa() {
   const paidOnIssue = ruleOf(selectedInvoiceType, 'paid_on_issue');
   const billsLater = !paidOnIssue && selectedInvoiceType !== 'PRO_FORMA';
   // offered = the catalog allows the type here AND the user may issue it (pro-forma: pos:proforma, a sale: pos:checkout)
-  const visibleTypeOptions = posTypeOptions.filter((o) => (o.value === 'PRO_FORMA' ? can('pos:proforma') : can('pos:checkout')));
+  const visibleTypeOptions = posTypeOptions.filter((o) => {
+    if (o.value === 'PRO_FORMA') return can('pos:proforma');
+    // a sale needs pos:checkout; a document billed later (a Fatura) also needs pos:checkout_ft
+    return can('pos:checkout') && (ruleOf(o.value, 'paid_on_issue') || can('pos:checkout_ft'));
+  });
   useEffect(() => {
     if (visibleTypeOptions.length && !visibleTypeOptions.some((o) => o.value === selectedInvoiceType)) setSelectedInvoiceType(visibleTypeOptions[0].value);
   }, [visibleTypeOptions.map((o) => o.value).join(','), selectedInvoiceType]);

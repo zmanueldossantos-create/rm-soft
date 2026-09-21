@@ -190,7 +190,10 @@ def test_every_catalog_permission_is_enforced_by_a_route():
     routes_dir = Path(__file__).resolve().parent.parent / "app" / "api" / "v1"
     used: set[str] = set()
     for path in routes_dir.rglob("*.py"):
-        used |= set(re.findall(r'require_permission\(\s*"([^"]+)"', path.read_text(encoding="utf-8")))
+        text = path.read_text(encoding="utf-8")
+        used |= set(re.findall(r'require_permission\(\s*"([^"]+)"', text))
+        # a permission checked inside a route helper (has_permission - e.g. only for some document types) is enforced too
+        used |= set(re.findall(r'has_permission\([^)]*?"([a-z_]+:[a-z_]+)"', text))
     unused = {entry[0] for entry in PERMISSION_CATALOG} - used
     assert not unused, f"catalog permissions no route enforces: {sorted(unused)}"
 

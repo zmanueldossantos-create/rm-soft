@@ -36,7 +36,7 @@ from app.services.cash_session_service import (
 )
 from app.services.pos_service import checkout, liquidate_pending_invoice, create_pro_forma_from_pos, NoOpenSessionError
 from app.services.invoice_service import ReferenceInvoiceTypeNotEligibleError
-from app.api.v1.issuable import ensure_issuable
+from app.api.v1.issuable import ensure_issuable, ensure_may_bill_later
 from app.services.point_of_sale_service import PosNotFoundError
 from app.services.invoice_service import (
     ActivityNotFoundError,
@@ -168,6 +168,7 @@ async def post_checkout(
 ):
     try:
         await ensure_issuable(db, payload.invoice_type, "pos")
+        await ensure_may_bill_later(db, current_user, payload.invoice_type)
         return await checkout(
             db, current_user.company_id, pos_id, current_user, payload.customer_id,
             [{"product_id": l.product_id, "service_id": l.service_id, "quantity": l.quantity, "discount_percent": l.discount_percent} for l in payload.lines],

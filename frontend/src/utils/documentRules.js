@@ -11,6 +11,7 @@ const DEFAULTS = {
   accepts_credit_note: ['FACTURA', 'FACTURA_RECIBO'],
   accepts_debit_note: ['FACTURA', 'FACTURA_RECIBO'],
   accepts_receipt: ['FACTURA'],
+  paid_on_issue: ['FACTURA_RECIBO'],
 };
 
 // Reads the rules of the document type catalog once; ruleOf(type, rule) answers from the catalog.

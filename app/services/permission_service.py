@@ -59,6 +59,7 @@ PERMISSION_CATALOG: list[tuple[str, str, str, list[str]]] = [
     ("pos:open_session", "Abrir sessao de caixa", "Caixa (POS)", ["CAIXA"]),
     ("pos:close_session", "Fechar sessao de caixa", "Caixa (POS)", ["CAIXA"]),
     ("pos:checkout", "Registar venda (checkout)", "Caixa (POS)", ["CAIXA"]),
+    ("pos:checkout_ft", "Faturar (FT) na caixa - documento a pagar mais tarde", "Caixa (POS)", ["CAIXA"]),
     ("pos:proforma", "Emitir fatura pro-forma na caixa", "Caixa (POS)", ["CAIXA"]),
     ("pos:liquidate", "Liquidar (regularizar) na caixa", "Caixa (POS)", ["CAIXA"]),
     ("invoices:view", "Ver faturas, PDF e periodos disponiveis", "Faturacao", ["CAIXA"]),
