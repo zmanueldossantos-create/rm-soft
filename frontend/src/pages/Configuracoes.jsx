@@ -173,6 +173,21 @@ const CATALOGS = [
   { key: 'modules', label: 'Módulos', icon: LayoutGrid, api: modulesApi },
 ];
 
+// Rules of a document type: [key, label, fiscal (locked on an official type)]
+const RULE_CHECKS = [
+  ['requires_origin', 'Exige documento de origem', true],
+  ['has_lines', 'Tem linhas de artigos', true],
+  ['paid_on_issue', 'Pago na emiss\u00e3o', true],
+  ['sent_to_agt', 'Enviado \u00e0 AGT', true],
+  ['deducts_stock', 'Deduz stock', true],
+  ['accepts_credit_note', 'Aceita nota de cr\u00e9dito', false],
+  ['accepts_debit_note', 'Aceita nota de d\u00e9bito', false],
+  ['accepts_receipt', 'Aceita recibo', false],
+  ['convertible', 'Convert\u00edvel em FT/FR', false],
+  ['issuable_in_invoices', 'Emitido em Nova Fatura', false],
+  ['issuable_at_pos', 'Emitido na Caixa', false],
+];
+
 export default function Configuracoes() {
   const [counts, setCounts] = useState({});
   const [loading, setLoading] = useState(true);
@@ -264,7 +279,7 @@ export default function Configuracoes() {
       case 'payment_methods': return { code: '', name: '', allows_payment: true, allows_receipt: true, is_cash: false };
       case 'payment_terms': return { name: '', fixed_days: false, days: 0, months_fixed_day: 0, discount: 0 };
       case 'vat_codes': return { code: '', name: '', rate: 0, country_id: countries[0]?.id || '', valid_from: '', valid_until: '', observations: '' };
-      case 'document_types': return { code: '', name: '', area: '', electronic_eligible: false, is_fiscal: true };
+      case 'document_types': return { code: '', name: '', area: '', electronic_eligible: false, is_fiscal: true, rules_locked: false, saft_section: 'NONE', revenue_sign: 0, requires_origin: false, has_lines: true, paid_on_issue: false, sent_to_agt: false, deducts_stock: false, accepts_credit_note: false, accepts_debit_note: false, accepts_receipt: false, convertible: false, issuable_in_invoices: false, issuable_at_pos: false };
       case 'movement_types': return { code: '', name: '', direction: 'ENTRADA', is_auto: false, description: '' };
       case 'units': return { code: '', name: '' };
       case 'withholding_taxes': return { name: '', rate: 0, tax_type: '' };
@@ -314,6 +329,9 @@ export default function Configuracoes() {
       if (activeCatalog.key === 'withholding_taxes') {
         payload.rate = parseFloat(payload.rate);
         payload.tax_type = payload.tax_type || null;
+      }
+      if (activeCatalog.key === 'document_types') {
+        payload.revenue_sign = parseInt(payload.revenue_sign, 10);
       }
       if (editingId) {
         await activeCatalog.api.update(editingId, payload);
@@ -450,6 +468,33 @@ export default function Configuracoes() {
             <input type="checkbox" checked={form.is_fiscal} onChange={(e) => updateField('is_fiscal', e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
             <span className="text-sm text-text-primary">Documento fiscal (submetido a AGT)</span>
           </label>
+          <div className="border-t border-border pt-3 flex flex-col gap-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">Regras do documento</p>
+            {form.rules_locked && (
+              <p className="text-[12px] text-text-muted">{'Tipo oficial: as regras marcadas (fixo) est\u00e3o bloqueadas'}</p>
+            )}
+            <Field label={'Sec\u00e7\u00e3o do SAF-T'}>
+              <select value={form.saft_section} disabled={!!form.rules_locked} onChange={(e) => updateField('saft_section', e.target.value)} className={inputClass}>
+                <option value="INVOICES">Faturas (SalesInvoices)</option>
+                <option value="PAYMENTS">Pagamentos (Payments)</option>
+                <option value="WORKING">Documentos de trabalho (WorkingDocuments)</option>
+                <option value="NONE">{'N\u00e3o exportado'}</option>
+              </select>
+            </Field>
+            <Field label={'Sinal no volume de neg\u00f3cios'}>
+              <select value={String(form.revenue_sign)} disabled={!!form.rules_locked} onChange={(e) => updateField('revenue_sign', e.target.value)} className={inputClass}>
+                <option value="1">+ Venda (soma)</option>
+                <option value="-1">{'- Nota de cr\u00e9dito (subtrai)'}</option>
+                <option value="0">{'0 N\u00e3o conta'}</option>
+              </select>
+            </Field>
+            {RULE_CHECKS.map(([key, label, fiscal]) => (
+              <label key={key} className="flex items-center gap-2.5 select-none">
+                <input type="checkbox" checked={!!form[key]} disabled={fiscal && !!form.rules_locked} onChange={(e) => updateField(key, e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer disabled:opacity-40" />
+                <span className="text-sm text-text-primary">{label}{fiscal && form.rules_locked ? ' (fixo)' : ''}</span>
+              </label>
+            ))}
+          </div>
         </>
       );
     }
