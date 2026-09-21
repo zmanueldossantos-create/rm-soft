@@ -31,6 +31,7 @@ from datetime import date, datetime
 from sqlalchemy import select, func, extract
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.document_rules import rules_from_row
 from app.core.tax_exemptions import TAX_EXEMPTION_REASONS
 from app.models.vat_code import VatCode
 from app.models.invoice import Invoice, InvoiceStatus, InvoiceType, DocumentLifecycleStatus, CreditNoteReason
@@ -222,6 +223,7 @@ async def create_invoice(
     doc_type = doc_type_result.scalar_one_or_none()
     if doc_type is None:
         raise DocumentTypeNotConfiguredError(f"Tipo de documento '{doc_code}' nao existe no catalogo da plataforma")
+    rules = rules_from_row(doc_type)
 
     company_result = await db.execute(select(Company).where(Company.id == company_id))
     company = company_result.scalar_one()
@@ -349,7 +351,7 @@ async def create_invoice(
     # payments is the correct, honest state for those.
     # What the customer actually pays: the withholding is kept by the customer (and paid by him to the AGT).
     cash_due_total = round(grand_total - retention_total, 2)
-    if not payments and invoice_type == "FACTURA_RECIBO" and cash_due_total > 0:
+    if not payments and rules.paid_on_issue and cash_due_total > 0:
         # The method chosen on the document; Numerario (NU) when none was chosen.
         default_method_id = payment_method_id
         if default_method_id is None:
@@ -422,7 +424,7 @@ async def create_invoice(
     # SAF-T XSD requires the space: "{DocType} {series_code}/{number}".
     invoice_reference = f"{doc_code} {series}/{next_number}"
     try:
-        for line_input in lines_input:
+        for line_input in (lines_input if rules.deducts_stock else []):
             # Services have no physical inventory - never deduct stock for them (either a
             # true Service line, or a legacy Product row typed as SERVICO).
             if line_input.get("service_id"):
@@ -444,7 +446,8 @@ async def create_invoice(
 
     # Trigger AGT submission asynchronously - section 4.2 requires submission
     # within 30s of creation, via a Celery task fired immediately.
-    submit_invoice_to_agt.delay(str(invoice.id))
+    if rules.sent_to_agt:
+        submit_invoice_to_agt.delay(str(invoice.id))
 
     return invoice
 
@@ -579,6 +582,7 @@ async def create_credit_note(
     doc_type = doc_type_result.scalar_one_or_none()
     if doc_type is None:
         raise DocumentTypeNotConfiguredError("Tipo de documento 'NC' nao existe no catalogo da plataforma")
+    rules = rules_from_row(doc_type)
 
     company_result = await db.execute(select(Company).where(Company.id == company_id))
     company = company_result.scalar_one()
@@ -643,7 +647,8 @@ async def create_credit_note(
     await db.commit()
     await db.refresh(credit_note)
 
-    submit_invoice_to_agt.delay(str(credit_note.id))
+    if rules.sent_to_agt:
+        submit_invoice_to_agt.delay(str(credit_note.id))
 
     return credit_note
 
@@ -718,6 +723,7 @@ async def create_debit_note(
     doc_type = doc_type_result.scalar_one_or_none()
     if doc_type is None:
         raise DocumentTypeNotConfiguredError("Tipo de documento 'ND' nao existe no catalogo da plataforma")
+    rules = rules_from_row(doc_type)
 
     try:
         series_row = await get_or_create_current_series(db, company, doc_type.id)
@@ -858,7 +864,8 @@ async def create_debit_note(
     await db.commit()
     await db.refresh(debit_note)
 
-    submit_invoice_to_agt.delay(str(debit_note.id))
+    if rules.sent_to_agt:
+        submit_invoice_to_agt.delay(str(debit_note.id))
 
     return debit_note
 
@@ -937,6 +944,7 @@ async def create_receipt(
     doc_type = doc_type_result.scalar_one_or_none()
     if doc_type is None:
         raise DocumentTypeNotConfiguredError("Tipo de documento 'RC' nao existe no catalogo da plataforma")
+    rules = rules_from_row(doc_type)
 
     try:
         series_row = await get_or_create_current_series(db, company, doc_type.id)
@@ -1013,7 +1021,8 @@ async def create_receipt(
     await db.commit()
     await db.refresh(receipt)
 
-    submit_invoice_to_agt.delay(str(receipt.id))
+    if rules.sent_to_agt:
+        submit_invoice_to_agt.delay(str(receipt.id))
 
     return receipt
 
