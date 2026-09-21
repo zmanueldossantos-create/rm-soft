@@ -57,3 +57,20 @@ async def get_document_rules(db: AsyncSession, invoice_type) -> DocumentRules:
     if row is None:
         raise DocumentRulesNotFoundError(f"Tipo de documento '{code}' nao existe no catalogo")
     return rules_from_row(row)
+
+
+async def default_paid_on_issue_type(db: AsyncSession) -> str:
+    """The stored invoice type used when a document must be paid at once (closing an open account, a hotel check-out):
+    the first active type, in the invoices section, paid on issue and issuable at the POS - by code. Falls back to the
+    Fatura/Recibo when the catalog has none."""
+    rows = (await db.execute(
+        select(DocumentType.code).where(
+            DocumentType.is_active.is_(True), DocumentType.saft_section == "INVOICES",
+            DocumentType.paid_on_issue.is_(True), DocumentType.issuable_at_pos.is_(True),
+        ).order_by(DocumentType.code)
+    )).scalars().all()
+    stored_by_code = {code: stored for stored, code in DOC_CODE_BY_INVOICE_TYPE.items()}
+    for code in rows:
+        if code in stored_by_code:
+            return stored_by_code[code]
+    return "FACTURA_RECIBO"

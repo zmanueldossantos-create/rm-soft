@@ -139,7 +139,7 @@ async def check_out(
     )
     account = account_result.scalar_one_or_none()
     if account is not None:
-        await close_account(db, company_id, account.id, checking_out_user, payments, invoice_type="FACTURA_RECIBO")
+        await close_account(db, company_id, account.id, checking_out_user, payments)
 
     booking.status = BookingStatus.CONCLUIDA
     await db.commit()

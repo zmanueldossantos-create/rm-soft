@@ -14,6 +14,7 @@ import uuid
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.document_rules import default_paid_on_issue_type
 from app.models.open_account import OpenAccount, OpenAccountStatus
 from app.models.open_account_line import OpenAccountLine
 from app.models.open_account_transfer import OpenAccountTransfer
@@ -171,7 +172,7 @@ async def remove_line(db: AsyncSession, company_id: uuid.UUID, account_id: uuid.
 
 async def close_account(
     db: AsyncSession, company_id: uuid.UUID, account_id: uuid.UUID, closing_user: "User",
-    payments: list[dict], invoice_type: str = "FACTURA_RECIBO",
+    payments: list[dict], invoice_type: str | None = None,
 ) -> OpenAccount:
     """Converts the account's lines into a real Invoice via pos_service.checkout,
     then marks the account FECHADA and links the resulting invoice."""
@@ -188,6 +189,8 @@ async def close_account(
         for l in lines
     ]
 
+    if invoice_type is None:  # by default the catalog decides: a type paid on issue
+        invoice_type = await default_paid_on_issue_type(db)
     invoice = await checkout(
         db, company_id, account.pos_id, closing_user, account.customer_id, lines_input, payments,
         invoice_type=invoice_type,
