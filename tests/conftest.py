@@ -38,6 +38,20 @@ from app.models.user import User, UserRole
 from app.models.fiscal_year import FiscalYear
 from app.models.fiscal_period import FiscalPeriod
 from app.models.document_type import DocumentType
+import importlib.util as _ilu
+import pathlib as _pathlib
+
+
+def _load_document_type_rules() -> dict:
+    """The rules of the official document types, from the migration that fills them (one single source)."""
+    path = next((_pathlib.Path(__file__).resolve().parent.parent / "alembic" / "versions").glob("l8b5c1e46f30_*.py"))
+    spec = _ilu.spec_from_file_location("document_type_rules_migration", path)
+    module = _ilu.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.RULES
+
+
+DOCUMENT_TYPE_RULES = _load_document_type_rules()
 from app.models.point_of_sale import PointOfSale
 
 TEST_DATABASE_URL = "postgresql+asyncpg://erp_user:erp_password@localhost:5436/erp_agt_test"
@@ -164,22 +178,22 @@ async def company_with_essentials(db):
     # company-scoped, and other fixtures/tests may have already seeded it.
     existing_ft = (await db.execute(select(DocumentType).where(DocumentType.code == "FT"))).scalar_one_or_none()
     if existing_ft is None:
-        db.add(DocumentType(code="FT", name="Fatura", area="FACTURACAO", electronic_eligible=True))
+        db.add(DocumentType(code="FT", name="Fatura", area="FACTURACAO", electronic_eligible=True, **DOCUMENT_TYPE_RULES["FT"]))
     existing_fr = (await db.execute(select(DocumentType).where(DocumentType.code == "FR"))).scalar_one_or_none()
     if existing_fr is None:
-        db.add(DocumentType(code="FR", name="Fatura/Recibo", area="FACTURACAO", electronic_eligible=True))
+        db.add(DocumentType(code="FR", name="Fatura/Recibo", area="FACTURACAO", electronic_eligible=True, **DOCUMENT_TYPE_RULES["FR"]))
     existing_nc = (await db.execute(select(DocumentType).where(DocumentType.code == "NC"))).scalar_one_or_none()
     if existing_nc is None:
-        db.add(DocumentType(code="NC", name="Nota de Credito", area="FACTURACAO", electronic_eligible=True))
+        db.add(DocumentType(code="NC", name="Nota de Credito", area="FACTURACAO", electronic_eligible=True, **DOCUMENT_TYPE_RULES["NC"]))
     existing_nd = (await db.execute(select(DocumentType).where(DocumentType.code == "ND"))).scalar_one_or_none()
     if existing_nd is None:
-        db.add(DocumentType(code="ND", name="Nota de Debito", area="FACTURACAO", electronic_eligible=True))
+        db.add(DocumentType(code="ND", name="Nota de Debito", area="FACTURACAO", electronic_eligible=True, **DOCUMENT_TYPE_RULES["ND"]))
     existing_rc = (await db.execute(select(DocumentType).where(DocumentType.code == "RC"))).scalar_one_or_none()
     if existing_rc is None:
-        db.add(DocumentType(code="RC", name="Recibo", area="TESOURARIA", electronic_eligible=True))
+        db.add(DocumentType(code="RC", name="Recibo", area="TESOURARIA", electronic_eligible=True, **DOCUMENT_TYPE_RULES["RC"]))
     existing_fp = (await db.execute(select(DocumentType).where(DocumentType.code == "FP"))).scalar_one_or_none()
     if existing_fp is None:
-        db.add(DocumentType(code="FP", name="Fatura Pro-forma", area="FACTURACAO", electronic_eligible=False, is_fiscal=False))
+        db.add(DocumentType(code="FP", name="Fatura Pro-forma", area="FACTURACAO", electronic_eligible=False, is_fiscal=False, **DOCUMENT_TYPE_RULES["FP"]))
 
     await db.commit()
     await db.refresh(company)
