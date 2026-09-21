@@ -347,7 +347,9 @@ async def create_invoice(
     # see the "3000 Kz balance didn't move after a paid sale" bug discussion. FACTURA
     # (due later, no cash yet) and PRO_FORMA (not a real sale) are left alone: no
     # payments is the correct, honest state for those.
-    if not payments and invoice_type == "FACTURA_RECIBO" and grand_total > 0:
+    # What the customer actually pays: the withholding is kept by the customer (and paid by him to the AGT).
+    cash_due_total = round(grand_total - retention_total, 2)
+    if not payments and invoice_type == "FACTURA_RECIBO" and cash_due_total > 0:
         # The method chosen on the document; Numerario (NU) when none was chosen.
         default_method_id = payment_method_id
         if default_method_id is None:
@@ -355,15 +357,15 @@ async def create_invoice(
             numerario = numerario_result.scalar_one_or_none()
             default_method_id = numerario.id if numerario is not None else None
         if default_method_id is not None:
-            payments = [{"payment_method_id": default_method_id, "amount": grand_total}]
+            payments = [{"payment_method_id": default_method_id, "amount": cash_due_total}]
 
     # Only reconcile when payments were actually supplied - see the auto-default above
     # for why an empty list is sometimes filled in before reaching this point.
     if payments:
         payments_sum = round(sum(float(p["amount"]) for p in payments), 2)
-        if abs(payments_sum - grand_total) > 0.01:
+        if abs(payments_sum - cash_due_total) > 0.01:
             raise PaymentAmountMismatchError(
-                f"A soma dos pagamentos ({payments_sum}) nao corresponde ao total da fatura ({grand_total})"
+                f"A soma dos pagamentos ({payments_sum}) nao corresponde ao montante a pagar ({cash_due_total})"
             )
 
     atcud = _simulate_atcud(company_id, series, next_number)
