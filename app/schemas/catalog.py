@@ -2,6 +2,7 @@
 Pydantic schemas for the 8 platform-wide base catalogs (see catalog_service.py).
 """
 import uuid
+from typing import Literal
 from datetime import date
 
 from pydantic import BaseModel
@@ -244,6 +245,8 @@ class UnitOfMeasureCatalogResponse(BaseModel):
 class WithholdingTaxRequest(BaseModel):
     name: str
     rate: float = 0
+    # SAF-T WithholdingTaxType (the AGT e-invoicing API names the imposto predial "IP": converted at that boundary).
+    tax_type: Literal["IRT", "II", "IS", "IVA", "IPU", "IAC", "OU"] | None = None
 
 
 class WithholdingTaxResponse(BaseModel):
@@ -251,6 +254,7 @@ class WithholdingTaxResponse(BaseModel):
     name: str
     rate: float
     is_active: bool
+    tax_type: str | None = None
 
     class Config:
         from_attributes = True

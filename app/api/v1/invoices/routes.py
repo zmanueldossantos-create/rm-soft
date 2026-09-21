@@ -435,7 +435,8 @@ async def download_invoice_pdf(
     if service_ids:
         services_result = await db.execute(select(Service).where(Service.id.in_(service_ids)))
         services_by_id = {s.id: s for s in services_result.scalars().all()}
-    unit_ids = [p.unit_of_measure_id for p in products_by_id.values() if p.unit_of_measure_id]
+    # Products AND services carry a unit of measure (a service line used to print "-").
+    unit_ids = [x.unit_of_measure_id for x in [*products_by_id.values(), *services_by_id.values()] if getattr(x, "unit_of_measure_id", None)]
     units_by_id = {}
     if unit_ids:
         units_result = await db.execute(select(UnitOfMeasureCatalog).where(UnitOfMeasureCatalog.id.in_(unit_ids)))
@@ -451,7 +452,11 @@ async def download_invoice_pdf(
             if p.unit_of_measure_id and p.unit_of_measure_id in units_by_id:
                 unit = units_by_id[p.unit_of_measure_id].code
         elif l.service_id and l.service_id in services_by_id:
-            code = services_by_id[l.service_id].code
+            svc = services_by_id[l.service_id]
+            code = svc.code
+            svc_unit_id = getattr(svc, "unit_of_measure_id", None)
+            if svc_unit_id and svc_unit_id in units_by_id:
+                unit = units_by_id[svc_unit_id].code
         lines_dict.append({
             "code": code,
             "unit": unit,
@@ -462,6 +467,7 @@ async def download_invoice_pdf(
             "vat_rate_snapshot": float(l.vat_rate_snapshot),
             "line_subtotal": float(l.line_subtotal),
             "line_total": float(l.line_total),
+            "exemption_code": l.exemption_code,
         })
     company_dict = {"name": company.name, "nif": company.nif, "address": company.address, "phone_number": company.phone_number, "phone_number_2": company.phone_number_2, "email": company.email, "website": company.website, "logo_path": company.logo_path, "bank_accounts": bank_accounts_list}
 

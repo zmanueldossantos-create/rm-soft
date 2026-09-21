@@ -11,6 +11,7 @@ Visual identity matches the app's own bordeaux design system.
 """
 import io
 import os
+import textwrap
 
 import qrcode
 from reportlab.lib.pagesizes import A4
@@ -18,6 +19,8 @@ from reportlab.lib.units import mm
 from reportlab.lib.colors import HexColor
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas
+
+from app.core.tax_exemptions import TAX_EXEMPTION_REASONS
 
 ACCENT = HexColor("#8B3A3A")
 ACCENT_SOFT = HexColor("#F3E7E7")
@@ -79,7 +82,7 @@ def generate_invoice_pdf_thermal(invoice: dict, lines: list[dict], company: dict
         line_discount_amount = gross * (l.get("discount_percent", 0) / 100)
         total_discount_amount += line_discount_amount
         rate = l["vat_rate_snapshot"]
-        grp = vat_groups.setdefault(rate, {"incidencia": 0.0, "montante": 0.0})
+        grp = vat_groups.setdefault((rate, l.get("exemption_code") if rate == 0 else None), {"incidencia": 0.0, "montante": 0.0})
         grp["incidencia"] += l["line_subtotal"]
         grp["montante"] += l["line_subtotal"] * (rate / 100)
 
@@ -207,11 +210,14 @@ def generate_invoice_pdf_thermal(invoice: dict, lines: list[dict], company: dict
     # --- Totals ---
     two_col("Total Desconto:", fmt(total_discount_all), size=7.5)
     two_col("Total a pagar :", fmt(invoice["total"]), size=8.5, bold=True)
+    if invoice.get("retention_total"):
+        two_col("Retencao:", fmt(invoice["retention_total"]), size=7.5)
+        two_col("Liquido a pagar:", fmt(invoice["total"] - invoice["retention_total"]), size=8, bold=True)
     y -= 1 * mm
 
     # --- Isencao / tax summary ---
     if vat_groups:
-        left("Isencao" if all(r == 0 for r in vat_groups) else "Resumo de impostos", size=7.5, bold=True)
+        left("Isencao" if all(k[0] == 0 for k in vat_groups) else "Resumo de impostos", size=7.5, bold=True)
         y -= 3.2 * mm
         c.setFillColor(TEXT_MUTED)
         c.setFont("Helvetica-Bold", 6.5)
@@ -219,17 +225,19 @@ def generate_invoice_pdf_thermal(invoice: dict, lines: list[dict], company: dict
         c.drawString(margin + 12 * mm, y, "Incidencia")
         c.drawString(margin + 38 * mm, y, "Motivo")
         y -= 3.5 * mm
-        for rate in sorted(vat_groups.keys()):
-            grp = vat_groups[rate]
-            motivo = "IVA - Regime de Exclusao" if rate == 0 else "IVA"
+        for rate, code in sorted(vat_groups.keys(), key=lambda k: (k[0], k[1] or "")):
+            grp = vat_groups[(rate, code)]
+            # Official reason of the exemption motive chosen on the article (M04 when none is recorded).
+            motivo = TAX_EXEMPTION_REASONS.get(code or "M04", TAX_EXEMPTION_REASONS["M04"]) if rate == 0 else "IVA"
             c.setFillColor(TEXT_PRIMARY)
             c.setFont("Helvetica", 6.5)
             c.drawString(margin, y, f"{rate:.2f}")
             c.drawString(margin + 12 * mm, y, fmt(grp["incidencia"]))
-            c.drawString(margin + 38 * mm, y, motivo[:20])
+            wrapped = textwrap.wrap(motivo, 28) or [""]
+            c.drawString(margin + 38 * mm, y, wrapped[0])
             y -= 3.2 * mm
-            if len(motivo) > 20:
-                c.drawString(margin + 38 * mm, y, motivo[20:])
+            for extra_line in wrapped[1:]:
+                c.drawString(margin + 38 * mm, y, extra_line)
                 y -= 3.2 * mm
 
     dashed_line()
@@ -406,7 +414,7 @@ def generate_invoice_pdf_a4(invoice: dict, lines: list[dict], company: dict, cus
         total_discount_amount += line_discount_amount
 
         rate = l["vat_rate_snapshot"]
-        grp = vat_groups.setdefault(rate, {"incidencia": 0.0, "montante": 0.0})
+        grp = vat_groups.setdefault((rate, l.get("exemption_code") if rate == 0 else None), {"incidencia": 0.0, "montante": 0.0})
         grp["incidencia"] += l["line_subtotal"]
         grp["montante"] += l["line_subtotal"] * (rate / 100)
 
@@ -477,10 +485,10 @@ def generate_invoice_pdf_a4(invoice: dict, lines: list[dict], company: dict, cus
     ry2 -= 4.5 * mm
 
     total_vat = 0.0
-    for rate in sorted(vat_groups.keys()):
-        grp = vat_groups[rate]
+    for rate, code in sorted(vat_groups.keys(), key=lambda k: (k[0], k[1] or "")):
+        grp = vat_groups[(rate, code)]
         total_vat += grp["montante"]
-        motivo = "Isento" if rate == 0 else "IVA"
+        motivo = (code or "M04") if rate == 0 else "IVA"
         c.setFillColor(TEXT_PRIMARY)
         c.setFont("Helvetica", 7.5)
         c.drawString(margin, ry2, "IVA")
@@ -489,6 +497,13 @@ def generate_invoice_pdf_a4(invoice: dict, lines: list[dict], company: dict, cus
         c.drawString(margin + 62 * mm, ry2, motivo)
         c.drawRightString(totals_box_x - 4 * mm, ry2, fmt(grp["montante"]))
         ry2 -= 4.2 * mm
+
+    # Legend: the official reason of each exemption code used, in full (the table only has room for the code).
+    for legend_code in sorted({k[1] or "M04" for k in vat_groups if k[0] == 0}):
+        c.setFillColor(TEXT_MUTED)
+        c.setFont("Helvetica", 6.5)
+        c.drawString(margin, ry2, f"{legend_code} - {TAX_EXEMPTION_REASONS.get(legend_code, '')}"[:110])
+        ry2 -= 3.6 * mm
 
     discount_global_pct = invoice.get("discount_global_percent", 0)
     gross_before_global = total_iliquido + invoice["vat_total"]
@@ -500,10 +515,11 @@ def generate_invoice_pdf_a4(invoice: dict, lines: list[dict], company: dict, cus
         ("Total Desconto", total_discount_all),
         ("Total Imposto", invoice["vat_total"]),
     ]
+    retention_rows = 2 if invoice.get("retention_total") else 0
     ty = resumo_top - 5 * mm
     c.setStrokeColor(BORDER)
     c.setLineWidth(0.6)
-    c.rect(totals_box_x, ty - (len(box_rows) + 1) * 4.6 * mm, page_width - margin - totals_box_x, (len(box_rows) + 1) * 4.6 * mm + 4 * mm, fill=0, stroke=1)
+    c.rect(totals_box_x, ty - (len(box_rows) + 1 + retention_rows) * 4.6 * mm, page_width - margin - totals_box_x, (len(box_rows) + 1 + retention_rows) * 4.6 * mm + 4 * mm, fill=0, stroke=1)
     ty -= 1 * mm
     for label, value in box_rows:
         c.setFillColor(TEXT_MUTED)
@@ -516,6 +532,17 @@ def generate_invoice_pdf_a4(invoice: dict, lines: list[dict], company: dict, cus
     c.setFont("Helvetica-Bold", 8)
     c.drawString(totals_box_x + 2 * mm, ty, "Total (AKZ)")
     c.drawRightString(page_width - margin - 2 * mm, ty, fmt(invoice["total"]))
+    if retention_rows:
+        ty -= 4.6 * mm
+        c.setFillColor(TEXT_MUTED)
+        c.setFont("Helvetica", 7.5)
+        c.drawString(totals_box_x + 2 * mm, ty, "Retencao na fonte")
+        c.setFillColor(TEXT_PRIMARY)
+        c.drawRightString(page_width - margin - 2 * mm, ty, fmt(invoice["retention_total"]))
+        ty -= 4.6 * mm
+        c.setFont("Helvetica-Bold", 8)
+        c.drawString(totals_box_x + 2 * mm, ty, "Liquido a pagar")
+        c.drawRightString(page_width - margin - 2 * mm, ty, fmt(invoice["total"] - invoice["retention_total"]))
 
     y = min(ry2, ty) - 6 * mm
 

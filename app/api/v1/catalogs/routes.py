@@ -358,13 +358,13 @@ async def get_withholding_taxes(db: AsyncSession = Depends(get_db), current_user
 
 @router.post("/withholding-taxes", response_model=WithholdingTaxResponse, status_code=status.HTTP_201_CREATED)
 async def post_withholding_tax(payload: WithholdingTaxRequest, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_role("SUPER_ADMIN"))):
-    return await catalog_service.create_withholding_tax(db, payload.name, payload.rate)
+    return await catalog_service.create_withholding_tax(db, payload.name, payload.rate, payload.tax_type)
 
 
 @router.patch("/withholding-taxes/{item_id}", response_model=WithholdingTaxResponse)
 async def patch_withholding_tax(item_id: uuid.UUID, payload: WithholdingTaxRequest, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_role("SUPER_ADMIN"))):
     try:
-        return await catalog_service.update_withholding_tax(db, item_id, payload.name, payload.rate)
+        return await catalog_service.update_withholding_tax(db, item_id, payload.name, payload.rate, payload.tax_type)
     except CatalogItemNotFoundError as e:
         _not_found(e)
 

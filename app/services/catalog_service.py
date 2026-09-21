@@ -541,21 +541,23 @@ async def list_withholding_taxes(db: AsyncSession) -> list[WithholdingTax]:
     return list(result.scalars().all())
 
 
-async def create_withholding_tax(db: AsyncSession, name: str, rate: float) -> WithholdingTax:
-    item = WithholdingTax(name=name, rate=rate)
+async def create_withholding_tax(db: AsyncSession, name: str, rate: float, tax_type: str | None = None) -> WithholdingTax:
+    item = WithholdingTax(name=name, rate=rate, tax_type=tax_type)
     db.add(item)
     await db.commit()
     await db.refresh(item)
     return item
 
 
-async def update_withholding_tax(db: AsyncSession, item_id: uuid.UUID, name: str, rate: float) -> WithholdingTax:
+async def update_withholding_tax(db: AsyncSession, item_id: uuid.UUID, name: str, rate: float, tax_type: str | None = None) -> WithholdingTax:
     result = await db.execute(select(WithholdingTax).where(WithholdingTax.id == item_id))
     item = result.scalar_one_or_none()
     if item is None:
         raise CatalogItemNotFoundError("Retencao nao encontrada")
     item.name = name
     item.rate = rate
+    if tax_type is not None:  # a client that does not send the type keeps the one already set
+        item.tax_type = tax_type
     await db.commit()
     await db.refresh(item)
     return item
