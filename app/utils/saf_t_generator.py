@@ -34,6 +34,13 @@ FINAL_CONSUMER_TAX_ID = "999999999"
 # XSD PaymentMechanism (the codes of the platform payment-method catalog); anything else is reported as "OU".
 PAYMENT_MECHANISMS = {"CC", "CD", "CH", "CI", "CO", "CS", "DE", "MB", "NU", "OU", "PR", "TB"}
 
+# The SAF-T section of a document comes from the document type catalog (document dict key "saft_section"). Only when
+# a caller does not carry it (test data) is this table used - to be removed once every caller carries the rule.
+_SECTION_WHEN_UNSET = {
+    "FACTURA": "INVOICES", "FACTURA_RECIBO": "INVOICES", "NOTA_CREDITO": "INVOICES", "NOTA_DEBITO": "INVOICES",
+    "RECIBO": "PAYMENTS", "PRO_FORMA": "WORKING",
+}
+
 INVOICE_TYPE_MAP = {
     "FACTURA": "FT",
     "FACTURA_RECIBO": "FR",
@@ -148,9 +155,13 @@ def generate_saf_t_xml(
     # Only documents that map to a SAF-T InvoiceType belong in SalesInvoices. A pro-forma is a working document
     # (WorkingDocuments, WorkType PP - as in the AGT-validated Kiami exports); a receipt is a payment (Payments,
     # PaymentType RC), left out if the invoice it settles is unknown. None of them is reported as an "FT".
-    working_docs = [inv for inv in invoices if inv["invoice_type"] == "PRO_FORMA"]
-    receipts = [inv for inv in invoices if inv["invoice_type"] == "RECIBO" and inv.get("reference_invoice_no")]
-    invoices = [inv for inv in invoices if inv["invoice_type"] in INVOICE_TYPE_MAP]
+    def _section(inv):
+        return inv.get("saft_section") or _SECTION_WHEN_UNSET.get(inv["invoice_type"], "NONE")
+
+    working_docs = [inv for inv in invoices if _section(inv) == "WORKING"]
+    receipts = [inv for inv in invoices if _section(inv) == "PAYMENTS" and inv.get("reference_invoice_no")]
+    # SalesInvoices also needs the SAF-T InvoiceType code (FT, FR, NC, ND) of the stored type.
+    invoices = [inv for inv in invoices if _section(inv) == "INVOICES" and inv["invoice_type"] in INVOICE_TYPE_MAP]
 
     root = etree.Element(_q("AuditFile"), nsmap=NSMAP)
 

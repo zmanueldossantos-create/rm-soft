@@ -9,6 +9,8 @@ from datetime import date
 from calendar import monthrange
 
 from sqlalchemy import select, text
+from app.models.document_type import DocumentType
+from app.services.document_rules import DOC_CODE_BY_INVOICE_TYPE
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.company import Company
@@ -98,6 +100,8 @@ async def export_saf_t_for_period(db: AsyncSession, company_id: uuid.UUID, year:
     settings_result = await db.execute(select(PlatformSettings).limit(1))
     platform_settings = settings_result.scalar_one_or_none()
 
+    # SAF-T section of each document (Faturas / Payments / Working), from the document type catalog.
+    section_by_code = {code: section for code, section in (await db.execute(select(DocumentType.code, DocumentType.saft_section))).all()}
     invoices_data = []
     for inv in invoices:
         receipt_extra = await _receipt_extras(db, inv) if inv.invoice_type.value == "RECIBO" else {}
@@ -121,6 +125,7 @@ async def export_saf_t_for_period(db: AsyncSession, company_id: uuid.UUID, year:
             "credit_note_cause": inv.credit_note_cause,
             "converted": inv.converted_to_invoice_id is not None,
             **receipt_extra,
+            "saft_section": section_by_code.get(DOC_CODE_BY_INVOICE_TYPE.get(inv.invoice_type.value, ""), "NONE"),
             "lines": [
                 {
                     "product_code": product_code_by_id.get(l.product_id) or service_code_by_id.get(l.service_id) or "N/A",
