@@ -250,7 +250,6 @@ export default function ContasAbertas() {
     setCloseSaving(true);
     try {
       await closeAccount(detailAccount.id, {
-        invoice_type: 'FACTURA_RECIBO',
         payments: closePayments.filter((p) => parseFloat(p.amount) > 0).map((p) => ({ payment_method_id: p.payment_method_id, amount: parseFloat(p.amount) })),
       });
       setCloseModalOpen(false);

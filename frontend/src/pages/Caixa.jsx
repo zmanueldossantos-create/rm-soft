@@ -633,7 +633,7 @@ export default function Caixa() {
   const [expandedDiscountKey, setExpandedDiscountKey] = useState(null);
   const [saleConfirmModalOpen, setSaleConfirmModalOpen] = useState(false);
   const [selectedInvoiceType, setSelectedInvoiceType] = useState('FACTURA_RECIBO');
-  const { typeOptions: posTypeOptions, liquidationOptions: posLiquidationOptions } = usePosDocumentTypes();
+  const { typeOptions: posTypeOptions, liquidationOptions: posLiquidationOptions, defaultPaidType } = usePosDocumentTypes();
   const ruleOf = useDocumentRules();
   // behaviour of the selected document type, from the catalog (paid on issue: payments at the till)
   const paidOnIssue = ruleOf(selectedInvoiceType, 'paid_on_issue');
@@ -767,7 +767,7 @@ export default function Caixa() {
     setProFormaModalOpen(false);
     setPaymentMode('liquidation');
     setLiquidationTarget(proForma);
-    setLiquidationTargetType('FACTURA_RECIBO');
+    setLiquidationTargetType(posLiquidationOptions.some((o) => o.value === defaultPaidType) ? defaultPaidType : posLiquidationOptions[0].value);
     setPayments([{ paymentMethod: 'NUMERARIO', amount: String(Number(proForma.total).toFixed(2)) }]);
     setCheckoutError('');
     setLastInvoice(null);
