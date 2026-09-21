@@ -173,21 +173,6 @@ const CATALOGS = [
   { key: 'modules', label: 'Módulos', icon: LayoutGrid, api: modulesApi },
 ];
 
-// Rules of a document type: [key, label, fiscal (locked on an official type)]
-const RULE_CHECKS = [
-  ['requires_origin', 'Exige documento de origem', true],
-  ['has_lines', 'Tem linhas de artigos', true],
-  ['paid_on_issue', 'Pago na emiss\u00e3o', true],
-  ['sent_to_agt', 'Enviado \u00e0 AGT', true],
-  ['deducts_stock', 'Deduz stock', true],
-  ['accepts_credit_note', 'Aceita nota de cr\u00e9dito', false],
-  ['accepts_debit_note', 'Aceita nota de d\u00e9bito', false],
-  ['accepts_receipt', 'Aceita recibo', false],
-  ['convertible', 'Convert\u00edvel em FT/FR', false],
-  ['issuable_in_invoices', 'Emitido em Nova Fatura', false],
-  ['issuable_at_pos', 'Emitido na Caixa', false],
-];
-
 export default function Configuracoes() {
   const [counts, setCounts] = useState({});
   const [loading, setLoading] = useState(true);
@@ -453,47 +438,45 @@ export default function Configuracoes() {
       );
     }
     if (key === 'document_types') {
+      const cb = (field, label) => (
+        <label key={field} className="flex items-center gap-2 cursor-pointer select-none">
+          <input type="checkbox" checked={!!form[field]} onChange={(e) => updateField(field, e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
+          <span className="text-sm text-text-primary">{label}</span>
+        </label>
+      );
       return (
         <>
-          <Field label="Código *"><input value={form.code} onChange={(e) => updateField('code', e.target.value)} required className={inputClass} /></Field>
-          <Field label="Nome *"><input value={form.name} onChange={(e) => updateField('name', e.target.value)} required className={inputClass} /></Field>
-          <Field label="Área">
-            <Select value={form.area} onChange={(v) => updateField('area', v)} options={[{ value: 'FACTURACAO', label: 'Facturação' }, { value: 'TESOURARIA', label: 'Tesouraria' }, { value: 'COMPRAS', label: 'Compras' }]} placeholder="Selecionar" />
-          </Field>
-          <label className="flex items-center gap-2.5 cursor-pointer select-none">
-            <input type="checkbox" checked={form.electronic_eligible} onChange={(e) => updateField('electronic_eligible', e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
-            <span className="text-sm text-text-primary">Elegível para facturação eletrónica</span>
-          </label>
-          <label className="flex items-center gap-2.5 cursor-pointer select-none">
-            <input type="checkbox" checked={form.is_fiscal} onChange={(e) => updateField('is_fiscal', e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
-            <span className="text-sm text-text-primary">Documento fiscal (submetido a AGT)</span>
-          </label>
-          <div className="border-t border-border pt-3 flex flex-col gap-2">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">Regras do documento</p>
-            {form.rules_locked && (
-              <p className="text-[12px] text-text-muted">{'Tipo oficial: as regras marcadas (fixo) est\u00e3o bloqueadas'}</p>
-            )}
+          <div className="grid grid-cols-2 gap-3">
+            <Field label={'C\u00f3digo *'}><input value={form.code} onChange={(e) => updateField('code', e.target.value)} required className={inputClass} /></Field>
+            <Field label="Nome *"><input value={form.name} onChange={(e) => updateField('name', e.target.value)} required className={inputClass} /></Field>
+            <Field label={'\u00c1rea'}>
+              <Select value={form.area} onChange={(v) => updateField('area', v)} options={[{ value: 'FACTURACAO', label: 'Factura\u00e7\u00e3o' }, { value: 'TESOURARIA', label: 'Tesouraria' }, { value: 'COMPRAS', label: 'Compras' }]} placeholder="Selecionar" />
+            </Field>
             <Field label={'Sec\u00e7\u00e3o do SAF-T'}>
-              <select value={form.saft_section} disabled={!!form.rules_locked} onChange={(e) => updateField('saft_section', e.target.value)} className={inputClass}>
+              <select value={form.saft_section} onChange={(e) => updateField('saft_section', e.target.value)} className={inputClass}>
                 <option value="INVOICES">Faturas (SalesInvoices)</option>
                 <option value="PAYMENTS">Pagamentos (Payments)</option>
-                <option value="WORKING">Documentos de trabalho (WorkingDocuments)</option>
+                <option value="WORKING">Documentos de trabalho (Working)</option>
                 <option value="NONE">{'N\u00e3o exportado'}</option>
               </select>
             </Field>
             <Field label={'Sinal no volume de neg\u00f3cios'}>
-              <select value={String(form.revenue_sign)} disabled={!!form.rules_locked} onChange={(e) => updateField('revenue_sign', e.target.value)} className={inputClass}>
+              <select value={String(form.revenue_sign)} onChange={(e) => updateField('revenue_sign', e.target.value)} className={inputClass}>
                 <option value="1">+ Venda (soma)</option>
                 <option value="-1">{'- Nota de cr\u00e9dito (subtrai)'}</option>
                 <option value="0">{'0 N\u00e3o conta'}</option>
               </select>
             </Field>
-            {RULE_CHECKS.map(([key, label, fiscal]) => (
-              <label key={key} className="flex items-center gap-2.5 select-none">
-                <input type="checkbox" checked={!!form[key]} disabled={fiscal && !!form.rules_locked} onChange={(e) => updateField(key, e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer disabled:opacity-40" />
-                <span className="text-sm text-text-primary">{label}{fiscal && form.rules_locked ? ' (fixo)' : ''}</span>
-              </label>
-            ))}
+          </div>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-2.5">
+            {cb('electronic_eligible', 'Fatura\u00e7\u00e3o eletr\u00f3nica')}
+            {cb('is_fiscal', 'Documento fiscal')}
+            {cb('paid_on_issue', 'Pago na emiss\u00e3o')}
+            {cb('sent_to_agt', 'Enviado \u00e0 AGT')}
+            {cb('deducts_stock', 'Deduz stock')}
+            {cb('accepts_receipt', 'Aceita recibo')}
+            {cb('accepts_credit_note', 'Aceita nota de cr\u00e9dito')}
+            {cb('accepts_debit_note', 'Aceita nota de d\u00e9bito')}
           </div>
         </>
       );
