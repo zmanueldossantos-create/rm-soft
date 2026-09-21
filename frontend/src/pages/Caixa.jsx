@@ -654,7 +654,8 @@ export default function Caixa() {
   const grossTotal = cartCalculation.subtotal + cartCalculation.vat;
   const globalDiscountAmount = grossTotal * (globalDiscountPercent / 100);
   const cartTotal = round2(grossTotal - globalDiscountAmount - cartCalculation.retention);
-  const paymentDueTotal = paymentMode === 'liquidation' && liquidationTarget ? Number(liquidationTarget.total) : cartTotal;
+  // what the customer pays: the total minus the withholding he keeps (the same on the pro-forma and on the invoice it becomes)
+  const paymentDueTotal = paymentMode === 'liquidation' && liquidationTarget ? round2(Number(liquidationTarget.total) - Number(liquidationTarget.retention_total || 0)) : cartTotal;
 
   async function handleConfirmFt() {
     setCheckoutError('');
@@ -742,7 +743,7 @@ export default function Caixa() {
     setPaymentMode('liquidation');
     setLiquidationTarget(proForma);
     setLiquidationTargetType(posLiquidationOptions.some((o) => o.value === defaultPaidType) ? defaultPaidType : posLiquidationOptions[0].value);
-    setPayments([{ paymentMethod: 'NUMERARIO', amount: String(Number(proForma.total).toFixed(2)) }]);
+    setPayments([{ paymentMethod: 'NUMERARIO', amount: String((Number(proForma.total) - Number(proForma.retention_total || 0)).toFixed(2)) }]);
     setCheckoutError('');
     setLastInvoice(null);
     setPaymentModalOpen(true);
