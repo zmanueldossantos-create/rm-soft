@@ -348,10 +348,14 @@ async def create_invoice(
     # (due later, no cash yet) and PRO_FORMA (not a real sale) are left alone: no
     # payments is the correct, honest state for those.
     if not payments and invoice_type == "FACTURA_RECIBO" and grand_total > 0:
-        numerario_result = await db.execute(select(PaymentMethodCatalog).where(PaymentMethodCatalog.code == "NU"))
-        numerario = numerario_result.scalar_one_or_none()
-        if numerario is not None:
-            payments = [{"payment_method_id": numerario.id, "amount": grand_total}]
+        # The method chosen on the document; Numerario (NU) when none was chosen.
+        default_method_id = payment_method_id
+        if default_method_id is None:
+            numerario_result = await db.execute(select(PaymentMethodCatalog).where(PaymentMethodCatalog.code == "NU"))
+            numerario = numerario_result.scalar_one_or_none()
+            default_method_id = numerario.id if numerario is not None else None
+        if default_method_id is not None:
+            payments = [{"payment_method_id": default_method_id, "amount": grand_total}]
 
     # Only reconcile when payments were actually supplied - see the auto-default above
     # for why an empty list is sometimes filled in before reaching this point.
