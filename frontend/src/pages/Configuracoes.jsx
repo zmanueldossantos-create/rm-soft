@@ -463,13 +463,12 @@ export default function Configuracoes() {
               {label}
               {!active && <span className="ml-1.5 text-[10px] uppercase tracking-wide text-text-muted border border-border rounded px-1 py-px">{'ainda n\u00e3o ativo'}</span>}
             </span>
-            <span className="text-[12px] text-text-muted leading-snug">{hint}</span>
           </span>
         </label>
       );
       return (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Field label={'C\u00f3digo *'}><input value={form.code} onChange={(e) => updateField('code', e.target.value)} required className={inputClass} /></Field>
             <Field label="Nome *"><input value={form.name} onChange={(e) => updateField('name', e.target.value)} required className={inputClass} /></Field>
             <Field label={'\u00c1rea'}>
@@ -482,7 +481,6 @@ export default function Configuracoes() {
                 <option value="WORKING">Documentos de trabalho (Working)</option>
                 <option value="NONE">{'N\u00e3o exportado'}</option>
               </select>
-              <p className="text-[12px] text-text-muted mt-1">{'Em que parte do ficheiro fiscal (SAF-T) o documento \u00e9 exportado'}</p>
             </Field>
             <Field label={'Sinal no volume de neg\u00f3cios'}>
               <select value={String(form.revenue_sign)} onChange={(e) => updateField('revenue_sign', e.target.value)} className={inputClass}>
@@ -490,10 +488,9 @@ export default function Configuracoes() {
                 <option value="-1">{'- Nota de cr\u00e9dito (subtrai)'}</option>
                 <option value="0">{'0 N\u00e3o conta'}</option>
               </select>
-              <p className="text-[12px] text-text-muted mt-1">{'No painel: soma (+), subtrai (-) ou n\u00e3o conta (0)'}</p>
             </Field>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-3">
             {RULE_INFO.map(rule)}
           </div>
         </>
@@ -649,7 +646,7 @@ export default function Configuracoes() {
         </div>
       </Modal>
 
-      <Modal open={formOpen} onClose={() => setFormOpen(false)} title={(editingId ? 'Editar' : 'Novo') + ' - ' + (activeCatalog?.label || '')}>
+      <Modal maxWidthClass={activeCatalog.key === 'document_types' ? 'max-w-4xl' : undefined} open={formOpen} onClose={() => setFormOpen(false)} title={(editingId ? 'Editar' : 'Novo') + ' - ' + (activeCatalog?.label || '')}>
         {activeCatalog && (
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             {renderFormFields()}
