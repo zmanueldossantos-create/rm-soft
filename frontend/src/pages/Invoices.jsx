@@ -1208,7 +1208,7 @@ export default function Invoices() {
                   type="button"
                   onClick={openNdModal}
                   disabled={!can('invoices:debit_note')}
-                  className="flex items-center gap-1.5 border border-border hover:border-accent text-accent text-sm px-3.5 py-2 rounded-md transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="flex items-center gap-1.5 border border-border hover:border-accent text-text-primary text-sm px-3.5 py-2 rounded-md transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <FilePlus size={14} /> Emitir Nota de Debito
                 </button>
