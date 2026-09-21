@@ -1077,7 +1077,7 @@ export default function Caixa() {
                   <ShoppingCart size={16} className="text-accent" />
                   <p className="font-display font-semibold text-text-primary text-sm">Carrinho</p>
                 </div>
-                <div className="w-44">
+                <div className="w-64">
                   <Select
                     compact
                     value={selectedInvoiceType}

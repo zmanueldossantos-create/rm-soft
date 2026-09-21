@@ -3,7 +3,7 @@ import { documentRulesApi } from '../api/catalogs';
 
 // Document types the Caixa offers, from the document type catalog ("issuable at POS" rule): [stored type, code, label]
 const TYPES = [['FACTURA_RECIBO', 'FR', 'Fatura/Recibo'], ['FACTURA', 'FT', 'Fatura'], ['PRO_FORMA', 'FP', 'Pro-forma']];
-const FALLBACK = TYPES.map(([value, , label]) => ({ value, label }));
+const FALLBACK = TYPES.map(([value, code, label]) => ({ value, label: code + ' - ' + label }));
 const FALLBACK_LIQUIDATION = FALLBACK.filter((o) => o.value !== 'PRO_FORMA');
 
 // The type paid on issue offered by the catalog at the till (first by code); the Fatura/Recibo when there is none.
@@ -25,7 +25,7 @@ export default function usePosDocumentTypes() {
     if (!docTypes) return { typeOptions: FALLBACK, liquidationOptions: FALLBACK_LIQUIDATION, defaultPaidType: 'FACTURA_RECIBO' };
     const offered = (test) => TYPES
       .filter(([, code]) => { const d = docTypes.find((x) => x.code === code); return d && d.is_active && test(d); })
-      .map(([value, , label]) => ({ value, label }));
+      .map(([value, code, label]) => ({ value, label: code + ' - ' + (docTypes.find((x) => x.code === code)?.name || label) }));
     const typeOptions = offered((d) => d.issuable_at_pos);
     const liquidationOptions = offered((d) => d.issuable_at_pos && d.saft_section === 'INVOICES');
     return {
