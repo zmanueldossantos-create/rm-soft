@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Building2, Loader2, Save, Lock, Image, Upload, Store, Plus, Pencil, Landmark, X, Check, Trash2, FileStack, Sparkles, ChevronDown, CreditCard } from 'lucide-react';
+import { Building2, Loader2, Save, Lock, Image, Upload, Store, Plus, Pencil, Landmark, X, Check, Trash2, FileStack, Sparkles, ChevronDown, CreditCard, Link2, Unlink } from 'lucide-react';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
 import { getMyCompany, updateMyCompanyContact, uploadMyCompanyLogo, removeMyCompanyLogo, getMyCompanyBankAccounts, addMyCompanyBankAccount, updateMyCompanyBankAccount, toggleMyCompanyBankAccountStatus } from '../api/company';
@@ -9,6 +9,9 @@ import { listDocumentSeries, createDocumentSeries, updateDocumentSeries, toggleD
 import { listActivities, createActivity, updateActivity, toggleActivityStatus, listPointsOfSale, createPointOfSale, updatePointOfSale, togglePosStatus } from '../api/activity';
 import apiClient from '../api/client';
 import { extractErrorMessage } from '../utils/errors';
+import { useCan } from '../utils/permissions';
+import { listUsers } from '../api/users';
+import { listCashPointAssociations, assignUserToCashPoint, unassignUserFromCashPoint } from '../api/tesouraria';
 
 const API_ORIGIN = 'http://127.0.0.1:8001';
 
@@ -37,6 +40,7 @@ const emptyEstablishmentForm = { code: '', name: '', description: '' };
 const emptyBankForm = { bankId: '', accountNumber: '', iban: '', currencyId: '' };
 
 export default function CompanySettings() {
+  const can = useCan();
   const [activeTab, setActiveTab] = useState('dados');
 
   const [company, setCompany] = useState(null);
@@ -94,6 +98,12 @@ export default function CompanySettings() {
   const [posForm, setPosForm] = useState({ activityId: '', name: '', billetageEnabled: false });
   const [posSaving, setPosSaving] = useState(false);
   const [posFormError, setPosFormError] = useState('');
+  const [assocByPos, setAssocByPos] = useState({});
+  const [assocUsers, setAssocUsers] = useState([]);
+  const [assocPos, setAssocPos] = useState(null);
+  const [assocSelection, setAssocSelection] = useState('');
+  const [assocSaving, setAssocSaving] = useState(false);
+  const [assocError, setAssocError] = useState('');
   const [posTogglingId, setPosTogglingId] = useState(null);
 
   const [establishments, setEstablishments] = useState([]);
@@ -218,6 +228,62 @@ export default function CompanySettings() {
       setError(extractErrorMessage(err, 'Erro ao atualizar estado da atividade'));
     } finally {
       setActivityTogglingId(null);
+    }
+  }
+
+  // Which user operates each cash point: managed here, where the cash points are created.
+  const canAssociate = can('tesouraria:associations_manage');
+  const assocUserName = (posId) => assocUsers.find((u) => u.id === assocByPos[posId])?.full_name;
+
+  async function loadAssociations() {
+    try {
+      const [users, associations] = await Promise.all([listUsers(), listCashPointAssociations()]);
+      setAssocUsers(users);
+      const map = {};
+      associations.forEach((a) => { map[a.pos_id] = a.user_id; });
+      setAssocByPos(map);
+    } catch (err) {
+      setError(extractErrorMessage(err, 'Erro ao carregar associacoes das caixas'));
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab === 'atividades' && canAssociate) loadAssociations();
+  }, [activeTab]);
+
+  function openAssociation(pos) {
+    setAssocPos(pos);
+    setAssocSelection('');
+    setAssocError('');
+  }
+
+  async function handleAssociate() {
+    if (!assocSelection || !assocPos) return;
+    setAssocSaving(true);
+    setAssocError('');
+    try {
+      await assignUserToCashPoint(assocSelection, assocPos.id);
+      setAssocSelection('');
+      await loadAssociations();
+    } catch (err) {
+      setAssocError(extractErrorMessage(err, 'Erro ao associar caixa'));
+    } finally {
+      setAssocSaving(false);
+    }
+  }
+
+  async function handleUnassign() {
+    const holderId = assocPos && assocByPos[assocPos.id];
+    if (!holderId) return;
+    setAssocSaving(true);
+    setAssocError('');
+    try {
+      await unassignUserFromCashPoint(holderId);
+      await loadAssociations();
+    } catch (err) {
+      setAssocError(extractErrorMessage(err, 'Erro ao desassociar caixa'));
+    } finally {
+      setAssocSaving(false);
     }
   }
 
@@ -830,8 +896,14 @@ export default function CompanySettings() {
                                   <div className="flex items-center gap-2">
                                     <p className="text-[13px] text-text-primary">{p.name}</p>
                                     {!p.is_active && <span className="text-[10px] font-semibold uppercase tracking-wide text-danger bg-danger/10 px-1.5 py-0.5 rounded">Inativo</span>}
+                                    {canAssociate && <span className="text-[11px] text-text-muted">{assocUserName(p.id) ? '- ' + assocUserName(p.id) : '- sem utilizador'}</span>}
                                   </div>
                                   <div className="flex items-center gap-2">
+                                    {canAssociate && (
+                                      <button onClick={() => openAssociation(p)} aria-label="Associar utilizador" title="Associar utilizador" className="inline-flex items-center justify-center w-7 h-7 rounded-md border border-border text-text-muted hover:text-text-primary hover:border-accent transition-colors cursor-pointer">
+                                        <Link2 size={12} />
+                                      </button>
+                                    )}
                                     <button onClick={() => openEditPos(p)} aria-label="Editar ponto de venda" className="inline-flex items-center justify-center w-7 h-7 rounded-md border border-border text-text-muted hover:text-text-primary hover:border-accent transition-colors cursor-pointer">
                                       <Pencil size={12} />
                                     </button>
@@ -1178,6 +1250,30 @@ export default function CompanySettings() {
             {activitySaving ? 'A guardar...' : editingActivityId ? 'Guardar alteracoes' : 'Configurar atividade'}
           </button>
         </form>
+      </Modal>
+
+      <Modal open={!!assocPos} onClose={() => setAssocPos(null)} title={'Associacao da caixa - ' + (assocPos?.name || '')}>
+        <div className="flex flex-col gap-3">
+          <p className="text-[13px] text-text-muted">Define qual utilizador esta autorizado a operar esta caixa.</p>
+          {assocPos && assocUserName(assocPos.id) ? (
+            <div className="flex items-center justify-between bg-bg-inset border border-border rounded-md px-3 py-2.5">
+              <span className="text-[13px] text-text-primary">{assocUserName(assocPos.id)}</span>
+              <button type="button" onClick={handleUnassign} disabled={assocSaving} className="flex items-center gap-1.5 text-danger text-[12px] cursor-pointer disabled:opacity-50">
+                <Unlink size={12} />Desassociar
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <div className="flex-1">
+                <Select value={assocSelection} onChange={setAssocSelection} options={assocUsers.map((u) => ({ value: u.id, label: u.full_name }))} placeholder="Selecionar utilizador" />
+              </div>
+              <button type="button" onClick={handleAssociate} disabled={assocSaving || !assocSelection} className="flex items-center gap-1.5 bg-accent hover:bg-accent-hover disabled:opacity-50 text-white text-[12px] font-medium px-3 py-2 rounded-md cursor-pointer">
+                <Link2 size={12} />Associar
+              </button>
+            </div>
+          )}
+          {assocError && <p className="text-danger text-[12px]">{assocError}</p>}
+        </div>
       </Modal>
 
       <Modal open={posModalOpen} onClose={() => setPosModalOpen(false)} title={editingPosId ? 'Editar ponto de venda' : 'Novo ponto de venda'}>

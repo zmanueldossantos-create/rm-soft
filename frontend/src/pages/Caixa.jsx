@@ -10,7 +10,7 @@ import useDocumentRules, { DOC_CODE_BY_TYPE } from '../utils/documentRules';
 import { getMyCompanyBankAccounts } from '../api/company';
 import { createProFormaFromPos } from '../api/pos';
 import { listPaymentMethodPreferences } from '../api/tesouraria';
-import { Wallet, Plus, Minus, Trash2, Loader2, Search, X, ShoppingCart, LogOut, CheckCircle2, FileSearch, ArrowLeftRight, Link2, Unlink, Coins, Receipt, Printer, FileText } from 'lucide-react';
+import { Wallet, Plus, Minus, Trash2, Loader2, Search, X, ShoppingCart, LogOut, CheckCircle2, FileSearch, ArrowLeftRight, Coins, Receipt, Printer, FileText } from 'lucide-react';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
 import { listActivities, listPointsOfSale } from '../api/activity';
@@ -22,10 +22,9 @@ import { listPendingProFormas, listRecentIssuedInvoices, fetchInvoicePdfBlob } f
 import { listPendingReceptions, receiveCashMovement, listPendingEmissions, cancelCashMovement, getDailyReport } from '../api/tesouraria';
 import DocumentActionModals from '../components/DocumentActionModals';
 import {
-  getMyCashPointAssociation, listCashPointAssociations, assignUserToCashPoint, unassignUserFromCashPoint,
+  getMyCashPointAssociation,
   createCashMovement, listCashMovementReasons, listCashMovements,
 } from '../api/tesouraria';
-import { listUsers } from '../api/users';
 import { useAuthStore } from '../store/authStore';
 import { extractErrorMessage } from '../utils/errors';
 
@@ -100,12 +99,6 @@ export default function Caixa() {
   const [dailyReportDateTo, setDailyReportDateTo] = useState('');
   const [closingViaBilletage, setClosingViaBilletage] = useState(false);
 
-  const [posHolder, setPosHolder] = useState(null);
-  const [assignableUsers, setAssignableUsers] = useState([]);
-  const [assignSelection, setAssignSelection] = useState('');
-  const [assignSaving, setAssignSaving] = useState(false);
-  const [assignError, setAssignError] = useState('');
-  const [associationModalOpen, setAssociationModalOpen] = useState(false);
   const [session, setSession] = useState(null);
   const [sessionLoading, setSessionLoading] = useState(true);
   const [error, setError] = useState('');
@@ -189,7 +182,6 @@ export default function Caixa() {
       if (initialPosId) {
         const openSession = await getOpenCashSession(initialPosId);
         setSession(openSession);
-        if (isGestor) await loadPosHolder(initialPosId);
         if (openSession) await refreshBalance(initialPosId);
         getPosStockLevels(initialPosId).then(setStockLevels).catch(() => setStockLevels({}));
       }
@@ -279,48 +271,6 @@ export default function Caixa() {
       setNewCustomerError(extractErrorMessage(err, 'Erro ao criar cliente'));
     } finally {
       setNewCustomerSaving(false);
-    }
-  }
-
-  async function loadPosHolder(posId) {
-    if (!isGestor || !posId) { setPosHolder(null); return; }
-    try {
-      const [usersData, associationsData] = await Promise.all([listUsers(), listCashPointAssociations()]);
-      setAssignableUsers(usersData);
-      const holderAccess = associationsData.find((a) => a.pos_id === posId);
-      const holderUser = holderAccess ? usersData.find((u) => u.id === holderAccess.user_id) : null;
-      setPosHolder(holderUser || null);
-    } catch (err) {
-      setAssignError(extractErrorMessage(err, 'Erro ao carregar associacao da caixa'));
-    }
-  }
-
-  async function handleAssignPos() {
-    if (!assignSelection || !selectedPosId) return;
-    setAssignSaving(true);
-    setAssignError('');
-    try {
-      await assignUserToCashPoint(assignSelection, selectedPosId);
-      setAssignSelection('');
-      await loadPosHolder(selectedPosId);
-    } catch (err) {
-      setAssignError(extractErrorMessage(err, 'Erro ao associar caixa'));
-    } finally {
-      setAssignSaving(false);
-    }
-  }
-
-  async function handleUnassignPos() {
-    if (!posHolder) return;
-    setAssignSaving(true);
-    setAssignError('');
-    try {
-      await unassignUserFromCashPoint(posHolder.id);
-      await loadPosHolder(selectedPosId);
-    } catch (err) {
-      setAssignError(extractErrorMessage(err, 'Erro ao desassociar caixa'));
-    } finally {
-      setAssignSaving(false);
     }
   }
 
@@ -471,7 +421,6 @@ export default function Caixa() {
     try {
       const openSession = await getOpenCashSession(posId);
       setSession(openSession);
-      await loadPosHolder(posId);
       if (openSession) await refreshBalance(posId);
       else setCurrentBalance(null);
       getPosStockLevels(posId).then(setStockLevels).catch(() => setStockLevels({}));
@@ -857,7 +806,7 @@ export default function Caixa() {
         <div className="bg-bg-elevated border border-border rounded-lg p-10 text-center">
           <Wallet size={28} className="text-text-muted mx-auto mb-3" />
           <p className="text-text-primary font-medium mb-1">Nenhuma caixa associada</p>
-          <p className="text-text-muted text-sm">Contacte o gestor para associar uma caixa a este utilizador antes de operar</p>
+          <p className="text-text-muted text-sm">Peca ao gestor para associar uma caixa a este utilizador (Atividades, definicoes da empresa) antes de operar</p>
         </div>
       </main>
     );
@@ -877,15 +826,6 @@ export default function Caixa() {
               <span className="text-text-muted text-[12px]">Saldo actual</span>
               <span className="font-mono font-semibold text-text-primary text-[15px]">{formatKz(currentBalance)} Kz</span>
             </div>
-          )}
-          {isGestor && (
-            <button
-              onClick={() => setAssociationModalOpen(true)}
-              className="flex items-center gap-2 border border-border hover:border-accent hover:text-accent text-text-primary font-medium text-sm px-4 py-2 rounded-md transition-colors cursor-pointer"
-            >
-              <Link2 size={15} />
-              Associação
-            </button>
           )}
           {session && (
             <button
@@ -1675,44 +1615,6 @@ export default function Caixa() {
               </button>
             </>
           )}
-        </div>
-      </Modal>
-
-      <Modal open={associationModalOpen} onClose={() => setAssociationModalOpen(false)} title="Associacao da caixa">
-        <div className="flex flex-col gap-3">
-          <p className="text-[13px] text-text-muted">Define qual utilizador esta autorizado a operar esta caixa.</p>
-          <div>
-            <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Caixa</label>
-            <Select
-              value={selectedPosId}
-              onChange={handlePosChange}
-              options={allActivePos.map((p) => ({ value: p.id, label: p.name + ' - ' + p.activityName }))}
-              placeholder="Selecionar caixa"
-            />
-          </div>
-          {posHolder ? (
-            <div className="flex items-center justify-between bg-bg-inset border border-border rounded-md px-3 py-2.5">
-              <span className="text-[13px] text-text-primary">{posHolder.full_name}</span>
-              <button type="button" onClick={handleUnassignPos} disabled={assignSaving} className="flex items-center gap-1.5 text-danger text-[12px] cursor-pointer disabled:opacity-50">
-                <Unlink size={12} />Desassociar
-              </button>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2">
-              <div className="flex-1">
-                <Select
-                  value={assignSelection}
-                  onChange={setAssignSelection}
-                  options={assignableUsers.map((u) => ({ value: u.id, label: u.full_name }))}
-                  placeholder="Selecionar utilizador"
-                />
-              </div>
-              <button type="button" onClick={handleAssignPos} disabled={assignSaving || !assignSelection} className="flex items-center gap-1.5 bg-accent hover:bg-accent-hover disabled:opacity-50 text-white text-[12px] font-medium px-3 py-2 rounded-md cursor-pointer">
-                <Link2 size={12} />Associar
-              </button>
-            </div>
-          )}
-          {assignError && <p className="text-danger text-[12px]">{assignError}</p>}
         </div>
       </Modal>
 
