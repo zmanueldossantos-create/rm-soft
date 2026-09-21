@@ -11,7 +11,7 @@ import { listProducts } from '../api/products';
 import { listActivities } from '../api/activity';
 import { listCustomers } from '../api/customers';
 import { listServices } from '../api/services';
-import { paymentTermsApi, paymentMethodsApi } from '../api/catalogs';
+import { paymentTermsApi, paymentMethodsApi, documentTypesApi } from '../api/catalogs';
 import { extractErrorMessage } from '../utils/errors';
 
 const STATUS_STYLE = {
@@ -114,6 +114,23 @@ export default function Invoices() {
   const [activities, setActivities] = useState([]);
   const [services, setServices] = useState([]);
   const [paymentMethods, setPaymentMethods] = useState([]);
+  const [documentTypes, setDocumentTypes] = useState(null);
+  useEffect(() => {
+    // A user who cannot read the catalog keeps the default behaviour; the server enforces the rules anyway.
+    documentTypesApi.list().then(setDocumentTypes).catch(() => {});
+  }, []);
+  const DOC_CODES = { FACTURA: 'FT', FACTURA_RECIBO: 'FR', PRO_FORMA: 'FP' };
+  // "convertible" rule of the catalog (a pro-forma by default) and the invoices a conversion can produce
+  const isConvertible = (type) => {
+    const d = documentTypes && documentTypes.find((x) => x.code === DOC_CODES[type]);
+    return d ? d.convertible : type === 'PRO_FORMA';
+  };
+  const convertibleTypes = (() => {
+    const all = [{ value: 'FACTURA', label: 'FT - Fatura' }, { value: 'FACTURA_RECIBO', label: 'FR - Fatura/Recibo' }];
+    if (!documentTypes) return all;
+    const allowed = all.filter((o) => { const d = documentTypes.find((x) => x.code === DOC_CODES[o.value]); return d && d.is_active && d.saft_section === 'INVOICES' && !d.requires_origin; });
+    return allowed.length ? allowed : all;
+  })();
   const [openActionMenuId, setOpenActionMenuId] = useState(null);
   const [company, setCompany] = useState(null);
   const tableScrollRef = useRef(null);
@@ -848,7 +865,7 @@ export default function Invoices() {
                               { perm: 'invoices:debit_note', label: 'Emitir Nota de Debito', icon: <FilePlus size={14} />, onClick: () => openNdModalFromRow(inv.id) },
                               ...(inv.invoice_type === 'FACTURA' && (Number(inv.total) - Number(inv.retention_total || 0) - Number(inv.amount_received || 0)) > 0.005 ? [{ perm: 'invoices:receipt', label: 'Emitir Recibo', icon: <Receipt size={14} />, onClick: () => openRcModalFromRow(inv.id) }] : []),
                             ] : []),
-                            ...(inv.invoice_type === 'PRO_FORMA' && !inv.converted_to_invoice_id ? [
+                            ...(isConvertible(inv.invoice_type) && !inv.converted_to_invoice_id ? [
                               { perm: 'invoices:proforma_convert', label: 'Converter em Fatura', icon: <FileText size={14} />, onClick: () => openConvertModalFromRow(inv.id) },
                             ] : []),
                           ].filter((item) => !item.perm || can(item.perm))} />
@@ -1223,7 +1240,7 @@ export default function Invoices() {
                   <Receipt size={14} /> Emitir Recibo
                 </button>
               )}
-              {detailInvoice.invoice_type === 'PRO_FORMA' && !detailInvoice.converted_to_invoice_id && (
+              {isConvertible(detailInvoice.invoice_type) && !detailInvoice.converted_to_invoice_id && (
                 <button
                   type="button"
                   onClick={openConvertModal}
@@ -1351,7 +1368,7 @@ export default function Invoices() {
             </p>
             <div>
               <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Converter para</label>
-              <Select value={convertTargetType} onChange={setConvertTargetType} options={[{ value: 'FACTURA', label: 'FT - Fatura' }, { value: 'FACTURA_RECIBO', label: 'FR - Fatura/Recibo' }]} />
+              <Select value={convertTargetType} onChange={setConvertTargetType} options={convertibleTypes} />
             </div>
             {convertFormError && (
               <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{convertFormError}</div>
