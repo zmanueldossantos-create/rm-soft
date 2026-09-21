@@ -191,6 +191,25 @@ class DocumentTypeRequest(BaseModel):
     area: str | None = None
     electronic_eligible: bool = False
     is_fiscal: bool = True
+    # Rules of the document (None = not sent, unchanged). The fiscal ones of an official type are locked server-side.
+    saft_section: Literal["INVOICES", "PAYMENTS", "WORKING", "NONE"] | None = None
+    revenue_sign: Literal[-1, 0, 1] | None = None
+    requires_origin: bool | None = None
+    has_lines: bool | None = None
+    paid_on_issue: bool | None = None
+    sent_to_agt: bool | None = None
+    deducts_stock: bool | None = None
+    accepts_credit_note: bool | None = None
+    accepts_debit_note: bool | None = None
+    accepts_receipt: bool | None = None
+    convertible: bool | None = None
+    issuable_in_invoices: bool | None = None
+    issuable_at_pos: bool | None = None
+
+    def rules_dict(self) -> dict:
+        names = ("saft_section", "revenue_sign", "requires_origin", "has_lines", "paid_on_issue", "sent_to_agt", "deducts_stock",
+                 "accepts_credit_note", "accepts_debit_note", "accepts_receipt", "convertible", "issuable_in_invoices", "issuable_at_pos")
+        return {name: getattr(self, name) for name in names if getattr(self, name) is not None}
 
 
 class DocumentTypeResponse(BaseModel):

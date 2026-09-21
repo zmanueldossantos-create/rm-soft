@@ -408,13 +408,36 @@ async def toggle_vat_code(db: AsyncSession, vat_code_id: uuid.UUID) -> VatCode:
 
 # ---------- DocumentType ----------
 
+# Fiscal rules: locked on an official type (rules_locked). Usage rules: always editable.
+FIXED_RULES = ("saft_section", "revenue_sign", "requires_origin", "has_lines", "paid_on_issue", "sent_to_agt", "deducts_stock")
+USAGE_RULES = ("accepts_credit_note", "accepts_debit_note", "accepts_receipt", "convertible", "issuable_in_invoices", "issuable_at_pos")
+
+
+class DocumentTypeRuleLockedError(Exception):
+    pass
+
+
+def _apply_rules(item: DocumentType, rules: dict | None) -> None:
+    rules = {k: v for k, v in (rules or {}).items() if k in FIXED_RULES + USAGE_RULES}
+    if item.rules_locked:  # validate first: nothing is changed if a locked rule would change
+        for key in FIXED_RULES:
+            if key in rules and getattr(item, key) != rules[key]:
+                raise DocumentTypeRuleLockedError("As regras fiscais de um tipo de documento oficial nao podem ser alteradas")
+    for key, value in rules.items():
+        setattr(item, key, value)
+
+
 async def list_document_types(db: AsyncSession) -> list[DocumentType]:
     result = await db.execute(select(DocumentType).order_by(DocumentType.code))
     return list(result.scalars().all())
 
 
-async def create_document_type(db: AsyncSession, code: str, name: str, area: str | None = None) -> DocumentType:
-    item = DocumentType(code=code, name=name, area=area)
+async def create_document_type(
+    db: AsyncSession, code: str, name: str, area: str | None = None,
+    electronic_eligible: bool = False, is_fiscal: bool = True, rules: dict | None = None,
+) -> DocumentType:
+    item = DocumentType(code=code, name=name, area=area, electronic_eligible=electronic_eligible, is_fiscal=is_fiscal)
+    _apply_rules(item, rules)  # a new type is never locked: every rule is editable
     db.add(item)
     await db.commit()
     await db.refresh(item)
@@ -423,9 +446,12 @@ async def create_document_type(db: AsyncSession, code: str, name: str, area: str
 
 async def update_document_type(
     db: AsyncSession, item_id: uuid.UUID, code: str, name: str, area: str | None = None,
-    electronic_eligible: bool = False, is_fiscal: bool = True,
+    electronic_eligible: bool = False, is_fiscal: bool = True, rules: dict | None = None,
 ) -> DocumentType:
-    result = await db.execute(select(DocumentType).where(DocumentType.id == item_id))
+    # Always read the row as it is in the database: the lock must not depend on a cached copy.
+    result = await db.execute(
+        select(DocumentType).where(DocumentType.id == item_id).execution_options(populate_existing=True)
+    )
     item = result.scalar_one_or_none()
     if item is None:
         raise CatalogItemNotFoundError("Tipo de documento nao encontrado")
@@ -434,6 +460,7 @@ async def update_document_type(
     item.area = area
     item.electronic_eligible = electronic_eligible
     item.is_fiscal = is_fiscal
+    _apply_rules(item, rules)
     await db.commit()
     await db.refresh(item)
     return item
