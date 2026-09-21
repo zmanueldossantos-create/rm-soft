@@ -408,23 +408,17 @@ async def toggle_vat_code(db: AsyncSession, vat_code_id: uuid.UUID) -> VatCode:
 
 # ---------- DocumentType ----------
 
-# Fiscal rules: locked on an official type (rules_locked). Usage rules: always editable.
-FIXED_RULES = ("saft_section", "revenue_sign", "requires_origin", "has_lines", "paid_on_issue", "sent_to_agt", "deducts_stock")
-USAGE_RULES = ("accepts_credit_note", "accepts_debit_note", "accepts_receipt", "convertible", "issuable_in_invoices", "issuable_at_pos")
-
-
-class DocumentTypeRuleLockedError(Exception):
-    pass
+# Rules of a document type: all editable by the super admin.
+RULE_NAMES = (
+    "saft_section", "revenue_sign", "requires_origin", "has_lines", "paid_on_issue", "sent_to_agt", "deducts_stock",
+    "accepts_credit_note", "accepts_debit_note", "accepts_receipt", "convertible", "issuable_in_invoices", "issuable_at_pos",
+)
 
 
 def _apply_rules(item: DocumentType, rules: dict | None) -> None:
-    rules = {k: v for k, v in (rules or {}).items() if k in FIXED_RULES + USAGE_RULES}
-    if item.rules_locked:  # validate first: nothing is changed if a locked rule would change
-        for key in FIXED_RULES:
-            if key in rules and getattr(item, key) != rules[key]:
-                raise DocumentTypeRuleLockedError("As regras fiscais de um tipo de documento oficial nao podem ser alteradas")
-    for key, value in rules.items():
-        setattr(item, key, value)
+    for key, value in (rules or {}).items():
+        if key in RULE_NAMES:
+            setattr(item, key, value)
 
 
 async def list_document_types(db: AsyncSession) -> list[DocumentType]:

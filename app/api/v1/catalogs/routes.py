@@ -283,8 +283,6 @@ async def patch_document_type(item_id: uuid.UUID, payload: DocumentTypeRequest, 
         return await catalog_service.update_document_type(db, item_id, payload.code, payload.name, payload.area, payload.electronic_eligible, payload.is_fiscal, payload.rules_dict())
     except CatalogItemNotFoundError as e:
         _not_found(e)
-    except catalog_service.DocumentTypeRuleLockedError as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
 
 
 @router.patch("/document-types/{item_id}/toggle-status", response_model=DocumentTypeResponse)
