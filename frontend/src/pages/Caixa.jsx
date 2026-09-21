@@ -126,7 +126,7 @@ export default function Caixa() {
   const [closeResult, setCloseResult] = useState(null);
 
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
-  const [payments, setPayments] = useState([{ paymentMethod: 'NUMERARIO', amount: '' }]);
+  const [payments, setPayments] = useState([]);
   const [checkoutSaving, setCheckoutSaving] = useState(false);
   const [checkoutError, setCheckoutError] = useState('');
   const [lastInvoice, setLastInvoice] = useState(null);
