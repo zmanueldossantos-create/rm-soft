@@ -94,7 +94,8 @@ async def create_activity(
     # Deferred import: point_of_sale_service imports get_activity_or_raise from this
     # module at top level, so importing create_point_of_sale up there would be circular.
     from app.services.point_of_sale_service import create_point_of_sale
-    await create_point_of_sale(db, company_id, activity.id, f"{name} - Caixa Geral", is_default=True)
+    from app.services.point_of_sale_service import DEFAULT_POS_NAME
+    await create_point_of_sale(db, company_id, activity.id, DEFAULT_POS_NAME, is_default=True)
 
     return activity
 

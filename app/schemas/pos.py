@@ -24,6 +24,7 @@ class PointOfSaleResponse(BaseModel):
     name: str
     is_active: bool
     billetage_enabled: bool
+    is_default: bool = False
 
     class Config:
         from_attributes = True

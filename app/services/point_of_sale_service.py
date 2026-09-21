@@ -12,6 +12,10 @@ from app.models.point_of_sale import PointOfSale
 from app.services.activity_service import get_activity_or_raise
 
 
+# Every activity gets one default cash point, always named like this (the activity is shown next to it where needed).
+DEFAULT_POS_NAME = "Caixa Geral"
+
+
 class PosAlreadyExistsError(Exception):
     """Raised when a POS name already exists within the same Activity."""
     pass
