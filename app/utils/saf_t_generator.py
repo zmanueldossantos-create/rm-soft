@@ -65,6 +65,41 @@ def _map_tax_code(rate: float) -> str:
     return "NOR"
 
 
+def _write_lines(parent_el, inv: dict, saft_type: str) -> None:
+    """Writes the Line elements of a document - shared by SalesInvoices and WorkingDocuments (same structure)."""
+    for idx, line in enumerate(inv["lines"], start=1):
+        line_el = _el(parent_el, "Line")
+        _el(line_el, "LineNumber", idx)
+        _el(line_el, "ProductCode", line["product_code"])
+        _el(line_el, "ProductDescription", line["product_name"])
+        _el(line_el, "Quantity", f"{Decimal(str(line['quantity'])):.3f}")
+        _el(line_el, "UnitOfMeasure", "UN")
+        _el(line_el, "UnitPrice", _money(line["unit_price"]))
+        _el(line_el, "TaxPointDate", inv["business_date"].isoformat())
+        # XSD: References is mandatory on the lines of a credit note (the credited document, in the
+        # numbering of its own InvoiceNo) with the reason - Reason is limited to 50 characters here.
+        if saft_type == "NC" and inv.get("document_reference"):
+            references = _el(line_el, "References")
+            _el(references, "Reference", inv["document_reference"][:60])
+            if inv.get("credit_note_cause"):
+                _el(references, "Reason", inv["credit_note_cause"][:50])
+        _el(line_el, "Description", line["product_name"])
+        _el(line_el, "DebitAmount" if saft_type == "NC" else "CreditAmount", _money(line["line_subtotal"]))
+
+        tax = _el(line_el, "Tax")
+        _el(tax, "TaxType", "IVA")
+        _el(tax, "TaxCountryRegion", "AO")
+        tax_code = _map_tax_code(line["vat_rate"])
+        _el(tax, "TaxCode", tax_code)
+        _el(tax, "TaxPercentage", _money(line["vat_rate"]))
+
+        if tax_code == "ISE":
+            _el(line_el, "TaxExemptionReason", "IVA - Regime de exclusao")
+            _el(line_el, "TaxExemptionCode", "M04")
+
+        _el(line_el, "SettlementAmount", "0.00")
+
+
 def generate_saf_t_xml(
     company: dict,
     platform_settings: dict,
@@ -90,9 +125,10 @@ def generate_saf_t_xml(
                     "line_vat": float, "line_total": float}],
     }
     """
-    # Only documents that map to a SAF-T InvoiceType belong in SalesInvoices. A pro-forma (working document)
-    # or a receipt used to fall through to "FT" - a non-fiscal document reported as an invoice. They stay out
-    # until their own sections (WorkingDocuments, Payments) are generated.
+    # Only documents that map to a SAF-T InvoiceType belong in SalesInvoices. A pro-forma is a working document
+    # (WorkingDocuments, WorkType PP - as in the AGT-validated Kiami exports); a receipt has no section yet
+    # (Payments) and stays out rather than being reported as an "FT".
+    working_docs = [inv for inv in invoices if inv["invoice_type"] == "PRO_FORMA"]
     invoices = [inv for inv in invoices if inv["invoice_type"] in INVOICE_TYPE_MAP]
 
     root = etree.Element(_q("AuditFile"), nsmap=NSMAP)
@@ -130,7 +166,7 @@ def generate_saf_t_xml(
     # ---------- MasterFiles ----------
     master_files = _el(root, "MasterFiles")
 
-    has_walk_in_sale = any(inv.get("customer_id") is None for inv in invoices)
+    has_walk_in_sale = any(inv.get("customer_id") is None for inv in invoices + working_docs)
     # The company may already hold its own "Consumidor final" customer (NIF 999999999): a walk-in sale then
     # points at it and no second generic entry is added (two records with the same tax ID otherwise).
     own_final_consumer = next((c for c in customers if c["nif"] == FINAL_CONSUMER_TAX_ID), None)
@@ -237,41 +273,45 @@ def generate_saf_t_xml(
         short_customer_id = customer_short_id.get(real_customer_id, walk_in_id) if real_customer_id else walk_in_id
         _el(invoice_el, "CustomerID", short_customer_id)
 
-        for idx, line in enumerate(inv["lines"], start=1):
-            line_el = _el(invoice_el, "Line")
-            _el(line_el, "LineNumber", idx)
-            _el(line_el, "ProductCode", line["product_code"])
-            _el(line_el, "ProductDescription", line["product_name"])
-            _el(line_el, "Quantity", f"{Decimal(str(line['quantity'])):.3f}")
-            _el(line_el, "UnitOfMeasure", "UN")
-            _el(line_el, "UnitPrice", _money(line["unit_price"]))
-            _el(line_el, "TaxPointDate", inv["business_date"].isoformat())
-            # XSD: References is mandatory on the lines of a credit note (the credited document, in the
-            # numbering of its own InvoiceNo) with the reason - Reason is limited to 50 characters here.
-            if saft_type == "NC" and inv.get("document_reference"):
-                references = _el(line_el, "References")
-                _el(references, "Reference", inv["document_reference"][:60])
-                if inv.get("credit_note_cause"):
-                    _el(references, "Reason", inv["credit_note_cause"][:50])
-            _el(line_el, "Description", line["product_name"])
-            _el(line_el, "DebitAmount" if saft_type == "NC" else "CreditAmount", _money(line["line_subtotal"]))
-
-            tax = _el(line_el, "Tax")
-            _el(tax, "TaxType", "IVA")
-            _el(tax, "TaxCountryRegion", "AO")
-            tax_code = _map_tax_code(line["vat_rate"])
-            _el(tax, "TaxCode", tax_code)
-            _el(tax, "TaxPercentage", _money(line["vat_rate"]))
-
-            if tax_code == "ISE":
-                _el(line_el, "TaxExemptionReason", "IVA - Regime de exclusao")
-                _el(line_el, "TaxExemptionCode", "M04")
-
-            _el(line_el, "SettlementAmount", "0.00")
+        _write_lines(invoice_el, inv, saft_type)
 
         totals = _el(invoice_el, "DocumentTotals")
         _el(totals, "TaxPayable", _money(inv["vat_total"]))
         _el(totals, "NetTotal", _money(inv["subtotal"]))
         _el(totals, "GrossTotal", _money(inv["total"]))
+
+    # ---------- SourceDocuments.WorkingDocuments (pro-formas) ----------
+    # Structure and element order follow the XSD and the AGT-validated Kiami exports: WorkType PP, WorkStatus
+    # N - or F once the pro-forma has been invoiced. A walk-in pro-forma points at the same customer as a walk-in
+    # invoice.
+    if working_docs:
+        walk_in_id = customer_short_id[own_final_consumer["id"]] if own_final_consumer else FINAL_CONSUMER_ID
+        working = _el(source_documents, "WorkingDocuments")
+        _el(working, "NumberOfEntries", len(working_docs))
+        _el(working, "TotalDebit", "0.00")
+        _el(working, "TotalCredit", _money(sum(float(d["subtotal"]) for d in working_docs)))
+        for doc in working_docs:
+            entry_date = doc["created_at"].strftime("%Y-%m-%dT%H:%M:%S")
+            work_el = _el(working, "WorkDocument")
+            _el(work_el, "DocumentNumber", f"PP {doc['series']}/{doc['number']}")
+            status = _el(work_el, "DocumentStatus")
+            _el(status, "WorkStatus", "F" if doc.get("converted") else "N")
+            _el(status, "WorkStatusDate", entry_date)
+            _el(status, "SourceID", "RMSOFT")
+            _el(status, "SourceBilling", "P")
+            _el(work_el, "Hash", doc["invoice_hash"])
+            _el(work_el, "HashControl", "0")
+            _el(work_el, "Period", doc["business_date"].month)
+            _el(work_el, "WorkDate", doc["business_date"].isoformat())
+            _el(work_el, "WorkType", "PP")
+            _el(work_el, "SourceID", "RMSOFT")
+            _el(work_el, "SystemEntryDate", entry_date)
+            real_customer_id = doc.get("customer_id")
+            _el(work_el, "CustomerID", customer_short_id.get(real_customer_id, walk_in_id) if real_customer_id else walk_in_id)
+            _write_lines(work_el, doc, "PP")
+            totals = _el(work_el, "DocumentTotals")
+            _el(totals, "TaxPayable", _money(doc["vat_total"]))
+            _el(totals, "NetTotal", _money(doc["subtotal"]))
+            _el(totals, "GrossTotal", _money(doc["total"]))
 
     return etree.tostring(root, xml_declaration=True, encoding="utf-8", pretty_print=True)

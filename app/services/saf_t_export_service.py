@@ -88,6 +88,7 @@ async def export_saf_t_for_period(db: AsyncSession, company_id: uuid.UUID, year:
             "customer_id": str(inv.customer_id) if inv.customer_id else None,
             "document_reference": inv.document_reference,
             "credit_note_cause": inv.credit_note_cause,
+            "converted": inv.converted_to_invoice_id is not None,
             "lines": [
                 {
                     "product_code": product_code_by_id.get(l.product_id) or service_code_by_id.get(l.service_id) or "N/A",
