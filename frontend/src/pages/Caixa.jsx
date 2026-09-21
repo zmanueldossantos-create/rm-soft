@@ -6,7 +6,7 @@ import { listProductCategories } from '../api/productCategories';
 import { listServices } from '../api/services';
 import { listVatRates } from '../api/vat';
 import { withholdingTaxesApi, paymentTermsApi } from '../api/catalogs';
-import useDocumentRules from '../utils/documentRules';
+import useDocumentRules, { DOC_CODE_BY_TYPE } from '../utils/documentRules';
 import { getMyCompanyBankAccounts } from '../api/company';
 import { createProFormaFromPos } from '../api/pos';
 import { listPaymentMethodPreferences } from '../api/tesouraria';
@@ -28,6 +28,8 @@ import {
 import { listUsers } from '../api/users';
 import { useAuthStore } from '../store/authStore';
 import { extractErrorMessage } from '../utils/errors';
+
+const balanceOf = (inv) => Number(inv.total) - Number(inv.retention_total || 0) - Number(inv.amount_received || 0);
 
 function addDays(dateStr, days) {
   const d = new Date(dateStr);
@@ -747,7 +749,7 @@ export default function Caixa() {
       setProFormaLoading(false);
     }
     try {
-      setRecentInvoices(await listRecentIssuedInvoices());
+      setRecentInvoices(await listRecentIssuedInvoices(selectedPosId));
     } catch (err) {
       // silent - the pro-forma section above already reports errors; this is a supplementary list
     } finally {
@@ -1996,7 +1998,7 @@ export default function Caixa() {
       </Modal>
 
 
-      <Modal open={proFormaModalOpen} onClose={() => setProFormaModalOpen(false)} title="Consultar documentos">
+      <Modal open={proFormaModalOpen} onClose={() => setProFormaModalOpen(false)} title="Consultar documentos" maxWidthClass="max-w-2xl">
         <div className="flex flex-col gap-3">
           {proFormaLoading ? (
             <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin text-accent" /></div>
@@ -2029,12 +2031,18 @@ export default function Caixa() {
             ) : recentInvoices.length === 0 ? (
               <p className="text-text-muted text-[13px] text-center py-6">Nenhum documento emitido ainda</p>
             ) : (
-              <div className="flex flex-col gap-2 max-h-[300px] overflow-y-auto scrollbar-thin">
+              <div className="flex flex-col gap-2 max-h-[420px] overflow-y-auto scrollbar-thin">
                 {recentInvoices.map((inv) => (
                   <div key={inv.id} className="flex items-center justify-between bg-bg-inset border border-border rounded-md px-4 py-2.5">
                     <div>
-                      <p className="font-mono text-[12px] text-text-primary">{inv.invoice_type === 'FACTURA' ? 'FT' : inv.invoice_type === 'FACTURA_RECIBO' ? 'FR' : inv.invoice_type} {inv.series}/{inv.number}</p>
-                      <p className="text-[11px] text-text-muted">{new Date(inv.business_date).toLocaleDateString('pt-PT')} - {formatKz(inv.total)} Kz</p>
+                      <p className="font-mono text-[12px] text-text-primary">{DOC_CODE_BY_TYPE[inv.invoice_type] || inv.invoice_type} {inv.series}/{inv.number}</p>
+                      <p className="text-[11px] text-text-muted">{new Date(inv.business_date).toLocaleDateString('pt-PT')} - Total {formatKz(inv.total)} Kz</p>
+                      <p className="text-[11px] text-text-muted">
+                        IVA {formatKz(inv.vat_total)} Kz
+                        {Number(inv.retention_total) > 0 && ' - Retencao ' + formatKz(inv.retention_total) + ' Kz'}
+                        {Number(inv.amount_received) > 0 && ' - Recebido ' + formatKz(inv.amount_received) + ' Kz'}
+                        {ruleOf(inv.invoice_type, 'accepts_receipt') && balanceOf(inv) > 0.005 && <span className="text-accent">{' - A pagar ' + formatKz(balanceOf(inv)) + ' Kz'}</span>}
+                      </p>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <button
@@ -2055,7 +2063,7 @@ export default function Caixa() {
                         <>
                           <button
                             onClick={() => documentActionsRef.current?.openRc(inv.id)}
-                            disabled={!can('invoices:receipt') || !ruleOf(inv.invoice_type, 'accepts_receipt') || !((Number(inv.total) - Number(inv.retention_total || 0) - Number(inv.amount_received || 0)) > 0.005)}
+                            disabled={!can('invoices:receipt') || !session || !ruleOf(inv.invoice_type, 'accepts_receipt') || !((Number(inv.total) - Number(inv.retention_total || 0) - Number(inv.amount_received || 0)) > 0.005)}
                             title="Emitir Recibo"
                             className="flex items-center justify-center w-8 h-8 rounded-md border border-border text-text-muted hover:text-accent hover:border-accent transition-colors cursor-pointer text-[10px] font-bold disabled:opacity-40 disabled:cursor-not-allowed"
                           >
@@ -2086,7 +2094,7 @@ export default function Caixa() {
           </a>
         </div>
       </Modal>
-      <DocumentActionModals cashSessionId={session?.id} ref={documentActionsRef} onSuccess={() => listRecentIssuedInvoices().then(setRecentInvoices).catch(() => {})} />
+      <DocumentActionModals cashSessionId={session?.id} ref={documentActionsRef} onSuccess={() => listRecentIssuedInvoices(selectedPosId).then(setRecentInvoices).catch(() => {})} />
     </main>
   );
 }

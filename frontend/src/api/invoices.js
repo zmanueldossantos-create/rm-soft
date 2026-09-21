@@ -75,7 +75,8 @@ export async function listPendingProFormas() {
   return res.data;
 }
 
-export async function listRecentIssuedInvoices() {
-  const res = await apiClient.get('/invoices', { params: { limit: 30 } });
-  return res.data.filter((inv) => inv.invoice_type !== 'PRO_FORMA');
+// Documents shown by the Caixa: those of this cash point plus the invoices still awaiting a payment (filtered server side).
+export async function listRecentIssuedInvoices(posId) {
+  const res = await apiClient.get('/pos/documents/' + posId, { params: { limit: 30 } });
+  return res.data;
 }
