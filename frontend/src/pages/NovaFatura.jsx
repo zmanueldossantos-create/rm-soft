@@ -194,6 +194,15 @@ export default function NovaFatura() {
     return { code, series: series.series_code, number: nextNumber, label: `${code} ${series.series_code}/${padded}` };
   }, [invoiceType, businessDate, documentSeries, documentTypes]);
 
+  // Types offered here: the document types flagged "issuable in Nova Fatura" in the catalog.
+  const issuableTypeOptions = useMemo(
+    () => Object.entries(INVOICE_TYPE_CODE)
+      .map(([type, code]) => [type, documentTypes.find((d) => d.code === code)])
+      .filter(([, d]) => d && d.is_active && d.issuable_in_invoices)
+      .map(([type, d]) => ({ value: type, label: d.code + ' - ' + d.name })),
+    [documentTypes],
+  );
+
   function getLineItem(line) {
     return line.item_type === 'service' ? serviceById[line.service_id] : productById[line.product_id];
   }
@@ -416,7 +425,7 @@ export default function NovaFatura() {
             </div>
             <div>
               <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Tipo de documento *</label>
-              <Select value={invoiceType} onChange={setInvoiceType} options={[{ value: 'FACTURA', label: 'FT - Fatura' }, { value: 'FACTURA_RECIBO', label: 'FR - Fatura/Recibo' }, { value: 'PRO_FORMA', label: 'FP - Fatura Pro-forma' }]} placeholder="Selecionar" />
+              <Select value={invoiceType} onChange={setInvoiceType} options={issuableTypeOptions} placeholder="Selecionar" />
             </div>
             <div>
               <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Documento (Nº)</label>

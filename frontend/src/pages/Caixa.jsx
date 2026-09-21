@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, Fragment } from 'react';
+import usePosDocumentTypes from '../utils/posDocumentTypes';
 import { useCan } from '../utils/permissions';
 import { listDenominations, recordDenominationCount, getLatestDenominationCount } from '../api/moedeiro';
 import { listProductCategories } from '../api/productCategories';
@@ -631,6 +632,14 @@ export default function Caixa() {
   const [expandedDiscountKey, setExpandedDiscountKey] = useState(null);
   const [saleConfirmModalOpen, setSaleConfirmModalOpen] = useState(false);
   const [selectedInvoiceType, setSelectedInvoiceType] = useState('FACTURA_RECIBO');
+  const { typeOptions: posTypeOptions, liquidationOptions: posLiquidationOptions } = usePosDocumentTypes();
+  // the selected types must be ones the catalog offers here
+  useEffect(() => {
+    if (!posTypeOptions.some((o) => o.value === selectedInvoiceType)) setSelectedInvoiceType(posTypeOptions[0].value);
+  }, [posTypeOptions, selectedInvoiceType]);
+  useEffect(() => {
+    if (!posLiquidationOptions.some((o) => o.value === liquidationTargetType)) setLiquidationTargetType(posLiquidationOptions[0].value);
+  }, [posLiquidationOptions, liquidationTargetType]);
   const [paymentTerms, setPaymentTerms] = useState([]);
   const [paymentMethods, setPaymentMethods] = useState([]);
   const [bankAccounts, setBankAccounts] = useState([]);
@@ -1068,11 +1077,7 @@ export default function Caixa() {
                     compact
                     value={selectedInvoiceType}
                     onChange={setSelectedInvoiceType}
-                    options={[
-                      { value: 'FACTURA_RECIBO', label: 'Fatura/Recibo' },
-                      { value: 'FACTURA', label: 'Fatura' },
-                      { value: 'PRO_FORMA', label: 'Pro-forma' },
-                    ]}
+                    options={posTypeOptions}
                   />
                 </div>
               </div>
@@ -1372,7 +1377,7 @@ export default function Caixa() {
                 <Select
                   value={liquidationTargetType}
                   onChange={setLiquidationTargetType}
-                  options={[{ value: 'FACTURA', label: 'Fatura' }, { value: 'FACTURA_RECIBO', label: 'Fatura/Recibo' }]}
+                  options={posLiquidationOptions}
                 />
               </div>
             </div>

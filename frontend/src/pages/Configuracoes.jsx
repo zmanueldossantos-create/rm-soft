@@ -184,8 +184,8 @@ const RULE_INFO = [
   ['accepts_credit_note', 'Aceita nota de cr\u00e9dito', 'Permite emitir notas de cr\u00e9dito sobre este tipo', true],
   ['accepts_debit_note', 'Aceita nota de d\u00e9bito', 'Permite emitir notas de d\u00e9bito sobre este tipo', true],
   ['convertible', 'Convert\u00edvel em FT/FR', 'Pode ser transformado em fatura (ex.: pro-forma)', false],
-  ['issuable_in_invoices', 'Emitido em Nova Fatura', 'Aparece na lista de tipos do ecr\u00e3 Nova Fatura', false],
-  ['issuable_at_pos', 'Emitido na Caixa', 'Aparece na lista de tipos da Caixa', false],
+  ['issuable_in_invoices', 'Emitido em Nova Fatura', 'Aparece na lista de tipos do ecr\u00e3 Nova Fatura', true],
+  ['issuable_at_pos', 'Emitido na Caixa', 'Aparece na lista de tipos da Caixa', true],
   ['requires_origin', 'Exige documento de origem', 'Tem de referir um documento anterior (ex.: NC, ND, recibo)', false],
   ['has_lines', 'Tem linhas de artigos', 'Desmarcado: documento sem linhas (ex.: recibo)', false],
 ];
