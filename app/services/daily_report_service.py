@@ -16,8 +16,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.invoice import Invoice
-from app.models.document_type import DocumentType
-from app.services.document_rules import DOC_CODE_BY_INVOICE_TYPE
+from app.models.payment import Payment
+from app.models.payment_method_catalog import PaymentMethodCatalog
 from app.models.cash_session import CashSession
 from app.models.cash_movement import CashMovement, CashMovementType
 
@@ -39,31 +39,32 @@ async def get_daily_report(
     """
     entries: list[dict] = []
 
-    invoices_result = await db.execute(
-        select(Invoice)
+    # The journal lists the money that actually entered this POS: one line per payment recorded on a document of its cash
+    # sessions. A Fatura billed later, a credit note or a pro-forma has no payment, so no line (a credit note corrects a
+    # document, it is not a cash refund).
+    payments_result = await db.execute(
+        select(Payment, Invoice, PaymentMethodCatalog.name)
+        .join(Invoice, Invoice.id == Payment.invoice_id)
         .join(CashSession, CashSession.id == Invoice.cash_session_id)
+        .join(PaymentMethodCatalog, PaymentMethodCatalog.id == Payment.payment_method_id)
         .where(
             CashSession.company_id == company_id,
             CashSession.pos_id == pos_id,
             Invoice.business_date >= date_from,
             Invoice.business_date <= date_to,
         )
-        .order_by(Invoice.created_at)
+        .order_by(Payment.created_at)
     )
-    # SAF-T section of each document type, from the catalog: a document of the Payments section settles another one.
-    section_by_code = {code: section for code, section in (await db.execute(select(DocumentType.code, DocumentType.saft_section))).all()}
     invoice_type_labels = {"FACTURA": "FT", "FACTURA_RECIBO": "FR", "PRO_FORMA": "PF", "NOTA_CREDITO": "NC", "NOTA_DEBITO": "ND", "RECIBO": "RC"}
-    for inv in invoices_result.scalars().all():
+    for payment, inv, method_name in payments_result.all():
         type_value = inv.invoice_type.value if hasattr(inv.invoice_type, "value") else str(inv.invoice_type)
         label = invoice_type_labels.get(type_value, type_value)
         entries.append({
             "type": "venda",
-            "time": inv.created_at,
+            "time": payment.created_at,
             "business_date": inv.business_date,
-            "description": f"{label} {inv.series}/{inv.number}",
-            # A receipt settles an invoice (its total is the settled part, withholding included): the drawer
-            # journal shows the cash actually received.
-            "amount": float(inv.amount_received or 0) if section_by_code.get(DOC_CODE_BY_INVOICE_TYPE.get(type_value, ""), "NONE") == "PAYMENTS" else float(inv.total),
+            "description": f"{label} {inv.series}/{inv.number} - {method_name}",
+            "amount": float(payment.amount),
             "direction": "entrada",
             "reference": f"{inv.series}/{inv.number}",
         })
