@@ -279,7 +279,7 @@ async def convert_pro_forma(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except ActivityNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except (EmptyInvoiceError, ProductNotFoundError) as e:
+    except (EmptyInvoiceError, ProductNotFoundError, ReferenceInvoiceTypeNotEligibleError) as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     except DocumentTypeNotConfiguredError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))

@@ -31,7 +31,7 @@ from datetime import date, datetime
 from sqlalchemy import select, func, extract
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.document_rules import get_document_rules, rules_from_row
+from app.services.document_rules import DocumentRulesNotFoundError, get_document_rules, rules_from_row
 from app.core.tax_exemptions import TAX_EXEMPTION_REASONS
 from app.models.vat_code import VatCode
 from app.models.invoice import Invoice, InvoiceStatus, InvoiceType, DocumentLifecycleStatus, CreditNoteReason
@@ -1245,8 +1245,15 @@ async def convert_pro_forma_to_invoice(
         select(Invoice).where(Invoice.id == pro_forma_id, Invoice.company_id == company_id)
     )
     pro_forma = pf_result.scalar_one_or_none()
-    if pro_forma is None or pro_forma.invoice_type != InvoiceType.PRO_FORMA:
-        raise ProFormaNotFoundError("Pro-forma nao encontrada")
+    # The source must be a document the catalog says can be converted (a pro-forma); the target a plain invoice.
+    if pro_forma is None or not (await get_document_rules(db, pro_forma.invoice_type)).convertible:
+        raise ProFormaNotFoundError("Documento nao encontrado ou nao convertivel")
+    try:
+        target_rules = await get_document_rules(db, target_invoice_type)
+    except DocumentRulesNotFoundError:
+        raise ReferenceInvoiceTypeNotEligibleError("O tipo de documento de destino nao e valido para uma conversao")
+    if target_rules.saft_section != "INVOICES" or target_rules.requires_origin:
+        raise ReferenceInvoiceTypeNotEligibleError("O tipo de documento de destino nao e valido para uma conversao")
 
     if pro_forma.converted_to_invoice_id is not None:
         raise ProFormaAlreadyConvertedError("Esta pro-forma ja foi convertida numa fatura")
