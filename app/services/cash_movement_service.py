@@ -165,6 +165,12 @@ async def create_cash_movement(
             raise InsufficientFundsError(f"Esta caixa so tem {current_balance:.2f} Kz disponiveis - o valor excede o saldo atual")
     if destination_pos_id is not None:
         await get_pos_or_raise(db, company_id, destination_pos_id)
+        if movement_type == CashMovementType.TRANSFERENCIA:
+            # A transfer must land on a POS whose drawer is currently open - otherwise the cash is
+            # physically sent but never counted (see get_current_expected_cash_balance: 0.0 with no session).
+            destination_open_session = await get_open_session(db, company_id, destination_pos_id)
+            if destination_open_session is None:
+                raise DestinationPosNotOpenError("A caixa de destino nao tem nenhuma sessao aberta - peca para a abrirem antes de transferir")
 
     if reason_id is not None:
         reason = await get_reason_or_raise(db, company_id, reason_id)
@@ -196,6 +202,10 @@ async def create_cash_movement(
     await db.commit()
     await db.refresh(movement)
     return movement
+
+
+class DestinationPosNotOpenError(Exception):
+    pass
 
 
 class MovementNotFoundError(Exception):

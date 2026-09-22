@@ -41,6 +41,7 @@ from app.services.cash_movement_service import (
     InvalidCashMovementError,
     ReasonDirectionMismatchError,
     SourcePosNotOpenError,
+    DestinationPosNotOpenError,
     MovementNotFoundError,
     MovementAlreadyReceivedError,
     MovementNotReceivableAtThisPosError,
@@ -147,6 +148,8 @@ async def post_cash_movement(
     except ReasonDirectionMismatchError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     except SourcePosNotOpenError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except DestinationPosNotOpenError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except InsufficientFundsError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
