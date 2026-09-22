@@ -139,6 +139,17 @@ class PaymentMethodPreferenceUpdateRequest(BaseModel):
     available_at_pos: bool
 
 
+class DocumentTypePreferenceResponse(BaseModel):
+    id: uuid.UUID
+    code: str
+    name: str
+    requires_payment_term: bool
+
+
+class DocumentTypePreferenceUpdateRequest(BaseModel):
+    requires_payment_term: bool
+
+
 class PaymentTermRequest(BaseModel):
     name: str
     fixed_days: bool = False

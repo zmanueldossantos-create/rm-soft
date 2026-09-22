@@ -56,7 +56,8 @@ from app.services.user_cash_point_access_service import (
     AccessNotFoundError,
 )
 from app.services.company_payment_method_service import list_payment_method_preferences, set_payment_method_preference
-from app.schemas.catalog import PaymentMethodPreferenceResponse, PaymentMethodPreferenceUpdateRequest
+from app.services.company_document_type_service import list_document_type_preferences, set_document_type_preference
+from app.schemas.catalog import PaymentMethodPreferenceResponse, PaymentMethodPreferenceUpdateRequest, DocumentTypePreferenceResponse, DocumentTypePreferenceUpdateRequest
 from app.schemas.tesouraria import DailyReportEntry
 from app.services.daily_report_service import get_daily_report
 
@@ -233,6 +234,28 @@ async def put_payment_method_preference(
     await set_payment_method_preference(db, current_user.company_id, payment_method_id, payload.available_at_pos)
     updated = await list_payment_method_preferences(db, current_user.company_id)
     return next(p for p in updated if p["id"] == payment_method_id)
+
+
+# ---------- Document type payment-term preferences (per-company override of requires_payment_term) ----------
+
+@router.get("/document-type-payment-term-preferences", response_model=list[DocumentTypePreferenceResponse])
+async def get_document_type_payment_term_preferences(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("documents:payment_term_prefs_view")),
+):
+    return await list_document_type_preferences(db, current_user.company_id)
+
+
+@router.put("/document-type-payment-term-preferences/{document_type_id}", response_model=DocumentTypePreferenceResponse)
+async def put_document_type_payment_term_preference(
+    document_type_id: uuid.UUID,
+    payload: DocumentTypePreferenceUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("documents:payment_term_prefs_manage")),
+):
+    await set_document_type_preference(db, current_user.company_id, document_type_id, payload.requires_payment_term)
+    updated = await list_document_type_preferences(db, current_user.company_id)
+    return next(p for p in updated if p["id"] == document_type_id)
 
 
 # ---------- Cash movement reception (two-step transfer confirmation) ----------

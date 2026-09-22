@@ -110,6 +110,8 @@ PERMISSION_CATALOG: list[tuple[str, str, str, list[str]]] = [
     ("tesouraria:associations_manage", "Associar utilizadores as caixas (pontos de venda)", "Atividades", []),
     ("tesouraria:payment_prefs_view", "Ver metodos de pagamento da empresa", "Tesouraria", ["CAIXA"]),
     ("tesouraria:payment_prefs_manage", "Configurar metodos de pagamento da empresa", "Tesouraria", []),
+    ("documents:payment_term_prefs_view", "Ver excecoes de condicao de pagamento obrigatoria da empresa", "Documentos", ["CAIXA"]),
+    ("documents:payment_term_prefs_manage", "Configurar excecoes de condicao de pagamento obrigatoria da empresa", "Documentos", []),
     ("fiscal_periods:view", "Ver exercicios e periodos fiscais", "Contabilidade", []),
     ("fiscal_periods:manage", "Abrir exercicios e periodos fiscais", "Contabilidade", []),
     ("fiscal_periods:close", "Fechar exercicios e periodos fiscais", "Contabilidade", []),
