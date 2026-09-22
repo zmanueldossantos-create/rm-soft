@@ -182,6 +182,7 @@ const RULE_INFO = [
   ['deducts_stock', 'Deduz stock', 'Retira do stock os artigos vendidos', true],
   ['accepts_receipt', 'Aceita recibo', 'Permite emitir recibos sobre este tipo', true],
   ['requires_payment_term', 'Exige condi\u00e7\u00e3o de pagamento', 'Obriga a escolher uma condi\u00e7\u00e3o de pagamento ao emitir este tipo', true],
+  ['requires_customer', 'Exige cliente identificado', 'Obriga a escolher um cliente ao emitir este tipo (nao permite consumidor final)', true],
   ['accepts_credit_note', 'Aceita nota de cr\u00e9dito', 'Permite emitir notas de cr\u00e9dito sobre este tipo', true],
   ['accepts_debit_note', 'Aceita nota de d\u00e9bito', 'Permite emitir notas de d\u00e9bito sobre este tipo', true],
   ['convertible', 'Convert\u00edvel em FT/FR', 'Pode ser transformado em fatura (ex.: pro-forma)', false],
@@ -282,7 +283,7 @@ export default function Configuracoes() {
       case 'payment_methods': return { code: '', name: '', allows_payment: true, allows_receipt: true, is_cash: false };
       case 'payment_terms': return { name: '', fixed_days: false, days: 0, months_fixed_day: 0, discount: 0 };
       case 'vat_codes': return { code: '', name: '', rate: 0, country_id: countries[0]?.id || '', valid_from: '', valid_until: '', observations: '' };
-      case 'document_types': return { code: '', name: '', area: '', electronic_eligible: false, is_fiscal: true, rules_locked: false, saft_section: 'NONE', revenue_sign: 0, requires_origin: false, has_lines: true, paid_on_issue: false, sent_to_agt: false, deducts_stock: false, accepts_credit_note: false, accepts_debit_note: false, accepts_receipt: false, convertible: false, issuable_in_invoices: false, issuable_at_pos: false, requires_payment_term: false };
+      case 'document_types': return { code: '', name: '', area: '', electronic_eligible: false, is_fiscal: true, rules_locked: false, saft_section: 'NONE', revenue_sign: 0, requires_origin: false, has_lines: true, paid_on_issue: false, sent_to_agt: false, deducts_stock: false, accepts_credit_note: false, accepts_debit_note: false, accepts_receipt: false, convertible: false, issuable_in_invoices: false, issuable_at_pos: false, requires_payment_term: false, requires_customer: false };
       case 'movement_types': return { code: '', name: '', direction: 'ENTRADA', is_auto: false, description: '' };
       case 'units': return { code: '', name: '' };
       case 'withholding_taxes': return { name: '', rate: 0, tax_type: '' };
