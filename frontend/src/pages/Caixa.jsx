@@ -1191,75 +1191,13 @@ export default function Caixa() {
                 </div>
               </div>
 
-              {posPaymentMethods.length > 0 && (
-                <div className="flex flex-col gap-2 mb-4">
-                  <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wide">Formas de pagamento</p>
-                  <div className={'flex flex-col gap-1.5' + (!paidOnIssue ? ' opacity-40 pointer-events-none' : '')}>
-                    {posPaymentMethods.map((m) => {
-                      const line = payments.find((p) => p.paymentMethodId === m.id);
-                      return (
-                        <div key={m.id} className="flex items-center gap-2">
-                          <label className="flex items-center gap-2 flex-1 cursor-pointer select-none">
-                            <input
-                              type="checkbox"
-                              checked={!!line}
-                              onChange={() => togglePaymentMethod(m.id)}
-                              disabled={!paidOnIssue}
-                              className="w-4 h-4 accent-accent cursor-pointer"
-                            />
-                            <span className="text-[13px] text-text-primary">{m.name}</span>
-                          </label>
-                          {line && (
-                            <input
-                              type="number" step="0.01" min="0"
-                              value={line.amount}
-                              onChange={(e) => updatePaymentAmount(m.id, e.target.value)}
-                              placeholder="Valor"
-                              className="w-28 bg-bg-inset border border-border rounded-md px-2.5 py-1.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors"
-                            />
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                  {paidOnIssue && (
-                    <div className={'text-[12px] px-3 py-2 rounded-r border-l-2 ' + (paymentsRemaining === 0 ? 'bg-success/10 border-success text-success' : paymentsRemaining > 0 ? 'bg-accent/10 border-accent text-accent' : 'bg-danger/10 border-danger text-danger')}>
-                      {paymentsRemaining === 0 ? 'Valor exato' : paymentsRemaining > 0 ? `Falta ${formatKz(paymentsRemaining)} Kz` : `Excede em ${formatKz(Math.abs(paymentsRemaining))} Kz`}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <div className="flex flex-col gap-2.5 mb-4">
-                <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wide">Condicoes de faturacao (FT)</p>
-                <div className={'flex flex-col gap-2.5' + (!billsLater ? ' opacity-40 pointer-events-none' : '')}>
-                  <Select
-                    value={ftPaymentTermId}
-                    onChange={(termId) => {
-                      setFtPaymentTermId(termId);
-                      const term = paymentTerms.find((t) => t.id === termId);
-                      if (term && term.days > 0) {
-                        setFtDueDate(addDays(new Date().toISOString().slice(0, 10), term.days));
-                      } else {
-                        setFtDueDate('');
-                      }
-                    }}
-                    options={paymentTerms.map((t) => ({ value: t.id, label: t.name }))}
-                    placeholder="Condicao de pagamento"
-                  />
-                  {ftDueDate && (
-                    <p className="text-[12px] text-text-muted">Data de vencimento: <span className="font-mono text-text-primary">{ftDueDate}</span></p>
-                  )}
-                </div>
-              </div>
-
               {checkoutError && (
                 <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r mb-3">{checkoutError}</div>
               )}
 
               <button
-                onClick={() => setSaleConfirmModalOpen(true)}
-                disabled={cart.length === 0 || proFormaSaving || checkoutSaving || (paidOnIssue && posPaymentMethods.length > 0 && paymentsRemaining !== 0) || (selectedInvoiceType === 'PRO_FORMA' ? !can('pos:proforma') : !can('pos:checkout'))}
+                onClick={() => { setPayments([]); setSaleConfirmModalOpen(true); }}
+                disabled={cart.length === 0 || proFormaSaving || checkoutSaving || (selectedInvoiceType === 'PRO_FORMA' ? !can('pos:proforma') : !can('pos:checkout'))}
                 className="bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer"
               >
                 {(proFormaSaving || checkoutSaving) && <Loader2 size={16} className="animate-spin" />}
@@ -1488,6 +1426,69 @@ export default function Caixa() {
               <span className="text-text-primary font-mono font-bold">{formatKz(cartTotal)} Kz</span>
             </div>
           </div>
+{posPaymentMethods.length > 0 && (
+            <div className="flex flex-col gap-2 mb-4">
+              <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wide">Formas de pagamento</p>
+              <div className={'flex flex-col gap-1.5' + (!paidOnIssue ? ' opacity-40 pointer-events-none' : '')}>
+                {posPaymentMethods.map((m) => {
+                  const line = payments.find((p) => p.paymentMethodId === m.id);
+                  return (
+                    <div key={m.id} className="flex items-center gap-2">
+                      <label className="flex items-center gap-2 flex-1 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={!!line}
+                          onChange={() => togglePaymentMethod(m.id)}
+                          disabled={!paidOnIssue}
+                          className="w-4 h-4 accent-accent cursor-pointer"
+                        />
+                        <span className="text-[13px] text-text-primary">{m.name}</span>
+                      </label>
+                      {line && (
+                        <input
+                          type="number" step="0.01" min="0"
+                          value={line.amount}
+                          onChange={(e) => updatePaymentAmount(m.id, e.target.value)}
+                          placeholder="Valor"
+                          className="w-28 bg-bg-inset border border-border rounded-md px-2.5 py-1.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors"
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              {paidOnIssue && (
+                <div className={'text-[12px] px-3 py-2 rounded-r border-l-2 ' + (paymentsRemaining === 0 ? 'bg-success/10 border-success text-success' : paymentsRemaining > 0 ? 'bg-accent/10 border-accent text-accent' : 'bg-danger/10 border-danger text-danger')}>
+                  {paymentsRemaining === 0 ? 'Valor exato' : paymentsRemaining > 0 ? `Falta ${formatKz(paymentsRemaining)} Kz` : `Excede em ${formatKz(Math.abs(paymentsRemaining))} Kz`}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="flex flex-col gap-2.5 mb-4">
+            <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wide">Condicoes de faturacao (FT)</p>
+            <div className={'flex flex-col gap-2.5' + (!billsLater ? ' opacity-40 pointer-events-none' : '')}>
+              <Select
+                value={ftPaymentTermId}
+                onChange={(termId) => {
+                  setFtPaymentTermId(termId);
+                  const term = paymentTerms.find((t) => t.id === termId);
+                  if (term && term.days > 0) {
+                    setFtDueDate(addDays(new Date().toISOString().slice(0, 10), term.days));
+                  } else {
+                    setFtDueDate('');
+                  }
+                }}
+                options={paymentTerms.map((t) => ({ value: t.id, label: t.name }))}
+                placeholder="Condicao de pagamento"
+              />
+              {ftDueDate && (
+                <p className="text-[12px] text-text-muted">Data de vencimento: <span className="font-mono text-text-primary">{ftDueDate}</span></p>
+              )}
+            </div>
+          </div>
+
+
           <p className="text-text-muted text-[13px]">Confirma a finalizacao desta operacao?</p>
           <div className="flex gap-2.5">
             <button
@@ -1503,7 +1504,7 @@ export default function Caixa() {
                 else if (billsLater) handleConfirmFt();
                 else handleConfirmSale();
               }}
-              disabled={(selectedInvoiceType === 'PRO_FORMA' ? !can('pos:proforma') : ((!billsLater && paymentMode === 'liquidation') ? !can('pos:liquidate') : !can('pos:checkout')))}
+              disabled={(selectedInvoiceType === 'PRO_FORMA' ? !can('pos:proforma') : ((!billsLater && paymentMode === 'liquidation') ? !can('pos:liquidate') : !can('pos:checkout'))) || (selectedInvoiceType !== 'PRO_FORMA' && paidOnIssue && posPaymentMethods.length > 0 && paymentsRemaining !== 0)}
               className="flex-1 bg-accent hover:bg-accent-hover text-white font-semibold text-sm rounded-md py-3 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Confirmar
