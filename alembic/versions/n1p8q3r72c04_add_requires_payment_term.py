@@ -7,6 +7,10 @@ down_revision = 'm9c6d2f57a41'
 branch_labels = None
 depends_on = None
 
+# Read by tests/conftest.py to keep the test fixtures' document type rules in sync with this migration
+# without duplicating the SQL UPDATE below - see _load_document_type_rules.
+RULES_OVERRIDES = {"FT": {"requires_payment_term": True}}
+
 
 def upgrade():
     op.add_column('document_types', sa.Column('requires_payment_term', sa.Boolean(), server_default='false', nullable=False))

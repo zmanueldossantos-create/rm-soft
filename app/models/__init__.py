@@ -41,6 +41,7 @@ from app.models.municipality import Municipality
 from app.models.bank import Bank
 from app.models.payment_method_catalog import PaymentMethodCatalog
 from app.models.company_payment_method_preference import CompanyPaymentMethodPreference
+from app.models.company_document_type_preference import CompanyDocumentTypePreference
 from app.models.payment_term import PaymentTerm
 from app.models.vat_code import VatCode
 from app.models.document_type import DocumentType
@@ -66,7 +67,7 @@ from app.models.cash_denomination_count import CashDenominationCount, CashDenomi
 __all__ = [
     "Company", "User", "VAT", "Product", "Customer", "CustomerStatus", "Supplier", "Permission", "RolePermission",
     "FiscalYear", "FiscalPeriod", "Invoice", "InvoiceLine",
-    "Warehouse", "Stock", "StockMovement", "ResourceTypeCatalog", "ConsumptionReasonCatalog", "InternalConsumption", "Resource", "Booking", "OpenAccount", "OpenAccountLine", "PlatformSettings", "FiscalRegime", "Activity", "RecipeIngredient", "CashSession", "Payment", "Country", "Currency", "Province", "Municipality", "Bank", "PaymentMethodCatalog", "CompanyPaymentMethodPreference", "PaymentTerm", "VatCode", "DocumentType", "UnitOfMeasureCatalog", "WithholdingTax", "CompanyBankAccount", "CustomerBankAccountLink", "ProductCategory", "ServiceType", "Service", "ProductServiceStatus", "Establishment", "DocumentSeries", "ContingencyIndicator", "Module", "CompanyModule", "PointOfSale", "CashMovementReason", "CashMovement", "CashMovementType", "UserCashPointAccess", "Denomination", "DenominationType", "CashDenominationCount", "CashDenominationCountLine", "DenominationCountType",
+    "CompanyDocumentTypePreference", "Warehouse", "Stock", "StockMovement", "ResourceTypeCatalog", "ConsumptionReasonCatalog", "InternalConsumption", "Resource", "Booking", "OpenAccount", "OpenAccountLine", "PlatformSettings", "FiscalRegime", "Activity", "RecipeIngredient", "CashSession", "Payment", "Country", "Currency", "Province", "Municipality", "Bank", "PaymentMethodCatalog", "CompanyPaymentMethodPreference", "PaymentTerm", "VatCode", "DocumentType", "UnitOfMeasureCatalog", "WithholdingTax", "CompanyBankAccount", "CustomerBankAccountLink", "ProductCategory", "ServiceType", "Service", "ProductServiceStatus", "Establishment", "DocumentSeries", "ContingencyIndicator", "Module", "CompanyModule", "PointOfSale", "CashMovementReason", "CashMovement", "CashMovementType", "UserCashPointAccess", "Denomination", "DenominationType", "CashDenominationCount", "CashDenominationCountLine", "DenominationCountType",
 ]
 from app.models.company_permission_seed import CompanyPermissionSeed  # noqa: F401
 from app.models.open_account_transfer import OpenAccountTransfer  # noqa: F401

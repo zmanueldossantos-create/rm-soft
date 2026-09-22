@@ -43,12 +43,34 @@ import pathlib as _pathlib
 
 
 def _load_document_type_rules() -> dict:
-    """The rules of the official document types, from the migration that fills them (one single source)."""
-    path = next((_pathlib.Path(__file__).resolve().parent.parent / "alembic" / "versions").glob("l8b5c1e46f30_*.py"))
-    spec = _ilu.spec_from_file_location("document_type_rules_migration", path)
+    """
+    The rules of the official document types, from the migrations that define them - dynamic, so a future
+    migration is picked up automatically without editing this fixture.
+
+    l8b5c1e46f30 exposes the base RULES dict (one entry per document type code, with the columns it added).
+    Any later migration that adjusts a rule may expose RULES_OVERRIDES = {code: {field: value}}; every
+    versions/*.py file is scanned (order does not matter - overrides are applied on top of the base RULES,
+    last file wins on a given (code, field) if more than one ever touches the same one) and merged in.
+    """
+    versions_dir = _pathlib.Path(__file__).resolve().parent.parent / "alembic" / "versions"
+    base_path = next(versions_dir.glob("l8b5c1e46f30_*.py"))
+    spec = _ilu.spec_from_file_location("document_type_rules_migration", base_path)
     module = _ilu.module_from_spec(spec)
     spec.loader.exec_module(module)
-    return module.RULES
+    rules = {code: dict(fields) for code, fields in module.RULES.items()}
+
+    for path in sorted(versions_dir.glob("*.py")):
+        if path == base_path:
+            continue
+        spec = _ilu.spec_from_file_location(path.stem, path)
+        module = _ilu.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        overrides = getattr(module, "RULES_OVERRIDES", None)
+        if not overrides:
+            continue
+        for code, fields in overrides.items():
+            rules.setdefault(code, {}).update(fields)
+    return rules
 
 
 DOCUMENT_TYPE_RULES = _load_document_type_rules()
