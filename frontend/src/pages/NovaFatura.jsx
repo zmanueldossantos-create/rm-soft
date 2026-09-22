@@ -336,8 +336,9 @@ export default function NovaFatura() {
     }
   }
 
+  const requiresPaymentTerm = !!documentTypes.find((d) => d.code === INVOICE_TYPE_CODE[invoiceType])?.requires_payment_term;
   const isFormValid = activityId && invoiceType && businessDate && lines.length > 0 &&
-    (invoiceType !== 'FACTURA' || paymentTermId) &&
+    (!requiresPaymentTerm || paymentTermId) &&
     lines.every((l) => {
     const item = getLineItem(l);
     return item && parseFloat(l.quantity) > 0;

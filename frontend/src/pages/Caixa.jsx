@@ -607,6 +607,7 @@ export default function Caixa() {
   // behaviour of the selected document type, from the catalog (paid on issue: payments at the till)
   const paidOnIssue = ruleOf(selectedInvoiceType, 'paid_on_issue');
   const billsLater = !paidOnIssue && selectedInvoiceType !== 'PRO_FORMA';
+  const requiresPaymentTerm = ruleOf(selectedInvoiceType, 'requires_payment_term');
   // offered = the catalog allows the type here AND the user may issue it (pro-forma: pos:proforma, a sale: pos:checkout)
   const visibleTypeOptions = posTypeOptions.filter((o) => {
     if (o.value === 'PRO_FORMA') return can('pos:proforma');
@@ -1510,7 +1511,7 @@ export default function Caixa() {
                 else if (billsLater) handleConfirmFt();
                 else handleConfirmSale();
               }}
-              disabled={(selectedInvoiceType === 'PRO_FORMA' ? !can('pos:proforma') : ((!billsLater && paymentMode === 'liquidation') ? !can('pos:liquidate') : !can('pos:checkout'))) || (selectedInvoiceType !== 'PRO_FORMA' && paidOnIssue && posPaymentMethods.length > 0 && paymentsRemaining !== 0) || (billsLater && !ftPaymentTermId)}
+              disabled={(selectedInvoiceType === 'PRO_FORMA' ? !can('pos:proforma') : ((!billsLater && paymentMode === 'liquidation') ? !can('pos:liquidate') : !can('pos:checkout'))) || (selectedInvoiceType !== 'PRO_FORMA' && paidOnIssue && posPaymentMethods.length > 0 && paymentsRemaining !== 0) || (requiresPaymentTerm && !ftPaymentTermId)}
               className="flex-1 bg-accent hover:bg-accent-hover text-white font-semibold text-sm rounded-md py-3 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Confirmar
