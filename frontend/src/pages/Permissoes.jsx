@@ -53,7 +53,7 @@ export default function Permissoes() {
   const categories = [...new Set(entries.map((e) => e.category))];
 
   return (
-    <main className="max-w-[1200px] mx-auto px-4 sm:px-6 md:px-8 py-6 sm:py-9">
+    <main className="max-w-[1600px] mx-auto px-4 sm:px-6 md:px-8 py-6 sm:py-9">
       <h2 className="font-display font-semibold text-[22px] text-text-primary flex items-center gap-2.5 mb-1">
         <ShieldCheck size={22} className="text-accent" />
         Permissoes
