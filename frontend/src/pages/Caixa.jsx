@@ -1927,7 +1927,7 @@ export default function Caixa() {
       </Modal>
 
 
-      <Modal open={proFormaModalOpen} onClose={() => setProFormaModalOpen(false)} title="Consultar documentos" maxWidthClass="max-w-2xl">
+      <Modal open={proFormaModalOpen} onClose={() => setProFormaModalOpen(false)} title="Consultar documentos" maxWidthClass="max-w-4xl">
         <div className="flex flex-col gap-3">
           {proFormaLoading ? (
             <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin text-accent" /></div>
@@ -1960,49 +1960,66 @@ export default function Caixa() {
             ) : recentInvoices.length === 0 ? (
               <p className="text-text-muted text-[13px] text-center py-6">Nenhum documento emitido ainda</p>
             ) : (
-              <div className="flex flex-col gap-2 max-h-[420px] overflow-y-auto scrollbar-thin">
-                {recentInvoices.map((inv) => (
-                  <div key={inv.id} className="flex items-center justify-between bg-bg-inset border border-border rounded-md px-4 py-2.5">
-                    <div>
-                      <p className="font-mono text-[12px] text-text-primary">{DOC_CODE_BY_TYPE[inv.invoice_type] || inv.invoice_type} {inv.series}/{inv.number}</p>
-                      <p className="text-[11px] text-text-muted">{new Date(inv.business_date).toLocaleDateString('pt-PT')} - Total {formatKz(inv.total)} Kz</p>
-                      <p className="text-[11px] text-text-muted">
-                        IVA {formatKz(inv.vat_total)} Kz
-                        {Number(inv.retention_total) > 0 && ' - Retencao ' + formatKz(inv.retention_total) + ' Kz'}
-                        {Number(inv.amount_received) > 0 && ' - Recebido ' + formatKz(inv.amount_received) + ' Kz'}
-                        {ruleOf(inv.invoice_type, 'accepts_receipt') && balanceOf(inv) > 0.005 && <span className="text-accent">{' - A pagar ' + formatKz(balanceOf(inv)) + ' Kz'}</span>}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        onClick={() => openPdfViewer(inv.id, 'thermal', inv.series + '-' + inv.number + ' (Ticket)')}
-                        title="Reimprimir - Ticket 80mm"
-                        className="flex items-center justify-center w-8 h-8 rounded-md border border-border text-text-muted hover:text-accent hover:border-accent transition-colors cursor-pointer"
-                      >
-                        <Receipt size={14} />
-                      </button>
-                      <button
-                        onClick={() => openPdfViewer(inv.id, 'a4', inv.series + '-' + inv.number + ' (A4)')}
-                        title="Reimprimir - A4"
-                        className="flex items-center justify-center w-8 h-8 rounded-md border border-border text-text-muted hover:text-accent hover:border-accent transition-colors cursor-pointer"
-                      >
-                        <Printer size={14} />
-                      </button>
-                      {inv.document_status !== 'ANULADO' && ruleOf(inv.invoice_type, 'accepts_receipt') && (
-                        <>
-                          <button
-                            onClick={() => documentActionsRef.current?.openRc(inv.id)}
-                            disabled={!can('invoices:receipt') || !session || !ruleOf(inv.invoice_type, 'accepts_receipt') || !((Number(inv.total) - Number(inv.retention_total || 0) - Number(inv.amount_received || 0)) > 0.005)}
-                            title="Emitir Recibo"
-                            className="flex items-center justify-center w-8 h-8 rounded-md border border-border text-text-muted hover:text-accent hover:border-accent transition-colors cursor-pointer text-[10px] font-bold disabled:opacity-40 disabled:cursor-not-allowed"
-                          >
-                            RC
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                ))}
+              <div className="max-h-[420px] overflow-y-auto overflow-x-auto scrollbar-thin">
+                <table className="w-full text-[12px] border-collapse">
+                  <thead className="sticky top-0 bg-bg-elevated">
+                    <tr className="border-b border-border text-[10px] font-semibold text-text-muted uppercase tracking-wide">
+                      <th className="text-left px-2.5 py-2">Documento</th>
+                      <th className="text-left px-2.5 py-2">Data</th>
+                      <th className="text-right px-2.5 py-2">Total</th>
+                      <th className="text-right px-2.5 py-2">IVA</th>
+                      <th className="text-right px-2.5 py-2">Retencao</th>
+                      <th className="text-right px-2.5 py-2">Recebido</th>
+                      <th className="text-right px-2.5 py-2">A pagar</th>
+                      <th className="text-right px-2.5 py-2">Acoes</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {recentInvoices.map((inv) => (
+                      <tr key={inv.id} className="border-b border-border last:border-0 hover:bg-bg-inset">
+                        <td className="px-2.5 py-2 font-mono text-text-primary whitespace-nowrap">{DOC_CODE_BY_TYPE[inv.invoice_type] || inv.invoice_type} {inv.series}/{inv.number}</td>
+                        <td className="px-2.5 py-2 text-text-muted whitespace-nowrap">{new Date(inv.business_date).toLocaleDateString('pt-PT')}</td>
+                        <td className="px-2.5 py-2 text-right font-mono text-text-primary whitespace-nowrap">{formatKz(inv.total)} Kz</td>
+                        <td className="px-2.5 py-2 text-right font-mono text-text-muted whitespace-nowrap">{formatKz(inv.vat_total)} Kz</td>
+                        <td className="px-2.5 py-2 text-right font-mono text-text-muted whitespace-nowrap">{Number(inv.retention_total) > 0 ? formatKz(inv.retention_total) + ' Kz' : '-'}</td>
+                        <td className="px-2.5 py-2 text-right font-mono text-text-muted whitespace-nowrap">{Number(inv.amount_received) > 0 ? formatKz(inv.amount_received) + ' Kz' : '-'}</td>
+                        <td className="px-2.5 py-2 text-right font-mono whitespace-nowrap">
+                          {ruleOf(inv.invoice_type, 'accepts_receipt') && balanceOf(inv) > 0.005 ? (
+                            <span className="text-accent">{formatKz(balanceOf(inv))} Kz</span>
+                          ) : '-'}
+                        </td>
+                        <td className="px-2.5 py-2">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={() => openPdfViewer(inv.id, 'thermal', inv.series + '-' + inv.number + ' (Ticket)')}
+                              title="Reimprimir - Ticket 80mm"
+                              className="flex items-center justify-center w-7 h-7 rounded-md border border-border text-text-muted hover:text-accent hover:border-accent transition-colors cursor-pointer"
+                            >
+                              <Receipt size={13} />
+                            </button>
+                            <button
+                              onClick={() => openPdfViewer(inv.id, 'a4', inv.series + '-' + inv.number + ' (A4)')}
+                              title="Reimprimir - A4"
+                              className="flex items-center justify-center w-7 h-7 rounded-md border border-border text-text-muted hover:text-accent hover:border-accent transition-colors cursor-pointer"
+                            >
+                              <Printer size={13} />
+                            </button>
+                            {inv.document_status !== 'ANULADO' && ruleOf(inv.invoice_type, 'accepts_receipt') && (
+                              <button
+                                onClick={() => documentActionsRef.current?.openRc(inv.id)}
+                                disabled={!can('invoices:receipt') || !session || !ruleOf(inv.invoice_type, 'accepts_receipt') || !((Number(inv.total) - Number(inv.retention_total || 0) - Number(inv.amount_received || 0)) > 0.005)}
+                                title="Emitir Recibo"
+                                className="flex items-center justify-center w-7 h-7 rounded-md border border-border text-text-muted hover:text-accent hover:border-accent transition-colors cursor-pointer text-[10px] font-bold disabled:opacity-40 disabled:cursor-not-allowed"
+                              >
+                                RC
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>
