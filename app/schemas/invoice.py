@@ -105,6 +105,7 @@ class InvoiceResponse(BaseModel):
     document_reference: str | None
     issuance_mode: str
     item_count: int = 0
+    amount_paid: float = 0
     converted_to_invoice_id: uuid.UUID | None = None
     atcud: str
     invoice_hash: str
