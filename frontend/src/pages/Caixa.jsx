@@ -162,8 +162,11 @@ export default function Caixa() {
     setSessionLoading(true);
     setError('');
     try {
+      // Servi?os (no STOCK capability) never gets products:manage - listProducts would 403 and, if kept
+      // inside this Promise.all, drag the whole page load down with it (activities, association, etc.).
+      const canManageProducts = can('products:manage');
       const [activitiesData, productsData, customersData, association] = await Promise.all([
-        listActivities(), listProducts(), listCustomers(), getMyCashPointAssociation(),
+        listActivities(), canManageProducts ? listProducts() : Promise.resolve([]), listCustomers(), getMyCashPointAssociation(),
       ]);
       const activeActivities = activitiesData.filter((a) => a.is_active);
       const posLists = await Promise.all(activeActivities.map((a) => listPointsOfSale(a.id)));
