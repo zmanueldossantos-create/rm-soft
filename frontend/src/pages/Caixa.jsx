@@ -740,7 +740,6 @@ export default function Caixa() {
   }
 
   function selectProFormaToLiquidate(proForma) {
-    setProFormaModalOpen(false);
     setPaymentMode('liquidation');
     setLiquidationTarget(proForma);
     setLiquidationTargetType(posLiquidationOptions.some((o) => o.value === defaultPaidType) ? defaultPaidType : posLiquidationOptions[0].value);
@@ -1277,7 +1276,7 @@ export default function Caixa() {
         )}
       </Modal>
 
-      <Modal open={paymentModalOpen} onClose={closeLiquidationModal} title="Liquidar pro-forma">
+      <Modal open={paymentModalOpen} onClose={closeLiquidationModal} title="Liquidar pro-forma" stacked={paymentMode === 'liquidation'}>
         <div className="flex flex-col gap-4">
           {liquidationTarget && (
             <div className="bg-accent/10 border-l-2 border-accent px-3.5 py-2.5 text-[13px] rounded-r">
@@ -1936,7 +1935,9 @@ export default function Caixa() {
           ) : pendingProFormas.length === 0 ? (
             <p className="text-text-muted text-[13px] text-center py-8">Nenhuma pro-forma pendente de liquidacao</p>
           ) : (
-            <div className="max-h-[280px] overflow-y-auto overflow-x-auto scrollbar-thin">
+            <div>
+              <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wide mb-2">Pro-formas pendentes de liquidacao</p>
+              <div className="max-h-[280px] overflow-y-auto overflow-x-auto scrollbar-thin">
               <table className="w-full text-[12px] border-collapse">
                 <thead className="sticky top-0 bg-bg-elevated">
                   <tr className="border-b border-border text-[10px] font-semibold text-text-muted uppercase tracking-wide">
@@ -1968,6 +1969,7 @@ export default function Caixa() {
                   ))}
                 </tbody>
               </table>
+              </div>
             </div>
           )}
 
