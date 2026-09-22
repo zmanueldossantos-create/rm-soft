@@ -79,7 +79,7 @@ export default function Caixa() {
   const [moedeiroSavedTotal, setMoedeiroSavedTotal] = useState(null);
 
   const [movementModalOpen, setMovementModalOpen] = useState(false);
-  const [movementForm, setMovementForm] = useState({ movementType: 'TRANSFERENCIA', amount: '', otherPosId: '', reasonId: '', description: '' });
+  const [movementForm, setMovementForm] = useState({ movementType: 'TRANSFERENCIA', amount: '', sourcePosId: '', otherPosId: '', reasonId: '', description: '' });
   const [movementReasons, setMovementReasons] = useState([]);
   const [movementSaving, setMovementSaving] = useState(false);
   const [movementFormError, setMovementFormError] = useState('');
@@ -293,7 +293,7 @@ export default function Caixa() {
   }
 
   function openMovementModal() {
-    setMovementForm({ movementType: 'TRANSFERENCIA', amount: '', otherPosId: '', reasonId: '', description: '' });
+    setMovementForm({ movementType: 'TRANSFERENCIA', amount: '', sourcePosId: selectedPosId, otherPosId: '', reasonId: '', description: '' });
     setMovementFormError('');
     setMovementModalOpen(true);
     setMovementModalTab('form');
@@ -379,7 +379,7 @@ export default function Caixa() {
         description: movementForm.description || null,
       };
       if (movementForm.movementType === 'TRANSFERENCIA') {
-        payload.source_pos_id = selectedPosId;
+        payload.source_pos_id = movementForm.sourcePosId;
         payload.destination_pos_id = movementForm.otherPosId;
       } else if (movementForm.movementType === 'ENTRADA_EXTERNA') {
         payload.destination_pos_id = selectedPosId;
@@ -391,7 +391,7 @@ export default function Caixa() {
       getPosStockLevels(selectedPosId).then(setStockLevels).catch(() => {});
       loadPendingEmissionsList();
       loadPendingReceptionsList();
-      setMovementForm({ movementType: 'TRANSFERENCIA', amount: '', otherPosId: '', reasonId: '', description: '' });
+      setMovementForm({ movementType: 'TRANSFERENCIA', amount: '', sourcePosId: selectedPosId, otherPosId: '', reasonId: '', description: '' });
     } catch (err) {
       setMovementFormError(extractErrorMessage(err, 'Erro ao registar movimento'));
     } finally {
@@ -1679,15 +1679,27 @@ export default function Caixa() {
             </div>
 
             {movementForm.movementType === 'TRANSFERENCIA' && (
-              <div>
-                <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Caixa de destino *</label>
-                <Select
-                  value={movementForm.otherPosId}
-                  onChange={(v) => setMovementForm((p) => ({ ...p, otherPosId: v }))}
-                  options={allActivePos.filter((p) => p.id !== selectedPosId).map((p) => ({ value: p.id, label: posLabel(p) }))}
-                  placeholder="Selecionar"
-                />
-              </div>
+              <>
+                <div>
+                  <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Caixa de origem *</label>
+                  <Select
+                    value={movementForm.sourcePosId}
+                    onChange={(v) => setMovementForm((p) => ({ ...p, sourcePosId: v, otherPosId: p.otherPosId === v ? '' : p.otherPosId }))}
+                    options={allActivePos.map((p) => ({ value: p.id, label: posLabel(p) }))}
+                    placeholder="Selecionar"
+                    disabled={!isGestor}
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Caixa de destino *</label>
+                  <Select
+                    value={movementForm.otherPosId}
+                    onChange={(v) => setMovementForm((p) => ({ ...p, otherPosId: v }))}
+                    options={allActivePos.filter((p) => p.id !== movementForm.sourcePosId).map((p) => ({ value: p.id, label: posLabel(p) }))}
+                    placeholder="Selecionar"
+                  />
+                </div>
+              </>
             )}
             {movementForm.movementType !== 'TRANSFERENCIA' && (
               <div>
