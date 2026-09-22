@@ -197,6 +197,7 @@ class DocumentTypeRequest(BaseModel):
     requires_origin: bool | None = None
     has_lines: bool | None = None
     paid_on_issue: bool | None = None
+    requires_payment_term: bool | None = None
     sent_to_agt: bool | None = None
     deducts_stock: bool | None = None
     accepts_credit_note: bool | None = None
@@ -207,7 +208,7 @@ class DocumentTypeRequest(BaseModel):
     issuable_at_pos: bool | None = None
 
     def rules_dict(self) -> dict:
-        names = ("saft_section", "revenue_sign", "requires_origin", "has_lines", "paid_on_issue", "sent_to_agt", "deducts_stock",
+        names = ("saft_section", "revenue_sign", "requires_origin", "has_lines", "paid_on_issue", "requires_payment_term", "sent_to_agt", "deducts_stock",
                  "accepts_credit_note", "accepts_debit_note", "accepts_receipt", "convertible", "issuable_in_invoices", "issuable_at_pos")
         return {name: getattr(self, name) for name in names if getattr(self, name) is not None}
 
@@ -226,6 +227,7 @@ class DocumentTypeResponse(BaseModel):
     requires_origin: bool = False
     has_lines: bool = True
     paid_on_issue: bool = False
+    requires_payment_term: bool = False
     sent_to_agt: bool = False
     deducts_stock: bool = False
     accepts_credit_note: bool = False

@@ -54,6 +54,7 @@ class DocumentType(Base):
     convertible: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)  # can become a FT / FR
     issuable_in_invoices: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)  # Nova Fatura
     issuable_at_pos: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)  # Caixa
+    requires_payment_term: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)  # FT (payment condition mandatory)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     def __repr__(self) -> str:
