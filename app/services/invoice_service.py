@@ -1388,6 +1388,16 @@ async def list_invoices(
         for inv in invoices_list:
             inv.item_count = counts_by_id.get(inv.id, 0)
 
+        # Attach customer_name dynamically too (not a real column, same mechanism as item_count above) -
+        # the Caixa's pending pro-formas table shows it, e.g. Consumidor final or "-" for a walk-in.
+        customer_ids = [inv.customer_id for inv in invoices_list if inv.customer_id]
+        name_by_id = {}
+        if customer_ids:
+            name_result = await db.execute(select(Customer.id, Customer.name).where(Customer.id.in_(customer_ids)))
+            name_by_id = dict(name_result.all())
+        for inv in invoices_list:
+            inv.customer_name = name_by_id.get(inv.customer_id)
+
     return invoices_list
 
 
