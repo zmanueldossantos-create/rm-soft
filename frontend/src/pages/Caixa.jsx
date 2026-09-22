@@ -57,6 +57,10 @@ function formatKz(value) {
 export default function Caixa() {
   const can = useCan();
   const currentUser = useAuthStore((state) => state.user);
+  // can() trusts GESTOR by default while permissions is still null (avoids a menu flash) - but
+  // loadInitial must know the REAL answer before deciding whether to call listProducts.
+  const permissionsList = useAuthStore((state) => state.permissions);
+  const canManageProductsUi = Array.isArray(permissionsList) ? permissionsList.includes('products:manage') : true;
   const isGestor = currentUser?.role === 'GESTOR';
   const documentActionsRef = useRef(null);
 
@@ -74,6 +78,9 @@ export default function Caixa() {
   const [vatRates, setVatRates] = useState([]);
   const [withholdingTaxes, setWithholdingTaxes] = useState([]);
   const [activeCategoryId, setActiveCategoryId] = useState('all');
+  useEffect(() => {
+    if (!canManageProductsUi) setActiveCategoryId('services');
+  }, [canManageProductsUi]);
   const [customersModalOpen, setCustomersModalOpen] = useState(false);
   const [customerSearchQuery, setCustomerSearchQuery] = useState('');
   const [newCustomerModalOpen, setNewCustomerModalOpen] = useState(false);
@@ -228,8 +235,8 @@ export default function Caixa() {
   }
 
   useEffect(() => {
-    loadInitial();
-  }, []);
+    if (Array.isArray(permissionsList)) loadInitial();
+  }, [Array.isArray(permissionsList)]);
 
   async function openMoedeiroModal(countType) {
     const resolvedType = countType || 'ABERTURA';
@@ -944,21 +951,25 @@ export default function Caixa() {
               </div>
 
               <div className="flex items-center gap-2 mb-4 overflow-x-auto scrollbar-thin pb-1">
-                <button
-                  onClick={() => setActiveCategoryId('all')}
-                  className={'shrink-0 px-3.5 py-1.5 rounded-md text-[13px] font-medium transition-colors cursor-pointer ' + (activeCategoryId === 'all' ? 'bg-accent text-white' : 'bg-bg-elevated border border-border text-text-muted hover:text-text-primary')}
-                >
-                  Todos
-                </button>
-                {categories.map((c) => (
-                  <button
-                    key={c.id}
-                    onClick={() => setActiveCategoryId(c.id)}
-                    className={'shrink-0 px-3.5 py-1.5 rounded-md text-[13px] font-medium transition-colors cursor-pointer ' + (activeCategoryId === c.id ? 'bg-accent text-white' : 'bg-bg-elevated border border-border text-text-muted hover:text-text-primary')}
-                  >
-                    {c.name}
-                  </button>
-                ))}
+                {canManageProductsUi && (
+                  <>
+                    <button
+                      onClick={() => setActiveCategoryId('all')}
+                      className={'shrink-0 px-3.5 py-1.5 rounded-md text-[13px] font-medium transition-colors cursor-pointer ' + (activeCategoryId === 'all' ? 'bg-accent text-white' : 'bg-bg-elevated border border-border text-text-muted hover:text-text-primary')}
+                    >
+                      Todos
+                    </button>
+                    {categories.map((c) => (
+                      <button
+                        key={c.id}
+                        onClick={() => setActiveCategoryId(c.id)}
+                        className={'shrink-0 px-3.5 py-1.5 rounded-md text-[13px] font-medium transition-colors cursor-pointer ' + (activeCategoryId === c.id ? 'bg-accent text-white' : 'bg-bg-elevated border border-border text-text-muted hover:text-text-primary')}
+                      >
+                        {c.name}
+                      </button>
+                    ))}
+                  </>
+                )}
                 {services.length > 0 && (
                   <button
                     onClick={() => setActiveCategoryId('services')}
