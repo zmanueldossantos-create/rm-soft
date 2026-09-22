@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.cash_session import CashSession
 from app.models.document_type import DocumentType
 from app.models.invoice import DocumentLifecycleStatus, Invoice, InvoiceType
+from app.models.payment import Payment
 from app.services.document_rules import DOC_CODE_BY_INVOICE_TYPE
 
 
@@ -33,4 +34,18 @@ async def list_pos_documents(db: AsyncSession, company_id: uuid.UUID, pos_id: uu
         .order_by(Invoice.created_at.desc())
         .limit(limit)
     )
-    return list((await db.execute(query)).scalars().all())
+    invoices = list((await db.execute(query)).scalars().all())
+
+    # The amount actually collected on each document - the real payments recorded, not the amount_received
+    # field (that one is only filled for a deposit on a Fatura billed later; a Fatura/Recibo or a settled
+    # receipt is paid via real Payment rows instead).
+    if invoices:
+        invoice_ids = [inv.id for inv in invoices]
+        paid_result = await db.execute(
+            select(Payment.invoice_id, func.sum(Payment.amount)).where(Payment.invoice_id.in_(invoice_ids)).group_by(Payment.invoice_id)
+        )
+        paid_by_id = dict(paid_result.all())
+        for inv in invoices:
+            inv.amount_paid = float(paid_by_id.get(inv.id, 0) or 0)
+
+    return invoices
