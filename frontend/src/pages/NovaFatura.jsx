@@ -13,6 +13,7 @@ import { paymentTermsApi, paymentMethodsApi, unitsApi, documentRulesApi, banksAp
 import { getMyCompany, getMyCompanyBankAccounts } from '../api/company';
 import { listDocumentSeries } from '../api/documentSeries';
 import { extractErrorMessage } from '../utils/errors';
+import { useAuthStore } from '../store/authStore';
 
 const inputClass = "w-full bg-bg-inset border border-border rounded-md px-2.5 py-2 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors";
 const cellInputClass = "w-full bg-transparent border-none px-1 py-1 text-sm text-text-primary font-mono outline-none focus:bg-bg-inset rounded transition-colors";
@@ -104,13 +105,19 @@ export default function NovaFatura() {
   const [formError, setFormError] = useState('');
   const [previewOpen, setPreviewOpen] = useState(false);
 
+  // can() trusts GESTOR by default while permissions is still null (avoids a menu flash) - but this load
+  // must know the REAL answer before deciding whether to call listProducts (Servicos has no products:manage).
+  const permissionsList = useAuthStore((state) => state.permissions);
+  const canManageProducts = Array.isArray(permissionsList) ? permissionsList.includes('products:manage') : true;
+
   useEffect(() => {
+    if (!Array.isArray(permissionsList)) return;
     async function load() {
       setLoading(true);
       setLoadError('');
       try {
         const [activitiesData, customersData, productsData, servicesData, vatData, unitsData, termsData, methodsData, bankData, companyData, seriesData, docTypesData, banksData, whData] = await Promise.all([
-          listActivities(), listCustomers(), listProducts(), listServices(), listVatRates(), unitsApi.list(),
+          listActivities(), listCustomers(), canManageProducts ? listProducts() : Promise.resolve([]), listServices(), listVatRates(), unitsApi.list(),
           paymentTermsApi.list(), paymentMethodsApi.list(), getMyCompanyBankAccounts(), getMyCompany(), listDocumentSeries(), documentRulesApi.list(), banksApi.list(), withholdingTaxesApi.list(),
         ]);
         setActivities(activitiesData.filter((a) => a.is_active));
@@ -136,7 +143,7 @@ export default function NovaFatura() {
       }
     }
     load();
-  }, []);
+  }, [Array.isArray(permissionsList)]);
 
   const productById = useMemo(() => {
     const map = {};

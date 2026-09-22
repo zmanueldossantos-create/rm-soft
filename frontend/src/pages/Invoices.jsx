@@ -1,6 +1,7 @@
 ﻿import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCan } from '../utils/permissions';
+import { useAuthStore } from '../store/authStore';
 import { createPortal } from 'react-dom';
 import { Receipt, Plus, Loader2, Search, Trash2, FileText, Printer, Eye, X as XIcon, RefreshCw, RotateCcw, FilePlus, MoreVertical, ChevronLeft, ChevronRight } from 'lucide-react';
 import Modal from '../components/Modal';
@@ -103,6 +104,10 @@ function round2(v) {
 
 export default function Invoices() {
   const can = useCan();
+  // can() trusts GESTOR by default while permissions is still null (avoids a menu flash) - but the initial
+  // load must know the REAL answer before deciding whether to call listProducts (Servicos has no products:manage).
+  const permissionsList = useAuthStore((state) => state.permissions);
+  const canManageProducts = Array.isArray(permissionsList) ? permissionsList.includes('products:manage') : true;
   const navigate = useNavigate();
   const [invoices, setInvoices] = useState([]);
   const [products, setProducts] = useState([]);
@@ -469,7 +474,7 @@ export default function Invoices() {
     try {
       const [periodsData, productsData, servicesData, customersData, activitiesData, paymentTermsData, paymentMethodsData] = await Promise.all([
         getInvoicePeriods(),
-        listProducts(),
+        canManageProducts ? listProducts() : Promise.resolve([]),
         listServices(),
         listCustomers(),
         listActivities(),
@@ -523,8 +528,8 @@ export default function Invoices() {
   }
 
   useEffect(() => {
-    loadData();
-  }, []);
+    if (Array.isArray(permissionsList)) loadData();
+  }, [Array.isArray(permissionsList)]);
 
   const productById = useMemo(() => {
     const map = {};
