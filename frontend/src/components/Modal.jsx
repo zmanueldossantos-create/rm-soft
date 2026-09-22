@@ -13,7 +13,7 @@ export default function Modal({ open, onClose, title, children, maxWidthClass = 
           onClick={onClose}
         />
       )}
-      {stacked && <div className="absolute inset-0" onClick={onClose} />}
+      {stacked && <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />}
       <div className={'relative bg-bg-elevated border border-border rounded-lg w-full shadow-2xl flex flex-col max-h-[90vh] ' + maxWidthClass}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
           <h3 className="font-display font-semibold text-[15px] text-text-primary">
