@@ -29,7 +29,7 @@ import { listUsers } from '../api/users';
 import { useAuthStore } from '../store/authStore';
 import { extractErrorMessage } from '../utils/errors';
 
-const balanceOf = (inv) => Number(inv.total) - Number(inv.retention_total || 0) - Number(inv.amount_received || 0);
+const balanceOf = (inv) => Number(inv.total) - Number(inv.retention_total || 0) - Number(inv.amount_paid || 0);
 
 function addDays(dateStr, days) {
   const d = new Date(dateStr);
@@ -1936,20 +1936,38 @@ export default function Caixa() {
           ) : pendingProFormas.length === 0 ? (
             <p className="text-text-muted text-[13px] text-center py-8">Nenhuma pro-forma pendente de liquidacao</p>
           ) : (
-            <div className="flex flex-col gap-2 max-h-[420px] overflow-y-auto scrollbar-thin">
-              {pendingProFormas.map((pf) => (
-                <button
-                  key={pf.id}
-                  onClick={() => selectProFormaToLiquidate(pf)}
-                  className="flex items-center justify-between bg-bg-inset border border-border hover:border-accent rounded-md px-4 py-3 text-left transition-colors cursor-pointer"
-                >
-                  <div>
-                    <p className="font-mono text-[12px] text-text-primary">FP {pf.series}/{pf.number}</p>
-                    <p className="text-[11px] text-text-muted">{new Date(pf.business_date).toLocaleDateString('pt-PT')}</p>
-                  </div>
-                  <span className="font-mono font-semibold text-accent text-[13px]">{formatKz(pf.total)} Kz</span>
-                </button>
-              ))}
+            <div className="max-h-[280px] overflow-y-auto overflow-x-auto scrollbar-thin">
+              <table className="w-full text-[12px] border-collapse">
+                <thead className="sticky top-0 bg-bg-elevated">
+                  <tr className="border-b border-border text-[10px] font-semibold text-text-muted uppercase tracking-wide">
+                    <th className="text-left px-2.5 py-2">Documento</th>
+                    <th className="text-left px-2.5 py-2">Data</th>
+                    <th className="text-left px-2.5 py-2">Cliente</th>
+                    <th className="text-right px-2.5 py-2">Total</th>
+                    <th className="text-right px-2.5 py-2">Retencao</th>
+                    <th className="text-right px-2.5 py-2">Acao</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pendingProFormas.map((pf) => (
+                    <tr key={pf.id} className="border-b border-border last:border-0 hover:bg-bg-inset">
+                      <td className="px-2.5 py-2 font-mono text-text-primary whitespace-nowrap">FP {pf.series}/{pf.number}</td>
+                      <td className="px-2.5 py-2 text-text-muted whitespace-nowrap">{new Date(pf.business_date).toLocaleDateString('pt-PT')}</td>
+                      <td className="px-2.5 py-2 text-text-muted whitespace-nowrap">{pf.customer_name || '-'}</td>
+                      <td className="px-2.5 py-2 text-right font-mono font-semibold text-accent whitespace-nowrap">{formatKz(pf.total)} Kz</td>
+                      <td className="px-2.5 py-2 text-right font-mono text-text-muted whitespace-nowrap">{Number(pf.retention_total) > 0 ? formatKz(pf.retention_total) + ' Kz' : '-'}</td>
+                      <td className="px-2.5 py-2 text-right whitespace-nowrap">
+                        <button
+                          onClick={() => selectProFormaToLiquidate(pf)}
+                          className="text-accent hover:text-accent-hover font-medium text-[12px] cursor-pointer"
+                        >
+                          Liquidar
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
 
@@ -1982,7 +2000,7 @@ export default function Caixa() {
                         <td className="px-2.5 py-2 text-right font-mono text-text-primary whitespace-nowrap">{formatKz(inv.total)} Kz</td>
                         <td className="px-2.5 py-2 text-right font-mono text-text-muted whitespace-nowrap">{formatKz(inv.vat_total)} Kz</td>
                         <td className="px-2.5 py-2 text-right font-mono text-text-muted whitespace-nowrap">{Number(inv.retention_total) > 0 ? formatKz(inv.retention_total) + ' Kz' : '-'}</td>
-                        <td className="px-2.5 py-2 text-right font-mono text-text-muted whitespace-nowrap">{Number(inv.amount_received) > 0 ? formatKz(inv.amount_received) + ' Kz' : '-'}</td>
+                        <td className="px-2.5 py-2 text-right font-mono text-text-muted whitespace-nowrap">{Number(inv.amount_paid) > 0 ? formatKz(inv.amount_paid) + ' Kz' : '-'}</td>
                         <td className="px-2.5 py-2 text-right font-mono whitespace-nowrap">
                           {ruleOf(inv.invoice_type, 'accepts_receipt') && balanceOf(inv) > 0.005 ? (
                             <span className="text-accent">{formatKz(balanceOf(inv))} Kz</span>
@@ -2007,7 +2025,7 @@ export default function Caixa() {
                             {inv.document_status !== 'ANULADO' && ruleOf(inv.invoice_type, 'accepts_receipt') && (
                               <button
                                 onClick={() => documentActionsRef.current?.openRc(inv.id)}
-                                disabled={!can('invoices:receipt') || !session || !ruleOf(inv.invoice_type, 'accepts_receipt') || !((Number(inv.total) - Number(inv.retention_total || 0) - Number(inv.amount_received || 0)) > 0.005)}
+                                disabled={!can('invoices:receipt') || !session || !ruleOf(inv.invoice_type, 'accepts_receipt') || !(balanceOf(inv) > 0.005)}
                                 title="Emitir Recibo"
                                 className="flex items-center justify-center w-7 h-7 rounded-md border border-border text-text-muted hover:text-accent hover:border-accent transition-colors cursor-pointer text-[10px] font-bold disabled:opacity-40 disabled:cursor-not-allowed"
                               >
