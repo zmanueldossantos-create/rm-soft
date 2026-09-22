@@ -1425,6 +1425,12 @@ export default function Caixa() {
               <span className="text-text-primary font-semibold">Total</span>
               <span className="text-text-primary font-mono font-bold">{formatKz(cartTotal)} Kz</span>
             </div>
+            {paidOnIssue && (
+              <div className="flex justify-between text-[13px] pt-1.5 border-t border-border mt-1">
+                <span className="text-text-muted">Pronto a pagar</span>
+                <span className="text-success font-medium">Sim</span>
+              </div>
+            )}
           </div>
 {posPaymentMethods.length > 0 && (
             <div className="flex flex-col gap-2 mb-4">
