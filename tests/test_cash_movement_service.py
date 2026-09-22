@@ -40,6 +40,8 @@ async def test_transfer_out_reduces_expected_amount_on_close(db, company_with_es
     company = setup["company"]
     other_pos = await _make_second_pos(db, company, setup["activity"])
 
+    # The destination side of a transfer must have an open session too (see DestinationPosNotOpenError rule).
+    await open_session(db, company.id, other_pos.id, setup["gestor"], opening_amount=0)
     session = await open_session(db, company.id, setup["pos"].id, setup["gestor"], opening_amount=1000)
 
     await create_cash_movement(
