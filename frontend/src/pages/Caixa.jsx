@@ -1510,7 +1510,7 @@ export default function Caixa() {
                 else if (billsLater) handleConfirmFt();
                 else handleConfirmSale();
               }}
-              disabled={(selectedInvoiceType === 'PRO_FORMA' ? !can('pos:proforma') : ((!billsLater && paymentMode === 'liquidation') ? !can('pos:liquidate') : !can('pos:checkout'))) || (selectedInvoiceType !== 'PRO_FORMA' && paidOnIssue && posPaymentMethods.length > 0 && paymentsRemaining !== 0)}
+              disabled={(selectedInvoiceType === 'PRO_FORMA' ? !can('pos:proforma') : ((!billsLater && paymentMode === 'liquidation') ? !can('pos:liquidate') : !can('pos:checkout'))) || (selectedInvoiceType !== 'PRO_FORMA' && paidOnIssue && posPaymentMethods.length > 0 && paymentsRemaining !== 0)} || (billsLater && !ftPaymentTermId)}
               className="flex-1 bg-accent hover:bg-accent-hover text-white font-semibold text-sm rounded-md py-3 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Confirmar
