@@ -27,7 +27,18 @@ let rulesCache = { at: 0, promise: null };
 export const documentRulesApi = {
   list: () => {
     if (!rulesCache.promise || Date.now() - rulesCache.at > 60000) {
-      const promise = apiClient.get('/catalogs/document-rules').then((res) => res.data);
+      const promise = apiClient.get('/catalogs/document-rules').then((res) => res.data).then(async (rules) => {
+        // Overlay this company's own requires_payment_term choice on top of the platform default (absence of
+        // access to that route - most roles - just keeps the platform default, same graceful fallback as elsewhere).
+        let prefs = [];
+        try {
+          prefs = (await apiClient.get('/tesouraria/document-type-payment-term-preferences')).data;
+        } catch (err) {
+          return rules;
+        }
+        const prefByTypeId = Object.fromEntries(prefs.map((p) => [p.id, p.requires_payment_term]));
+        return rules.map((r) => (r.id in prefByTypeId ? { ...r, requires_payment_term: prefByTypeId[r.id] } : r));
+      });
       rulesCache = { at: Date.now(), promise };
       promise.catch(() => { if (rulesCache.promise === promise) rulesCache = { at: 0, promise: null }; });
     }
