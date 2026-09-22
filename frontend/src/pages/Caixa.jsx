@@ -31,6 +31,19 @@ import { extractErrorMessage } from '../utils/errors';
 
 const balanceOf = (inv) => Number(inv.total) - Number(inv.retention_total || 0) - Number(inv.amount_paid || 0);
 
+// The cart is kept per cash point, in sessionStorage (cleared when the tab closes) - so switching between
+// two of the gestor's cash points, or reloading the page, does not silently lose items in progress.
+const cartStorageKey = (posId) => 'rm_caixa_cart:' + posId;
+function loadStoredCart(posId) {
+  if (!posId) return [];
+  try {
+    const raw = sessionStorage.getItem(cartStorageKey(posId));
+    return raw ? JSON.parse(raw) : [];
+  } catch (err) {
+    return [];
+  }
+}
+
 function addDays(dateStr, days) {
   const d = new Date(dateStr);
   d.setDate(d.getDate() + days);
@@ -197,6 +210,7 @@ export default function Caixa() {
       const associatedPosStillActive = association?.pos_id && availablePos.some((p) => p.id === association.pos_id);
       const initialPosId = associatedPosStillActive ? association.pos_id : (availablePos[0]?.id || '');
       setSelectedPosId(initialPosId);
+      setCart(loadStoredCart(initialPosId));
       if (initialPosId) {
         const openSession = await getOpenCashSession(initialPosId);
         setSession(openSession);
@@ -432,9 +446,18 @@ export default function Caixa() {
     }
   }
 
+  useEffect(() => {
+    if (!selectedPosId) return;
+    try {
+      sessionStorage.setItem(cartStorageKey(selectedPosId), JSON.stringify(cart));
+    } catch (err) {
+      // storage full or unavailable - the cart still works, just not persisted
+    }
+  }, [cart, selectedPosId]);
+
   async function handlePosChange(posId) {
     setSelectedPosId(posId);
-    setCart([]);
+    setCart(loadStoredCart(posId));
     setSessionLoading(true);
     try {
       const openSession = await getOpenCashSession(posId);
