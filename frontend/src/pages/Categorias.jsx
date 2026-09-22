@@ -4,7 +4,7 @@ import Modal from '../components/Modal';
 import Select from '../components/Select';
 import { listProductCategories, createProductCategory, updateProductCategory, toggleProductCategoryStatus } from '../api/productCategories';
 import { listServiceTypes, createServiceType, updateServiceType, toggleServiceTypeStatus } from '../api/serviceTypes';
-import { listCashMovementReasons, createCashMovementReason, updateCashMovementReason, toggleCashMovementReasonStatus, listPaymentMethodPreferences, setPaymentMethodPreference } from '../api/tesouraria';
+import { listCashMovementReasons, createCashMovementReason, updateCashMovementReason, toggleCashMovementReasonStatus, listPaymentMethodPreferences, setPaymentMethodPreference, listDocumentTypePaymentTermPreferences, setDocumentTypePaymentTermPreference } from '../api/tesouraria';
 import { listResourceTypes, createResourceType, updateResourceType, toggleResourceTypeStatus } from '../api/booking';
 import { listConsumptionReasons, createConsumptionReason, updateConsumptionReason, toggleConsumptionReasonStatus } from '../api/internalConsumption';
 import { extractErrorMessage } from '../utils/errors';
@@ -76,6 +76,10 @@ export default function Categorias() {
   const [paymentMethodsModalOpen, setPaymentMethodsModalOpen] = useState(false);
   const [paymentMethodsLoading, setPaymentMethodsLoading] = useState(false);
   const [togglingPaymentMethodId, setTogglingPaymentMethodId] = useState(null);
+  const [paymentTermPrefs, setPaymentTermPrefs] = useState([]);
+  const [paymentTermPrefsModalOpen, setPaymentTermPrefsModalOpen] = useState(false);
+  const [paymentTermPrefsLoading, setPaymentTermPrefsLoading] = useState(false);
+  const [togglingPaymentTermPrefId, setTogglingPaymentTermPrefId] = useState(null);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -101,6 +105,7 @@ export default function Categorias() {
   useEffect(() => {
     loadCounts();
     listPaymentMethodPreferences().then(setPaymentMethods).catch(() => {});
+    listDocumentTypePaymentTermPreferences().then(setPaymentTermPrefs).catch(() => {});
   }, []);
 
   async function openCatalog(catalog) {
@@ -148,6 +153,30 @@ export default function Categorias() {
       setError(extractErrorMessage(err, 'Erro ao atualizar preferencia'));
     } finally {
       setTogglingPaymentMethodId(null);
+    }
+  }
+
+  async function openPaymentTermPrefsModal() {
+    setPaymentTermPrefsModalOpen(true);
+    setPaymentTermPrefsLoading(true);
+    try {
+      setPaymentTermPrefs(await listDocumentTypePaymentTermPreferences());
+    } catch (err) {
+      setError(extractErrorMessage(err, 'Erro ao carregar condicoes de pagamento'));
+    } finally {
+      setPaymentTermPrefsLoading(false);
+    }
+  }
+
+  async function handleTogglePaymentTermPref(docType) {
+    setTogglingPaymentTermPrefId(docType.id);
+    try {
+      await setDocumentTypePaymentTermPreference(docType.id, !docType.requires_payment_term);
+      setPaymentTermPrefs(await listDocumentTypePaymentTermPreferences());
+    } catch (err) {
+      setError(extractErrorMessage(err, 'Erro ao atualizar preferencia'));
+    } finally {
+      setTogglingPaymentTermPrefId(null);
     }
   }
 
@@ -257,6 +286,16 @@ export default function Categorias() {
             <p className="text-text-muted text-[12px] font-mono">{paymentMethods.length} itens</p>
           </button>
           )}
+          {can('documents:payment_term_prefs_view') && (
+          <button
+            onClick={openPaymentTermPrefsModal}
+            className="bg-bg-elevated border border-border hover:border-accent rounded-lg p-5 text-left transition-colors cursor-pointer"
+          >
+            <CreditCard size={20} className="text-accent mb-3" />
+            <p className="font-display font-semibold text-text-primary text-sm mb-1">Condições de Pagamento Obrigatórias</p>
+            <p className="text-text-muted text-[12px] font-mono">{paymentTermPrefs.length} itens</p>
+          </button>
+          )}
         </div>
       )}
 
@@ -314,6 +353,30 @@ export default function Categorias() {
                     {m.is_cash && <span className="text-[10px] font-semibold uppercase tracking-wide text-success bg-success/10 px-1.5 py-0.5 rounded">Numerario</span>}
                   </div>
                   <ToggleSwitch checked={m.available_at_pos} disabled={togglingPaymentMethodId === m.id || !can('tesouraria:payment_prefs_manage')} onChange={() => handleTogglePaymentMethod(m)} />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      <Modal open={paymentTermPrefsModalOpen} onClose={() => setPaymentTermPrefsModalOpen(false)} title="Condicoes de Pagamento Obrigatorias" maxWidthClass="max-w-2xl">
+        <div className="flex flex-col gap-4">
+          <p className="text-text-muted text-[13px]">Escolha para quais tipos de documento e obrigatorio escolher uma condicao de pagamento (o catalogo da plataforma define o padrao)</p>
+          {paymentTermPrefsLoading ? (
+            <div className="flex items-center justify-center py-8 text-text-muted text-sm">
+              <Loader2 size={16} className="animate-spin mr-2" />
+              A carregar...
+            </div>
+          ) : (
+            <div className="flex flex-col gap-1.5 max-h-[420px] overflow-y-auto scrollbar-thin">
+              {paymentTermPrefs.map((d) => (
+                <div key={d.id} className="flex items-center justify-between gap-2 border border-border rounded-md px-3.5 py-2.5">
+                  <div className="flex items-center gap-2.5">
+                    <span className="font-mono text-[11px] text-text-muted bg-bg-inset px-1.5 py-0.5 rounded">{d.code}</span>
+                    <span className="text-[13px] text-text-primary">{d.name}</span>
+                  </div>
+                  <ToggleSwitch checked={d.requires_payment_term} disabled={togglingPaymentTermPrefId === d.id || !can('documents:payment_term_prefs_manage')} onChange={() => handleTogglePaymentTermPref(d)} />
                 </div>
               ))}
             </div>

@@ -83,6 +83,19 @@ export async function unassignUserFromCashPoint(userId) {
 }
 
 
+export async function listDocumentTypePaymentTermPreferences() {
+  const res = await apiClient.get('/tesouraria/document-type-payment-term-preferences');
+  return res.data;
+}
+
+export async function setDocumentTypePaymentTermPreference(documentTypeId, requiresPaymentTerm) {
+  const res = await apiClient.put('/tesouraria/document-type-payment-term-preferences/' + documentTypeId, {
+    requires_payment_term: requiresPaymentTerm,
+  });
+  return res.data;
+}
+
+
 export async function listPaymentMethodPreferences() {
   const res = await apiClient.get('/tesouraria/payment-method-preferences');
   return res.data;
