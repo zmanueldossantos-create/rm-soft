@@ -34,8 +34,8 @@ CAPABILITIES: dict[str, Capability] = {
     for c in (
         Capability(
             "STOCK", "Stock", "Armazens, movimentos de stock, fornecedores e consumo interno", (),
-            ("stock", "warehouses", "movements", "suppliers", "consumption_reasons", "internal_consumption"),
-            ("/stock", "/stock/dashboard", "/stock-movements", "/fornecedores", "/consumo-interno"),
+            ("stock", "warehouses", "movements", "suppliers", "consumption_reasons", "internal_consumption", "products"),
+            ("/stock", "/stock/dashboard", "/stock-movements", "/fornecedores", "/consumo-interno", "/products", "/materia-prima"),
         ),
         Capability(
             "PRODUCTION", "Producao", "Receitas e producao (a partir do stock)", ("STOCK",),
@@ -62,7 +62,7 @@ CAPABILITIES: dict[str, Capability] = {
 
 # Permission prefixes that belong to the core (always available to every company).
 CORE_PREFIXES: frozenset[str] = frozenset({
-    "pos", "moedeiro", "tesouraria", "invoices", "documents", "document_series", "customers", "products", "services",
+    "pos", "moedeiro", "tesouraria", "invoices", "documents", "document_series", "customers", "services",
     "service_types", "product_categories", "catalogs", "fiscal_periods", "saf_t", "company",
     "company_bank_accounts", "establishments", "dashboard", "vat", "activities", "pos_terminals",
 })
