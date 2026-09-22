@@ -743,8 +743,7 @@ export default function Caixa() {
     setPaymentMode('liquidation');
     setLiquidationTarget(proForma);
     setLiquidationTargetType(posLiquidationOptions.some((o) => o.value === defaultPaidType) ? defaultPaidType : posLiquidationOptions[0].value);
-    const numerarioId = posPaymentMethods.find((m) => m.code === 'NU')?.id;
-    setPayments(numerarioId ? [{ paymentMethodId: numerarioId, amount: String((Number(proForma.total) - Number(proForma.retention_total || 0)).toFixed(2)) }] : []);
+    setPayments([]);
     setCheckoutError('');
     setLastInvoice(null);
     setPaymentModalOpen(true);
