@@ -345,10 +345,13 @@ async def deduct_stock_for_sale(
     stock = await _get_or_create_stock_row(db, company_id, product_id, warehouse_id)
 
     if float(stock.quantity) < quantity:
-        result = await db.execute(select(Product).where(Product.id == product_id))
-        product = result.scalar_one_or_none()
-        product_name = product.name if product else str(product_id)
-        raise InsufficientStockError(f"Stock insuficiente para {product_name} (disponível: {_format_quantity(float(stock.quantity))})")
+        warehouse_result = await db.execute(select(Warehouse).where(Warehouse.id == warehouse_id))
+        warehouse = warehouse_result.scalar_one_or_none()
+        if not (warehouse and warehouse.allow_negative_stock):
+            result = await db.execute(select(Product).where(Product.id == product_id))
+            product = result.scalar_one_or_none()
+            product_name = product.name if product else str(product_id)
+            raise InsufficientStockError(f"Stock insuficiente para {product_name} (disponível: {_format_quantity(float(stock.quantity))})")
 
     stock.quantity = float(stock.quantity) - quantity
     db.add(StockMovement(
