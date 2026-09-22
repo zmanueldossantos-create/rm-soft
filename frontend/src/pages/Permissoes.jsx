@@ -77,12 +77,12 @@ export default function Permissoes() {
             <div className="px-4 py-2.5 border-b border-border bg-bg-inset">
               <p className="text-[11px] font-medium uppercase tracking-wide text-text-muted">{category}</p>
             </div>
-            <table className="w-full text-sm">
+            <table className="w-full text-sm table-fixed">
               <thead>
                 <tr className="border-b border-border text-[11px] uppercase tracking-wide text-text-muted">
                   <th className="text-left px-4 py-2.5">Permissao</th>
                   {ROLES.map((role) => (
-                    <th key={role} className="text-center px-4 py-2.5">{ROLE_LABELS[role]}</th>
+                    <th key={role} className="text-center px-4 py-2.5 w-32">{ROLE_LABELS[role]}</th>
                   ))}
                 </tr>
               </thead>
