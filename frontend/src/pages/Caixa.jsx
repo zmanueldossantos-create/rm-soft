@@ -210,7 +210,7 @@ export default function Caixa() {
         paymentTermsApi.list(), listPaymentMethodPreferences(), getMyCompanyBankAccounts(),
       ]);
       setCategories(categoriesData.filter((c) => c.is_active));
-      setServices(servicesData.filter((s) => s.is_active));
+      setServices(servicesData.filter((s) => s.is_active && !s.not_available_pos));
       setVatRates(vatData);
       setWithholdingTaxes(withholdingData);
       setPaymentTerms(termsData.filter((t) => t.is_active));
