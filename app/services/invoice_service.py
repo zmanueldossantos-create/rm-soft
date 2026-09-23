@@ -28,13 +28,14 @@ import hashlib
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import select, func, extract
+from sqlalchemy import select, func, extract, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.document_rules import DocumentRulesNotFoundError, get_document_rules, rules_from_row
 from app.core.tax_exemptions import TAX_EXEMPTION_REASONS
 from app.models.vat_code import VatCode
 from app.models.invoice import Invoice, InvoiceStatus, InvoiceType, DocumentLifecycleStatus, CreditNoteReason
+from app.models.cash_session import CashSession
 from app.models.invoice_line import InvoiceLine
 from app.models.product import Product
 from app.models.service import Service
@@ -1346,6 +1347,7 @@ async def list_invoices(
     offset: int = 0,
     invoice_type: str | None = None,
     pending_only: bool = False,
+    pos_id: uuid.UUID | None = None,
 ) -> list[Invoice]:
     """
     Lists invoices, newest first, with optional filters (year/month OR an
@@ -1356,6 +1358,11 @@ async def list_invoices(
     combined with invoice_type="PRO_FORMA", is the Caixa liquidation search:
     pro-formas not yet converted to a real invoice (converted_to_invoice_id
     IS NULL) - see pos_service.liquidate_pending_invoice.
+
+    pos_id restricts real invoices (FT/FR/NC/ND/RC) to the sessions of that one POS - the CAIXA
+    role only sees documents from its own cash point. Pro-formas are never restricted this way
+    (they have no cash_session_id until liquidated, and any cashier can liquidate any of them -
+    see point-8 discussion). The caller (route) passes pos_id only for CAIXA; None for GESTOR.
     """
     query = select(Invoice).where(Invoice.company_id == company_id)
     if year is not None:
@@ -1370,6 +1377,9 @@ async def list_invoices(
         query = query.where(Invoice.invoice_type == InvoiceType(invoice_type))
     if pending_only:
         query = query.where(Invoice.converted_to_invoice_id.is_(None))
+    if pos_id is not None:
+        session_ids = select(CashSession.id).where(CashSession.pos_id == pos_id)
+        query = query.where(or_(Invoice.invoice_type == InvoiceType.PRO_FORMA, Invoice.cash_session_id.in_(session_ids)))
     query = query.order_by(Invoice.created_at.desc()).limit(limit).offset(offset)
 
     result = await db.execute(query)

@@ -303,10 +303,17 @@ async def get_invoices(
     current_user: User = Depends(require_permission("invoices:view")),
 ):
     """Lists invoices belonging to the caller's company, filtered and paginated.
-    invoice_type + pending_only=true finds pro-formas awaiting Caixa liquidation."""
+    invoice_type + pending_only=true finds pro-formas awaiting Caixa liquidation.
+    CAIXA only sees documents from its own cash point (pro-formas excepted - see list_invoices
+    docstring); GESTOR and other roles see everything, unrestricted."""
+    pos_id = None
+    if current_user.role == "CAIXA":
+        from app.services.user_cash_point_access_service import get_access_for_user
+        access = await get_access_for_user(db, current_user.company_id, current_user.id)
+        pos_id = access.pos_id if access else None
     return await list_invoices(
         db, current_user.company_id, year, month, date_from, date_to, limit, offset,
-        invoice_type=invoice_type, pending_only=pending_only,
+        invoice_type=invoice_type, pending_only=pending_only, pos_id=pos_id,
     )
 
 
