@@ -592,19 +592,17 @@ export default function AdminCompanies() {
                 <Field label="Denominação fiscal *">
                   <input value={form.name} onChange={(e) => updateField('name', e.target.value)} required className={inputClass} />
                 </Field>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                 <Field label="Nome curto">
                   <input value={form.shortName} onChange={(e) => updateField('shortName', e.target.value)} placeholder="Usado nas listagens" className={inputClass} />
                 </Field>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                 <Field label="Email *">
                   <input type="email" value={form.email} onChange={(e) => updateField('email', e.target.value)} required className={inputClass} />
                 </Field>
                 <Field label="Website">
                   <input value={form.website} onChange={(e) => updateField('website', e.target.value)} className={inputClass} />
                 </Field>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                 <Field label="Telefone 1 *">
                   <div className="flex items-center bg-bg-inset border border-border rounded-md overflow-hidden focus-within:border-accent transition-colors">
                     <span className="px-3 py-2.5 text-text-muted border-r border-border font-mono text-sm">+244</span>
@@ -617,11 +615,11 @@ export default function AdminCompanies() {
                     <input value={form.phone2} onChange={(e) => updateField('phone2', e.target.value)} placeholder="923 456 789" className="flex-1 bg-transparent border-none px-3 py-2.5 text-sm text-text-primary font-mono outline-none" />
                   </div>
                 </Field>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                 <Field label="Moeda principal">
                   <Select value={form.primaryCurrencyId} onChange={(v) => updateField('primaryCurrencyId', v)} options={primaryCurrencyOptions.map((c) => ({ value: c.id, label: c.code + ' - ' + c.name }))} placeholder="Selecionar" />
                 </Field>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                 <Field label="Moeda secundária">
                   <Select value={form.secondaryCurrencyId} onChange={(v) => updateField('secondaryCurrencyId', v)} options={secondaryCurrencyOptions.map((c) => ({ value: c.id, label: c.code + ' - ' + c.name }))} placeholder="Selecionar" />
                 </Field>
@@ -632,25 +630,35 @@ export default function AdminCompanies() {
                   <Select value={form.municipalityId} onChange={(v) => updateField('municipalityId', v)} options={municipalitiesForProvince.map((m) => ({ value: m.id, label: m.name }))} placeholder="Selecionar" />
                 </Field>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-                <Field label="Cidade">
-                  <input value={form.city} onChange={(e) => updateField('city', e.target.value)} className={inputClass} />
-                </Field>
-                <Field label="Número de registo comercial">
-                  <input value={form.commercialRegistrationNumber} onChange={(e) => updateField('commercialRegistrationNumber', e.target.value)} className={inputClass} />
-                </Field>
-                <Field label="Morada">
-                  <input value={form.address} onChange={(e) => updateField('address', e.target.value)} className={inputClass} />
-                </Field>
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
+                <div className="sm:col-span-3">
+                  <Field label="Cidade">
+                    <input value={form.city} onChange={(e) => updateField('city', e.target.value)} className={inputClass} />
+                  </Field>
+                </div>
+                <div className="sm:col-span-3">
+                  <Field label="Morada">
+                    <input value={form.address} onChange={(e) => updateField('address', e.target.value)} className={inputClass} />
+                  </Field>
+                </div>
+                <div className="sm:col-span-6">
+                  <Field label="Número de registo comercial">
+                    <input value={form.commercialRegistrationNumber} onChange={(e) => updateField('commercialRegistrationNumber', e.target.value)} className={inputClass} />
+                  </Field>
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-                <Field label="Regime fiscal" hint={editingId ? "Alterar o regime ajusta automaticamente as taxas de IVA da empresa: desativa as que o novo regime nao permite e ativa/cria as que ele permite" : "Determina quais taxas de IVA a empresa poderá usar"}>
-                  <Select value={form.fiscalRegimeId} onChange={(v) => updateField('fiscalRegimeId', v)} options={regimes.map((r) => ({ value: r.id, label: r.name }))} placeholder="Selecionar regime fiscal" />
-                </Field>
-                <Field label="Modo de emissão">
-                  <Select value={form.issuanceMode} onChange={handleIssuanceModeChange} options={[{ value: 'MANUAL', label: 'Manual' }, { value: 'ELETRONICA', label: 'Eletrónica' }]} />
-                </Field>
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
+                <div className="sm:col-span-6">
+                  <Field label="Regime fiscal">
+                    <Select value={form.fiscalRegimeId} onChange={(v) => updateField('fiscalRegimeId', v)} options={regimes.map((r) => ({ value: r.id, label: r.name }))} placeholder="Selecionar regime fiscal" />
+                  </Field>
+                </div>
+                <div className="sm:col-span-6">
+                  <Field label="Modo de emissão">
+                    <Select value={form.issuanceMode} onChange={handleIssuanceModeChange} options={[{ value: 'MANUAL', label: 'Manual' }, { value: 'ELETRONICA', label: 'Eletrónica' }]} />
+                  </Field>
+                </div>
               </div>
 
               {form.issuanceMode === 'ELETRONICA' && (
