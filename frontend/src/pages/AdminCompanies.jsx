@@ -547,7 +547,7 @@ export default function AdminCompanies() {
         )}
       </div>
 
-      <Modal open={modalOpen} onClose={closeModal} title={editingId ? 'Editar empresa' : 'Nova empresa'} maxWidthClass="max-w-3xl">
+      <Modal open={modalOpen} onClose={closeModal} title={editingId ? 'Editar empresa' : 'Nova empresa'} maxWidthClass="max-w-5xl">
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex items-center bg-bg-inset border border-border rounded-md p-0.5 self-start flex-wrap">
             {[
@@ -570,7 +570,7 @@ export default function AdminCompanies() {
 
           {activeTab === 'dados' && (
             <div className="flex flex-col gap-4 min-h-[420px] max-h-[420px] overflow-y-auto scrollbar-thin pr-1">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                 <Field label="NIF *">
                   <div className="flex items-center bg-bg-inset border border-border rounded-md overflow-hidden focus-within:border-accent transition-colors">
                     <input value={form.nif} onChange={(e) => updateField('nif', e.target.value)} required className="flex-1 bg-transparent border-none px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none" />
@@ -593,7 +593,7 @@ export default function AdminCompanies() {
                   <input value={form.name} onChange={(e) => updateField('name', e.target.value)} required className={inputClass} />
                 </Field>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                 <Field label="Nome curto">
                   <input value={form.shortName} onChange={(e) => updateField('shortName', e.target.value)} placeholder="Usado nas listagens" className={inputClass} />
                 </Field>
@@ -604,7 +604,7 @@ export default function AdminCompanies() {
                   <input value={form.website} onChange={(e) => updateField('website', e.target.value)} className={inputClass} />
                 </Field>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                 <Field label="Telefone 1 *">
                   <div className="flex items-center bg-bg-inset border border-border rounded-md overflow-hidden focus-within:border-accent transition-colors">
                     <span className="px-3 py-2.5 text-text-muted border-r border-border font-mono text-sm">+244</span>
@@ -621,7 +621,7 @@ export default function AdminCompanies() {
                   <Select value={form.primaryCurrencyId} onChange={(v) => updateField('primaryCurrencyId', v)} options={primaryCurrencyOptions.map((c) => ({ value: c.id, label: c.code + ' - ' + c.name }))} placeholder="Selecionar" />
                 </Field>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                 <Field label="Moeda secundária">
                   <Select value={form.secondaryCurrencyId} onChange={(v) => updateField('secondaryCurrencyId', v)} options={secondaryCurrencyOptions.map((c) => ({ value: c.id, label: c.code + ' - ' + c.name }))} placeholder="Selecionar" />
                 </Field>
@@ -632,7 +632,7 @@ export default function AdminCompanies() {
                   <Select value={form.municipalityId} onChange={(v) => updateField('municipalityId', v)} options={municipalitiesForProvince.map((m) => ({ value: m.id, label: m.name }))} placeholder="Selecionar" />
                 </Field>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                 <Field label="Cidade">
                   <input value={form.city} onChange={(e) => updateField('city', e.target.value)} className={inputClass} />
                 </Field>
@@ -644,8 +644,8 @@ export default function AdminCompanies() {
                 </Field>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <Field label="Regime fiscal" hint={editingId ? "Alterar aqui nao ajusta automaticamente as taxas de IVA ja configuradas - ajuste-as manualmente no catalogo se necessario" : "Determina quais taxas de IVA a empresa poderá usar"}>
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                <Field label="Regime fiscal" hint={editingId ? "Alterar o regime ajusta automaticamente as taxas de IVA da empresa: desativa as que o novo regime nao permite e ativa/cria as que ele permite" : "Determina quais taxas de IVA a empresa poderá usar"}>
                   <Select value={form.fiscalRegimeId} onChange={(v) => updateField('fiscalRegimeId', v)} options={regimes.map((r) => ({ value: r.id, label: r.name }))} placeholder="Selecionar regime fiscal" />
                 </Field>
                 <Field label="Modo de emissão">
