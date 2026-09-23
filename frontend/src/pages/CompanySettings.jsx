@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Building2, Loader2, Save, Lock, Image, Upload, Store, Plus, Pencil, Landmark, X, Check, Trash2, FileStack, Sparkles, ChevronDown, CreditCard, Link2, Unlink } from 'lucide-react';
+import { Building2, Loader2, Save, Lock, Image, Upload, Store, Plus, Pencil, Landmark, X, Check, Trash2, FileStack, Sparkles, ChevronDown, CreditCard, Link2, Unlink, Users } from 'lucide-react';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
 import { getMyCompany, updateMyCompanyContact, uploadMyCompanyLogo, removeMyCompanyLogo, getMyCompanyBankAccounts, addMyCompanyBankAccount, updateMyCompanyBankAccount, toggleMyCompanyBankAccountStatus } from '../api/company';
@@ -90,7 +90,6 @@ export default function CompanySettings() {
   const [activityFormError, setActivityFormError] = useState('');
   const [activityTogglingId, setActivityTogglingId] = useState(null);
 
-  const [expandedActivityId, setExpandedActivityId] = useState(null);
   const [posByActivity, setPosByActivity] = useState({});
   const [posLoadingActivityId, setPosLoadingActivityId] = useState(null);
   const [posModalOpen, setPosModalOpen] = useState(false);
@@ -179,6 +178,7 @@ export default function CompanySettings() {
       ]);
       setActivities(activitiesData);
       setAvailableModules(modulesRes.data);
+      activitiesData.forEach((a) => loadPointsOfSale(a.id));
     } catch (err) {
       setError(extractErrorMessage(err, 'Erro ao carregar atividades'));
     } finally {
@@ -297,12 +297,6 @@ export default function CompanySettings() {
     } finally {
       setPosLoadingActivityId(null);
     }
-  }
-
-  function toggleExpandActivity(activityId) {
-    const next = expandedActivityId === activityId ? null : activityId;
-    setExpandedActivityId(next);
-    if (next && !posByActivity[activityId]) loadPointsOfSale(activityId);
   }
 
   function openCreatePos(activityId) {
@@ -864,12 +858,9 @@ export default function CompanySettings() {
                   {activities.map((a) => (
                     <div key={a.id} className="border border-border rounded-md">
                       <div className="flex items-center justify-between px-4 py-3">
-                        <button type="button" onClick={() => toggleExpandActivity(a.id)} className="flex items-center gap-2 cursor-pointer">
-                          <ChevronDown size={14} className={'text-text-muted transition-transform ' + (expandedActivityId === a.id ? 'rotate-180' : '')} />
-                          <p className="font-display font-medium text-text-primary">{a.name}</p>
-                          {!a.is_active && <span className="text-[10px] font-semibold uppercase tracking-wide text-danger bg-danger/10 px-1.5 py-0.5 rounded">Inativa</span>}
-                        </button>
+                        <p className="font-display font-medium text-text-primary">{a.name}</p>
                         <div className="flex items-center gap-2">
+                          {!a.is_active && <span className="text-[10px] font-semibold uppercase tracking-wide text-danger bg-danger/10 px-1.5 py-0.5 rounded">Inativa</span>}
                           <button onClick={() => openEditActivity(a)} aria-label="Editar atividade" className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-border text-text-muted hover:text-text-primary hover:border-accent transition-colors cursor-pointer">
                             <Pencil size={14} />
                           </button>
@@ -877,7 +868,7 @@ export default function CompanySettings() {
                         </div>
                       </div>
 
-                      {expandedActivityId === a.id && (
+                      {(
                         <div className="border-t border-border px-4 py-3 bg-bg-inset/40">
                           <div className="flex items-center justify-between mb-2.5">
                             <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wide flex items-center gap-1.5"><CreditCard size={12} />Pontos de venda</p>
@@ -892,20 +883,28 @@ export default function CompanySettings() {
                           ) : (
                             <div className="flex flex-col gap-1.5">
                               {posByActivity[a.id].map((p) => (
-                                <div key={p.id} className="flex items-center justify-between bg-bg-elevated border border-border rounded-md px-3 py-2">
-                                  <div className="flex items-center gap-2">
-                                    <p className="text-[13px] text-text-primary">{p.name}</p>
+                                <div key={p.id} className="flex items-center justify-between bg-bg-elevated border border-border rounded-lg px-3.5 py-3">
+                                  <div className="flex items-center gap-3">
+                                    <p className="text-sm font-medium text-text-primary">{p.name}</p>
                                     {!p.is_active && <span className="text-[10px] font-semibold uppercase tracking-wide text-danger bg-danger/10 px-1.5 py-0.5 rounded">Inativo</span>}
-                                    {canAssociate && <span className="text-[11px] text-text-muted">{assocUserName(p.id) ? '- ' + assocUserName(p.id) : '- sem utilizador'}</span>}
+                                    {canAssociate && (
+                                      assocUserName(p.id) ? (
+                                        <span className="flex items-center gap-1.5 bg-accent/10 text-accent text-[12px] font-medium rounded-md px-2.5 py-1">
+                                          <Users size={12} />{assocUserName(p.id)}
+                                        </span>
+                                      ) : (
+                                        <span className="text-[11px] text-text-muted">sem utilizador</span>
+                                      )
+                                    )}
                                   </div>
-                                  <div className="flex items-center gap-2">
+                                  <div className="flex items-center gap-2.5">
                                     {canAssociate && (
                                       <button onClick={() => openAssociation(p)} aria-label="Associar utilizador" title="Associar utilizador" className="inline-flex items-center justify-center w-7 h-7 rounded-md border border-border text-text-muted hover:text-text-primary hover:border-accent transition-colors cursor-pointer">
-                                        <Link2 size={12} />
+                                        <Link2 size={14} />
                                       </button>
                                     )}
                                     <button onClick={() => openEditPos(p)} aria-label="Editar ponto de venda" className="inline-flex items-center justify-center w-7 h-7 rounded-md border border-border text-text-muted hover:text-text-primary hover:border-accent transition-colors cursor-pointer">
-                                      <Pencil size={12} />
+                                      <Pencil size={14} />
                                     </button>
                                     <ToggleSwitch checked={p.is_active} disabled={posTogglingId === p.id || !!p.is_default} onChange={() => handleTogglePos(p.id, a.id)} />
                                   </div>
