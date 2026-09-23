@@ -17,12 +17,13 @@ function ToggleSwitch({ checked, onChange, disabled }) {
 }
 
 const ROLE_OPTIONS = [
+  { value: 'GESTOR', label: 'Gestor' },
   { value: 'CAIXA', label: 'Caixa' },
   { value: 'ARMAZENISTA', label: 'Armazenista' },
   { value: 'CONTABILISTA', label: 'Contabilista' },
 ];
 
-const emptyForm = { fullName: '', phone: '', password: '', role: 'CAIXA' };
+const emptyForm = { fullName: '', phone: '', password: '', role: '' };
 
 export default function Users() {
   const currentUser = useAuthStore((state) => state.user);
