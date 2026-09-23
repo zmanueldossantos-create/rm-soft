@@ -453,7 +453,7 @@ export default function AdminCompanies() {
 
   const isFormValid = editingId
     ? form.name && form.nif && form.email && form.phone
-    : form.name && form.nif && form.email && form.phone && form.gestorName && form.gestorPhone && form.gestorPassword.length >= 8;
+    : form.name && form.nif && form.email && form.phone && form.fiscalRegimeId && form.gestorName && form.gestorPhone && form.gestorPassword.length >= 8;
 
   return (
     <main className="max-w-[1600px] mx-auto px-4 sm:px-6 md:px-8 py-6 sm:py-9">
@@ -553,8 +553,7 @@ export default function AdminCompanies() {
             {[
               ...(editingId ? [] : [['gestor', 'Conta do Gestor']]),
               ['dados', 'Dados da Empresa'],
-              ['fiscal', 'Informações Fiscais'],
-              ['bancarias', 'Coordenadas Bancárias'],
+                        ['bancarias', 'Coordenadas Bancárias'],
               ...(editingId ? [['iva', 'Taxas de IVA']] : []),
               ['modulos', 'Módulos'],
             ].map(([key, label]) => (
@@ -637,12 +636,50 @@ export default function AdminCompanies() {
                 <Field label="Cidade">
                   <input value={form.city} onChange={(e) => updateField('city', e.target.value)} className={inputClass} />
                 </Field>
-                <Field label="Número de registo comercial" hint="Necessário para o SAF-T">
+                <Field label="Número de registo comercial">
                   <input value={form.commercialRegistrationNumber} onChange={(e) => updateField('commercialRegistrationNumber', e.target.value)} className={inputClass} />
                 </Field>
                 <Field label="Morada">
                   <input value={form.address} onChange={(e) => updateField('address', e.target.value)} className={inputClass} />
                 </Field>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <Field label="Regime fiscal" hint={editingId ? "Alterar aqui nao ajusta automaticamente as taxas de IVA ja configuradas - ajuste-as manualmente no catalogo se necessario" : "Determina quais taxas de IVA a empresa poderá usar"}>
+                  <Select value={form.fiscalRegimeId} onChange={(v) => updateField('fiscalRegimeId', v)} options={regimes.map((r) => ({ value: r.id, label: r.name }))} placeholder="Selecionar regime fiscal" />
+                </Field>
+                <Field label="Modo de emissão">
+                  <Select value={form.issuanceMode} onChange={handleIssuanceModeChange} options={[{ value: 'MANUAL', label: 'Manual' }, { value: 'ELETRONICA', label: 'Eletrónica' }]} />
+                </Field>
+              </div>
+
+              {form.issuanceMode === 'ELETRONICA' && (
+                <Field label="Assinatura eletrónica (chave privada AGT)">
+                  <input type="password" value={form.electronicSignatureKey} onChange={(e) => updateField('electronicSignatureKey', e.target.value)} className={inputClass} />
+                </Field>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4" id="usesInvoicingRow">
+                <label className="flex items-center gap-2.5 cursor-pointer select-none border border-border rounded-md px-3.5 py-3 hover:border-accent transition-colors">
+                  <input type="checkbox" checked={form.usesInvoicing} onChange={(e) => handleUsesInvoicingChange(e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
+                  <span className="text-sm text-text-primary">Usa Facturação</span>
+                </label>
+                {form.usesInvoicing && (
+                  <>
+                    <label className="flex items-center gap-2.5 cursor-pointer select-none border border-border rounded-md px-3.5 py-3 hover:border-accent transition-colors">
+                      <input type="checkbox" checked={form.autoSeriesYear} disabled={form.issuanceMode === 'ELETRONICA'} onChange={(e) => updateField('autoSeriesYear', e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer disabled:opacity-50" />
+                      <span className="text-sm text-text-primary">Série automática por ano</span>
+                    </label>
+                    <label className="flex items-center gap-2.5 cursor-pointer select-none border border-border rounded-md px-3.5 py-3 hover:border-accent transition-colors">
+                      <input type="checkbox" checked={form.allowsFutureSaleDate} onChange={(e) => updateField('allowsFutureSaleDate', e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
+                      <span className="text-sm text-text-primary">Permite venda com data futura</span>
+                    </label>
+                    <label className="flex items-center gap-2.5 cursor-pointer select-none border border-border rounded-md px-3.5 py-3 hover:border-accent transition-colors">
+                      <input type="checkbox" checked={form.suggestsLastDocumentDate} onChange={(e) => updateField('suggestsLastDocumentDate', e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
+                      <span className="text-sm text-text-primary">Sugere data do último documento</span>
+                    </label>
+                  </>
+                )}
               </div>
 
             </div>
@@ -756,46 +793,6 @@ export default function AdminCompanies() {
                   );
                 })}
               </div>
-            </div>
-          )}
-
-          {activeTab === 'fiscal' && (
-            <div className="flex flex-col gap-4 min-h-[420px]">
-              <Field label="Regime fiscal" hint={editingId ? "Alterar aqui nao ajusta automaticamente as taxas de IVA ja configuradas - ajuste-as manualmente no catalogo se necessario" : "Determina quais taxas de IVA a empresa poderá usar"}>
-                <Select value={form.fiscalRegimeId} onChange={(v) => updateField('fiscalRegimeId', v)} options={regimes.map((r) => ({ value: r.id, label: r.name }))} placeholder="Selecionar regime fiscal" />
-              </Field>
-
-              <Field label="Modo de emissão">
-                <Select value={form.issuanceMode} onChange={handleIssuanceModeChange} options={[{ value: 'MANUAL', label: 'Manual' }, { value: 'ELETRONICA', label: 'Eletrónica' }]} />
-              </Field>
-
-              {form.issuanceMode === 'ELETRONICA' && (
-                <Field label="Assinatura eletrónica (chave privada AGT)">
-                  <input type="password" value={form.electronicSignatureKey} onChange={(e) => updateField('electronicSignatureKey', e.target.value)} className={inputClass} />
-                </Field>
-              )}
-
-              <label className="flex items-center gap-2.5 cursor-pointer select-none border border-border rounded-md px-3.5 py-3 hover:border-accent transition-colors">
-                <input type="checkbox" checked={form.usesInvoicing} onChange={(e) => handleUsesInvoicingChange(e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
-                <span className="text-sm text-text-primary">Usa Facturação</span>
-              </label>
-
-              {form.usesInvoicing && (
-                <div className="flex flex-col gap-2 pl-4 border-l-2 border-border">
-                  <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                    <input type="checkbox" checked={form.autoSeriesYear} disabled={form.issuanceMode === 'ELETRONICA'} onChange={(e) => updateField('autoSeriesYear', e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer disabled:opacity-50" />
-                    <span className="text-sm text-text-primary">Série automática por ano</span>
-                  </label>
-                  <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                    <input type="checkbox" checked={form.allowsFutureSaleDate} onChange={(e) => updateField('allowsFutureSaleDate', e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
-                    <span className="text-sm text-text-primary">Permite venda com data futura</span>
-                  </label>
-                  <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                    <input type="checkbox" checked={form.suggestsLastDocumentDate} onChange={(e) => updateField('suggestsLastDocumentDate', e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
-                    <span className="text-sm text-text-primary">Sugere data do último documento</span>
-                  </label>
-                </div>
-              )}
             </div>
           )}
 
