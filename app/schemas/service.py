@@ -30,7 +30,6 @@ class ServiceCreateRequest(BaseModel):
     duration_minutes: int | None = Field(default=None, ge=5, le=1440)
     brand: str | None = None
     withholding_tax_id: uuid.UUID | None = None
-    subject_to_return: bool = False
     not_available_pos: bool = False
     status: str = "ACTIVO"
     exemption_reason_id: uuid.UUID | None = None
@@ -70,7 +69,6 @@ class ServiceResponse(BaseModel):
     duration_minutes: int | None = None
     brand: str | None
     withholding_tax_id: uuid.UUID | None
-    subject_to_return: bool
     not_available_pos: bool
     status: str
     exemption_reason_id: uuid.UUID | None

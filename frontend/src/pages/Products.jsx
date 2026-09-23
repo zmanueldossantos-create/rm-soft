@@ -44,7 +44,7 @@ const emptyForm = {
   minStockThreshold: '0', expiryDate: '', isSoldByWeight: false,
   unitOfMeasureId: '', categoryId: '', brand: '',
   managedByBatch: false, managedByStock: true, managedByExpiry: false,
-  notAvailablePos: false, internalUseOnly: false, subjectToReturn: false, status: 'ACTIVO',
+  notAvailablePos: false, internalUseOnly: false, status: 'ACTIVO',
   exemptionReasonId: '',
 };
 
@@ -139,7 +139,6 @@ export default function Products() {
       managedByExpiry: product.managed_by_expiry,
       notAvailablePos: product.not_available_pos,
       internalUseOnly: product.internal_use_only,
-      subjectToReturn: product.subject_to_return,
       status: product.status,
       exemptionReasonId: product.exemption_reason_id || '',
     });
@@ -227,7 +226,6 @@ export default function Products() {
       managed_by_expiry: form.managedByExpiry,
       not_available_pos: form.notAvailablePos,
       internal_use_only: form.internalUseOnly,
-      subject_to_return: form.subjectToReturn,
       status: form.status,
       exemption_reason_id: form.exemptionReasonId || null,
     };
@@ -480,10 +478,6 @@ export default function Products() {
             <label className="flex items-center gap-2.5 cursor-pointer select-none">
               <input type="checkbox" checked={form.internalUseOnly} onChange={(e) => updateField('internalUseOnly', e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
               <span className="text-sm text-text-primary">Uso interno apenas (nunca vendavel)</span>
-            </label>
-            <label className="flex items-center gap-2.5 cursor-pointer select-none">
-              <input type="checkbox" checked={form.subjectToReturn} onChange={(e) => updateField('subjectToReturn', e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
-              <span className="text-sm text-text-primary">Sujeito a devolução</span>
             </label>
           </div>
 

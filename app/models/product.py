@@ -97,7 +97,6 @@ class Product(Base):
     # picker. Distinct from not_available_pos, which only hides an item at
     # the POS specifically while it may still be sold elsewhere (invoices).
     internal_use_only: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    subject_to_return: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)  # sujeito a devolucao
 
     status: Mapped[ProductServiceStatus] = mapped_column(Enum(ProductServiceStatus, name="productservicestatus"), nullable=False, default=ProductServiceStatus.ACTIVO)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

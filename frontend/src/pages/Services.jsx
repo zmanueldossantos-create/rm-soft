@@ -35,7 +35,7 @@ const inputClass = "w-full bg-bg-inset border border-border rounded-md px-3.5 py
 const emptyForm = {
   code: '', name: '', serviceTypeId: '', resourceTypeId: '', description: '', unitOfMeasureId: '',
   price: '', brand: '', vatId: '', withholdingTaxId: '',
-  subjectToReturn: false, notAvailablePos: false, status: 'ACTIVO',
+  notAvailablePos: false, status: 'ACTIVO',
   exemptionReasonId: '',
   durationMinutes: '',
 };
@@ -130,7 +130,6 @@ export default function Services() {
       brand: service.brand || '',
       vatId: service.vat_id,
       withholdingTaxId: service.withholding_tax_id || '',
-      subjectToReturn: service.subject_to_return,
       notAvailablePos: service.not_available_pos,
       status: service.status,
       exemptionReasonId: service.exemption_reason_id || '',
@@ -183,7 +182,6 @@ export default function Services() {
       brand: form.brand || null,
       vat_id: form.vatId,
       withholding_tax_id: form.withholdingTaxId || null,
-      subject_to_return: form.subjectToReturn,
       not_available_pos: form.notAvailablePos,
       status: form.status,
       exemption_reason_id: form.exemptionReasonId || null,
@@ -391,10 +389,6 @@ export default function Services() {
             <label className="flex items-center gap-2.5 cursor-pointer select-none">
               <input type="checkbox" checked={form.notAvailablePos} onChange={(e) => updateField('notAvailablePos', e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
               <span className="text-sm text-text-primary">Não disponível POS</span>
-            </label>
-            <label className="flex items-center gap-2.5 cursor-pointer select-none">
-              <input type="checkbox" checked={form.subjectToReturn} onChange={(e) => updateField('subjectToReturn', e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
-              <span className="text-sm text-text-primary">Sujeito a devolução</span>
             </label>
           </div>
 

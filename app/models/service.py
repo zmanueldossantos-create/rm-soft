@@ -52,7 +52,6 @@ class Service(Base):
     exemption_reason_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("vat_codes.id"), nullable=True)
     brand: Mapped[str | None] = mapped_column(String(100), nullable=True)  # marca
     withholding_tax_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("withholding_taxes.id"), nullable=True)
-    subject_to_return: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)  # sujeito a devolucao
     not_available_pos: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     status: Mapped[ProductServiceStatus] = mapped_column(Enum(ProductServiceStatus, name="productservicestatus"), nullable=False, default=ProductServiceStatus.ACTIVO)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

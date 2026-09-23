@@ -48,7 +48,6 @@ class ProductCreateRequest(BaseModel):
     managed_by_expiry: bool = False
     not_available_pos: bool = False
     internal_use_only: bool = False
-    subject_to_return: bool = False
     status: str = "ACTIVO"
     exemption_reason_id: uuid.UUID | None = None
 
@@ -115,7 +114,6 @@ class ProductUpdateRequest(BaseModel):
     managed_by_expiry: bool = False
     not_available_pos: bool = False
     internal_use_only: bool = False
-    subject_to_return: bool = False
     status: str = "ACTIVO"
     exemption_reason_id: uuid.UUID | None = None
 
@@ -186,7 +184,6 @@ class ProductResponse(BaseModel):
     managed_by_expiry: bool
     not_available_pos: bool
     internal_use_only: bool
-    subject_to_return: bool
     status: str
     exemption_reason_id: uuid.UUID | None
 

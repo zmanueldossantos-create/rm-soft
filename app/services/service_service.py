@@ -64,7 +64,6 @@ async def create_service(
     price: float | None = None,
     brand: str | None = None,
     withholding_tax_id: uuid.UUID | None = None,
-    subject_to_return: bool = False,
     not_available_pos: bool = False,
     status: str = "ACTIVO",
     exemption_reason_id: uuid.UUID | None = None,
@@ -77,7 +76,7 @@ async def create_service(
         company_id=company_id, code=code, name=name, vat_id=vat_id,
         service_type_id=service_type_id, resource_type_id=resource_type_id, description=description,
         unit_of_measure_id=unit_of_measure_id, price=price, brand=brand, duration_minutes=duration_minutes,
-        withholding_tax_id=withholding_tax_id, subject_to_return=subject_to_return,
+        withholding_tax_id=withholding_tax_id,
         not_available_pos=not_available_pos, status=status,
         exemption_reason_id=exemption_reason_id,
     )
@@ -116,7 +115,6 @@ async def update_service(
     price: float | None = None,
     brand: str | None = None,
     withholding_tax_id: uuid.UUID | None = None,
-    subject_to_return: bool = False,
     not_available_pos: bool = False,
     status: str = "ACTIVO",
     exemption_reason_id: uuid.UUID | None = None,
@@ -137,7 +135,6 @@ async def update_service(
     service.duration_minutes = duration_minutes
     service.brand = brand
     service.withholding_tax_id = withholding_tax_id
-    service.subject_to_return = subject_to_return
     service.not_available_pos = not_available_pos
     service.status = status
     service.exemption_reason_id = exemption_reason_id

@@ -109,7 +109,6 @@ async def create_product(
     managed_by_expiry: bool = False,
     not_available_pos: bool = False,
     internal_use_only: bool = False,
-    subject_to_return: bool = False,
     status: str = "ACTIVO",
     exemption_reason_id: uuid.UUID | None = None,
 ) -> Product:
@@ -144,7 +143,6 @@ async def create_product(
         managed_by_expiry=managed_by_expiry,
         not_available_pos=not_available_pos,
         internal_use_only=internal_use_only,
-        subject_to_return=subject_to_return,
         status=status,
         exemption_reason_id=exemption_reason_id,
     )
@@ -197,7 +195,6 @@ async def update_product(
     managed_by_expiry: bool = False,
     not_available_pos: bool = False,
     internal_use_only: bool = False,
-    subject_to_return: bool = False,
     status: str = "ACTIVO",
     exemption_reason_id: uuid.UUID | None = None,
 ) -> Product:
@@ -231,7 +228,6 @@ async def update_product(
     product.managed_by_expiry = managed_by_expiry
     product.not_available_pos = not_available_pos
     product.internal_use_only = internal_use_only
-    product.subject_to_return = subject_to_return
     product.status = status
     product.exemption_reason_id = exemption_reason_id
 

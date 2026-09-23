@@ -70,7 +70,6 @@ async def create_new_product(
             managed_by_expiry=payload.managed_by_expiry,
             not_available_pos=payload.not_available_pos,
             internal_use_only=payload.internal_use_only,
-            subject_to_return=payload.subject_to_return,
             status=payload.status,
             exemption_reason_id=payload.exemption_reason_id,
         )
@@ -127,7 +126,6 @@ async def edit_product(
             managed_by_expiry=payload.managed_by_expiry,
             not_available_pos=payload.not_available_pos,
             internal_use_only=payload.internal_use_only,
-            subject_to_return=payload.subject_to_return,
             status=payload.status,
             exemption_reason_id=payload.exemption_reason_id,
         )
