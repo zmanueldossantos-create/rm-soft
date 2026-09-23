@@ -34,6 +34,16 @@ DEFAULT_VAT_RATES = [
     {"name": "Taxa normal", "rate": 14.00},
 ]
 
+# Maps a seeded VAT rate's name to the FiscalRegime flag that must allow it - used both at
+# creation (existing logic below) and when a company's regime changes later (see update_company):
+# a rate the new regime does not allow gets deactivated, one it allows gets (re)activated/created.
+# Existing invoice lines keep their own vat_rate_snapshot - never affected by this.
+REGIME_RATE_NAMES = [
+    ("allows_ise", "Isento", 0.00),
+    ("allows_red", "Taxa reduzida", 5.00),
+    ("allows_nor", "Taxa normal", 14.00),
+]
+
 
 class CompanyAlreadyExistsError(Exception):
     """Raised when a company field (name, NIF, email or phone) conflicts with an existing one."""
@@ -289,9 +299,10 @@ async def update_company(
 ) -> Company:
     """
     Updates a company's editable fields, including NIF, email and phone (all unique).
-    fiscal_regime_id CAN be changed here (SUPER_ADMIN only, see routes) - unlike creation,
-    changing it does NOT automatically add/remove/disable any already-seeded VAT rate;
-    the admin adjusts rates manually via the VAT catalog if the new regime requires it.
+    fiscal_regime_id CAN be changed here (SUPER_ADMIN only, see routes). When it actually changes,
+    the company's existing VAT rates (matched by name against REGIME_RATE_NAMES) are resynced:
+    a rate the new regime does not allow is deactivated, one it allows is (re)activated, created
+    if missing. Existing invoice lines keep their own vat_rate_snapshot - never affected by this.
     """
     company = await get_company_or_raise(db, company_id)
 
@@ -324,7 +335,19 @@ async def update_company(
     company.suggests_last_document_date = suggests_last_document_date if uses_invoicing else False
     company.issuance_mode = InvoiceIssuanceMode(issuance_mode)
     company.electronic_signature_key = electronic_signature_key if issuance_mode == "ELETRONICA" else None
-    if fiscal_regime_id is not None:
+    if fiscal_regime_id is not None and fiscal_regime_id != company.fiscal_regime_id:
+        company.fiscal_regime_id = fiscal_regime_id
+        regime = (await db.execute(select(FiscalRegime).where(FiscalRegime.id == fiscal_regime_id))).scalar_one()
+        existing_rates = (await db.execute(select(VAT).where(VAT.company_id == company_id))).scalars().all()
+        existing_by_name = {v.name: v for v in existing_rates}
+        for flag_name, rate_name, rate_value in REGIME_RATE_NAMES:
+            allowed = getattr(regime, flag_name)
+            existing = existing_by_name.get(rate_name)
+            if existing is not None:
+                existing.is_active = allowed
+            elif allowed:
+                db.add(VAT(company_id=company_id, name=rate_name, rate=rate_value, is_active=True))
+    elif fiscal_regime_id is not None:
         company.fiscal_regime_id = fiscal_regime_id
 
     try:
