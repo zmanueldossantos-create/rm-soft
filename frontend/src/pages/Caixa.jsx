@@ -1569,7 +1569,7 @@ export default function Caixa() {
                 <p className="text-text-muted text-[13px] font-mono mt-1">{lastInvoice.series}/{lastInvoice.number} - {formatKz(lastInvoice.total)} Kz</p>
                 {Number(lastInvoice.retention_total) > 0 && (
                   <p className="text-text-muted text-[12px] font-mono mt-0.5">
-                    Reten??o {formatKz(lastInvoice.retention_total)} Kz - recebido {formatKz(lastInvoice.total - lastInvoice.retention_total)} Kz
+                    Retenção {formatKz(lastInvoice.retention_total)} Kz - recebido {formatKz(lastInvoice.total - lastInvoice.retention_total)} Kz
                   </p>
                 )}
               </>
