@@ -1565,7 +1565,14 @@ export default function Caixa() {
               {lastInvoice?.invoice_type === 'PRO_FORMA' ? 'Pro-forma gerada' : lastInvoice?.invoice_type === 'FACTURA' ? 'Fatura emitida' : 'Venda concluida'}
             </p>
             {lastInvoice && (
-              <p className="text-text-muted text-[13px] font-mono mt-1">{lastInvoice.series}/{lastInvoice.number} - {formatKz(lastInvoice.total)} Kz</p>
+              <>
+                <p className="text-text-muted text-[13px] font-mono mt-1">{lastInvoice.series}/{lastInvoice.number} - {formatKz(lastInvoice.total)} Kz</p>
+                {Number(lastInvoice.retention_total) > 0 && (
+                  <p className="text-text-muted text-[12px] font-mono mt-0.5">
+                    Reten??o {formatKz(lastInvoice.retention_total)} Kz - recebido {formatKz(lastInvoice.total - lastInvoice.retention_total)} Kz
+                  </p>
+                )}
+              </>
             )}
           </div>
           <button onClick={closePaymentModal} className="bg-accent hover:bg-accent-hover text-white font-semibold text-sm rounded-md py-3 px-6 transition-colors cursor-pointer">
