@@ -247,3 +247,30 @@ async def is_period_open_for_date(db: AsyncSession, company_id: uuid.UUID, check
 class PeriodClosedError(Exception):
     """Raised when the fiscal Year/Period covering a given date is not open."""
     pass
+
+
+async def ensure_period_open(db: AsyncSession, company_id: uuid.UUID, check_date: date) -> None:
+    """Same check as is_period_open_for_date, but raises PeriodClosedError with a message that
+    names precisely which one is missing/closed (year vs month) - avoids a generic message that
+    sends the GESTOR looking in the wrong place (see the double-check-date confusion discussion)."""
+    year_result = await db.execute(
+        select(FiscalYear).where(FiscalYear.company_id == company_id, FiscalYear.year == check_date.year)
+    )
+    fiscal_year = year_result.scalar_one_or_none()
+    if fiscal_year is None or not fiscal_year.is_open:
+        raise PeriodClosedError(
+            f"O ano fiscal {check_date.year} nao esta aberto. Contacte o GESTOR para o abrir antes de faturar."
+        )
+
+    period_result = await db.execute(
+        select(FiscalPeriod).where(
+            FiscalPeriod.fiscal_year_id == fiscal_year.id,
+            FiscalPeriod.month == check_date.month,
+        )
+    )
+    period = period_result.scalar_one_or_none()
+    if period is None or not period.is_open:
+        raise PeriodClosedError(
+            f"O periodo de {MONTH_NAMES_PT[check_date.month]} de {check_date.year} nao esta aberto. "
+            "Contacte o GESTOR para o abrir antes de faturar."
+        )

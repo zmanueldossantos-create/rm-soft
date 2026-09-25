@@ -14,7 +14,7 @@ warehouse, never the central one directly.
 """
 import uuid
 from datetime import datetime, date, timedelta
-from app.services.fiscal_period_service import is_period_open_for_date, PeriodClosedError
+from app.services.fiscal_period_service import ensure_period_open, PeriodClosedError
 
 from sqlalchemy import select, extract
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -181,11 +181,7 @@ async def receive_stock(
     reason: str | None = None,
 ) -> Stock:
     """Records incoming stock (purchase, production) into the CENTRAL warehouse - RECEPCAO movement."""
-    if not await is_period_open_for_date(db, company_id, date.today()):
-        raise PeriodClosedError(
-            "O periodo ou ano fiscal correspondente a data de hoje nao esta aberto. "
-            "Contacte o GESTOR para abrir o periodo antes de movimentar stock."
-        )
+    await ensure_period_open(db, company_id, date.today())
     warehouse = await get_default_warehouse(db, company_id)
     stock = await _get_or_create_stock_row(db, company_id, product_id, warehouse.id)
 
@@ -216,11 +212,7 @@ async def transfer_stock(
     addition to destination) sharing the same reason so the audit trail
     reads as one transfer.
     """
-    if not await is_period_open_for_date(db, company_id, date.today()):
-        raise PeriodClosedError(
-            "O periodo ou ano fiscal correspondente a data de hoje nao esta aberto. "
-            "Contacte o GESTOR para abrir o periodo antes de movimentar stock."
-        )
+    await ensure_period_open(db, company_id, date.today())
     if from_warehouse_id == to_warehouse_id:
         raise ValueError("O armazem de origem e destino nao pode ser o mesmo")
 
@@ -267,11 +259,7 @@ async def record_stock_loss(
     (see LossCategory) - PERDA movement, distinct from a generic AJUSTE
     correction. Requires the category; free-text reason is optional detail.
     """
-    if not await is_period_open_for_date(db, company_id, date.today()):
-        raise PeriodClosedError(
-            "O periodo ou ano fiscal correspondente a data de hoje nao esta aberto. "
-            "Contacte o GESTOR para abrir o periodo antes de movimentar stock."
-        )
+    await ensure_period_open(db, company_id, date.today())
     warehouse = await get_warehouse_or_raise(db, company_id, warehouse_id)
     stock = await _get_or_create_stock_row(db, company_id, product_id, warehouse.id)
 
@@ -306,11 +294,7 @@ async def adjust_stock(
     reconciliation, damage, etc.) in a specific warehouse - AJUSTE
     movement, reason required.
     """
-    if not await is_period_open_for_date(db, company_id, date.today()):
-        raise PeriodClosedError(
-            "O periodo ou ano fiscal correspondente a data de hoje nao esta aberto. "
-            "Contacte o GESTOR para abrir o periodo antes de movimentar stock."
-        )
+    await ensure_period_open(db, company_id, date.today())
     warehouse = await get_warehouse_or_raise(db, company_id, warehouse_id)
     stock = await _get_or_create_stock_row(db, company_id, product_id, warehouse.id)
 
@@ -499,11 +483,7 @@ async def produce_stock(
     ingredient is insufficient, nothing is deducted or produced (raises
     InsufficientStockError before touching any row).
     """
-    if not await is_period_open_for_date(db, company_id, date.today()):
-        raise PeriodClosedError(
-            "O periodo ou ano fiscal correspondente a data de hoje nao esta aberto. "
-            "Contacte o GESTOR para abrir o periodo antes de produzir."
-        )
+    await ensure_period_open(db, company_id, date.today())
     recipe = await _get_recipe_rows(db, company_id, finished_product_id)
     if not recipe:
         raise NoRecipeError("Este produto nao tem receita definida")

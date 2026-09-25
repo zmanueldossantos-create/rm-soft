@@ -48,7 +48,7 @@ from app.models.payment import Payment
 from app.models.payment_method_catalog import PaymentMethodCatalog
 from app.models.company import Company
 from app.models.document_type import DocumentType
-from app.services.fiscal_period_service import is_period_open_for_date, PeriodClosedError
+from app.services.fiscal_period_service import ensure_period_open, PeriodClosedError
 from app.services.stock_service import deduct_stock_for_sale, InsufficientStockError
 from app.services.document_series_service import get_or_create_current_series, get_next_number, SeriesNotFoundError
 from app.workers.agt_worker import submit_invoice_to_agt
@@ -198,11 +198,7 @@ async def create_invoice(
     if activity is None:
         raise ActivityNotFoundError("Atividade nao encontrada ou inativa")
 
-    if not await is_period_open_for_date(db, company_id, business_date):
-        raise PeriodClosedError(
-            "O periodo ou ano fiscal correspondente a data de hoje nao esta aberto. "
-            "Contacte o GESTOR para abrir o periodo antes de faturar."
-        )
+    await ensure_period_open(db, company_id, business_date)
 
     if not lines_input:
         raise EmptyInvoiceError("A fatura deve ter pelo menos uma linha")
@@ -506,11 +502,7 @@ async def create_credit_note(
     if activity is None:
         raise ActivityNotFoundError("Atividade nao encontrada ou inativa")
 
-    if not await is_period_open_for_date(db, company_id, business_date):
-        raise PeriodClosedError(
-            "O periodo ou ano fiscal correspondente a data de hoje nao esta aberto. "
-            "Contacte o GESTOR para abrir o periodo antes de faturar."
-        )
+    await ensure_period_open(db, company_id, business_date)
 
     if not lines_input:
         raise EmptyInvoiceError("A nota de credito deve ter pelo menos uma linha")
@@ -710,11 +702,7 @@ async def create_debit_note(
     if activity is None:
         raise ActivityNotFoundError("Atividade nao encontrada ou inativa")
 
-    if not await is_period_open_for_date(db, company_id, business_date):
-        raise PeriodClosedError(
-            "O periodo ou ano fiscal correspondente a data de hoje nao esta aberto. "
-            "Contacte o GESTOR para abrir o periodo antes de faturar."
-        )
+    await ensure_period_open(db, company_id, business_date)
 
     if not lines_input:
         raise EmptyInvoiceError("A nota de debito deve ter pelo menos uma linha")
@@ -933,11 +921,7 @@ async def create_receipt(
     if activity is None:
         raise ActivityNotFoundError("Atividade nao encontrada ou inativa")
 
-    if not await is_period_open_for_date(db, company_id, business_date):
-        raise PeriodClosedError(
-            "O periodo ou ano fiscal correspondente a data de hoje nao esta aberto. "
-            "Contacte o GESTOR para abrir o periodo antes de faturar."
-        )
+    await ensure_period_open(db, company_id, business_date)
 
     if amount is None or amount <= 0:
         raise EmptyInvoiceError("O valor do recibo deve ser maior que zero")

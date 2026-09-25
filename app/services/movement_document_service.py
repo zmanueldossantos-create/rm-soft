@@ -19,7 +19,7 @@ from app.models.movement_series import MovementSeries
 from app.models.stock_movement import StockMovement, MovementType as LedgerMovementType
 from app.models.stock_movement_document import StockMovementDocument, StockMovementDocumentLine
 from app.services.stock_service import _get_or_create_stock_row
-from app.services.fiscal_period_service import is_period_open_for_date, PeriodClosedError
+from app.services.fiscal_period_service import ensure_period_open, PeriodClosedError
 import io
 import openpyxl
 
@@ -82,11 +82,7 @@ async def create_stock_movement_document(
     """
     movement_date = movement_date or date.today()
 
-    if not await is_period_open_for_date(db, company_id, movement_date):
-        raise PeriodClosedError(
-            "O periodo ou ano fiscal correspondente a data do movimento nao esta aberto. "
-            "Contacte o GESTOR para abrir o periodo antes de movimentar stock."
-        )
+    await ensure_period_open(db, company_id, movement_date)
 
     type_result = await db.execute(select(MovementTypeCatalog).where(MovementTypeCatalog.id == movement_type_id))
     movement_type = type_result.scalar_one_or_none()
