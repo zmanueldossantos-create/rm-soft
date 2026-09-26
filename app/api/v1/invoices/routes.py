@@ -420,6 +420,26 @@ async def download_invoice_pdf(
         "FACTURA": "FT", "FACTURA_RECIBO": "FR", "NOTA_CREDITO": "NC",
         "NOTA_DEBITO": "ND", "RECIBO": "RC", "PRO_FORMA": "FP",
     }
+
+    # The referenced original invoice - RC/NC/ND all point back to one via reference_invoice_id.
+    # RC (Recibo) needs it to render its own table row (it carries no product/service lines of its
+    # own - see create_receipt docstring); NC/ND already had document_reference free text, but
+    # fetching it directly here is more reliable than depending on that optional field.
+    reference_invoice_dict = None
+    if invoice.reference_invoice_id:
+        ref_result = await db.execute(select(Invoice).where(Invoice.id == invoice.reference_invoice_id))
+        ref_invoice = ref_result.scalar_one_or_none()
+        if ref_invoice is not None:
+            reference_invoice_dict = {
+                "invoice_type": INVOICE_TYPE_CODE.get(ref_invoice.invoice_type.value, ref_invoice.invoice_type.value),
+                "series": ref_invoice.series,
+                "number": ref_invoice.number,
+                "business_date": str(ref_invoice.business_date),
+                "subtotal": float(ref_invoice.subtotal),
+                "vat_total": float(ref_invoice.vat_total),
+                "total": float(ref_invoice.total),
+            }
+
     invoice_dict = {
         "invoice_type": INVOICE_TYPE_CODE.get(invoice.invoice_type.value, invoice.invoice_type.value),
         "series": invoice.series,
@@ -443,6 +463,7 @@ async def download_invoice_pdf(
         "atcud": invoice.atcud,
         "invoice_hash": invoice.invoice_hash,
         "qr_code_data": invoice.qr_code_data,
+        "reference_invoice": reference_invoice_dict,
     }
     product_ids = [l.product_id for l in lines if l.product_id]
     service_ids = [l.service_id for l in lines if l.service_id]
@@ -487,6 +508,8 @@ async def download_invoice_pdf(
             "line_subtotal": float(l.line_subtotal),
             "line_total": float(l.line_total),
             "exemption_code": l.exemption_code,
+            "iec_amount": float(l.iec_amount or 0),
+            "iselo_amount": float(l.iselo_amount or 0),
         })
     company_dict = {"name": company.name, "nif": company.nif, "address": company.address, "phone_number": company.phone_number, "phone_number_2": company.phone_number_2, "email": company.email, "website": company.website, "logo_path": company.logo_path, "bank_accounts": bank_accounts_list}
 

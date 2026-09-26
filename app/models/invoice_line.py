@@ -36,6 +36,13 @@ class InvoiceLine(Base):
     line_vat: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
     line_total: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
 
+    # IEC (Imposto Especial de Consumo) and Selo (Imposto de Selo) - AGT's A4 invoice layout
+    # always shows these two columns alongside IVA, but this system does not yet compute either
+    # (no product carries an IEC category or a Selo rule). Columns exist now, always 0, so the
+    # PDF and schema are ready; a future pass only needs to populate them, no further plumbing.
+    iec_amount: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False, default=0)
+    iselo_amount: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False, default=0)
+
     # Withholding applied on this line, copied when the invoice is issued (like vat_rate_snapshot): later
     # changes of the withholding catalog must not alter an issued document. Empty when nothing was withheld.
     retention_name_snapshot: Mapped[str | None] = mapped_column(String(150), nullable=True)

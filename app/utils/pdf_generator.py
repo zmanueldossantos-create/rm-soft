@@ -37,6 +37,24 @@ DOCUMENT_TYPE_LABELS = {
     "FP": "Factura Pro-forma",
 }
 
+BANNER_LIGHT = HexColor("#E3E3E3")
+BANNER_DARK = HexColor("#AFAFAF")
+TABLE_HEADER_BG = HexColor("#D0D0D0")
+TABLE_ROW_ALT = HexColor("#ECECEC")
+TITLE_BLACK = HexColor("#161616")
+
+# Sentence-case version for the inline "Factura no FT2026/1" line - DOCUMENT_TYPE_LABELS
+# is all-caps for the big banner title, but .title()-ing it would wrongly capitalise
+# connectors like "de" ("Nota De Credito").
+DOCUMENT_TYPE_LABELS_SENTENCE = {
+    "FT": "Factura",
+    "FR": "Factura/Recibo",
+    "NC": "Nota de credito",
+    "ND": "Nota de debito",
+    "RC": "Recibo",
+    "FP": "Factura pro-forma",
+}
+
 
 def fmt(value: float) -> str:
     """Formats a monetary value with a space as thousand separator, e.g. 5130.5 -> '5 130.50'."""
@@ -274,277 +292,362 @@ def _via_label_text(print_count: int) -> str:
     return f"{print_count}a via conforme o {ordinal_word}"
 
 
-def generate_invoice_pdf_a4(invoice: dict, lines: list[dict], company: dict, customer: dict | None) -> bytes:
-    """Generates an A4 invoice PDF matching the Kiami reference layout precisely."""
+def _draw_diagonal_banner(c, page_width, page_height, title_text):
+    """Light-grey diagonal band across the top with a darker accent slice,
+    then the big bold document-type title sitting on top of it."""
+    top = page_height
+    band_h = 40 * mm
+    cut_x = page_width * 0.42
+
+    p = c.beginPath()
+    p.moveTo(cut_x, top)
+    p.lineTo(page_width, top)
+    p.lineTo(page_width, top - band_h)
+    p.lineTo(cut_x - 18 * mm, top - band_h)
+    p.close()
+    c.setFillColor(BANNER_LIGHT)
+    c.drawPath(p, fill=1, stroke=0)
+
+    p2 = c.beginPath()
+    p2.moveTo(page_width - 45 * mm, top - band_h)
+    p2.lineTo(page_width, top - band_h)
+    p2.lineTo(page_width, top - band_h - 14 * mm)
+    p2.close()
+    c.setFillColor(BANNER_DARK)
+    c.drawPath(p2, fill=1, stroke=0)
+
+    c.setFillColor(TITLE_BLACK)
+    c.setFont("Helvetica-Bold", 30)
+    c.drawRightString(page_width - 14 * mm, top - 26 * mm, title_text)
+
+
+def _wrap_to_width(c, text, font, size, max_width):
+    """Greedy word-wrap: splits text into as many lines as needed so each
+    fits max_width at the given font/size (used for the company address,
+    which is often too long for a single line in the identification box)."""
+    words = text.split()
+    lines_out = []
+    current = ""
+    for w in words:
+        candidate = (current + " " + w).strip()
+        if c.stringWidth(candidate, font, size) <= max_width or not current:
+            current = candidate
+        else:
+            lines_out.append(current)
+            current = w
+    if current:
+        lines_out.append(current)
+    return lines_out or [""]
+
+
+def _draw_company_box(c, x, y, w, company, label="Contribuinte"):
+    """Rounded-border box with the issuing company's info - matches the
+    reference's left-hand identification box. The address wraps onto a
+    second line instead of being cut off when it does not fit."""
+    addr = company.get("address") or "-"
+    phones = " / ".join([p for p in [company.get("phone_number"), company.get("phone_number_2")] if p]) or "-"
+
+    addr_label = "Localizacao: "
+    addr_label_w = c.stringWidth(addr_label, "Helvetica-Bold", 9)
+    addr_wrapped = _wrap_to_width(c, addr, "Helvetica", 9, w - 8 * mm - addr_label_w)
+
+    fixed_lines = [
+        ("Contribuinte: ", company["name"]),
+        ("Contacto: ", phones),
+        ("NIF: ", company["nif"]),
+    ]
+
+    row_h = 5.2 * mm
+    total_rows = 1 + len(addr_wrapped) + 2
+    box_h = total_rows * row_h + 6 * mm
+    c.setStrokeColor(TEXT_MUTED)
+    c.setLineWidth(0.8)
+    c.roundRect(x, y - box_h, w, box_h, 3 * mm, fill=0, stroke=1)
+
+    ty = y - 6 * mm
+    c.setFillColor(TEXT_PRIMARY)
+    c.setFont("Helvetica-Bold", 9)
+    c.drawString(x + 4 * mm, ty, fixed_lines[0][0])
+    lbl_w = c.stringWidth(fixed_lines[0][0], "Helvetica-Bold", 9)
+    c.setFont("Helvetica", 9)
+    c.drawString(x + 4 * mm + lbl_w, ty, fixed_lines[0][1][:48])
+    ty -= row_h
+
+    c.setFont("Helvetica-Bold", 9)
+    c.drawString(x + 4 * mm, ty, addr_label)
+    c.setFont("Helvetica", 9)
+    c.drawString(x + 4 * mm + addr_label_w, ty, addr_wrapped[0])
+    ty -= row_h
+    for extra in addr_wrapped[1:]:
+        c.drawString(x + 4 * mm + addr_label_w, ty, extra)
+        ty -= row_h
+
+    for label_part, value_part in fixed_lines[1:]:
+        c.setFillColor(TEXT_PRIMARY)
+        c.setFont("Helvetica-Bold", 9)
+        c.drawString(x + 4 * mm, ty, label_part)
+        label_w = c.stringWidth(label_part, "Helvetica-Bold", 9)
+        c.setFont("Helvetica", 9)
+        c.drawString(x + 4 * mm + label_w, ty, value_part[:48])
+        ty -= row_h
+    return box_h
+
+
+def _draw_party_block(c, right_x, y, name, nif, address):
+    ry = y
+    c.setFillColor(TEXT_PRIMARY)
+    c.setFont("Helvetica", 9.5)
+    c.drawRightString(right_x, ry, name[:55])
+    ry -= 4.6 * mm
+    c.setFont("Helvetica", 8.5)
+    if nif:
+        c.drawRightString(right_x, ry, f"No de Contribuinte: {nif}")
+        ry -= 4.2 * mm
+    if address:
+        c.drawRightString(right_x, ry, address[:55])
+        ry -= 4.2 * mm
+    return y - ry
+
+
+def _totais_documento_box(c, x, y, w, rows, highlight_last=True):
+    """Small bordered 'Descricao | Valor' style box used for Valores em
+    Kwanzas - last row shaded + bold when highlight_last."""
+    row_h = 5.4 * mm
+    header_h = 5.5 * mm
+    box_h = header_h + len(rows) * row_h
+
+    c.setFillColor(TABLE_HEADER_BG)
+    c.rect(x, y - header_h, w, header_h, fill=1, stroke=0)
+    c.setFillColor(TEXT_PRIMARY)
+    c.setFont("Helvetica-Bold", 7.5)
+    c.drawString(x + 2 * mm, y - header_h + 1.6 * mm, "Descricao")
+    c.drawRightString(x + w - 2 * mm, y - header_h + 1.6 * mm, "Valor")
+
+    ry = y - header_h
+    for i, (label, value) in enumerate(rows):
+        is_last = highlight_last and i == len(rows) - 1
+        if is_last:
+            c.setFillColor(HexColor("#D8D8D8"))
+            c.rect(x, ry - row_h, w, row_h, fill=1, stroke=0)
+        c.setFillColor(TEXT_PRIMARY)
+        c.setFont("Helvetica-Bold" if is_last else "Helvetica", 8)
+        c.drawString(x + 2 * mm, ry - row_h + 1.6 * mm, label)
+        c.drawRightString(x + w - 2 * mm, ry - row_h + 1.6 * mm, fmt(value) + " Kz")
+        ry -= row_h
+
+    c.setStrokeColor(BORDER)
+    c.setLineWidth(0.5)
+    c.rect(x, y - box_h, w, box_h, fill=0, stroke=1)
+    return box_h
+
+
+def generate_factura_style_a4(invoice, lines, company, customer):
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
     page_width, page_height = A4
-    margin = 18 * mm
+    margin = 14 * mm
+
+    via_label = _via_label_text(invoice.get("print_count", 1))
+    c.setFillColor(TEXT_MUTED)
+    c.setFont("Helvetica-Oblique", 7.5)
+    c.drawString(margin, page_height - 8 * mm, via_label)
+
+    doc_title = DOCUMENT_TYPE_LABELS.get(invoice["invoice_type"], invoice["invoice_type"])
+    _draw_diagonal_banner(c, page_width, page_height, doc_title)
 
     logo_path = _resolve_logo_path(company)
-    via_label = _via_label_text(invoice.get("print_count", 1))
-
-    # --- Top-right via-label ---
-    c.setFillColor(TEXT_MUTED)
-    c.setFont("Helvetica-Oblique", 8)
-    c.drawRightString(page_width - margin, page_height - 12 * mm, via_label)
-
-    top_y = page_height - margin - 8 * mm
-
-    # --- Logo sits alone, above both the company block AND the doc-title block, so the
-    # two blocks start at the exact same Y underneath it (matches the reference: company
-    # name and "Factura ...: FT2026/1" are on the same horizontal line). ---
-    y = top_y
+    logo_top = page_height - 12 * mm
     if logo_path:
         logo_size = 20 * mm
-        c.drawImage(ImageReader(logo_path), margin, y - logo_size, width=logo_size, height=logo_size, preserveAspectRatio=True, mask="auto")
-        y -= logo_size + 4 * mm
+        c.drawImage(ImageReader(logo_path), margin, logo_top - logo_size, width=logo_size, height=logo_size, preserveAspectRatio=True, mask="auto")
 
-    # --- Left: company block. Right: doc title + client block. Both start at "y". ---
-    cy = y
-    c.setFillColor(TEXT_PRIMARY)
-    c.setFont("Helvetica-Bold", 10)
-    c.drawString(margin, cy, company["name"])
-    cy -= 4.5 * mm
-    c.setFont("Helvetica", 8)
-    c.drawString(margin, cy, f"NIF: {company['nif']}")
-    cy -= 4 * mm
-    if company.get("address"):
-        c.drawString(margin, cy, company["address"])
-        cy -= 4 * mm
-    phones = " / ".join([p for p in [company.get("phone_number"), company.get("phone_number_2")] if p])
-    if phones:
-        c.drawString(margin, cy, f"Tel.: {phones}")
-        cy -= 4 * mm
-    if company.get("email"):
-        c.drawString(margin, cy, f"E-mail: {company['email']}")
-        cy -= 4 * mm
-    if company.get("website"):
-        c.drawString(margin, cy, f"Website: {company['website']}")
-        cy -= 4 * mm
+    box_y = page_height - 42 * mm
+    box_w = 92 * mm
+    box_h = _draw_company_box(c, margin, box_y, box_w, company)
 
     right_x = page_width - margin
-    doc_title = f"{DOCUMENT_TYPE_LABELS.get(invoice['invoice_type'], invoice['invoice_type'])}: {invoice['series']}/{invoice['number']}"
-    ry = y
-    c.setFillColor(ACCENT)
-    c.setFont("Helvetica-Bold", 12)
-    c.drawRightString(right_x, ry, doc_title)
-    ry -= 6 * mm
-    if customer:
-        c.setFillColor(TEXT_PRIMARY)
-        c.setFont("Helvetica-Bold", 9)
-        c.drawRightString(right_x, ry, customer["name"][:55])
-        ry -= 4.2 * mm
-        c.setFillColor(TEXT_MUTED)
-        c.setFont("Helvetica", 8)
-        c.drawRightString(right_x, ry, f"NIF: {customer['nif']}")
-        ry -= 4 * mm
-        if customer.get("address"):
-            c.drawRightString(right_x, ry, customer["address"][:55])
-            ry -= 4 * mm
-    else:
-        c.setFillColor(TEXT_MUTED)
-        c.setFont("Helvetica", 9)
-        c.drawRightString(right_x, ry, "Consumidor Final")
-        ry -= 4 * mm
+    _draw_party_block(
+        c, right_x, box_y - 12 * mm,
+        customer["name"] if customer else "Consumidor Final",
+        customer.get("nif") if customer else None,
+        customer.get("address") if customer else None,
+    )
 
-    y = min(cy, ry) - 4 * mm
-
-    # --- Info bar: ALWAYS shows all 4 fields (dash if empty), matching the reference. ---
-    c.setStrokeColor(BORDER)
-    c.setLineWidth(0.6)
-    c.line(margin, y, page_width - margin, y)
+    y = box_y - box_h - 8 * mm
+    c.setFillColor(TEXT_PRIMARY)
+    c.setFont("Helvetica-Bold", 10)
+    doc_title_sentence = DOCUMENT_TYPE_LABELS_SENTENCE.get(invoice["invoice_type"], doc_title)
+    c.drawString(margin, y, f"{doc_title_sentence} no {invoice['series']}/{invoice['number']}")
     y -= 5 * mm
-
-    info_cells = [
-        ("Data de emissao", invoice.get("business_date") or "-"),
-        ("Data de vencimento", invoice.get("due_date") or "-"),
-        ("Modo de pagamento", invoice.get("payment_method_name") or "-"),
-        ("Condicao de pagamento", invoice.get("payment_term_name") or "-"),
-    ]
-
-    cell_width = (page_width - 2 * margin) / len(info_cells)
-    for i, (label, value) in enumerate(info_cells):
-        cx = margin + i * cell_width
-        c.setFillColor(TEXT_PRIMARY)
-        c.setFont("Helvetica-Bold", 8)
-        c.drawString(cx, y, label)
-        c.setFillColor(TEXT_PRIMARY)
-        c.setFont("Helvetica", 8)
-        c.drawString(cx, y - 4.5 * mm, str(value)[:24])
-    y -= 9 * mm
-    c.setStrokeColor(BORDER)
-    c.line(margin, y, page_width - margin, y)
+    c.setFont("Helvetica", 9)
+    c.drawString(margin, y, f"Data de emissao: {invoice.get('business_date', '-')}")
     y -= 8 * mm
 
-    # --- Line table: Referencia | Designacao | Qtd | Un | Preco | Desc | Taxa(%) | Total ---
-    col_ref = margin
-    col_desc = margin + 22 * mm
-    col_qty = margin + 90 * mm
-    col_un = margin + 104 * mm
-    col_price = margin + 114 * mm
-    col_disc = margin + 132 * mm
-    col_tax = margin + 146 * mm
+    col_tipo = margin
+    col_cod = margin + 8 * mm
+    col_desc = margin + 24 * mm
+    col_qt = margin + 74 * mm
+    col_preco = margin + 86 * mm
+    col_desc_pct = margin + 104 * mm
+    col_valor = margin + 116 * mm
+    tax_block_x = margin + 134 * mm
+    tax_w = 32 * mm
+    col_iec = tax_block_x
+    col_iva = tax_block_x + tax_w / 3
+    col_iselo = tax_block_x + 2 * tax_w / 3
     col_total = page_width - margin
 
+    header_h = 8 * mm
+    c.setFillColor(TABLE_HEADER_BG)
+    c.rect(margin, y - header_h, page_width - 2 * margin, header_h, fill=1, stroke=0)
     c.setFillColor(TEXT_PRIMARY)
-    c.setFont("Helvetica-Bold", 8)
-    c.drawString(col_ref, y, "Referencia")
-    c.drawString(col_desc, y, "Designacao")
-    c.drawString(col_qty, y, "Qtd")
-    c.drawString(col_un, y, "Un")
-    c.drawString(col_price, y, "Preco")
-    c.drawString(col_disc, y, "Desc")
-    c.drawString(col_tax, y, "Taxa(%)")
-    c.drawRightString(col_total, y, "Total")
-    y -= 2.5 * mm
-    c.setStrokeColor(BORDER)
-    c.setLineWidth(0.8)
-    c.line(margin, y, page_width - margin, y)
-    y -= 6 * mm
+    c.setFont("Helvetica-Bold", 6.8)
+    hy = y - 3.2 * mm
+    c.drawString(col_tipo + 1 * mm, hy, "Tipo")
+    c.drawString(col_cod + 1 * mm, hy, "Codigo")
+    c.drawString(col_desc + 1 * mm, hy, "Descricao")
+    c.drawString(col_qt, hy, "Qt")
+    c.drawString(col_preco, hy, "Preco")
+    c.drawString(col_desc_pct, hy, "Desc.")
+    c.drawString(col_valor, hy, "Valor")
+    c.drawCentredString(tax_block_x + tax_w / 2, y - 2.4 * mm, "Impostos")
+    c.drawRightString(col_total - 1 * mm, hy, "Total")
+    c.setFont("Helvetica", 5.8)
+    c.drawCentredString(col_iec + tax_w / 6, y - header_h + 1.2 * mm, "IEC")
+    c.drawCentredString(col_iva + tax_w / 6, y - header_h + 1.2 * mm, "IVA")
+    c.drawCentredString(col_iselo + tax_w / 6, y - header_h + 1.2 * mm, "Iselo")
+    y -= header_h
 
-    c.setFont("Helvetica", 8)
+    row_h = 6.4 * mm
+    c.setFont("Helvetica", 7.5)
     vat_groups = {}
     total_iliquido = 0.0
     total_discount_amount = 0.0
     for i, l in enumerate(lines):
+        if i % 2 == 1:
+            c.setFillColor(TABLE_ROW_ALT)
+            c.rect(margin, y - row_h, page_width - 2 * margin, row_h, fill=1, stroke=0)
+
         gross = l["quantity"] * l["unit_price"]
         line_discount_amount = gross * (l.get("discount_percent", 0) / 100)
         total_iliquido += l["line_subtotal"]
         total_discount_amount += line_discount_amount
-
         rate = l["vat_rate_snapshot"]
         grp = vat_groups.setdefault((rate, l.get("exemption_code") if rate == 0 else None), {"incidencia": 0.0, "montante": 0.0})
         grp["incidencia"] += l["line_subtotal"]
         grp["montante"] += l["line_subtotal"] * (rate / 100)
 
-        c.setFillColor(TEXT_PRIMARY)
-        c.drawString(col_ref, y, str(l.get("code", "-"))[:12])
-        name = l["product_name_snapshot"]
-        c.drawString(col_desc, y, name[:34])
-        if len(name) > 34:
-            c.setFont("Helvetica", 7)
-            c.drawString(col_desc, y - 3.3 * mm, name[34:68])
-            c.setFont("Helvetica", 8)
-        c.drawString(col_qty, y, f"{l['quantity']:.2f}")
-        c.drawString(col_un, y, str(l.get("unit", "-")))
-        c.drawString(col_price, y, fmt(l["unit_price"]))
-        c.drawString(col_disc, y, f"{line_discount_amount:.2f}" if line_discount_amount else "0,00")
-        tax_label = f"{rate:.2f}"
-        c.drawString(col_tax, y, tax_label + (" a)" if rate == 0 else ""))
-        c.drawRightString(col_total, y, fmt(l["line_total"]))
-        y -= 6 * mm if len(name) <= 34 else 9 * mm
-
-    y -= 2 * mm
-    c.setStrokeColor(BORDER)
-    c.setLineWidth(0.6)
-    c.line(margin, y, page_width - margin, y)
-    y -= 7 * mm
-
-    if invoice.get("observations"):
-        c.setFillColor(ACCENT)
-        c.setFont("Helvetica-Bold", 9)
-        c.drawString(margin, y, "Observacoes:")
-        y -= 5 * mm
-        c.setFillColor(TEXT_PRIMARY)
-        c.setFont("Helvetica", 8)
-        for para in str(invoice["observations"]).split("\n"):
-            for chunk_start in range(0, len(para), 100):
-                c.drawString(margin, y, para[chunk_start:chunk_start + 100])
-                y -= 4.5 * mm
-        y -= 3 * mm
-
-    footer_top = max(y, margin + 66 * mm)
-
-    fy = footer_top
-    c.setFillColor(TEXT_MUTED)
-    c.setFont("Helvetica", 6.5)
-    c.drawString(margin, fy, "SIMUL - Processado por programa nao homologado (simulacao)")
-    fy -= 5 * mm
-
-    # --- Resumo de impostos (left) + compact totals box (right), side by side ---
-    resumo_top = fy
-    c.setFillColor(TEXT_PRIMARY)
-    c.setFont("Helvetica-Bold", 8.5)
-    c.drawString(margin, resumo_top, "Resumo de impostos")
-
-    totals_box_x = page_width - margin - 62 * mm
-
-    ry2 = resumo_top - 5 * mm
-    c.setStrokeColor(BORDER)
-    c.setLineWidth(0.6)
-    c.line(margin, ry2, totals_box_x - 4 * mm, ry2)
-    ry2 -= 4 * mm
-    c.setFillColor(TEXT_MUTED)
-    c.setFont("Helvetica-Bold", 7)
-    c.drawString(margin, ry2, "Imposto")
-    c.drawString(margin + 16 * mm, ry2, "Taxa(%)")
-    c.drawString(margin + 32 * mm, ry2, "Incidencia")
-    c.drawString(margin + 62 * mm, ry2, "Motivo")
-    c.drawRightString(totals_box_x - 4 * mm, ry2, "Montante (AKZ)")
-    ry2 -= 4.5 * mm
-
-    total_vat = 0.0
-    for rate, code in sorted(vat_groups.keys(), key=lambda k: (k[0], k[1] or "")):
-        grp = vat_groups[(rate, code)]
-        total_vat += grp["montante"]
-        motivo = (code or "M04") if rate == 0 else "IVA"
+        ty = y - row_h + 2.1 * mm
         c.setFillColor(TEXT_PRIMARY)
         c.setFont("Helvetica", 7.5)
-        c.drawString(margin, ry2, "IVA")
-        c.drawString(margin + 16 * mm, ry2, f"{rate:.2f}")
-        c.drawString(margin + 32 * mm, ry2, fmt(grp["incidencia"]))
-        c.drawString(margin + 62 * mm, ry2, motivo)
-        c.drawRightString(totals_box_x - 4 * mm, ry2, fmt(grp["montante"]))
-        ry2 -= 4.2 * mm
+        c.drawString(col_tipo + 1 * mm, ty, "S" if l.get("service_line") else "P")
+        c.drawString(col_cod + 1 * mm, ty, str(l.get("code", "-"))[:10])
+        c.drawString(col_desc + 1 * mm, ty, l["product_name_snapshot"][:32])
+        c.drawString(col_qt, ty, f"{l['quantity']:.2f}")
+        c.drawString(col_preco, ty, fmt(l["unit_price"]))
+        c.drawString(col_desc_pct, ty, f"{l.get('discount_percent', 0):.0f}%")
+        c.drawString(col_valor, ty, fmt(l["line_subtotal"]))
+        c.setFont("Helvetica", 6.8)
+        c.drawCentredString(col_iec + tax_w / 6, ty, fmt(l.get("iec_amount", 0)))
+        exemption_code_line = l.get("exemption_code")
+        iva_display = exemption_code_line if (rate == 0 and exemption_code_line) else f"{rate:.0f}%"
+        c.drawCentredString(col_iva + tax_w / 6, ty, iva_display)
+        c.drawCentredString(col_iselo + tax_w / 6, ty, fmt(l.get("iselo_amount", 0)))
+        c.setFont("Helvetica", 7.5)
+        c.drawRightString(col_total - 1 * mm, ty, fmt(l["line_total"]))
+        y -= row_h
 
-    # Legend: the official reason of each exemption code used, in full (the table only has room for the code).
-    for legend_code in sorted({k[1] or "M04" for k in vat_groups if k[0] == 0}):
+    c.setStrokeColor(BORDER)
+    c.setLineWidth(0.6)
+    c.rect(margin, y, page_width - 2 * margin, header_h + row_h * len(lines), fill=0, stroke=1)
+    y -= 6 * mm
+
+    # Legend: the official reason of each exemption code used on a 0%-VAT line - the table only
+    # has room for the code itself (e.g. "M11"), the full reason is spelled out here.
+    exemption_codes = sorted({code for (rate, code) in vat_groups if rate == 0 and code})
+    if exemption_codes:
         c.setFillColor(TEXT_MUTED)
         c.setFont("Helvetica", 6.5)
-        c.drawString(margin, ry2, f"{legend_code} - {TAX_EXEMPTION_REASONS.get(legend_code, '')}"[:110])
-        ry2 -= 3.6 * mm
+        for code in exemption_codes:
+            c.drawString(margin, y, f"{code} - {TAX_EXEMPTION_REASONS.get(code, '')}"[:120])
+            y -= 3.4 * mm
+        y -= 2 * mm
 
-    discount_global_pct = invoice.get("discount_global_percent", 0)
-    gross_before_global = total_iliquido + invoice["vat_total"]
-    global_discount_amount = gross_before_global * (discount_global_pct / 100) if discount_global_pct else 0
-    total_discount_all = total_discount_amount + global_discount_amount
+    y -= 2 * mm
 
-    box_rows = [
-        ("Total Iliquido", total_iliquido),
-        ("Total Desconto", total_discount_all),
-        ("Total Imposto", invoice["vat_total"]),
+    retention_total = invoice.get("retention_total") or 0
+    left_w = 0.52 * (page_width - 2 * margin) - 4 * mm
+    right_col_x = margin + left_w + 8 * mm
+    right_w = (page_width - margin) - right_col_x
+
+    section_top = y
+    if retention_total > 0:
+        c.setFillColor(TEXT_PRIMARY)
+        c.setFont("Helvetica-Bold", 8.5)
+        c.drawString(margin, y, "Totais retidos na fonte ou cativados pelo adquirente")
+        y -= 4 * mm
+        c.setFillColor(TEXT_MUTED)
+        c.setFont("Helvetica-Oblique", 6.5)
+        c.drawString(margin, y, "(valores informativos nao integrados no total do documento)")
+        y -= 4.5 * mm
+
+        rh = 5 * mm
+        c.setFillColor(TABLE_HEADER_BG)
+        c.rect(margin, y - rh, left_w, rh, fill=1, stroke=0)
+        c.setFillColor(TEXT_PRIMARY)
+        c.setFont("Helvetica-Bold", 7)
+        c.drawString(margin + 1 * mm, y - rh + 1.6 * mm, "Tipo")
+        c.drawString(margin + 30 * mm, y - rh + 1.6 * mm, "Imposto")
+        c.drawString(margin + 55 * mm, y - rh + 1.6 * mm, "Taxa")
+        c.drawRightString(margin + left_w - 1 * mm, y - rh + 1.6 * mm, "Valor")
+        y -= rh
+        c.setFont("Helvetica", 7.5)
+        c.drawString(margin + 1 * mm, y - rh + 1.6 * mm, "II")
+        c.drawString(margin + 30 * mm, y - rh + 1.6 * mm, "Retencao na fonte")
+        c.drawString(margin + 55 * mm, y - rh + 1.6 * mm, "-")
+        c.drawRightString(margin + left_w - 1 * mm, y - rh + 1.6 * mm, fmt(retention_total) + " Kz")
+        c.setStrokeColor(BORDER)
+        c.rect(margin, y - rh, left_w, rh, fill=0, stroke=1)
+        y -= rh + 2 * mm
+
+    doc_rows = [
+        ("Total iliquido", total_iliquido),
+        ("Total de descontos", total_discount_amount),
+        ("Total de impostos (IVA)", invoice["vat_total"]),
     ]
-    retention_rows = 2 if invoice.get("retention_total") else 0
-    ty = resumo_top - 5 * mm
-    c.setStrokeColor(BORDER)
-    c.setLineWidth(0.6)
-    c.rect(totals_box_x, ty - (len(box_rows) + 1 + retention_rows) * 4.6 * mm, page_width - margin - totals_box_x, (len(box_rows) + 1 + retention_rows) * 4.6 * mm + 4 * mm, fill=0, stroke=1)
-    ty -= 1 * mm
-    for label, value in box_rows:
-        c.setFillColor(TEXT_MUTED)
-        c.setFont("Helvetica", 7.5)
-        c.drawString(totals_box_x + 2 * mm, ty, label)
-        c.setFillColor(TEXT_PRIMARY)
-        c.drawRightString(page_width - margin - 2 * mm, ty, fmt(value))
-        ty -= 4.6 * mm
+    ry = section_top
     c.setFillColor(TEXT_PRIMARY)
-    c.setFont("Helvetica-Bold", 8)
-    c.drawString(totals_box_x + 2 * mm, ty, "Total (AKZ)")
-    c.drawRightString(page_width - margin - 2 * mm, ty, fmt(invoice["total"]))
-    if retention_rows:
-        ty -= 4.6 * mm
+    c.setFont("Helvetica-Bold", 8.5)
+    c.drawString(right_col_x, ry, "Totais do documento (valores em kwanzas)")
+    ry -= 5 * mm
+    ry -= _totais_documento_box(c, right_col_x, ry, right_w, doc_rows, highlight_last=False)
+
+    kz_rows = [
+        ("Totais sem impostos", total_iliquido),
+        ("Valor de impostos", invoice["vat_total"]),
+        ("Valor de descontos", total_discount_amount),
+        ("Valor total a pagar", invoice["total"]),
+    ]
+    ry -= 4 * mm
+    box_h_kz = _totais_documento_box(c, right_col_x, ry, right_w, kz_rows, highlight_last=True)
+    ry -= box_h_kz
+
+    # Net amount actually due after withholding - drawn as its own bare row (no "Kz" suffix,
+    # matches the historic Resumo de impostos format) rather than folded into the boxed totals.
+    if retention_total > 0:
+        ry -= 2 * mm
         c.setFillColor(TEXT_MUTED)
         c.setFont("Helvetica", 7.5)
-        c.drawString(totals_box_x + 2 * mm, ty, "Retencao na fonte")
+        c.drawString(right_col_x + 2 * mm, ry, "Retencao na fonte")
         c.setFillColor(TEXT_PRIMARY)
-        c.drawRightString(page_width - margin - 2 * mm, ty, fmt(invoice["retention_total"]))
-        ty -= 4.6 * mm
+        c.drawRightString(right_col_x + right_w - 2 * mm, ry, fmt(retention_total))
+        ry -= 4.6 * mm
         c.setFont("Helvetica-Bold", 8)
-        c.drawString(totals_box_x + 2 * mm, ty, "Liquido a pagar")
-        c.drawRightString(page_width - margin - 2 * mm, ty, fmt(invoice["total"] - invoice["retention_total"]))
+        c.drawString(right_col_x + 2 * mm, ry, "Liquido a pagar")
+        c.drawRightString(right_col_x + right_w - 2 * mm, ry, fmt(invoice["total"] - retention_total))
+        ry -= 4.6 * mm
 
-    y = min(ry2, ty) - 6 * mm
+    y = min(y, ry) - 10 * mm
 
     if invoice.get("amount_in_words"):
         c.setFillColor(TEXT_PRIMARY)
@@ -552,35 +655,39 @@ def generate_invoice_pdf_a4(invoice: dict, lines: list[dict], company: dict, cus
         c.drawString(margin, y, f"Total: {invoice['amount_in_words']}")
         y -= 6 * mm
 
-    # --- Separator before Coordenadas Bancarias ---
-    c.setStrokeColor(BORDER)
-    c.setLineWidth(0.6)
-    c.line(margin, y, page_width - margin, y)
-    y -= 6 * mm
+    if invoice.get("observations"):
+        c.setFillColor(ACCENT)
+        c.setFont("Helvetica-Bold", 8)
+        c.drawString(margin, y, "Observacoes:")
+        y -= 4.5 * mm
+        c.setFillColor(TEXT_PRIMARY)
+        c.setFont("Helvetica", 7.5)
+        c.drawString(margin, y, str(invoice["observations"])[:100])
+        y -= 5 * mm
 
     bank_accounts = company.get("bank_accounts") or []
     if bank_accounts:
         c.setFillColor(TEXT_PRIMARY)
         c.setFont("Helvetica-Bold", 8)
         c.drawString(margin, y, "Coordenadas Bancarias")
-        y -= 4.5 * mm
-        c.setFont("Helvetica", 7.5)
+        y -= 4.2 * mm
+        c.setFont("Helvetica", 7)
         for b in bank_accounts:
             c.setFillColor(TEXT_PRIMARY)
             c.drawString(margin, y, f"{b['acronym']}:")
             c.setFillColor(TEXT_MUTED)
-            c.drawString(margin + 18 * mm, y, f"{b['account_number']}   IBAN: {b['iban']}")
-            y -= 4 * mm
+            c.drawString(margin + 16 * mm, y, f"{b['account_number']}  IBAN: {b['iban']}")
+            y -= 3.8 * mm
 
     qr_buffer = _make_qr_image(invoice["qr_code_data"])
-    qr_size = 20 * mm
-    qr_y = margin + 8 * mm
-    c.drawImage(ImageReader(qr_buffer), page_width - margin - qr_size, qr_y, width=qr_size, height=qr_size)
+    qr_size = 22 * mm
+    c.drawImage(ImageReader(qr_buffer), page_width - margin - qr_size, margin + 6 * mm, width=qr_size, height=qr_size)
 
-    if not invoice.get("is_fiscal_doc", True):
-        c.setFillColor(TEXT_MUTED)
-        c.setFont("Helvetica-Oblique", 7.5)
-        c.drawString(margin, margin, "Este documento nao serve como factura")
+    c.setFillColor(TEXT_MUTED)
+    c.setFont("Helvetica-Oblique", 6.5)
+    c.drawString(margin, margin + 3 * mm, "SIMUL - Processado por programa nao homologado (simulacao)")
+    if invoice.get("atcud"):
+        c.drawString(margin, margin, f"ATCUD: {invoice['atcud']}")
 
     c.setFillColor(TEXT_MUTED)
     c.setFont("Helvetica", 7)
@@ -589,3 +696,196 @@ def generate_invoice_pdf_a4(invoice: dict, lines: list[dict], company: dict, cus
     c.save()
     buffer.seek(0)
     return buffer.read()
+
+
+def generate_recibo_style_a4(invoice, company, customer):
+    buffer = io.BytesIO()
+    c = canvas.Canvas(buffer, pagesize=A4)
+    page_width, page_height = A4
+    margin = 14 * mm
+
+    via_label = _via_label_text(invoice.get("print_count", 1))
+    top = page_height - 14 * mm
+    c.setFillColor(TITLE_BLACK)
+    c.setFont("Helvetica-Bold", 30)
+    c.drawString(margin, top, "RECIBO")
+    ty = top - 7 * mm
+    c.setFillColor(TEXT_PRIMARY)
+    c.setFont("Helvetica", 9.5)
+    c.drawString(margin, ty, f"Data de emissao: {invoice.get('business_date', '-')}")
+
+    logo_path = _resolve_logo_path(company)
+    if logo_path:
+        logo_size = 18 * mm
+        c.drawImage(ImageReader(logo_path), page_width - margin - logo_size, top - 12 * mm, width=logo_size, height=logo_size, preserveAspectRatio=True, mask="auto")
+
+    c.setFillColor(TEXT_MUTED)
+    c.setFont("Helvetica-Oblique", 7)
+    c.drawRightString(page_width - margin, top - 18 * mm, via_label)
+
+    y = ty - 10 * mm
+    c.setFillColor(TEXT_PRIMARY)
+    c.setFont("Helvetica", 8.5)
+    c.drawString(margin, y, company["name"])
+    y -= 4 * mm
+    c.drawString(margin, y, f"No de Contribuinte: {company['nif']}")
+    y -= 4 * mm
+    addr_line = company.get("address") or ""
+    phones = " / ".join([p for p in [company.get("phone_number"), company.get("phone_number_2")] if p])
+    tail = (" - Tel: " + phones) if phones else ""
+    c.drawString(margin, y, f"{addr_line}{tail}"[:100])
+    y -= 8 * mm
+
+    c.setFont("Helvetica-Bold", 9)
+    c.drawString(margin, y, "Contribuinte: ")
+    lbl_w = c.stringWidth("Contribuinte: ", "Helvetica-Bold", 9)
+    c.setFont("Helvetica", 9)
+    c.drawString(margin + lbl_w, y, (customer["name"] if customer else "Consumidor Final")[:50])
+    cust_y = y
+    y -= 4.4 * mm
+    if customer and customer.get("address"):
+        c.setFont("Helvetica-Bold", 8)
+        c.drawString(margin, y, "Localizacao: ")
+        lbl_w2 = c.stringWidth("Localizacao: ", "Helvetica-Bold", 8)
+        c.setFont("Helvetica", 8)
+        c.drawString(margin + lbl_w2, y, customer["address"][:60])
+        y -= 4.2 * mm
+    if customer and customer.get("nif"):
+        c.setFont("Helvetica-Bold", 8)
+        c.drawString(margin, y, "NIF: ")
+        lbl_w3 = c.stringWidth("NIF: ", "Helvetica-Bold", 8)
+        c.setFont("Helvetica", 8)
+        c.drawString(margin + lbl_w3, y, customer["nif"])
+        y -= 4.2 * mm
+
+    right_x = page_width - margin
+    c.setFillColor(TEXT_PRIMARY)
+    c.setFont("Helvetica-Bold", 9)
+    c.drawRightString(right_x, cust_y, "Documento de Cobranca")
+    c.setFont("Helvetica", 8)
+    c.drawRightString(right_x, cust_y - 4.2 * mm, f"Data emissao: {invoice.get('business_date', '-')}")
+
+    y -= 6 * mm
+
+    ref = invoice.get("reference_invoice")
+    col_num = margin
+    col_tipo = margin + 42 * mm
+    col_semimp = margin + 68 * mm
+    tax_block_x = margin + 100 * mm
+    tax_w = 32 * mm
+    col_desc = tax_block_x + tax_w + 2 * mm
+    col_total = page_width - margin
+
+    header_h = 9 * mm
+    c.setFillColor(TABLE_HEADER_BG)
+    c.rect(margin, y - header_h, page_width - 2 * margin, header_h, fill=1, stroke=0)
+    c.setFillColor(TEXT_PRIMARY)
+    c.setFont("Helvetica-Bold", 6.5)
+    hy = y - 3.2 * mm
+    c.drawString(col_num + 1 * mm, hy, "No Factura ou documento")
+    c.drawString(col_tipo + 1 * mm, hy, "Tipo de documento")
+    c.drawString(col_semimp + 1 * mm, hy, "Total sem imposto")
+    c.drawCentredString(tax_block_x + tax_w / 2, y - 2.4 * mm, "Valor de imposto")
+    c.drawString(col_desc + 1 * mm, hy, "Descontos")
+    c.drawRightString(col_total - 1 * mm, hy, "Total")
+    c.setFont("Helvetica", 5.6)
+    c.drawCentredString(tax_block_x + tax_w / 6, y - header_h + 1.2 * mm, "IEC")
+    c.drawCentredString(tax_block_x + tax_w / 2, y - header_h + 1.2 * mm, "IVA")
+    c.drawCentredString(tax_block_x + 5 * tax_w / 6, y - header_h + 1.2 * mm, "IS")
+    y -= header_h
+
+    row_h = 6 * mm
+    total_rows = 9
+    if ref:
+        ty = y - row_h + 2.1 * mm
+        c.setFillColor(TEXT_PRIMARY)
+        c.setFont("Helvetica", 7.5)
+        c.drawString(col_num + 1 * mm, ty, f"{ref['invoice_type']} {ref['series']}/{ref['number']}")
+        c.drawString(col_tipo + 1 * mm, ty, ref['invoice_type'])
+        c.drawString(col_semimp + 1 * mm, ty, fmt(ref["subtotal"]))
+        c.setFont("Helvetica", 6.8)
+        c.drawCentredString(tax_block_x + tax_w / 6, ty, "0,00")
+        c.drawCentredString(tax_block_x + tax_w / 2, ty, fmt(ref["vat_total"]))
+        c.drawCentredString(tax_block_x + 5 * tax_w / 6, ty, "0,00")
+        c.setFont("Helvetica", 7.5)
+        c.drawRightString(col_total - 1 * mm, ty, fmt(invoice["total"]))
+        y -= row_h
+
+    for _ in range(total_rows - (1 if ref else 0)):
+        y -= row_h
+
+    c.setStrokeColor(BORDER)
+    c.setLineWidth(0.6)
+    c.rect(margin, y, page_width - 2 * margin, header_h + row_h * total_rows, fill=0, stroke=1)
+    y -= 10 * mm
+
+    left_w = 0.5 * (page_width - 2 * margin) - 4 * mm
+    right_col_x = margin + left_w + 8 * mm
+    right_w = (page_width - margin) - right_col_x
+
+    section_top = y
+    c.setFillColor(TEXT_PRIMARY)
+    c.setFont("Helvetica-Bold", 8.5)
+    c.drawString(margin, y, "Valores totais")
+    y -= 5 * mm
+    curr_rows = [("Divisas", "-"), ("Taxa de Cambios", "-"), ("Valor em divisas", "-")]
+    rh = 5 * mm
+    c.setStrokeColor(BORDER)
+    c.setLineWidth(0.5)
+    for label, value in curr_rows:
+        c.rect(margin, y - rh, left_w, rh, fill=0, stroke=1)
+        c.setFillColor(TEXT_MUTED)
+        c.setFont("Helvetica", 7.5)
+        c.drawString(margin + 2 * mm, y - rh + 1.6 * mm, label)
+        c.setFillColor(TEXT_PRIMARY)
+        c.drawRightString(margin + left_w - 2 * mm, y - rh + 1.6 * mm, value)
+        y -= rh
+
+    kz_rows = [
+        ("Totais sem impostos", invoice["subtotal"]),
+        ("Valor de impostos", invoice["vat_total"]),
+        ("Valor de descontos", 0.0),
+        ("Valor total a pagar", invoice["total"]),
+    ]
+    ry = section_top
+    c.setFillColor(TEXT_PRIMARY)
+    c.setFont("Helvetica-Bold", 8.5)
+    c.drawRightString(right_col_x + right_w, ry, "Valores em Kwanzas")
+    ry -= 5 * mm
+    ry -= _totais_documento_box(c, right_col_x, ry, right_w, kz_rows, highlight_last=True)
+
+    y = min(y, ry) - 10 * mm
+
+    qr_buffer = _make_qr_image(invoice["qr_code_data"])
+    qr_size = 26 * mm
+    qr_x = page_width / 2 - qr_size / 2
+    c.drawImage(ImageReader(qr_buffer), qr_x, y - qr_size, width=qr_size, height=qr_size)
+    y -= qr_size + 10 * mm
+
+    banner_text = "SIMUL - DOCUMENTO PROCESSADO POR PROGRAMA NAO HOMOLOGADO"
+    banner_h = 10 * mm
+    banner_w = page_width - 2 * margin
+    banner_x = margin
+    c.setStrokeColor(TEXT_PRIMARY)
+    c.setLineWidth(1.2)
+    c.rect(banner_x, y - banner_h, banner_w, banner_h, fill=0, stroke=1)
+    c.setFillColor(TEXT_PRIMARY)
+    c.setFont("Helvetica-Bold", 10)
+    c.drawCentredString(page_width / 2, y - banner_h / 2 - 1.5 * mm, banner_text)
+
+    c.setFillColor(TEXT_MUTED)
+    c.setFont("Helvetica", 7)
+    c.drawString(margin, margin, "Pag. 1/1")
+
+    c.save()
+    buffer.seek(0)
+    return buffer.read()
+
+
+def generate_invoice_pdf_a4(invoice: dict, lines: list[dict], company: dict, customer: dict | None) -> bytes:
+    """Dispatches to the RECIBO-style template (RC has no product/service lines of its own -
+    see create_receipt docstring, it references the settled invoice instead) or the FACTURA-style
+    template used by every other document type (FT, FR, FP, NC, ND)."""
+    if invoice["invoice_type"] == "RC":
+        return generate_recibo_style_a4(invoice, company, customer)
+    return generate_factura_style_a4(invoice, lines, company, customer)
