@@ -199,6 +199,7 @@ class VatCodeResponse(BaseModel):
 class DocumentTypeRequest(BaseModel):
     code: str
     name: str
+    description: str | None = None
     area: str | None = None
     electronic_eligible: bool = False
     is_fiscal: bool = True
@@ -229,6 +230,7 @@ class DocumentTypeResponse(BaseModel):
     id: uuid.UUID
     code: str
     name: str
+    description: str | None = None
     area: str | None
     electronic_eligible: bool
     is_fiscal: bool

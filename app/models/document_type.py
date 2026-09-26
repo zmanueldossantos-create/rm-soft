@@ -36,6 +36,9 @@ class DocumentType(Base):
     # vs WorkType enums in the XSD. Administrable by SUPER_ADMIN.
     is_fiscal: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
+    # Short human-readable blurb shown on the document-type selection cards (Nova Fatura /
+    # Nota de Credito wizard), e.g. "A pagar mais tarde - emite FT". Purely descriptive.
+    description: Mapped[str | None] = mapped_column(String(200), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     # Behaviour of the document, read by the code instead of comparing document types by name.

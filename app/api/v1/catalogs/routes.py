@@ -282,13 +282,13 @@ async def get_document_rules_catalog(db: AsyncSession = Depends(get_db), current
 
 @router.post("/document-types", response_model=DocumentTypeResponse, status_code=status.HTTP_201_CREATED)
 async def post_document_type(payload: DocumentTypeRequest, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_role("SUPER_ADMIN"))):
-    return await catalog_service.create_document_type(db, payload.code, payload.name, payload.area, payload.electronic_eligible, payload.is_fiscal, payload.rules_dict())
+    return await catalog_service.create_document_type(db, payload.code, payload.name, payload.area, payload.electronic_eligible, payload.is_fiscal, payload.rules_dict(), payload.description)
 
 
 @router.patch("/document-types/{item_id}", response_model=DocumentTypeResponse)
 async def patch_document_type(item_id: uuid.UUID, payload: DocumentTypeRequest, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_role("SUPER_ADMIN"))):
     try:
-        return await catalog_service.update_document_type(db, item_id, payload.code, payload.name, payload.area, payload.electronic_eligible, payload.is_fiscal, payload.rules_dict())
+        return await catalog_service.update_document_type(db, item_id, payload.code, payload.name, payload.area, payload.electronic_eligible, payload.is_fiscal, payload.rules_dict(), payload.description)
     except CatalogItemNotFoundError as e:
         _not_found(e)
 

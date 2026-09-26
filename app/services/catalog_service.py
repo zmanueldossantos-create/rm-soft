@@ -429,8 +429,9 @@ async def list_document_types(db: AsyncSession) -> list[DocumentType]:
 async def create_document_type(
     db: AsyncSession, code: str, name: str, area: str | None = None,
     electronic_eligible: bool = False, is_fiscal: bool = True, rules: dict | None = None,
+    description: str | None = None,
 ) -> DocumentType:
-    item = DocumentType(code=code, name=name, area=area, electronic_eligible=electronic_eligible, is_fiscal=is_fiscal)
+    item = DocumentType(code=code, name=name, description=description, area=area, electronic_eligible=electronic_eligible, is_fiscal=is_fiscal)
     _apply_rules(item, rules)  # a new type is never locked: every rule is editable
     db.add(item)
     await db.commit()
@@ -441,6 +442,7 @@ async def create_document_type(
 async def update_document_type(
     db: AsyncSession, item_id: uuid.UUID, code: str, name: str, area: str | None = None,
     electronic_eligible: bool = False, is_fiscal: bool = True, rules: dict | None = None,
+    description: str | None = None,
 ) -> DocumentType:
     # Always read the row as it is in the database: the lock must not depend on a cached copy.
     result = await db.execute(
@@ -451,6 +453,7 @@ async def update_document_type(
         raise CatalogItemNotFoundError("Tipo de documento nao encontrado")
     item.code = code
     item.name = name
+    item.description = description
     item.area = area
     item.electronic_eligible = electronic_eligible
     item.is_fiscal = is_fiscal
