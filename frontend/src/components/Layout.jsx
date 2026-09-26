@@ -178,7 +178,9 @@ export default function Layout() {
 
         <div className="relative flex-1 min-w-0 h-full">
           <div ref={navScrollRef} onWheel={handleNavWheel} className="flex items-center gap-1 sm:gap-2 overflow-x-auto scrollbar-hover-thin h-full">
-            <NavLink to="/dashboard" icon={LayoutDashboard} label="Painel" active={isActive('/dashboard')} />
+            {user?.role === 'GESTOR' && (
+              <NavLink to="/dashboard" icon={LayoutDashboard} label="Painel" active={isActive('/dashboard')} />
+            )}
             {user?.role === 'SUPER_ADMIN' && (
               <NavLink to="/admin/companies" icon={Building2} label="Empresas" active={isActive('/admin/companies')} />
             )}
@@ -214,7 +216,7 @@ export default function Layout() {
             {can('pos:view') && (
               <NavLink to="/caixa" icon={Wallet} label="Caixa" active={isActive('/caixa')} />
             )}
-            {can('invoices:view') && (
+            {user?.role === 'GESTOR' && can('invoices:view') && (
               <NavLink to="/invoices" icon={Receipt} label="Faturas" active={isActive('/invoices')} />
             )}
             {stockItems.length > 0 && (
