@@ -19,6 +19,8 @@ from app.models.company_permission_seed import CompanyPermissionSeed
 from app.models.company import Company, LegalPersonType, InvoiceIssuanceMode
 from app.models.company_bank_account import CompanyBankAccount
 from app.models.vat import VAT
+from app.models.payment_method_catalog import PaymentMethodCatalog
+from app.models.company_payment_method_preference import CompanyPaymentMethodPreference
 from app.models.warehouse import Warehouse
 from app.models.user import User, UserRole
 from app.models.fiscal_regime import FiscalRegime
@@ -223,6 +225,15 @@ async def create_company(
 
     # Default warehouse - Phase 1 keeps a single warehouse per company (section 5.2/2.8).
     db.add(Warehouse(company_id=company.id, name="Armazem Principal"))
+
+    # Numerario is enabled at the Caixa by default - a company with NO payment method available
+    # can never complete a single sale, since Payment.payment_method_id is required (nullable=False).
+    # Every other method still defaults to unavailable, per CompanyPaymentMethodPreference's own
+    # design (absence of a row = False) - the GESTOR enables the rest as needed.
+    numerario_result = await db.execute(select(PaymentMethodCatalog).where(PaymentMethodCatalog.code == "NU"))
+    numerario = numerario_result.scalar_one_or_none()
+    if numerario is not None:
+        db.add(CompanyPaymentMethodPreference(company_id=company.id, payment_method_id=numerario.id, available_at_pos=True))
 
 
     # Grant the chosen Modules (Hotel/Padaria/Bar/Restaurante) - GESTOR will

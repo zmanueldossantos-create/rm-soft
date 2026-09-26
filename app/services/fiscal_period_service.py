@@ -297,13 +297,26 @@ async def ensure_period_open(db: AsyncSession, company_id: uuid.UUID, check_date
     period = period_result.scalar_one_or_none()
     if period is None or not period.is_open:
         # The month that WAS due (check_date.month) may be permanently closed and unopenable again
-        # (months only ever advance - see get_next_fiscal_month) - so point the GESTOR at whichever
-        # month can actually be opened next, not at a month that can no longer be reopened.
-        next_month = await get_next_fiscal_month(db, fiscal_year.id)
-        if next_month is not None:
-            hint = f"Contacte o GESTOR para abrir o periodo de {MONTH_NAMES_PT[next_month]} de {fiscal_year.year} antes de faturar."
+        # (months only ever advance). Two distinct situations to tell apart, since
+        # get_next_fiscal_month answers "what to open next" and returns None in BOTH:
+        # (a) a later month is already open (the transaction's date fell behind - e.g. a sale
+        #     dated in a month that has since been closed) - point at that open month instead;
+        # (b) no month is open at all - point at whichever one can be opened next.
+        open_period_result = await db.execute(
+            select(FiscalPeriod).where(FiscalPeriod.fiscal_year_id == fiscal_year.id, FiscalPeriod.is_open == True)
+        )
+        open_period = open_period_result.scalar_one_or_none()
+        if open_period is not None:
+            hint = (
+                f"O periodo aberto de momento e {MONTH_NAMES_PT[open_period.month]} de {fiscal_year.year} - "
+                "verifique a data do documento."
+            )
         else:
-            hint = "Contacte o GESTOR para abrir o periodo antes de faturar."
+            next_month = await get_next_fiscal_month(db, fiscal_year.id)
+            if next_month is not None:
+                hint = f"Contacte o GESTOR para abrir o periodo de {MONTH_NAMES_PT[next_month]} de {fiscal_year.year} antes de faturar."
+            else:
+                hint = "Contacte o GESTOR para abrir o periodo antes de faturar."
         raise PeriodClosedError(
             f"O periodo de {MONTH_NAMES_PT[check_date.month]} de {check_date.year} nao esta aberto. {hint}"
         )
