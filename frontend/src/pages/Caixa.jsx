@@ -819,9 +819,11 @@ export default function Caixa() {
       if (paymentMode === 'liquidation') {
         const invoice = await liquidatePendingInvoice(selectedPosId, liquidationTarget.id, liquidationTargetType, validPayments);
         setLastInvoice(invoice);
+        setPaymentModalOpen(false);
         setSuccessModalOpen(true);
       refreshBalance(selectedPosId);
       getPosStockLevels(selectedPosId).then(setStockLevels).catch(() => {});
+      listPendingProFormas().then(setPendingProFormas).catch(() => {});
       } else {
         const invoice = await checkout(
           selectedPosId, selectedCustomerId || null,
@@ -1557,7 +1559,7 @@ export default function Caixa() {
         </div>
       </Modal>
 
-      <Modal open={successModalOpen} onClose={closePaymentModal} title="Documento gerado">
+      <Modal open={successModalOpen} onClose={closePaymentModal} title="Documento gerado" stacked={paymentMode === 'liquidation'}>
         <div className="flex flex-col items-center gap-4 py-4 text-center">
           <CheckCircle2 size={40} className="text-success" />
           <div>
