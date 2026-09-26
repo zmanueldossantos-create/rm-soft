@@ -69,6 +69,8 @@ async def post_open_session(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except PosNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except PeriodClosedError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
 
 
 @router.get("/sessions/open", response_model=CashSessionResponse | None)

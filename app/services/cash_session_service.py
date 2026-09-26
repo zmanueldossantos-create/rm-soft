@@ -18,6 +18,7 @@ from app.models.cash_movement import CashMovement, CashMovementStatus
 from app.services.point_of_sale_service import get_pos_or_raise
 from app.services.user_cash_point_access_service import require_cash_point_access, CashPointAccessDeniedError
 from app.models.cash_denomination_count import DenominationCountType
+from app.services.fiscal_period_service import ensure_period_open
 
 
 class SessionAlreadyOpenError(Exception):
@@ -81,6 +82,7 @@ async def open_session(
     cashier no longer has to manually re-enter the drawer's cash each morning. If
     this POS has never had a session before, it starts at 0. Passing an explicit
     value still overrides the carry-over, for the rare case of a manual correction."""
+    await ensure_period_open(db, company_id, date.today())
     await require_cash_point_access(db, company_id, opened_by_user, pos_id)
     pos = await get_pos_or_raise(db, company_id, pos_id)
     opened_by_user_id = opened_by_user.id

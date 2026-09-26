@@ -124,6 +124,8 @@ async def close_period(
         return await close_fiscal_period(db, current_user.company_id, period_id)
     except FiscalPeriodNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except InvalidFiscalOperationError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
 
 
 @router.get("/current-period")

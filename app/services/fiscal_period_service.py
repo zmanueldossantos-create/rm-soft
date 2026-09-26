@@ -16,11 +16,13 @@ by the system rather than freely chosen by the user:
 import uuid
 from datetime import date
 
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.fiscal_year import FiscalYear
 from app.models.fiscal_period import FiscalPeriod
+from app.models.cash_session import CashSession, CashSessionStatus
+from app.models.cash_movement import CashMovement, CashMovementStatus
 
 
 class FiscalYearAlreadyExistsError(Exception):
@@ -181,6 +183,30 @@ async def close_fiscal_period(db: AsyncSession, company_id: uuid.UUID, period_id
     period = result.scalar_one_or_none()
     if period is None:
         raise FiscalPeriodNotFoundError("Periodo fiscal nao encontrado")
+
+    # A period cannot close while cash is still "in flight" for this company - an open cash
+    # session (drawer not yet counted/closed) or a transfer awaiting reception at its destination.
+    open_sessions_count = (await db.execute(
+        select(func.count(CashSession.id)).where(
+            CashSession.company_id == company_id, CashSession.status == CashSessionStatus.ABERTA
+        )
+    )).scalar_one()
+    if open_sessions_count > 0:
+        raise InvalidFiscalOperationError(
+            f"Nao e possivel fechar o periodo - existem {open_sessions_count} caixa(s) ainda aberta(s). "
+            "Feche todas as sessoes de caixa antes de fechar o periodo."
+        )
+
+    pending_transfers_count = (await db.execute(
+        select(func.count(CashMovement.id)).where(
+            CashMovement.company_id == company_id, CashMovement.status == CashMovementStatus.PENDENTE
+        )
+    )).scalar_one()
+    if pending_transfers_count > 0:
+        raise InvalidFiscalOperationError(
+            f"Nao e possivel fechar o periodo - existem {pending_transfers_count} transferencia(s) de caixa "
+            "por receber. Confirme a rececao antes de fechar o periodo."
+        )
 
     period.is_open = False
     await db.commit()
