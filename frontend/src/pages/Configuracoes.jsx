@@ -283,7 +283,7 @@ export default function Configuracoes() {
       case 'payment_methods': return { code: '', name: '', allows_payment: true, allows_receipt: true, is_cash: false };
       case 'payment_terms': return { name: '', fixed_days: false, days: 0, months_fixed_day: 0, discount: 0 };
       case 'vat_codes': return { code: '', name: '', rate: 0, country_id: countries[0]?.id || '', valid_from: '', valid_until: '', observations: '' };
-      case 'document_types': return { code: '', name: '', area: '', electronic_eligible: false, is_fiscal: true, rules_locked: false, saft_section: 'NONE', revenue_sign: 0, requires_origin: false, has_lines: true, paid_on_issue: false, sent_to_agt: false, deducts_stock: false, accepts_credit_note: false, accepts_debit_note: false, accepts_receipt: false, convertible: false, issuable_in_invoices: false, issuable_at_pos: false, requires_payment_term: false, requires_customer: false };
+      case 'document_types': return { code: '', name: '', description: '', area: '', electronic_eligible: false, is_fiscal: true, rules_locked: false, saft_section: 'NONE', revenue_sign: 0, requires_origin: false, has_lines: true, paid_on_issue: false, sent_to_agt: false, deducts_stock: false, accepts_credit_note: false, accepts_debit_note: false, accepts_receipt: false, convertible: false, issuable_in_invoices: false, issuable_at_pos: false, requires_payment_term: false, requires_customer: false };
       case 'movement_types': return { code: '', name: '', direction: 'ENTRADA', is_auto: false, description: '' };
       case 'units': return { code: '', name: '' };
       case 'withholding_taxes': return { name: '', rate: 0, tax_type: '' };
@@ -472,6 +472,9 @@ export default function Configuracoes() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Field label={'C\u00f3digo *'}><input value={form.code} onChange={(e) => updateField('code', e.target.value)} required className={inputClass} /></Field>
             <Field label="Nome *"><input value={form.name} onChange={(e) => updateField('name', e.target.value)} required className={inputClass} /></Field>
+            <Field label="Descricao (cartao de selecao)" hint="Frase curta mostrada ao escolher o tipo de documento, ex: A pagar mais tarde - emite FT">
+              <input value={form.description || ''} onChange={(e) => updateField('description', e.target.value)} maxLength={200} className={inputClass} />
+            </Field>
             <Field label={'\u00c1rea'}>
               <Select value={form.area} onChange={(v) => updateField('area', v)} options={[{ value: 'FACTURACAO', label: 'Factura\u00e7\u00e3o' }, { value: 'TESOURARIA', label: 'Tesouraria' }, { value: 'COMPRAS', label: 'Compras' }]} placeholder="Selecionar" />
             </Field>
