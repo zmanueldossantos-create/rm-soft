@@ -296,7 +296,14 @@ async def ensure_period_open(db: AsyncSession, company_id: uuid.UUID, check_date
     )
     period = period_result.scalar_one_or_none()
     if period is None or not period.is_open:
+        # The month that WAS due (check_date.month) may be permanently closed and unopenable again
+        # (months only ever advance - see get_next_fiscal_month) - so point the GESTOR at whichever
+        # month can actually be opened next, not at a month that can no longer be reopened.
+        next_month = await get_next_fiscal_month(db, fiscal_year.id)
+        if next_month is not None:
+            hint = f"Contacte o GESTOR para abrir o periodo de {MONTH_NAMES_PT[next_month]} de {fiscal_year.year} antes de faturar."
+        else:
+            hint = "Contacte o GESTOR para abrir o periodo antes de faturar."
         raise PeriodClosedError(
-            f"O periodo de {MONTH_NAMES_PT[check_date.month]} de {check_date.year} nao esta aberto. "
-            "Contacte o GESTOR para o abrir antes de faturar."
+            f"O periodo de {MONTH_NAMES_PT[check_date.month]} de {check_date.year} nao esta aberto. {hint}"
         )
