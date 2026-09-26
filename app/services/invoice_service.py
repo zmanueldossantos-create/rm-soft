@@ -480,6 +480,7 @@ async def create_credit_note(
     credit_note_cause: str,
     lines_input: list[dict],
     business_date: date | None = None,
+    cash_session_id: uuid.UUID | None = None,
 ) -> Invoice:
     """
     Creates a Nota de Credito (NC) against an already-issued Factura/Factura-Recibo,
@@ -623,6 +624,7 @@ async def create_credit_note(
         company_id=company_id,
         activity_id=activity_id,
         customer_id=reference_invoice.customer_id,
+        cash_session_id=cash_session_id,
         invoice_type=InvoiceType.NOTA_CREDITO,
         document_type_id=doc_type.id,
         series=series_row.series_code,
@@ -679,6 +681,7 @@ async def create_debit_note(
     business_date: date | None = None,
     document_reference: str | None = None,
     observations: str | None = None,
+    cash_session_id: uuid.UUID | None = None,
 ) -> Invoice:
     """
     Creates a Nota de Debito (ND) referencing an already-issued Factura/Factura-Recibo/
@@ -847,6 +850,7 @@ async def create_debit_note(
         company_id=company_id,
         activity_id=activity_id,
         customer_id=customer_id if customer_id is not None else reference_invoice.customer_id,
+        cash_session_id=cash_session_id,
         invoice_type=InvoiceType.NOTA_DEBITO,
         document_type_id=doc_type.id,
         series=series_row.series_code,

@@ -17,6 +17,7 @@ from app.models.invoice import Invoice
 from app.models.cash_movement import CashMovement, CashMovementStatus
 from app.services.point_of_sale_service import get_pos_or_raise
 from app.services.user_cash_point_access_service import require_cash_point_access, CashPointAccessDeniedError
+from app.services.user_cash_point_access_service import get_access_for_user
 from app.models.cash_denomination_count import DenominationCountType
 from app.services.fiscal_period_service import ensure_period_open
 
@@ -46,6 +47,19 @@ async def get_open_session(db: AsyncSession, company_id: uuid.UUID, pos_id: uuid
         )
     )
     return result.scalar_one_or_none()
+
+
+async def get_open_session_for_user(db: AsyncSession, company_id: uuid.UUID, user_id: uuid.UUID) -> CashSession | None:
+    """Best-effort lookup of the caller's own open session, for screens that don't have a pos_id
+    of their own (Faturas - NC/ND/Recibo) but still want the resulting document to be scoped to
+    a cash point when the issuing user happens to have one open, so it shows up in that POS's
+    Faturas list (see the point-16 pos-scoping filter). Returns None when the user has no assigned
+    POS (unassigned CAIXA, or GESTOR - who isn't tied to one) or no session currently open there -
+    the document then stays company-wide visible (GESTOR only), exactly like before this existed."""
+    access = await get_access_for_user(db, company_id, user_id)
+    if access is None:
+        return None
+    return await get_open_session(db, company_id, access.pos_id)
 
 
 async def get_carry_forward_amount(db: AsyncSession, company_id: uuid.UUID, pos_id: uuid.UUID) -> float:

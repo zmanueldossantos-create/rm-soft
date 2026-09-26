@@ -27,6 +27,7 @@ from app.workers.agt_worker import submit_invoice_to_agt
 from datetime import date
 from app.schemas.invoice import InvoiceCreateRequest, InvoiceResponse, InvoiceDetailResponse, CreditNoteCreateRequest, DebitNoteCreateRequest, ReceiptCreateRequest, ProFormaCreateRequest, ConvertProFormaRequest
 from app.utils.pdf_generator import generate_invoice_pdf_thermal, generate_invoice_pdf_a4
+from app.services.cash_session_service import get_open_session_for_user
 from app.services.invoice_service import (
     create_invoice,
     list_invoices,
@@ -111,6 +112,7 @@ async def create_new_credit_note(
     current_user: User = Depends(require_permission("invoices:credit_note")),
 ):
     """Creates a Nota de Credito against an already-issued Factura/Factura-Recibo - see Video 5."""
+    session = await get_open_session_for_user(db, current_user.company_id, current_user.id)
     try:
         credit_note = await create_credit_note(
             db,
@@ -120,6 +122,7 @@ async def create_new_credit_note(
             credit_note_reason=payload.credit_note_reason,
             credit_note_cause=payload.credit_note_cause,
             lines_input=[{"invoice_line_id": l.invoice_line_id, "quantity": l.quantity} for l in payload.lines],
+            cash_session_id=session.id if session else None,
         )
     except PeriodClosedError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
@@ -149,6 +152,7 @@ async def create_new_debit_note(
     current_user: User = Depends(require_permission("invoices:debit_note")),
 ):
     """Creates a Nota de Debito referencing an already-issued Factura/Factura-Recibo - see Video 5."""
+    session = await get_open_session_for_user(db, current_user.company_id, current_user.id)
     try:
         debit_note = await create_debit_note(
             db,
@@ -159,6 +163,7 @@ async def create_new_debit_note(
             lines_input=[{"product_id": l.product_id, "service_id": l.service_id, "quantity": l.quantity, "discount_percent": l.discount_percent} for l in payload.lines],
             document_reference=payload.document_reference,
             observations=payload.observations,
+            cash_session_id=session.id if session else None,
         )
     except PeriodClosedError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
