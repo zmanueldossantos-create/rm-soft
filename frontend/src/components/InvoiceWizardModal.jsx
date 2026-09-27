@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Plus, Trash2, Loader2, Copy, Eye, ArrowLeft, ArrowRight, Check } from 'lucide-react';
 import Select from './Select';
 import Modal from './Modal';
-import { createInvoice, createProForma } from '../api/invoices';
+import { createInvoice, createProForma, getInvoiceDetail, createCreditNote, createDebitNote } from '../api/invoices';
 import { listProducts } from '../api/products';
 import { listServices } from '../api/services';
 import { listActivities } from '../api/activity';
@@ -17,7 +17,7 @@ import { useAuthStore } from '../store/authStore';
 const inputClass = "w-full bg-bg-inset border border-border rounded-md px-2.5 py-2 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors";
 const API_ORIGIN = 'http://127.0.0.1:8001';
 
-const INVOICE_TYPE_CODE = { FACTURA: 'FT', FACTURA_RECIBO: 'FR', PRO_FORMA: 'FP' };
+const INVOICE_TYPE_CODE = { FACTURA: 'FT', FACTURA_RECIBO: 'FR', PRO_FORMA: 'FP', NOTA_CREDITO: 'NC', NOTA_DEBITO: 'ND', RECIBO: 'RC' };
 const INVOICE_TYPE_LABEL = { FACTURA: 'Factura', FACTURA_RECIBO: 'Factura/Recibo', PRO_FORMA: 'Factura Pro-forma' };
 
 const PT_ONES = ['', 'um', 'dois', 'tres', 'quatro', 'cinco', 'seis', 'sete', 'oito', 'nove', 'dez', 'onze', 'doze', 'treze', 'catorze', 'quinze', 'dezasseis', 'dezassete', 'dezoito', 'dezanove'];
@@ -66,7 +66,7 @@ const emptyLine = { item_type: 'product', product_id: '', service_id: '', quanti
 
 const STEP_LABELS = ['Tipo de documento', 'Cliente e datas', 'Pagamento', 'Revisao'];
 
-export default function InvoiceWizardModal({ open, onClose, onCreated }) {
+export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'create', referenceInvoiceId = null }) {
   const [activities, setActivities] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [products, setProducts] = useState([]);
@@ -104,12 +104,20 @@ export default function InvoiceWizardModal({ open, onClose, onCreated }) {
   const [formError, setFormError] = useState('');
   const [previewOpen, setPreviewOpen] = useState(false);
 
+  const [referenceInvoice, setReferenceInvoice] = useState(null);
+  const [ncLines, setNcLines] = useState([]);
+  const [ncReason, setNcReason] = useState('ANL');
+  const [ncCause, setNcCause] = useState('');
+
   const permissionsList = useAuthStore((state) => state.permissions);
   const canManageProducts = Array.isArray(permissionsList) ? permissionsList.includes('products:manage') : true;
 
   useEffect(() => {
     if (!open) return;
-    setStep(1);
+    setStep(mode === 'create' ? 1 : 1);
+    setReferenceInvoice(null);
+    setNcReason('ANL');
+    setNcCause('');
     setInvoiceType('');
     setActivityId('');
     setCustomerId('');
@@ -150,6 +158,25 @@ export default function InvoiceWizardModal({ open, onClose, onCreated }) {
         setWithholdingTaxes(whData);
         const activeOnes = activitiesData.filter((a) => a.is_active);
         if (activeOnes.length === 1) setActivityId(activeOnes[0].id);
+
+        if (mode !== 'create' && referenceInvoiceId) {
+          const ref = await getInvoiceDetail(referenceInvoiceId);
+          setReferenceInvoice(ref);
+          setActivityId(ref.activity_id);
+          if (mode === 'nc') {
+            setNcLines(ref.lines.map((l) => ({
+              invoice_line_id: l.id,
+              product_name: l.product_name_snapshot,
+              original_quantity: l.quantity,
+              line_total: l.line_total,
+              selected: true,
+              quantity: String(l.quantity),
+            })));
+          }
+          if (mode === 'nd') {
+            setDocumentReference((INVOICE_TYPE_CODE[ref.invoice_type] || ref.invoice_type) + ' ' + ref.series + '/' + ref.number);
+          }
+        }
       } catch (err) {
         setLoadError(extractErrorMessage(err, 'Erro ao carregar dados'));
       } finally {
@@ -360,7 +387,60 @@ export default function InvoiceWizardModal({ open, onClose, onCreated }) {
 
   const hasUsableLines = lines.some((l) => getLineItem(l) && parseFloat(l.quantity) > 0);
 
+  async function handleNcSubmit() {
+    setFormError('');
+    setSaving(true);
+    try {
+      const selectedLines = ncLines.filter((l) => l.selected && parseFloat(l.quantity) > 0);
+      if (selectedLines.length === 0) {
+        setFormError('Selecione pelo menos uma linha para creditar');
+        setSaving(false);
+        return;
+      }
+      await createCreditNote({
+        activity_id: referenceInvoice.activity_id,
+        reference_invoice_id: referenceInvoice.id,
+        credit_note_reason: ncReason,
+        credit_note_cause: ncCause,
+        lines: selectedLines.map((l) => ({ invoice_line_id: l.invoice_line_id, quantity: parseFloat(l.quantity) })),
+      });
+      onCreated?.();
+      onClose();
+    } catch (err) {
+      setFormError(extractErrorMessage(err, 'Erro ao emitir nota de credito'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleNdSubmit() {
+    setFormError('');
+    setSaving(true);
+    try {
+      await createDebitNote({
+        activity_id: referenceInvoice.activity_id,
+        reference_invoice_id: referenceInvoice.id,
+        document_reference: documentReference || null,
+        observations: observations || null,
+        lines: lines.map((l) => ({
+          product_id: l.item_type === 'service' ? null : l.product_id,
+          service_id: l.item_type === 'service' ? l.service_id : null,
+          quantity: parseFloat(l.quantity),
+          discount_percent: parseFloat(l.discount_percent) || 0,
+        })),
+      });
+      onCreated?.();
+      onClose();
+    } catch (err) {
+      setFormError(extractErrorMessage(err, 'Erro ao emitir nota de debito'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function handleSubmit() {
+    if (mode === 'nc') return handleNcSubmit();
+    if (mode === 'nd') return handleNdSubmit();
     setFormError('');
     setSaving(true);
     try {
@@ -410,6 +490,9 @@ export default function InvoiceWizardModal({ open, onClose, onCreated }) {
   if (!open) return null;
 
   const currentTypeLabel = invoiceType ? `${INVOICE_TYPE_LABEL[invoiceType]} (${INVOICE_TYPE_CODE[invoiceType]})` : undefined;
+  const referenceLabel = referenceInvoice ? `${INVOICE_TYPE_CODE[referenceInvoice.invoice_type] || referenceInvoice.invoice_type} ${referenceInvoice.series}/${referenceInvoice.number}` : '';
+  const modalTitle = mode === 'nc' ? 'Nota de credito' : mode === 'nd' ? 'Nota de debito' : 'Nova fatura';
+  const modalSubtitle = mode === 'nc' || mode === 'nd' ? (referenceLabel ? `Referente a ${referenceLabel}` : undefined) : currentTypeLabel;
 
   function stepReached(n) {
     if (n === 1) return true;
@@ -419,9 +502,13 @@ export default function InvoiceWizardModal({ open, onClose, onCreated }) {
     return false;
   }
 
+  const isSingleScreen = mode !== 'create';
+  const submitLabel = mode === 'nc' ? 'Emitir Nota de Credito' : mode === 'nd' ? 'Emitir Nota de Debito' : (invoiceType === 'PRO_FORMA' ? 'Gerar pro-forma' : 'Criar factura');
+  const isSubmitDisabled = mode === 'nc' ? (saving || !ncCause) : mode === 'nd' ? (saving || lines.every((l) => !getLineItem(l) || parseFloat(l.quantity) <= 0)) : (saving || !isFormValid);
+
   const footer = (
     <div className="flex items-center justify-between px-6 py-3.5">
-      {step > 1 ? (
+      {!isSingleScreen && step > 1 ? (
         <button type="button" onClick={() => setStep((s) => s - 1)} className="flex items-center gap-1.5 border border-border hover:border-accent text-text-primary text-sm px-4 py-2 rounded-md transition-colors cursor-pointer">
           <ArrowLeft size={14} /> Voltar
         </button>
@@ -431,22 +518,24 @@ export default function InvoiceWizardModal({ open, onClose, onCreated }) {
         </button>
       )}
       <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => setPreviewOpen(true)}
-          disabled={!hasUsableLines}
-          className="flex items-center gap-1.5 border border-border hover:border-accent disabled:opacity-40 disabled:cursor-not-allowed text-text-primary text-sm px-4 py-2 rounded-md transition-colors cursor-pointer"
-        >
-          <Eye size={15} /> Pre-visualizar
-        </button>
-        {step < 4 ? (
+        {mode === 'create' && (
+          <button
+            type="button"
+            onClick={() => setPreviewOpen(true)}
+            disabled={!hasUsableLines}
+            className="flex items-center gap-1.5 border border-border hover:border-accent disabled:opacity-40 disabled:cursor-not-allowed text-text-primary text-sm px-4 py-2 rounded-md transition-colors cursor-pointer"
+          >
+            <Eye size={15} /> Pre-visualizar
+          </button>
+        )}
+        {!isSingleScreen && step < 4 ? (
           <button type="button" onClick={() => setStep((s) => s + 1)} disabled={step === 1 && !invoiceType} className="flex items-center gap-1.5 bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-sm px-5 py-2 rounded-md transition-colors cursor-pointer">
             Seguinte <ArrowRight size={14} />
           </button>
         ) : (
-          <button type="button" onClick={handleSubmit} disabled={saving || !isFormValid} className="flex items-center gap-1.5 bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-sm px-5 py-2 rounded-md transition-colors cursor-pointer">
+          <button type="button" onClick={handleSubmit} disabled={isSubmitDisabled} className={'flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-sm px-5 py-2 rounded-md transition-colors cursor-pointer ' + (mode === 'nc' ? 'bg-danger hover:opacity-90' : 'bg-accent hover:bg-accent-hover')}>
             {saving ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
-            {saving ? 'A criar...' : (invoiceType === 'PRO_FORMA' ? 'Gerar pro-forma' : 'Criar factura')}
+            {saving ? 'A emitir...' : submitLabel}
           </button>
         )}
       </div>
@@ -455,14 +544,14 @@ export default function InvoiceWizardModal({ open, onClose, onCreated }) {
 
   return (
     <>
-      <Modal open={open} onClose={onClose} title="Nova fatura" subtitle={currentTypeLabel} maxWidthClass="max-w-6xl" footer={footer}>
+      <Modal open={open} onClose={onClose} title={modalTitle} subtitle={modalSubtitle} maxWidthClass="max-w-6xl" footer={footer}>
         {loading ? (
           <div className="flex items-center justify-center py-16"><Loader2 size={24} className="animate-spin text-accent" /></div>
         ) : loadError ? (
           <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-sm rounded-r">{loadError}</div>
         ) : (
           <>
-            <div className="flex items-center gap-1.5 -mt-1 mb-5">
+            {!isSingleScreen && <div className="flex items-center gap-1.5 -mt-1 mb-5">
               {STEP_LABELS.map((label, i) => {
                 const n = i + 1;
                 const done = step > n;
@@ -484,11 +573,53 @@ export default function InvoiceWizardModal({ open, onClose, onCreated }) {
                   </div>
                 );
               })}
-            </div>
+            </div>}
 
             <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.2fr] gap-6">
               <div className="min-h-[380px]">
-                {step === 1 && (
+                {isSingleScreen && mode === 'nc' && (
+                  <div className="flex flex-col gap-4">
+                    {referenceInvoice && (
+                      <p className="text-[12px] text-text-muted">
+                        Referente a <span className="font-mono text-text-primary">{INVOICE_TYPE_CODE[referenceInvoice.invoice_type] || referenceInvoice.invoice_type} {referenceInvoice.series}/{referenceInvoice.number}</span>
+                      </p>
+                    )}
+                    <div>
+                      <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Motivo *</label>
+                      <Select value={ncReason} onChange={setNcReason} options={[{ value: 'ANL', label: 'Anulacao' }, { value: 'RTF', label: 'Rectificacao' }]} />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Causa * (max. 60 caracteres)</label>
+                      <input value={ncCause} onChange={(e) => setNcCause(e.target.value)} maxLength={60} required placeholder="Ex: Cliente desistiu da compra" className={inputClass} />
+                    </div>
+                    {formError && (
+                      <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{formError}</div>
+                    )}
+                  </div>
+                )}
+
+                {isSingleScreen && mode === 'nd' && (
+                  <div className="flex flex-col gap-4">
+                    {referenceInvoice && (
+                      <p className="text-[12px] text-text-muted">
+                        Referente a <span className="font-mono text-text-primary">{INVOICE_TYPE_CODE[referenceInvoice.invoice_type] || referenceInvoice.invoice_type} {referenceInvoice.series}/{referenceInvoice.number}</span>
+                      </p>
+                    )}
+                    <div>
+                      <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Referencia</label>
+                      <input value={documentReference} disabled className={inputClass + ' opacity-60 cursor-not-allowed'} />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Observacoes</label>
+                      <textarea value={observations} onChange={(e) => setObservations(e.target.value)} rows={3} className={inputClass + ' resize-none'} placeholder="Opcional" />
+                    </div>
+                    {formError && (
+                      <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{formError}</div>
+                    )}
+                  </div>
+                )}
+
+                {!isSingleScreen && step === 1 && (
                   <div className="flex flex-col gap-3">
                     <p className="text-[12.5px] text-text-muted mb-1">Selecionar o tipo de documento a emitir</p>
                     {issuableTypeCards.map((c) => (
@@ -510,7 +641,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated }) {
                   </div>
                 )}
 
-                {step === 2 && (
+                {!isSingleScreen && step === 2 && (
                   <div className="flex flex-col gap-4">
                     <div>
                       <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Atividade *</label>
@@ -533,7 +664,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated }) {
                   </div>
                 )}
 
-                {step === 3 && (
+                {!isSingleScreen && step === 3 && (
                   <div className="flex flex-col gap-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
@@ -578,7 +709,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated }) {
                   </div>
                 )}
 
-                {step === 4 && (
+                {!isSingleScreen && step === 4 && (
                   <div className="flex flex-col gap-4">
                     <div>
                       <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Observacoes</label>
@@ -605,11 +736,34 @@ export default function InvoiceWizardModal({ open, onClose, onCreated }) {
               <div className="flex flex-col border border-border rounded-lg overflow-hidden">
                 <div className="p-4 flex-1 overflow-y-auto scrollbar-thin max-h-[340px]">
                   <div className="flex items-center justify-between mb-3">
-                    <p className="text-[13px] font-medium text-text-primary">Produtos e servicos</p>
-                    <button type="button" onClick={addLine} className="flex items-center gap-1 text-accent hover:text-accent-hover text-[12px] font-medium transition-colors cursor-pointer">
-                      <Plus size={13} /> Linha
-                    </button>
+                    <p className="text-[13px] font-medium text-text-primary">{mode === 'nc' ? 'Linhas da fatura original' : 'Produtos e servicos'}</p>
+                    {mode !== 'nc' && (
+                      <button type="button" onClick={addLine} className="flex items-center gap-1 text-accent hover:text-accent-hover text-[12px] font-medium transition-colors cursor-pointer">
+                        <Plus size={13} /> Linha
+                      </button>
+                    )}
                   </div>
+                  {mode === 'nc' ? (
+                    <div className="flex flex-col gap-2">
+                      {ncLines.map((l) => (
+                        <div key={l.invoice_line_id} className="flex items-center gap-2.5 border border-border rounded-md px-3 py-2.5">
+                          <input type="checkbox" checked={l.selected} onChange={() => setNcLines((prev) => prev.map((x) => x.invoice_line_id === l.invoice_line_id ? { ...x, selected: !x.selected } : x))} className="w-4 h-4 accent-accent cursor-pointer shrink-0" />
+                          <span className="flex-1 text-[12.5px] text-text-primary truncate">{l.product_name}</span>
+                          <input
+                            type="number"
+                            step="0.001"
+                            min="0"
+                            max={l.original_quantity}
+                            disabled={!l.selected}
+                            value={l.quantity}
+                            onChange={(e) => setNcLines((prev) => prev.map((x) => x.invoice_line_id === l.invoice_line_id ? { ...x, quantity: e.target.value } : x))}
+                            className="w-16 bg-bg-inset border border-border rounded px-1.5 py-1 text-[11px] text-text-primary font-mono outline-none focus:border-accent disabled:opacity-50"
+                          />
+                          <span className="text-[10.5px] text-text-muted shrink-0">/ {l.original_quantity}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
                   <div className="flex flex-col gap-2.5">
                     {lines.map((line, idx) => {
                       const c = computeLine(line);
@@ -650,6 +804,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated }) {
                       );
                     })}
                   </div>
+                  )}
                 </div>
                 <div className="border-t border-border p-4">
                   <p className="text-[13px] font-medium text-text-primary mb-2">Detalhes</p>
