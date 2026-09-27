@@ -5,6 +5,14 @@ import apiClient from '../api/client';
 import { useAuthStore } from '../store/authStore';
 import { extractErrorMessage } from '../utils/errors';
 
+// Where each role lands right after login - a role not listed here (GESTOR, CONTABILISTA,
+// SUPER_ADMIN, and any future role added before this map is updated) falls back to /dashboard.
+// Add an entry here when a role gets its own landing screen instead of the general overview.
+const ROLE_HOME = {
+  CAIXA: '/caixa',
+  ARMAZENISTA: '/stock/dashboard',
+};
+
 export default function Login() {
   const [phoneSuffix, setPhoneSuffix] = useState('');
   const [password, setPassword] = useState('');
@@ -45,7 +53,7 @@ export default function Login() {
       });
 
       login(access_token, refresh_token, meRes.data);
-      navigate('/dashboard');
+      navigate(ROLE_HOME[meRes.data.role] || '/dashboard');
     } catch (err) {
       setError(extractErrorMessage(err, 'Erro ao ligar ao servidor'));
     } finally {
