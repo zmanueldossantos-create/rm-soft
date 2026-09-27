@@ -16,6 +16,15 @@ export async function createTeamUser(fullName, phoneNumber, password, role) {
   return res.data;
 }
 
+export async function updateTeamUser(userId, fullName, phoneNumber, role) {
+  const res = await apiClient.patch('/auth/users/' + userId, {
+    full_name: fullName,
+    phone_number: phoneNumber,
+    role,
+  });
+  return res.data;
+}
+
 export async function toggleUserStatus(userId) {
   const res = await apiClient.patch('/auth/users/' + userId + '/toggle-status');
   return res.data;

@@ -1,8 +1,8 @@
 ﻿import { useState, useEffect, useMemo } from 'react';
-import { UserCog, Plus, Loader2, Search, KeyRound } from 'lucide-react';
+import { UserCog, Plus, Loader2, Search, KeyRound, Pencil } from 'lucide-react';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
-import { listUsers, createTeamUser, toggleUserStatus, resetUserPassword } from '../api/users';
+import { listUsers, createTeamUser, updateTeamUser, toggleUserStatus, resetUserPassword } from '../api/users';
 import { extractErrorMessage } from '../utils/errors';
 import { useAuthStore } from '../store/authStore';
 
@@ -34,6 +34,7 @@ export default function Users() {
   const [togglingId, setTogglingId] = useState(null);
 
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
@@ -96,7 +97,20 @@ export default function Users() {
   }, [users, search]);
 
   function openCreateModal() {
+    setEditingId(null);
     setForm(emptyForm);
+    setFormError('');
+    setModalOpen(true);
+  }
+
+  function openEditModal(user) {
+    setEditingId(user.id);
+    setForm({
+      fullName: user.full_name,
+      phone: user.phone_number.startsWith('+244') ? user.phone_number.slice(4) : user.phone_number,
+      password: '',
+      role: user.role,
+    });
     setFormError('');
     setModalOpen(true);
   }
@@ -111,11 +125,15 @@ export default function Users() {
     setSaving(true);
     try {
       const fullPhone = form.phone.startsWith('+') ? form.phone : '+244' + form.phone.replace(/\s/g, '');
-      await createTeamUser(form.fullName, fullPhone, form.password, form.role);
+      if (editingId) {
+        await updateTeamUser(editingId, form.fullName, fullPhone, form.role);
+      } else {
+        await createTeamUser(form.fullName, fullPhone, form.password, form.role);
+      }
       setModalOpen(false);
       await loadUsers();
     } catch (err) {
-      setFormError(extractErrorMessage(err, 'Erro ao criar utilizador'));
+      setFormError(extractErrorMessage(err, editingId ? 'Erro ao guardar utilizador' : 'Erro ao criar utilizador'));
     } finally {
       setSaving(false);
     }
@@ -133,7 +151,7 @@ export default function Users() {
     }
   }
 
-  const isFormValid = form.fullName && form.phone && form.password.length >= 8 && form.role;
+  const isFormValid = form.fullName && form.phone && form.role && (editingId || form.password.length >= 8);
 
   return (
     <main className="max-w-[1600px] mx-auto px-4 sm:px-6 md:px-8 py-6 sm:py-9">
@@ -142,6 +160,22 @@ export default function Users() {
           <UserCog size={22} className="text-accent" />
           Utilizadores
         </h2>
+      </div>
+      <p className="text-text-muted text-sm mb-6">
+        Gerir a equipa com acesso ao sistema - caixas, armazenistas e contabilistas
+      </p>
+
+      <div className="flex items-center justify-between gap-3 flex-wrap mb-5">
+        <div className="relative max-w-sm w-full sm:w-auto sm:min-w-[260px]">
+          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" />
+          <input
+            type="text"
+            placeholder="Pesquisar por nome ou numero..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full bg-bg-elevated border border-border rounded-md pl-10 pr-4 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors"
+          />
+        </div>
         <button
           onClick={openCreateModal}
           className="flex items-center gap-2 bg-accent hover:bg-accent-hover text-white font-semibold text-sm px-4 py-2.5 rounded-md transition-colors cursor-pointer"
@@ -149,20 +183,6 @@ export default function Users() {
           <Plus size={17} />
           Novo utilizador
         </button>
-      </div>
-      <p className="text-text-muted text-sm mb-6">
-        Gerir a equipa com acesso ao sistema - caixas, armazenistas e contabilistas
-      </p>
-
-      <div className="relative max-w-sm mb-5">
-        <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" />
-        <input
-          type="text"
-          placeholder="Pesquisar por nome ou número..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full bg-bg-elevated border border-border rounded-md pl-10 pr-4 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors"
-        />
       </div>
 
       <div className="bg-bg-elevated border border-border rounded-lg overflow-hidden">
@@ -215,14 +235,24 @@ export default function Users() {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <button
-                        onClick={() => openResetModal(u)}
-                        aria-label="Redefinir palavra-passe"
-                        title="Redefinir palavra-passe"
-                        className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-border text-text-muted hover:text-text-primary hover:border-accent transition-colors cursor-pointer"
-                      >
-                        <KeyRound size={14} />
-                      </button>
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => openEditModal(u)}
+                          aria-label="Editar utilizador"
+                          title="Editar utilizador"
+                          className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-border text-text-muted hover:text-text-primary hover:border-accent transition-colors cursor-pointer"
+                        >
+                          <Pencil size={14} />
+                        </button>
+                        <button
+                          onClick={() => openResetModal(u)}
+                          aria-label="Redefinir palavra-passe"
+                          title="Redefinir palavra-passe"
+                          className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-border text-text-muted hover:text-text-primary hover:border-accent transition-colors cursor-pointer"
+                        >
+                          <KeyRound size={14} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -232,7 +262,7 @@ export default function Users() {
         )}
       </div>
 
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Novo utilizador">
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editingId ? 'Editar utilizador' : 'Novo utilizador'}>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div>
             <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Nome completo *</label>
@@ -256,18 +286,20 @@ export default function Users() {
               />
             </div>
           </div>
+          {!editingId && (
           <div>
-            <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Palavra-passe *</label>
+              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Palavra-passe *</label>
             <input
-              type="password"
-              value={form.password}
-              onChange={(e) => updateField('password', e.target.value)}
-              required
-              minLength={8}
-              className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors"
+                type="password"
+                value={form.password}
+                onChange={(e) => updateField('password', e.target.value)}
+                required
+                minLength={8}
+                className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors"
             />
             <p className="text-[11px] text-text-muted mt-1">Mínimo 8 caracteres</p>
           </div>
+          )}
           <div>
             <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Função *</label>
             <Select
@@ -289,8 +321,8 @@ export default function Users() {
             disabled={saving || !isFormValid}
             className="mt-1 bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors"
           >
-            {saving ? <Loader2 size={17} className="animate-spin" /> : <Plus size={17} />}
-            {saving ? 'A criar...' : 'Criar utilizador'}
+            {saving ? <Loader2 size={17} className="animate-spin" /> : (editingId ? <Pencil size={17} /> : <Plus size={17} />)}
+            {saving ? 'A guardar...' : (editingId ? 'Guardar alteracoes' : 'Criar utilizador')}
           </button>
         </form>
       </Modal>
