@@ -236,14 +236,16 @@ export default function Users() {
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => openEditModal(u)}
-                          aria-label="Editar utilizador"
-                          title="Editar utilizador"
-                          className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-border text-text-muted hover:text-text-primary hover:border-accent transition-colors cursor-pointer"
-                        >
-                          <Pencil size={14} />
-                        </button>
+                        {u.id !== currentUser?.id && (
+                          <button
+                            onClick={() => openEditModal(u)}
+                            aria-label="Editar utilizador"
+                            title="Editar utilizador"
+                            className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-border text-text-muted hover:text-text-primary hover:border-accent transition-colors cursor-pointer"
+                          >
+                            <Pencil size={14} />
+                          </button>
+                        )}
                         <button
                           onClick={() => openResetModal(u)}
                           aria-label="Redefinir palavra-passe"
