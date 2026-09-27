@@ -235,44 +235,16 @@ export default function Invoices() {
   }
 
   async function openNcModalFromRow(invoiceId) {
-    const data = await getInvoiceDetail(invoiceId);
-    setDetailInvoice(data);
-    setNcLines(data.lines.map((l) => ({
-      invoice_line_id: l.id,
-      product_name: l.product_name_snapshot,
-      original_quantity: l.quantity,
-      selected: true,
-      quantity: String(l.quantity),
-    })));
-    setNcReason('ANL');
-    setNcCause('');
-    setNcFormError('');
-    setNcModalOpen(true);
+    openWizard('nc', invoiceId);
   }
 
   async function openNdModalFromRow(invoiceId) {
-    const data = await getInvoiceDetail(invoiceId);
-    setDetailInvoice(data);
-    setNdLines([{ item_type: 'product', product_id: '', service_id: '', quantity: '1', discount_percent: '0' }]);
-    setNdDocumentReference((INVOICE_TYPE_CODE[data.invoice_type] || data.invoice_type) + ' ' + data.series + '/' + data.number);
-    setNdObservations('');
-    setNdFormError('');
-    setNdModalOpen(true);
+    openWizard('nd', invoiceId);
   }
 
   function openNcModal() {
     if (!detailInvoice) return;
-    setNcLines(detailInvoice.lines.map((l) => ({
-      invoice_line_id: l.id,
-      product_name: l.product_name_snapshot,
-      original_quantity: l.quantity,
-      selected: true,
-      quantity: String(l.quantity),
-    })));
-    setNcReason('ANL');
-    setNcCause('');
-    setNcFormError('');
-    setNcModalOpen(true);
+    openWizard('nc', detailInvoice.id);
   }
 
   function updateNcLineQuantity(lineId, quantity) {
@@ -312,11 +284,8 @@ export default function Invoices() {
   }
 
   function openNdModal() {
-    setNdLines([{ item_type: 'product', product_id: '', service_id: '', quantity: '1', discount_percent: '0' }]);
-    setNdDocumentReference((INVOICE_TYPE_CODE[detailInvoice.invoice_type] || detailInvoice.invoice_type) + ' ' + detailInvoice.series + '/' + detailInvoice.number);
-    setNdObservations('');
-    setNdFormError('');
-    setNdModalOpen(true);
+    if (!detailInvoice) return;
+    openWizard('nd', detailInvoice.id);
   }
 
   function updateNdLine(index, field, value) {
@@ -448,6 +417,14 @@ export default function Invoices() {
   const PAGE_SIZE = 50;
 
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [wizardMode, setWizardMode] = useState('create');
+  const [wizardRefId, setWizardRefId] = useState(null);
+
+  function openWizard(mode, refId) {
+    setWizardMode(mode);
+    setWizardRefId(refId || null);
+    setWizardOpen(true);
+  }
 
   async function loadInvoicesPage(currentFilters, currentOffset, append) {
     const data = await listInvoices({
@@ -624,7 +601,7 @@ export default function Invoices() {
           <PeriodFilter periods={periods} onChange={handleFilterChange} />
         </div>
         <button
-          onClick={() => setWizardOpen(true)}
+          onClick={() => openWizard('create')}
           // No dependency on products: a services-only company (or one that only has raw materials)
           // has none, and /invoices/new handles service lines - its own form keeps 'Criar Fatura'
           // disabled until every line has an item.
@@ -866,7 +843,13 @@ export default function Invoices() {
         )}
       </div>
 
-      <InvoiceWizardModal open={wizardOpen} onClose={() => setWizardOpen(false)} onCreated={loadData} />
+      <InvoiceWizardModal
+        open={wizardOpen}
+        onClose={() => setWizardOpen(false)}
+        mode={wizardMode}
+        referenceInvoiceId={wizardRefId}
+        onCreated={() => { loadData(); if (detailInvoice) openDetailModal(detailInvoice.id); }}
+      />
 
       <Modal open={detailModalOpen} onClose={() => setDetailModalOpen(false)} title="Detalhe da fatura" maxWidthClass="max-w-3xl">
         {detailLoading && (

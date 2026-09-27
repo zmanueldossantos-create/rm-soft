@@ -502,6 +502,13 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
     return false;
   }
 
+  const ncEstimatedTotal = ncLines
+    .filter((l) => l.selected && parseFloat(l.quantity) > 0)
+    .reduce((sum, l) => {
+      const ratio = l.original_quantity > 0 ? (parseFloat(l.quantity) || 0) / l.original_quantity : 0;
+      return sum + (parseFloat(l.line_total) || 0) * ratio;
+    }, 0);
+
   const isSingleScreen = mode !== 'create';
   const submitLabel = mode === 'nc' ? 'Emitir Nota de Credito' : mode === 'nd' ? 'Emitir Nota de Debito' : (invoiceType === 'PRO_FORMA' ? 'Gerar pro-forma' : 'Criar factura');
   const isSubmitDisabled = mode === 'nc' ? (saving || !ncCause) : mode === 'nd' ? (saving || lines.every((l) => !getLineItem(l) || parseFloat(l.quantity) <= 0)) : (saving || !isFormValid);
@@ -808,6 +815,15 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                 </div>
                 <div className="border-t border-border p-4">
                   <p className="text-[13px] font-medium text-text-primary mb-2">Detalhes</p>
+                  {mode === 'nc' ? (
+                    <div className="flex flex-col gap-1 text-[12.5px]">
+                      <div className="flex justify-between"><span className="text-text-muted">Linhas selecionadas</span><span className="font-mono text-text-primary">{ncLines.filter((l) => l.selected).length}</span></div>
+                      <div className="flex justify-between pt-1.5 mt-1 border-t border-border text-[13.5px] font-medium">
+                        <span className="text-text-primary">Valor a creditar (estimado)</span><span className="font-mono text-accent">{formatMoney(ncEstimatedTotal)}</span>
+                      </div>
+                      <p className="text-[10.5px] text-text-muted mt-1">O valor final e calculado no servidor.</p>
+                    </div>
+                  ) : (
                   <div className="flex flex-col gap-1 text-[12.5px]">
                     <div className="flex justify-between"><span className="text-text-muted">Total iliquido</span><span className="font-mono text-text-primary">{formatMoney(totals.totalIliquido)}</span></div>
                     <div className="flex justify-between"><span className="text-text-muted">IVA</span><span className="font-mono text-text-primary">{formatMoney(totals.totalIva)}</span></div>
@@ -824,6 +840,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                       <div className="flex justify-between"><span className="text-text-accent">Valor a pagar</span><span className="font-mono text-text-accent">{formatMoney(totals.valorAPagar)}</span></div>
                     )}
                   </div>
+                  )}
                 </div>
               </div>
             </div>
