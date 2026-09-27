@@ -7,7 +7,7 @@ import { Receipt, Plus, Loader2, Search, Trash2, FileText, Printer, Eye, X as XI
 import Modal from '../components/Modal';
 import InvoiceWizardModal from '../components/InvoiceWizardModal';
 import Select from '../components/Select';
-import { listInvoices, getInvoicePeriods, createInvoice, fetchInvoicePdfBlob, getInvoiceDetail, resubmitInvoice, createCreditNote, createDebitNote, createReceipt, convertProForma } from '../api/invoices';
+import { listInvoices, getInvoicePeriods, fetchInvoicePdfBlob, getInvoiceDetail, resubmitInvoice, createCreditNote, createDebitNote, createReceipt, convertProForma } from '../api/invoices';
 import PeriodFilter from '../components/PeriodFilter';
 import { listProducts } from '../api/products';
 import { listActivities } from '../api/activity';
@@ -117,7 +117,6 @@ export default function Invoices() {
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
 
-  const [modalOpen, setModalOpen] = useState(false);
   const [activities, setActivities] = useState([]);
   const [services, setServices] = useState([]);
   const [paymentMethods, setPaymentMethods] = useState([]);
@@ -149,14 +148,6 @@ export default function Invoices() {
     }
   }
   const [paymentTerms, setPaymentTerms] = useState([]);
-  const [invoiceType, setInvoiceType] = useState('FACTURA');
-  const [paymentTermId, setPaymentTermId] = useState('');
-  const [paymentMethodId, setPaymentMethodId] = useState('');
-  const [activityId, setActivityId] = useState('');
-  const [customerId, setCustomerId] = useState('');
-  const [lines, setLines] = useState([{ item_type: 'product', product_id: '', service_id: '', quantity: '1' }]);
-  const [saving, setSaving] = useState(false);
-  const [formError, setFormError] = useState('');
 
   const [resubmittingId, setResubmittingId] = useState(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
@@ -608,87 +599,6 @@ export default function Invoices() {
     return { debito, credito, diff };
   }, [filteredInvoices]);
 
-  function openCreateModal() {
-    setActivityId(activities.length === 1 ? activities[0].id : '');
-    setCustomerId('');
-    setInvoiceType('FACTURA');
-    setPaymentTermId('');
-    setPaymentMethodId('');
-    setLines([{ item_type: 'product', product_id: '', service_id: '', quantity: '1' }]);
-    setFormError('');
-    setModalOpen(true);
-  }
-
-  function handleCustomerChange(newCustomerId) {
-    setCustomerId(newCustomerId);
-    const customer = customers.find((c) => c.id === newCustomerId);
-    if (customer) {
-      if (customer.payment_term_id) setPaymentTermId(customer.payment_term_id);
-      if (customer.payment_method_id) setPaymentMethodId(customer.payment_method_id);
-    }
-  }
-
-  function closeModal() {
-    setModalOpen(false);
-  }
-
-  function updateLine(index, field, value) {
-    setLines((prev) => prev.map((l, i) => (i === index ? { ...l, [field]: value } : l)));
-  }
-
-  function addLine() {
-    setLines((prev) => [...prev, { item_type: 'product', product_id: '', service_id: '', quantity: '1' }]);
-  }
-
-  function updateLineType(index, itemType) {
-    setLines((prev) => prev.map((l, i) => (i === index ? { item_type: itemType, product_id: '', service_id: '', quantity: l.quantity } : l)));
-  }
-
-  function removeLine(index) {
-    setLines((prev) => prev.filter((_, i) => i !== index));
-  }
-
-  const preview = useMemo(() => {
-    let subtotal = 0;
-    for (const line of lines) {
-      const item = line.item_type === 'service' ? serviceById[line.service_id] : productById[line.product_id];
-      const qty = parseFloat(line.quantity) || 0;
-      if (!item || qty <= 0) continue;
-      subtotal += (item.price || 0) * qty;
-    }
-    return { subtotal };
-  }, [lines, productById, serviceById]);
-
-  const isFormValid = activityId && lines.length > 0 && lines.every((l) =>
-    (l.item_type === 'service' ? l.service_id : l.product_id) && parseFloat(l.quantity) > 0
-  );
-
-  async function handleSubmit(e) {
-    e.preventDefault();
-    setFormError('');
-    setSaving(true);
-    try {
-      await createInvoice({
-        activity_id: activityId,
-        customer_id: customerId || null,
-        invoice_type: invoiceType,
-        payment_term_id: paymentTermId || null,
-        payment_method_id: paymentMethodId || null,
-        lines: lines.map((l) => ({
-          product_id: l.item_type === 'service' ? null : l.product_id,
-          service_id: l.item_type === 'service' ? l.service_id : null,
-          quantity: parseFloat(l.quantity),
-        })),
-      });
-      closeModal();
-      await loadData();
-    } catch (err) {
-      setFormError(extractErrorMessage(err, 'Erro ao criar fatura'));
-    } finally {
-      setSaving(false);
-    }
-  }
-
   return (
     <main className="max-w-[1600px] mx-auto px-4 sm:px-6 md:px-8 py-6 sm:py-9">
       <h2 className="font-display font-semibold text-[22px] text-text-primary flex items-center gap-2.5 mb-1">
@@ -957,148 +867,6 @@ export default function Invoices() {
       </div>
 
       <InvoiceWizardModal open={wizardOpen} onClose={() => setWizardOpen(false)} onCreated={loadData} />
-
-      <Modal open={modalOpen} onClose={closeModal} title="Nova fatura" maxWidthClass="max-w-3xl">
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <div>
-            <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">
-              Atividade *
-            </label>
-            <Select
-              value={activityId}
-              onChange={setActivityId}
-              options={activities.map((a) => ({ value: a.id, label: a.name + ' (' + a.series_code + ')' }))}
-              placeholder="Selecionar atividade"
-            />
-          </div>
-
-          <div>
-            <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">
-              Cliente (opcional)
-            </label>
-            <Select
-              value={customerId}
-              onChange={handleCustomerChange}
-              options={[{ value: '', label: 'Sem cliente (venda ao balcão)' }, ...customers.map((c) => ({ value: c.id, label: c.name + ' - ' + c.nif }))]}
-              placeholder="Selecionar cliente"
-            />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Tipo de documento *</label>
-              <Select
-                value={invoiceType}
-                onChange={setInvoiceType}
-                options={[{ value: 'FACTURA', label: 'FT - Fatura' }, { value: 'FACTURA_RECIBO', label: 'FR - Fatura/Recibo' }]}
-              />
-            </div>
-            <div>
-              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Condição de pagamento</label>
-              <Select
-                value={paymentTermId}
-                onChange={setPaymentTermId}
-                options={paymentTerms.map((t) => ({ value: t.id, label: t.name }))}
-                placeholder="Selecionar"
-              />
-            </div>
-            <div>
-              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Método de pagamento</label>
-              <Select
-                value={paymentMethodId}
-                onChange={setPaymentMethodId}
-                options={paymentMethods.map((m) => ({ value: m.id, label: m.name }))}
-                placeholder="Selecionar"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">
-              Produtos *
-            </label>
-            <div className="flex flex-col gap-2">
-              {lines.map((line, idx) => {
-                const product = line.item_type === 'product' ? productById[line.product_id] : null;
-                const service = line.item_type === 'service' ? serviceById[line.service_id] : null;
-                const item = product || service;
-                return (
-                  <div key={idx} className="flex items-center gap-2 bg-bg-inset/40 border border-border rounded-md p-2.5">
-                    <div className="flex bg-bg-inset border border-border rounded-md overflow-hidden shrink-0">
-                      <button type="button" onClick={() => updateLineType(idx, 'product')} className={'px-2.5 py-2 text-[11px] font-medium transition-colors cursor-pointer ' + (line.item_type === 'product' ? 'bg-accent text-white' : 'text-text-muted')}>Produto</button>
-                      <button type="button" onClick={() => updateLineType(idx, 'service')} className={'px-2.5 py-2 text-[11px] font-medium transition-colors cursor-pointer ' + (line.item_type === 'service' ? 'bg-accent text-white' : 'text-text-muted')}>Servico</button>
-                    </div>
-                    <div className="flex-1">
-                      {line.item_type === 'service' ? (
-                        <Select
-                          value={line.service_id}
-                          onChange={(val) => updateLine(idx, 'service_id', val)}
-                          options={services.map((s) => ({ value: s.id, label: s.code + ' - ' + s.name + ' (' + formatMoney(s.price || 0) + ')' }))}
-                          placeholder="Selecionar servico"
-                        />
-                      ) : (
-                        <Select
-                          value={line.product_id}
-                          onChange={(val) => updateLine(idx, 'product_id', val)}
-                          options={products.map((p) => ({ value: p.id, label: p.code + ' - ' + p.name + ' (' + formatMoney(p.price) + ')' }))}
-                          placeholder="Selecionar produto"
-                        />
-                      )}
-                    </div>
-                    <input
-                      type="number"
-                      step={product?.is_sold_by_weight ? '0.001' : '1'}
-                      min={product?.is_sold_by_weight ? '0.001' : '1'}
-                      value={line.quantity}
-                      onChange={(e) => updateLine(idx, 'quantity', e.target.value)}
-                      className="w-24 bg-bg-inset border border-border rounded-md px-2.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors"
-                    />
-                    <div className="w-28 text-right font-mono text-sm text-text-primary">
-                      {item ? formatMoney((item.price || 0) * (parseFloat(line.quantity) || 0)) : '-'}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => removeLine(idx)}
-                      disabled={lines.length === 1}
-                      className="text-text-muted hover:text-danger disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-            <button
-              type="button"
-              onClick={addLine}
-              className="mt-2 flex items-center gap-1.5 text-accent hover:underline text-sm cursor-pointer"
-            >
-              <Plus size={14} /> Adicionar linha
-            </button>
-          </div>
-
-          <div className="border-t border-border pt-3 flex items-center justify-between">
-            <span className="text-text-muted text-sm">Subtotal (sem IVA)</span>
-            <span className="font-mono font-semibold text-text-primary">{formatMoney(preview.subtotal)}</span>
-          </div>
-          <p className="text-[11px] text-text-muted -mt-2">O IVA e o total final são calculados no servidor por linha, conforme a taxa de cada produto.</p>
-
-          {formError && (
-            <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">
-              {formError}
-            </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={saving || !isFormValid}
-            className="mt-1 bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors"
-          >
-            {saving ? <Loader2 size={17} className="animate-spin" /> : <Plus size={17} />}
-            {saving ? 'A emitir...' : 'Emitir fatura'}
-          </button>
-        </form>
-      </Modal>
 
       <Modal open={detailModalOpen} onClose={() => setDetailModalOpen(false)} title="Detalhe da fatura" maxWidthClass="max-w-3xl">
         {detailLoading && (
