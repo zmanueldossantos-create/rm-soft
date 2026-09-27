@@ -7,7 +7,7 @@ import { Receipt, Plus, Loader2, Search, Trash2, FileText, Printer, Eye, X as XI
 import Modal from '../components/Modal';
 import InvoiceWizardModal from '../components/InvoiceWizardModal';
 import Select from '../components/Select';
-import { listInvoices, getInvoicePeriods, fetchInvoicePdfBlob, getInvoiceDetail, resubmitInvoice, createCreditNote, createDebitNote, createReceipt, convertProForma } from '../api/invoices';
+import { listInvoices, getInvoicePeriods, fetchInvoicePdfBlob, getInvoiceDetail, resubmitInvoice, createReceipt, convertProForma } from '../api/invoices';
 import PeriodFilter from '../components/PeriodFilter';
 import { listProducts } from '../api/products';
 import { listActivities } from '../api/activity';
@@ -155,20 +155,6 @@ export default function Invoices() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState('');
 
-  const [ncModalOpen, setNcModalOpen] = useState(false);
-  const [ncLines, setNcLines] = useState([]);
-  const [ncReason, setNcReason] = useState('ANL');
-  const [ncCause, setNcCause] = useState('');
-  const [ncSaving, setNcSaving] = useState(false);
-  const [ncFormError, setNcFormError] = useState('');
-
-  const [ndModalOpen, setNdModalOpen] = useState(false);
-  const [ndLines, setNdLines] = useState([{ item_type: 'product', product_id: '', service_id: '', quantity: '1', discount_percent: '0' }]);
-  const [ndDocumentReference, setNdDocumentReference] = useState('');
-  const [ndObservations, setNdObservations] = useState('');
-  const [ndSaving, setNdSaving] = useState(false);
-  const [ndFormError, setNdFormError] = useState('');
-
   const [rcModalOpen, setRcModalOpen] = useState(false);
   const [rcAmount, setRcAmount] = useState('');
   const [rcDocumentReference, setRcDocumentReference] = useState('');
@@ -245,94 +231,6 @@ export default function Invoices() {
   function openNcModal() {
     if (!detailInvoice) return;
     openWizard('nc', detailInvoice.id);
-  }
-
-  function updateNcLineQuantity(lineId, quantity) {
-    setNcLines((prev) => prev.map((l) => l.invoice_line_id === lineId ? { ...l, quantity } : l));
-  }
-
-  function toggleNcLineSelected(lineId) {
-    setNcLines((prev) => prev.map((l) => l.invoice_line_id === lineId ? { ...l, selected: !l.selected } : l));
-  }
-
-  async function handleNcSubmit(e) {
-    e.preventDefault();
-    setNcFormError('');
-    setNcSaving(true);
-    try {
-      const selectedLines = ncLines.filter((l) => l.selected && parseFloat(l.quantity) > 0);
-      if (selectedLines.length === 0) {
-        setNcFormError('Selecione pelo menos uma linha para creditar');
-        setNcSaving(false);
-        return;
-      }
-      await createCreditNote({
-        activity_id: detailInvoice.activity_id,
-        reference_invoice_id: detailInvoice.id,
-        credit_note_reason: ncReason,
-        credit_note_cause: ncCause,
-        lines: selectedLines.map((l) => ({ invoice_line_id: l.invoice_line_id, quantity: parseFloat(l.quantity) })),
-      });
-      setNcModalOpen(false);
-      await openDetailModal(detailInvoice.id);
-      await loadData();
-    } catch (err) {
-      setNcFormError(extractErrorMessage(err, 'Erro ao emitir nota de credito'));
-    } finally {
-      setNcSaving(false);
-    }
-  }
-
-  function openNdModal() {
-    if (!detailInvoice) return;
-    openWizard('nd', detailInvoice.id);
-  }
-
-  function updateNdLine(index, field, value) {
-    setNdLines((prev) => prev.map((l, i) => (i === index ? { ...l, [field]: value } : l)));
-  }
-
-  function updateNdLineType(index, itemType) {
-    setNdLines((prev) => prev.map((l, i) => (i === index ? { item_type: itemType, product_id: '', service_id: '', quantity: l.quantity, discount_percent: l.discount_percent } : l)));
-  }
-
-  function addNdLine() {
-    setNdLines((prev) => [...prev, { item_type: 'product', product_id: '', service_id: '', quantity: '1', discount_percent: '0' }]);
-  }
-
-  function removeNdLine(index) {
-    setNdLines((prev) => prev.filter((_, i) => i !== index));
-  }
-
-  function getNdLineItem(line) {
-    return line.item_type === 'service' ? serviceById[line.service_id] : productById[line.product_id];
-  }
-
-  async function handleNdSubmit(e) {
-    e.preventDefault();
-    setNdFormError('');
-    setNdSaving(true);
-    try {
-      await createDebitNote({
-        activity_id: detailInvoice.activity_id,
-        reference_invoice_id: detailInvoice.id,
-        document_reference: ndDocumentReference || null,
-        observations: ndObservations || null,
-        lines: ndLines.map((l) => ({
-          product_id: l.item_type === 'service' ? null : l.product_id,
-          service_id: l.item_type === 'service' ? l.service_id : null,
-          quantity: parseFloat(l.quantity),
-          discount_percent: parseFloat(l.discount_percent) || 0,
-        })),
-      });
-      setNdModalOpen(false);
-      await openDetailModal(detailInvoice.id);
-      await loadData();
-    } catch (err) {
-      setNdFormError(extractErrorMessage(err, 'Erro ao emitir nota de debito'));
-    } finally {
-      setNdSaving(false);
-    }
   }
 
   function openRcModal() {
@@ -1019,69 +917,6 @@ export default function Invoices() {
         )}
       </Modal>
 
-      <Modal open={ndModalOpen} onClose={() => setNdModalOpen(false)} title="Emitir Nota de Debito" maxWidthClass="max-w-3xl">
-        {detailInvoice && (
-          <form onSubmit={handleNdSubmit} className="flex flex-col gap-4">
-            <p className="text-[12px] text-text-muted">
-              Referente a <span className="font-mono text-text-primary">{INVOICE_TYPE_CODE[detailInvoice.invoice_type] || detailInvoice.invoice_type} {detailInvoice.series}/{detailInvoice.number}</span>
-            </p>
-
-            <div className="flex flex-col gap-2">
-              {ndLines.map((line, idx) => {
-                const item = getNdLineItem(line);
-                return (
-                  <div key={idx} className="flex items-center gap-2 bg-bg-inset/40 border border-border rounded-md p-2.5">
-                    <div className="flex bg-bg-inset border border-border rounded-md overflow-hidden shrink-0">
-                      <button type="button" onClick={() => updateNdLineType(idx, 'product')} className={'px-2.5 py-2 text-[11px] font-medium transition-colors cursor-pointer ' + (line.item_type === 'product' ? 'bg-accent text-white' : 'text-text-muted')}>Produto</button>
-                      <button type="button" onClick={() => updateNdLineType(idx, 'service')} className={'px-2.5 py-2 text-[11px] font-medium transition-colors cursor-pointer ' + (line.item_type === 'service' ? 'bg-accent text-white' : 'text-text-muted')}>Servico</button>
-                    </div>
-                    <div className="flex-1">
-                      {line.item_type === 'service' ? (
-                        <Select value={line.service_id} onChange={(v) => updateNdLine(idx, 'service_id', v)} options={services.map((s) => ({ value: s.id, label: s.code + ' - ' + s.name }))} placeholder="Selecionar servico" />
-                      ) : (
-                        <Select value={line.product_id} onChange={(v) => updateNdLine(idx, 'product_id', v)} options={products.map((p) => ({ value: p.id, label: p.code + ' - ' + p.name }))} placeholder="Selecionar produto" />
-                      )}
-                    </div>
-                    <input type="number" step="0.001" min="0" value={line.quantity} onChange={(e) => updateNdLine(idx, 'quantity', e.target.value)} className="w-20 bg-bg-inset border border-border rounded-md px-2.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors" />
-                    <div className="w-28 text-right font-mono text-sm text-text-primary">
-                      {item ? formatMoney((item.price || 0) * (parseFloat(line.quantity) || 0)) : '-'}
-                    </div>
-                    <button type="button" onClick={() => removeNdLine(idx)} disabled={ndLines.length === 1} className="text-text-muted hover:text-danger disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer">
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                );
-              })}
-              <button type="button" onClick={addNdLine} className="flex items-center gap-1.5 text-accent hover:text-accent-hover text-sm font-medium transition-colors cursor-pointer">
-                <Plus size={15} /> Adicionar linha
-              </button>
-            </div>
-
-            <div>
-              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Referencia</label>
-              <input value={ndDocumentReference} disabled className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-muted font-mono outline-none opacity-70 cursor-not-allowed" />
-            </div>
-            <div>
-              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Observacoes</label>
-              <input value={ndObservations} onChange={(e) => setNdObservations(e.target.value)} className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors" />
-            </div>
-
-            {ndFormError && (
-              <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{ndFormError}</div>
-            )}
-
-            <button
-              type="submit"
-              disabled={ndSaving || ndLines.some((l) => !getNdLineItem(l) || parseFloat(l.quantity) <= 0)}
-              className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer"
-            >
-              {ndSaving ? <Loader2 size={17} className="animate-spin" /> : <FilePlus size={17} />}
-              {ndSaving ? 'A emitir...' : 'Emitir Nota de Debito'}
-            </button>
-          </form>
-        )}
-      </Modal>
-
       <Modal open={rcModalOpen} onClose={() => setRcModalOpen(false)} title="Emitir Recibo" maxWidthClass="max-w-md">
         {detailInvoice && (
           <form onSubmit={handleRcSubmit} className="flex flex-col gap-4">
@@ -1144,60 +979,6 @@ export default function Invoices() {
             >
               {convertSaving ? <Loader2 size={17} className="animate-spin" /> : <FileText size={17} />}
               {convertSaving ? 'A converter...' : 'Converter'}
-            </button>
-          </form>
-        )}
-      </Modal>
-
-      <Modal open={ncModalOpen} onClose={() => setNcModalOpen(false)} title="Emitir Nota de Credito" maxWidthClass="max-w-2xl">
-        {detailInvoice && (
-          <form onSubmit={handleNcSubmit} className="flex flex-col gap-4">
-            <p className="text-[12px] text-text-muted">
-              Referente a <span className="font-mono text-text-primary">{INVOICE_TYPE_CODE[detailInvoice.invoice_type] || detailInvoice.invoice_type} {detailInvoice.series}/{detailInvoice.number}</span>
-            </p>
-
-            <div className="flex flex-col gap-2 max-h-[280px] overflow-y-auto scrollbar-thin">
-              {ncLines.map((l) => (
-                <div key={l.invoice_line_id} className="flex items-center gap-3 border border-border rounded-md px-3.5 py-2.5">
-                  <input type="checkbox" checked={l.selected} onChange={() => toggleNcLineSelected(l.invoice_line_id)} className="w-4 h-4 accent-accent cursor-pointer shrink-0" />
-                  <span className="flex-1 text-sm text-text-primary truncate">{l.product_name}</span>
-                  <input
-                    type="number"
-                    step="0.001"
-                    min="0"
-                    max={l.original_quantity}
-                    disabled={!l.selected}
-                    value={l.quantity}
-                    onChange={(e) => updateNcLineQuantity(l.invoice_line_id, e.target.value)}
-                    className="w-24 bg-bg-inset border border-border rounded-md px-2.5 py-1.5 text-sm text-text-primary font-mono outline-none focus:border-accent disabled:opacity-50 transition-colors"
-                  />
-                  <span className="text-[11px] text-text-muted shrink-0">/ {l.original_quantity}</span>
-                </div>
-              ))}
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Motivo *</label>
-                <Select value={ncReason} onChange={setNcReason} options={[{ value: 'ANL', label: 'Anulacao' }, { value: 'RTF', label: 'Rectificacao' }]} />
-              </div>
-              <div>
-                <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Causa * (max. 60 caracteres)</label>
-                <input value={ncCause} onChange={(e) => setNcCause(e.target.value)} maxLength={60} required placeholder="Ex: Cliente desistiu da compra" className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors" />
-              </div>
-            </div>
-
-            {ncFormError && (
-              <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{ncFormError}</div>
-            )}
-
-            <button
-              type="submit"
-              disabled={ncSaving || !ncCause}
-              className="bg-danger hover:opacity-90 disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer"
-            >
-              {ncSaving ? <Loader2 size={17} className="animate-spin" /> : <RotateCcw size={17} />}
-              {ncSaving ? 'A emitir...' : 'Emitir Nota de Credito'}
             </button>
           </form>
         )}
