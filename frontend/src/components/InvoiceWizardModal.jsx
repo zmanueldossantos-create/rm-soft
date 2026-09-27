@@ -131,7 +131,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
     setDocumentReference('');
     setObservations('');
     setDiscountGlobalPercent('0');
-    setLines([{ ...emptyLine }]);
+    setLines([{ ...emptyLine, item_type: canManageProducts ? 'product' : 'service' }]);
     setFormError('');
     if (!Array.isArray(permissionsList)) return;
     async function load() {
@@ -330,7 +330,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
   }
 
   function addLine() {
-    setLines((prev) => [...prev, { ...emptyLine }]);
+    setLines((prev) => [...prev, { ...emptyLine, item_type: canManageProducts ? 'product' : 'service' }]);
   }
 
   function duplicateLine(index) {
@@ -777,10 +777,12 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                       return (
                         <div key={idx} className="border border-border rounded-md p-2.5 flex flex-col gap-2">
                           <div className="flex items-center gap-2">
-                            <div className="flex bg-bg-inset border border-border rounded-md overflow-hidden shrink-0">
-                              <button type="button" onClick={() => updateLineType(idx, 'product')} className={'px-2 py-1.5 text-[10px] font-medium transition-colors cursor-pointer ' + (line.item_type === 'product' ? 'bg-accent text-white' : 'text-text-muted')}>Prod</button>
-                              <button type="button" onClick={() => updateLineType(idx, 'service')} className={'px-2 py-1.5 text-[10px] font-medium transition-colors cursor-pointer ' + (line.item_type === 'service' ? 'bg-accent text-white' : 'text-text-muted')}>Serv</button>
-                            </div>
+                            {canManageProducts && (
+                              <div className="flex bg-bg-inset border border-border rounded-md overflow-hidden shrink-0">
+                                <button type="button" onClick={() => updateLineType(idx, 'product')} className={'px-2 py-1.5 text-[10px] font-medium transition-colors cursor-pointer ' + (line.item_type === 'product' ? 'bg-accent text-white' : 'text-text-muted')}>Prod</button>
+                                <button type="button" onClick={() => updateLineType(idx, 'service')} className={'px-2 py-1.5 text-[10px] font-medium transition-colors cursor-pointer ' + (line.item_type === 'service' ? 'bg-accent text-white' : 'text-text-muted')}>Serv</button>
+                              </div>
+                            )}
                             <div className="flex-1 min-w-0">
                               {line.item_type === 'service' ? (
                                 <Select value={line.service_id} onChange={(v) => updateLine(idx, 'service_id', v)} options={services.map((s) => ({ value: s.id, label: s.code + ' - ' + s.name }))} placeholder="Selecionar servico" compact />
