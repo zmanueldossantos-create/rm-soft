@@ -172,6 +172,13 @@ export default function Caixa() {
       // Servi?os (no STOCK capability) never gets products:manage - listProducts would 403 and, if kept
       // inside this Promise.all, drag the whole page load down with it (activities, association, etc.).
       const canManageProducts = can('products:manage');
+      // Fired together and awaited separately where each is actually used: catalogStep below (categories,
+      // services, vat...) has no dependency on activities/products/customers/association, so starting it
+      // here instead of after them removes a full network round-trip from the page's critical path.
+      const catalogStep = Promise.all([
+        listProductCategories(), listServices(), listVatRates(), withholdingTaxesApi.list(),
+        paymentTermsApi.list(), listPaymentMethodPreferences(), getMyCompanyBankAccounts(),
+      ]);
       const [activitiesData, productsData, customersData, association] = await Promise.all([
         listActivities(), canManageProducts ? listProducts() : Promise.resolve([]), listCustomers(), getMyCashPointAssociation(),
       ]);
@@ -205,10 +212,7 @@ export default function Caixa() {
       setPointsOfSale(availablePos);
 
       setProducts(productsData.filter((p) => p.is_active && !p.is_raw_material && !p.not_available_pos && !p.internal_use_only));
-      const [categoriesData, servicesData, vatData, withholdingData, termsData, methodsData, bankData] = await Promise.all([
-        listProductCategories(), listServices(), listVatRates(), withholdingTaxesApi.list(),
-        paymentTermsApi.list(), listPaymentMethodPreferences(), getMyCompanyBankAccounts(),
-      ]);
+      const [categoriesData, servicesData, vatData, withholdingData, termsData, methodsData, bankData] = await catalogStep;
       setCategories(categoriesData.filter((c) => c.is_active));
       setServices(servicesData.filter((s) => s.is_active && !s.not_available_pos));
       setVatRates(vatData);
