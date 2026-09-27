@@ -106,7 +106,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
 
   const [referenceInvoice, setReferenceInvoice] = useState(null);
   const [ncLines, setNcLines] = useState([]);
-  const [ncReason, setNcReason] = useState('ANL');
+  const [ncReason, setNcReason] = useState('');
   const [ncCause, setNcCause] = useState('');
 
   const permissionsList = useAuthStore((state) => state.permissions);
@@ -116,7 +116,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
     if (!open) return;
     setStep(mode === 'create' ? 1 : 1);
     setReferenceInvoice(null);
-    setNcReason('ANL');
+    setNcReason('');
     setNcCause('');
     setInvoiceType('');
     setActivityId('');
@@ -511,7 +511,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
 
   const isSingleScreen = mode !== 'create';
   const submitLabel = mode === 'nc' ? 'Emitir Nota de Credito' : mode === 'nd' ? 'Emitir Nota de Debito' : (invoiceType === 'PRO_FORMA' ? 'Gerar pro-forma' : 'Criar factura');
-  const isSubmitDisabled = mode === 'nc' ? (saving || !ncCause) : mode === 'nd' ? (saving || lines.every((l) => !getLineItem(l) || parseFloat(l.quantity) <= 0)) : (saving || !isFormValid);
+  const isSubmitDisabled = mode === 'nc' ? (saving || !ncCause || !ncReason) : mode === 'nd' ? (saving || lines.every((l) => !getLineItem(l) || parseFloat(l.quantity) <= 0)) : (saving || !isFormValid);
 
   const footer = (
     <div className="flex items-center justify-between px-6 py-3.5">
@@ -593,7 +593,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                     )}
                     <div>
                       <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Motivo *</label>
-                      <Select value={ncReason} onChange={setNcReason} options={[{ value: 'ANL', label: 'Anulacao' }, { value: 'RTF', label: 'Rectificacao' }]} />
+                      <Select value={ncReason} onChange={setNcReason} options={[{ value: 'ANL', label: 'Anulacao' }, { value: 'RTF', label: 'Rectificacao' }]} placeholder="Selecionar" />
                     </div>
                     <div>
                       <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Causa * (max. 60 caracteres)</label>
