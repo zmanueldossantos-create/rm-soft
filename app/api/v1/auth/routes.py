@@ -9,11 +9,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.security import decode_token, create_access_token
-from app.schemas.auth import PhoneLoginRequest, TokenPair, RefreshRequest, UserCreateRequest, UserResponse, PasswordResetRequest
+from app.schemas.auth import PhoneLoginRequest, TokenPair, RefreshRequest, UserCreateRequest, UserUpdateRequest, UserResponse, PasswordResetRequest
 from app.services.auth_service import (
     authenticate_user,
     generate_token_pair,
     create_user,
+    update_user,
     list_users,
     toggle_user_status,
     reset_user_password,
@@ -81,6 +82,30 @@ async def create_new_user(
             password=payload.password,
             role=payload.role,
         )
+    except UserAlreadyExistsError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    return user
+
+
+@router.patch("/users/{user_id}", response_model=UserResponse)
+async def edit_user(
+    user_id: uuid.UUID,
+    payload: UserUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role("GESTOR")),
+):
+    """Edits an existing user - restricted to the GESTOR of the caller's company."""
+    try:
+        user = await update_user(
+            db,
+            company_id=current_user.company_id,
+            user_id=user_id,
+            full_name=payload.full_name,
+            phone_number=payload.phone_number,
+            role=payload.role,
+        )
+    except UserNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except UserAlreadyExistsError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     return user

@@ -55,6 +55,25 @@ class UserCreateRequest(BaseModel):
             raise ValueError("Formato de numero de telefone invalido (esperado: +244923456789)")
 
 
+class UserUpdateRequest(BaseModel):
+    """User edit (by GESTOR only) - name, phone and role. Password changes go through the
+    separate reset-password endpoint, kept deliberately apart from this one."""
+    full_name: str
+    phone_number: str
+    role: str
+
+    @field_validator("phone_number")
+    @classmethod
+    def validate_phone(cls, v: str) -> str:
+        try:
+            parsed = phonenumbers.parse(v, None)
+            if not phonenumbers.is_valid_number(parsed):
+                raise ValueError("Numero de telefone invalido")
+            return phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164)
+        except phonenumbers.NumberParseException:
+            raise ValueError("Formato de numero de telefone invalido (esperado: +244923456789)")
+
+
 class UserResponse(BaseModel):
     """User data returned to the GESTOR managing their team."""
     id: str

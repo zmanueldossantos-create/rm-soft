@@ -61,6 +61,35 @@ async def create_user(
     return user
 
 
+async def update_user(
+    db: AsyncSession,
+    company_id: uuid.UUID,
+    user_id: uuid.UUID,
+    full_name: str,
+    phone_number: str,
+    role: str,
+) -> User:
+    """Edits an existing user's name, phone and role - restricted to the GESTOR of their
+    company. The phone uniqueness check excludes the user's own current row."""
+    result = await db.execute(select(User).where(User.id == user_id, User.company_id == company_id))
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise UserNotFoundError("Utilizador nao encontrado")
+
+    existing = await db.execute(
+        select(User).where(User.company_id == company_id, User.phone_number == phone_number, User.id != user_id)
+    )
+    if existing.scalar_one_or_none() is not None:
+        raise UserAlreadyExistsError("Ja existe um utilizador registado com este numero de telefone nesta empresa")
+
+    user.full_name = full_name
+    user.phone_number = phone_number
+    user.role = UserRole(role)
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
 async def authenticate_user(db: AsyncSession, phone_number: str, password: str) -> User:
     """
     Looks up by phone number ALONE (the user does not know their company_id at login time).
