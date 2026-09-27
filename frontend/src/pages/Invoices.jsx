@@ -848,6 +848,7 @@ export default function Invoices() {
         onClose={() => setWizardOpen(false)}
         mode={wizardMode}
         referenceInvoiceId={wizardRefId}
+        stacked={detailModalOpen}
         onCreated={() => { loadData(); if (detailInvoice) openDetailModal(detailInvoice.id); }}
       />
 

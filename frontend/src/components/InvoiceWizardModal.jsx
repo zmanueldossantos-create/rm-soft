@@ -66,7 +66,7 @@ const emptyLine = { item_type: 'product', product_id: '', service_id: '', quanti
 
 const STEP_LABELS = ['Tipo de documento', 'Cliente e datas', 'Pagamento', 'Revisao'];
 
-export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'create', referenceInvoiceId = null }) {
+export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'create', referenceInvoiceId = null, stacked = false }) {
   const [activities, setActivities] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [products, setProducts] = useState([]);
@@ -551,7 +551,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
 
   return (
     <>
-      <Modal open={open} onClose={onClose} title={modalTitle} subtitle={modalSubtitle} maxWidthClass="max-w-6xl" footer={footer}>
+      <Modal open={open} onClose={onClose} title={modalTitle} subtitle={modalSubtitle} maxWidthClass="max-w-6xl" footer={footer} stacked={stacked}>
         {loading ? (
           <div className="flex items-center justify-center py-16"><Loader2 size={24} className="animate-spin text-accent" /></div>
         ) : loadError ? (
