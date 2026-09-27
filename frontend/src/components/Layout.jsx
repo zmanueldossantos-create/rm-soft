@@ -201,7 +201,7 @@ export default function Layout() {
                 )}
               </>
             )}
-            {can('products:manage') && (
+            {can('products:manage') && can('recipes:view') && (
               <NavLink to="/materia-prima" icon={Wheat} label="Matéria-prima" active={isActive('/materia-prima')} />
             )}
             {productionItems.length > 0 && (
