@@ -5,6 +5,7 @@ import { useAuthStore } from '../store/authStore';
 import { createPortal } from 'react-dom';
 import { Receipt, Plus, Loader2, Search, Trash2, FileText, Printer, Eye, X as XIcon, RefreshCw, RotateCcw, FilePlus, MoreVertical, ChevronLeft, ChevronRight } from 'lucide-react';
 import Modal from '../components/Modal';
+import InvoiceWizardModal from '../components/InvoiceWizardModal';
 import Select from '../components/Select';
 import { listInvoices, getInvoicePeriods, createInvoice, fetchInvoicePdfBlob, getInvoiceDetail, resubmitInvoice, createCreditNote, createDebitNote, createReceipt, convertProForma } from '../api/invoices';
 import PeriodFilter from '../components/PeriodFilter';
@@ -455,6 +456,8 @@ export default function Invoices() {
   const [loadingMore, setLoadingMore] = useState(false);
   const PAGE_SIZE = 50;
 
+  const [wizardOpen, setWizardOpen] = useState(false);
+
   async function loadInvoicesPage(currentFilters, currentOffset, append) {
     const data = await listInvoices({
       year: currentFilters.year || undefined,
@@ -711,7 +714,7 @@ export default function Invoices() {
           <PeriodFilter periods={periods} onChange={handleFilterChange} />
         </div>
         <button
-          onClick={() => navigate('/invoices/new')}
+          onClick={() => setWizardOpen(true)}
           // No dependency on products: a services-only company (or one that only has raw materials)
           // has none, and /invoices/new handles service lines - its own form keeps 'Criar Fatura'
           // disabled until every line has an item.
@@ -952,6 +955,8 @@ export default function Invoices() {
           </div>
         )}
       </div>
+
+      <InvoiceWizardModal open={wizardOpen} onClose={() => setWizardOpen(false)} onCreated={loadData} />
 
       <Modal open={modalOpen} onClose={closeModal} title="Nova fatura" maxWidthClass="max-w-3xl">
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
