@@ -60,7 +60,7 @@ export default function Caixa() {
   // can() trusts GESTOR by default while permissions is still null (avoids a menu flash) - but
   // loadInitial must know the REAL answer before deciding whether to call listProducts.
   const permissionsList = useAuthStore((state) => state.permissions);
-  const canManageProductsUi = Array.isArray(permissionsList) ? permissionsList.includes('products:manage') : true;
+  const canViewProductsUi = Array.isArray(permissionsList) ? permissionsList.includes('products:view') : true;
   const isGestor = currentUser?.role === 'GESTOR';
   const documentActionsRef = useRef(null);
 
@@ -79,8 +79,8 @@ export default function Caixa() {
   const [withholdingTaxes, setWithholdingTaxes] = useState([]);
   const [activeCategoryId, setActiveCategoryId] = useState('all');
   useEffect(() => {
-    if (!canManageProductsUi) setActiveCategoryId('services');
-  }, [canManageProductsUi]);
+    if (!canViewProductsUi) setActiveCategoryId('services');
+  }, [canViewProductsUi]);
   const [customersModalOpen, setCustomersModalOpen] = useState(false);
   const [customerSearchQuery, setCustomerSearchQuery] = useState('');
   const [newCustomerModalOpen, setNewCustomerModalOpen] = useState(false);
@@ -169,9 +169,9 @@ export default function Caixa() {
     setSessionLoading(true);
     setError('');
     try {
-      // Servi?os (no STOCK capability) never gets products:manage - listProducts would 403 and, if kept
+      // Servi?os (no STOCK capability) never gets products:view - listProducts would 403 and, if kept
       // inside this Promise.all, drag the whole page load down with it (activities, association, etc.).
-      const canManageProducts = can('products:manage');
+      const canViewProducts = can('products:view');
       // Fired together and awaited separately where each is actually used: catalogStep below (categories,
       // services, vat...) has no dependency on activities/products/customers/association, so starting it
       // here instead of after them removes a full network round-trip from the page's critical path.
@@ -180,7 +180,7 @@ export default function Caixa() {
         paymentTermsApi.list(), listPaymentMethodPreferences(), getMyCompanyBankAccounts(),
       ]);
       const [activitiesData, productsData, customersData, association] = await Promise.all([
-        listActivities(), canManageProducts ? listProducts() : Promise.resolve([]), listCustomers(), getMyCashPointAssociation(),
+        listActivities(), canViewProducts ? listProducts() : Promise.resolve([]), listCustomers(), getMyCashPointAssociation(),
       ]);
       const activeActivities = activitiesData.filter((a) => a.is_active);
       const posLists = await Promise.all(activeActivities.map((a) => listPointsOfSale(a.id)));
@@ -957,7 +957,7 @@ export default function Caixa() {
               </div>
 
               <div className="flex items-center gap-2 mb-4 overflow-x-auto scrollbar-thin pb-1">
-                {canManageProductsUi && (
+                {canViewProductsUi && (
                   <>
                     <button
                       onClick={() => setActiveCategoryId('all')}
