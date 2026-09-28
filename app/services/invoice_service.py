@@ -1396,6 +1396,18 @@ async def list_invoices(
         for inv in invoices_list:
             inv.customer_name = name_by_id.get(inv.customer_id)
 
+        # Attach amount_paid dynamically as well: the real sum of Payment rows on each document (same mechanism as
+        # item_count, and as pos_documents_service does for the Caixa table). amount_received stays empty on a
+        # Fatura/Recibo paid at the till, so the Faturas list needs this to show it as paid.
+        paid_result = await db.execute(
+            select(Payment.invoice_id, func.sum(Payment.amount))
+            .where(Payment.invoice_id.in_(invoice_ids))
+            .group_by(Payment.invoice_id)
+        )
+        paid_by_id = dict(paid_result.all())
+        for inv in invoices_list:
+            inv.amount_paid = float(paid_by_id.get(inv.id, 0) or 0)
+
     return invoices_list
 
 

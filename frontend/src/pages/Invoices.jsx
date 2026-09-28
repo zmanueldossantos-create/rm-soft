@@ -437,6 +437,12 @@ export default function Invoices() {
     );
   }, [invoices, search]);
 
+  // Cash actually collected on a document. amount_received is the running total kept on a Fatura (a deposit, then
+  // each receipt - the Payment rows of a receipt sit on the receipt itself); a Fatura/Recibo paid at the till leaves it
+  // empty and is settled by its own Payment rows (amount_paid). The larger of the two is what was collected, never their
+  // sum: a deposit on a Fatura is in both.
+  const receivedOf = (inv) => Math.max(parseFloat(inv.amount_received) || 0, parseFloat(inv.amount_paid) || 0);
+
   // Debito = every document type except Nota de Credito (FT/FR/ND all increase what is owed);
   // Credito = Nota de Credito only. Used by the 3-row Total Debito/Credito/Diferenca footer.
   const footerTotals = useMemo(() => {
@@ -445,7 +451,7 @@ export default function Invoices() {
       return round2(list.reduce((sum, inv) => sum + (parseFloat(inv[field]) || 0), 0));
     }
     function aPagarFor(list) {
-      return round2(list.reduce((sum, inv) => sum + round2((parseFloat(inv.total) || 0) - (parseFloat(inv.retention_total) || 0) - (parseFloat(inv.amount_received) || 0)), 0));
+      return round2(list.reduce((sum, inv) => sum + round2((parseFloat(inv.total) || 0) - (parseFloat(inv.retention_total) || 0) - receivedOf(inv)), 0));
     }
     function descontosFor(list) {
       return round2(list.reduce((sum, inv) => {
@@ -586,9 +592,9 @@ export default function Invoices() {
                 {filteredInvoices.map((inv) => {
                   const customer = customerById[inv.customer_id];
                   const paymentMethod = paymentMethodById[inv.payment_method_id];
-                  const received = parseFloat(inv.amount_received) || 0;
+                  const received = receivedOf(inv);
                   const aPagar = round2((inv.total || 0) - (inv.retention_total || 0) - received);
-                  const estadoPagamento = received >= (inv.total || 0) && (inv.total || 0) > 0 ? 'Pago' : received > 0 ? 'Parcial' : 'Pendente';
+                  const estadoPagamento = (inv.total || 0) > 0 && aPagar <= 0.005 ? 'Pago' : received > 0 ? 'Parcial' : 'Pendente';
                   const estadoPagamentoStyle = estadoPagamento === 'Pago' ? 'bg-success/10 text-success' : estadoPagamento === 'Parcial' ? 'bg-accent/10 text-accent' : 'bg-text-muted/10 text-text-muted';
                   const docCode = INVOICE_TYPE_CODE[inv.invoice_type] || inv.invoice_type;
                   return (
