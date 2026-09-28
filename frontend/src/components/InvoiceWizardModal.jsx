@@ -110,7 +110,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
   const [ncCause, setNcCause] = useState('');
 
   const permissionsList = useAuthStore((state) => state.permissions);
-  const canManageProducts = Array.isArray(permissionsList) ? permissionsList.includes('products:manage') : true;
+  const canViewProducts = Array.isArray(permissionsList) ? permissionsList.includes('products:view') : true;
 
   useEffect(() => {
     if (!open) return;
@@ -131,7 +131,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
     setDocumentReference('');
     setObservations('');
     setDiscountGlobalPercent('0');
-    setLines([{ ...emptyLine, item_type: canManageProducts ? 'product' : 'service' }]);
+    setLines([{ ...emptyLine, item_type: canViewProducts ? 'product' : 'service' }]);
     setFormError('');
     if (!Array.isArray(permissionsList)) return;
     async function load() {
@@ -139,7 +139,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
       setLoadError('');
       try {
         const [activitiesData, customersData, productsData, servicesData, vatData, unitsData, termsData, methodsData, bankData, companyData, seriesData, docTypesData, banksData, whData] = await Promise.all([
-          listActivities(), listCustomers(), canManageProducts ? listProducts() : Promise.resolve([]), listServices(), listVatRates(), unitsApi.list(),
+          listActivities(), listCustomers(), canViewProducts ? listProducts() : Promise.resolve([]), listServices(), listVatRates(), unitsApi.list(),
           paymentTermsApi.list(), paymentMethodsApi.list(), getMyCompanyBankAccounts(), getMyCompany(), listDocumentSeries(), documentRulesApi.list(), banksApi.list(), withholdingTaxesApi.list(),
         ]);
         setActivities(activitiesData.filter((a) => a.is_active));
@@ -330,7 +330,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
   }
 
   function addLine() {
-    setLines((prev) => [...prev, { ...emptyLine, item_type: canManageProducts ? 'product' : 'service' }]);
+    setLines((prev) => [...prev, { ...emptyLine, item_type: canViewProducts ? 'product' : 'service' }]);
   }
 
   function duplicateLine(index) {
@@ -777,7 +777,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                       return (
                         <div key={idx} className="border border-border rounded-md p-2.5 flex flex-col gap-2">
                           <div className="flex items-center gap-2">
-                            {canManageProducts && (
+                            {canViewProducts && (
                               <div className="flex bg-bg-inset border border-border rounded-md overflow-hidden shrink-0">
                                 <button type="button" onClick={() => updateLineType(idx, 'product')} className={'px-2 py-1.5 text-[10px] font-medium transition-colors cursor-pointer ' + (line.item_type === 'product' ? 'bg-accent text-white' : 'text-text-muted')}>Prod</button>
                                 <button type="button" onClick={() => updateLineType(idx, 'service')} className={'px-2 py-1.5 text-[10px] font-medium transition-colors cursor-pointer ' + (line.item_type === 'service' ? 'bg-accent text-white' : 'text-text-muted')}>Serv</button>

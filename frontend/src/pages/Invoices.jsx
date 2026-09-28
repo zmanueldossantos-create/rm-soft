@@ -106,9 +106,9 @@ function round2(v) {
 export default function Invoices() {
   const can = useCan();
   // can() trusts GESTOR by default while permissions is still null (avoids a menu flash) - but the initial
-  // load must know the REAL answer before deciding whether to call listProducts (Servicos has no products:manage).
+  // load must know the REAL answer before deciding whether to call listProducts (Servicos has no products:view).
   const permissionsList = useAuthStore((state) => state.permissions);
-  const canManageProducts = Array.isArray(permissionsList) ? permissionsList.includes('products:manage') : true;
+  const canViewProducts = Array.isArray(permissionsList) ? permissionsList.includes('products:view') : true;
   const navigate = useNavigate();
   const [invoices, setInvoices] = useState([]);
   const [products, setProducts] = useState([]);
@@ -348,7 +348,7 @@ export default function Invoices() {
     try {
       const [periodsData, productsData, servicesData, customersData, activitiesData, paymentTermsData, paymentMethodsData] = await Promise.all([
         getInvoicePeriods(),
-        canManageProducts ? listProducts() : Promise.resolve([]),
+        canViewProducts ? listProducts() : Promise.resolve([]),
         listServices(),
         listCustomers(),
         listActivities(),
