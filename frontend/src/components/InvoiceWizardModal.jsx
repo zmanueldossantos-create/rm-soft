@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Plus, Trash2, Loader2, Copy, Eye, ArrowLeft, ArrowRight, Check } from 'lucide-react';
 import Select from './Select';
 import Modal from './Modal';
-import { createInvoice, createProForma, getInvoiceDetail, createCreditNote, createDebitNote } from '../api/invoices';
+import { createInvoice, createProForma, getInvoiceDetail, createCreditNote, createDebitNote, getCreditNoteInfo } from '../api/invoices';
 import { listProducts } from '../api/products';
 import { listServices } from '../api/services';
 import { listActivities } from '../api/activity';
@@ -108,6 +108,16 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
   const [ncLines, setNcLines] = useState([]);
   const [ncReason, setNcReason] = useState('');
   const [ncCause, setNcCause] = useState('');
+  const [ncRestock, setNcRestock] = useState(false);
+  // Explicit refund on a credit note: proposed only when the invoice was overpaid once credited (credit-note-info).
+  const [refundInfo, setRefundInfo] = useState(null);
+  const [ncRefund, setNcRefund] = useState(false);
+  const [refundMethodId, setRefundMethodId] = useState('');
+  const [refundAmount, setRefundAmount] = useState('');
+  const [refundPosId, setRefundPosId] = useState('');
+  const refundableFor = (ncTotal) => (refundInfo
+    ? Math.max(refundInfo.collected - refundInfo.refunded - Math.max(refundInfo.due - ncTotal, 0), 0)
+    : 0);
 
   const permissionsList = useAuthStore((state) => state.permissions);
   const canViewProducts = Array.isArray(permissionsList) ? permissionsList.includes('products:view') : true;
@@ -118,6 +128,12 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
     setReferenceInvoice(null);
     setNcReason('');
     setNcCause('');
+    setNcRestock(false);
+    setRefundInfo(null);
+    setNcRefund(false);
+    setRefundMethodId('');
+    setRefundAmount('');
+    setRefundPosId('');
     setInvoiceType('');
     setActivityId('');
     setCustomerId('');
@@ -164,14 +180,27 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
           setReferenceInvoice(ref);
           setActivityId(ref.activity_id);
           if (mode === 'nc') {
-            setNcLines(ref.lines.map((l) => ({
-              invoice_line_id: l.id,
-              product_name: l.product_name_snapshot,
-              original_quantity: l.quantity,
-              line_total: l.line_total,
-              selected: true,
-              quantity: String(l.quantity),
-            })));
+            let info = null;
+            try {
+              info = await getCreditNoteInfo(referenceInvoiceId);
+            } catch {
+              info = null;
+            }
+            setRefundInfo(info);
+            // Each line starts at what is left to credit on it (earlier credit notes deducted), not its original quantity.
+            setNcLines(ref.lines.map((l) => {
+              const remaining = Number(info?.remaining_by_line?.[l.id] ?? l.quantity);
+              return {
+                invoice_line_id: l.id,
+                product_name: l.product_name_snapshot,
+                original_quantity: l.quantity,
+                remaining_quantity: remaining,
+                is_product: !!l.product_id && !l.service_id,
+                line_total: l.line_total,
+                selected: remaining > 0.0005,
+                quantity: String(remaining),
+              };
+            }));
           }
           if (mode === 'nd') {
             setDocumentReference((INVOICE_TYPE_CODE[ref.invoice_type] || ref.invoice_type) + ' ' + ref.series + '/' + ref.number);
@@ -397,12 +426,34 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
         setSaving(false);
         return;
       }
+      const overLine = selectedLines.find((l) => parseFloat(l.quantity) > l.remaining_quantity + 0.0005);
+      if (overLine) {
+        setFormError('Quantidade a creditar de ' + overLine.product_name + ' excede o restante (' + overLine.remaining_quantity + ')');
+        setSaving(false);
+        return;
+      }
+      const refundAsked = ncRefund && refundableFor(ncEstimatedTotal) > 0.005;
+      if (refundAsked) {
+        if (!refundMethodId || !(parseFloat(refundAmount) > 0)) {
+          setFormError('Indique o metodo e o valor a devolver');
+          setSaving(false);
+          return;
+        }
+        if (paymentMethods.find((pm) => pm.id === refundMethodId)?.is_cash === true && !refundPosId) {
+          setFormError('Selecione a caixa de onde sai o numerario');
+          setSaving(false);
+          return;
+        }
+      }
       await createCreditNote({
         activity_id: referenceInvoice.activity_id,
         reference_invoice_id: referenceInvoice.id,
         credit_note_reason: ncReason,
         credit_note_cause: ncCause,
         lines: selectedLines.map((l) => ({ invoice_line_id: l.invoice_line_id, quantity: parseFloat(l.quantity) })),
+        restock: ncRestock && selectedLines.some((l) => l.is_product),
+        refunds: refundAsked ? [{ payment_method_id: refundMethodId, amount: parseFloat(refundAmount) }] : [],
+        refund_pos_id: refundAsked && refundPosId ? refundPosId : null,
       });
       onCreated?.();
       onClose();
@@ -599,6 +650,68 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                       <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Causa * (max. 60 caracteres)</label>
                       <input value={ncCause} onChange={(e) => setNcCause(e.target.value)} maxLength={60} required placeholder="Ex: Cliente desistiu da compra" className={inputClass} />
                     </div>
+                    {ncLines.some((l) => l.selected && l.is_product && parseFloat(l.quantity) > 0) && (
+                      <label className="flex items-start gap-2.5 cursor-pointer select-none border border-border rounded-md px-3.5 py-3 hover:border-accent transition-colors">
+                        <input type="checkbox" checked={ncRestock} onChange={(e) => setNcRestock(e.target.checked)} className="w-4 h-4 mt-0.5 accent-accent cursor-pointer" />
+                        <span className="text-sm text-text-primary">
+                          Repor no stock
+                          <span className="block text-[12px] text-text-muted mt-0.5">
+                            {ncRestock
+                              ? 'Devolve ao armazem de venda: ' + ncLines.filter((l) => l.selected && l.is_product && parseFloat(l.quantity) > 0).map((l) => parseFloat(l.quantity) + ' x ' + l.product_name).join(', ')
+                              : 'Nao marcado: esta nota de credito nao altera o stock'}
+                          </span>
+                        </span>
+                      </label>
+                    )}
+                    {refundInfo && refundableFor(ncEstimatedTotal) > 0.005 && (
+                      <div className="flex flex-col gap-3 border border-border rounded-md px-3.5 py-3">
+                        <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={ncRefund}
+                            onChange={(e) => {
+                              setNcRefund(e.target.checked);
+                              if (e.target.checked) setRefundAmount(refundableFor(ncEstimatedTotal).toFixed(2));
+                            }}
+                            className="w-4 h-4 mt-0.5 accent-accent cursor-pointer"
+                          />
+                          <span className="text-sm text-text-primary">
+                            Devolver valor ao cliente
+                            <span className="block text-[12px] text-text-muted mt-0.5">
+                              {'Reembolsavel (estimado): ' + formatMoney(refundableFor(ncEstimatedTotal)) + ' - pago: ' + formatMoney(refundInfo.collected)
+                                + (refundInfo.refunded > 0 ? ' - ja devolvido: ' + formatMoney(refundInfo.refunded) : '')}
+                            </span>
+                          </span>
+                        </label>
+                        {ncRefund && (
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Metodo *</label>
+                              <Select value={refundMethodId} onChange={setRefundMethodId} options={paymentMethods.map((pm) => ({ value: pm.id, label: pm.name }))} placeholder="Selecionar" />
+                            </div>
+                            <div>
+                              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Valor a devolver *</label>
+                              <input type="number" min="0" step="0.01" value={refundAmount} onChange={(e) => setRefundAmount(e.target.value)} className={inputClass} />
+                            </div>
+                            {paymentMethods.find((pm) => pm.id === refundMethodId)?.is_cash === true && (
+                              <div className="col-span-2">
+                                <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Caixa de saida *</label>
+                                {refundInfo.cash_points.length === 0 ? (
+                                  <p className="text-[12px] text-danger">Nenhuma caixa com sessao aberta - abra uma caixa para devolver em numerario</p>
+                                ) : (
+                                  <Select
+                                    value={refundPosId}
+                                    onChange={setRefundPosId}
+                                    options={refundInfo.cash_points.map((c) => ({ value: c.pos_id, label: c.name + ' - disponivel: ' + formatMoney(c.available_cash) }))}
+                                    placeholder="Selecionar"
+                                  />
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
                     {formError && (
                       <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{formError}</div>
                     )}
@@ -754,19 +867,19 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                     <div className="flex flex-col gap-2">
                       {ncLines.map((l) => (
                         <div key={l.invoice_line_id} className="flex items-center gap-2.5 border border-border rounded-md px-3 py-2.5">
-                          <input type="checkbox" checked={l.selected} onChange={() => setNcLines((prev) => prev.map((x) => x.invoice_line_id === l.invoice_line_id ? { ...x, selected: !x.selected } : x))} className="w-4 h-4 accent-accent cursor-pointer shrink-0" />
+                          <input type="checkbox" checked={l.selected} disabled={l.remaining_quantity <= 0.0005} onChange={() => setNcLines((prev) => prev.map((x) => x.invoice_line_id === l.invoice_line_id ? { ...x, selected: !x.selected } : x))} className="w-4 h-4 accent-accent cursor-pointer shrink-0 disabled:opacity-40 disabled:cursor-not-allowed" />
                           <span className="flex-1 text-[12.5px] text-text-primary truncate">{l.product_name}</span>
                           <input
                             type="number"
                             step="0.001"
                             min="0"
-                            max={l.original_quantity}
+                            max={l.remaining_quantity}
                             disabled={!l.selected}
                             value={l.quantity}
                             onChange={(e) => setNcLines((prev) => prev.map((x) => x.invoice_line_id === l.invoice_line_id ? { ...x, quantity: e.target.value } : x))}
                             className="w-16 bg-bg-inset border border-border rounded px-1.5 py-1 text-[11px] text-text-primary font-mono outline-none focus:border-accent disabled:opacity-50"
                           />
-                          <span className="text-[10.5px] text-text-muted shrink-0">/ {l.original_quantity}</span>
+                          <span className="text-[10.5px] text-text-muted shrink-0">{l.remaining_quantity <= 0.0005 ? 'ja creditado' : 'restante ' + l.remaining_quantity + ' / ' + l.original_quantity}</span>
                         </div>
                       ))}
                     </div>

@@ -345,6 +345,29 @@ async def deduct_stock_for_sale(
     # No commit here - part of the caller's (invoice creation) transaction.
 
 
+async def return_stock_for_credit_note(
+    db: AsyncSession,
+    company_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+    product_id: uuid.UUID,
+    quantity: float,
+    reference: str,
+) -> None:
+    """
+    Puts credited goods back into the warehouse the sale took them from - the mirror of
+    deduct_stock_for_sale. Recorded as a RECEPCAO movement whose reference is the credit note, so the
+    sale (SAIDA, reference = invoice) and its return can be matched. Only called when the credit note
+    explicitly asks for it. No commit here - part of the credit note's own transaction.
+    """
+    stock = await _get_or_create_stock_row(db, company_id, product_id, warehouse_id)
+    stock.quantity = float(stock.quantity) + quantity
+    db.add(StockMovement(
+        company_id=company_id, product_id=product_id, warehouse_id=warehouse_id,
+        movement_type=MovementType.RECEPCAO, quantity=quantity, reference=reference,
+        reason="Devolucao - nota de credito",
+    ))
+
+
 async def list_stock_levels(db: AsyncSession, company_id: uuid.UUID, warehouse_id: uuid.UUID) -> list[dict]:
     """Returns current stock quantity per product, for ONE specific warehouse."""
     result = await db.execute(

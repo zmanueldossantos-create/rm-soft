@@ -594,8 +594,8 @@ export default function Invoices() {
                   const paymentMethod = paymentMethodById[inv.payment_method_id];
                   const received = receivedOf(inv);
                   const aPagar = round2((inv.total || 0) - (inv.retention_total || 0) - received);
-                  const estadoPagamento = (inv.total || 0) > 0 && aPagar <= 0.005 ? 'Pago' : received > 0 ? 'Parcial' : 'Pendente';
-                  const estadoPagamentoStyle = estadoPagamento === 'Pago' ? 'bg-success/10 text-success' : estadoPagamento === 'Parcial' ? 'bg-accent/10 text-accent' : 'bg-text-muted/10 text-text-muted';
+                  const estadoPagamento = inv.invoice_type === 'NOTA_CREDITO' ? ((parseFloat(inv.amount_paid) || 0) < 0 ? 'Reembolsado' : '-') : (inv.total || 0) > 0 && aPagar <= 0.005 ? 'Pago' : received > 0 ? 'Parcial' : 'Pendente';
+                  const estadoPagamentoStyle = estadoPagamento === 'Reembolsado' ? 'bg-danger/10 text-danger' : estadoPagamento === 'Pago' ? 'bg-success/10 text-success' : estadoPagamento === 'Parcial' ? 'bg-accent/10 text-accent' : 'bg-text-muted/10 text-text-muted';
                   const docCode = INVOICE_TYPE_CODE[inv.invoice_type] || inv.invoice_type;
                   return (
                     <tr key={inv.id} className="border-b border-border hover:bg-bg-inset/40 transition-colors">

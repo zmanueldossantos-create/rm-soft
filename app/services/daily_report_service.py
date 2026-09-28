@@ -39,9 +39,9 @@ async def get_daily_report(
     """
     entries: list[dict] = []
 
-    # The journal lists the money that actually entered this POS: one line per payment recorded on a document of its cash
-    # sessions. A Fatura billed later, a credit note or a pro-forma has no payment, so no line (a credit note corrects a
-    # document, it is not a cash refund).
+    # The journal lists the money that actually moved in this POS: one line per payment recorded on a document of its
+    # cash sessions. A Fatura billed later or a pro-forma has no payment, so no line. A credit note has a payment only
+    # when money was explicitly given back from this cash point: that payment is negative, shown as an outgoing line.
     payments_result = await db.execute(
         select(Payment, Invoice, PaymentMethodCatalog.name)
         .join(Invoice, Invoice.id == Payment.invoice_id)
@@ -59,13 +59,14 @@ async def get_daily_report(
     for payment, inv, method_name in payments_result.all():
         type_value = inv.invoice_type.value if hasattr(inv.invoice_type, "value") else str(inv.invoice_type)
         label = invoice_type_labels.get(type_value, type_value)
+        is_refund = float(payment.amount) < 0
         entries.append({
-            "type": "venda",
+            "type": "reembolso" if is_refund else "venda",
             "time": payment.created_at,
             "business_date": inv.business_date,
-            "description": f"{label} {inv.series}/{inv.number} - {method_name}",
-            "amount": float(payment.amount),
-            "direction": "entrada",
+            "description": f"{label} {inv.series}/{inv.number} - {method_name}" + (" - Reembolso" if is_refund else ""),
+            "amount": abs(float(payment.amount)),
+            "direction": "saida" if is_refund else "entrada",
             "reference": f"{inv.series}/{inv.number}",
         })
 

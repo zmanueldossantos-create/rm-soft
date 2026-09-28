@@ -49,6 +49,12 @@ export async function createCreditNote(payload) {
   return res.data;
 }
 
+// What the NC screen needs: what is left to credit per line, collected / refunded / due and the open cash points.
+export async function getCreditNoteInfo(invoiceId) {
+  const res = await apiClient.get('/invoices/' + invoiceId + '/credit-note-info');
+  return res.data;
+}
+
 export async function createDebitNote(payload) {
   const res = await apiClient.post('/invoices/debit-note', payload);
   return res.data;

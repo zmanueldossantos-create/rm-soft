@@ -49,7 +49,8 @@ from app.models.payment_method_catalog import PaymentMethodCatalog
 from app.models.company import Company
 from app.models.document_type import DocumentType
 from app.services.fiscal_period_service import ensure_period_open, PeriodClosedError
-from app.services.stock_service import deduct_stock_for_sale, InsufficientStockError
+from app.services.stock_service import deduct_stock_for_sale, InsufficientStockError, return_stock_for_credit_note
+from app.models.stock_movement import MovementType, StockMovement
 from app.services.document_series_service import get_or_create_current_series, get_next_number, SeriesNotFoundError
 from app.workers.agt_worker import submit_invoice_to_agt
 
@@ -97,6 +98,10 @@ class EmptyInvoiceError(Exception):
 class StockUnavailableError(Exception):
     """Raised when a line item cannot be fulfilled due to insufficient stock."""
     pass
+
+
+class RefundNotAllowedError(Exception):
+    """The money refund asked with a credit note is not possible (amount, method, cash point) - nothing is issued."""
 
 
 class PaymentAmountMismatchError(Exception):
@@ -471,6 +476,119 @@ async def create_invoice(
     return invoice
 
 
+def _credit_line_key(line) -> tuple:
+    """Identifies "the same kind of line" between an invoice and its credit notes. A credit note line keeps no
+    link to the original line, but it copies its product/service, unit price, discount and VAT rate exactly."""
+    return (
+        str(line.product_id), str(line.service_id),
+        round(float(line.unit_price), 2), round(float(line.discount_percent or 0), 2),
+        round(float(line.vat_rate_snapshot), 2),
+    )
+
+
+async def _previous_credit_notes(db: AsyncSession, reference_invoice: Invoice) -> list[Invoice]:
+    """The credit notes already issued against an invoice."""
+    return list((await db.execute(
+        select(Invoice).where(
+            Invoice.reference_invoice_id == reference_invoice.id, Invoice.invoice_type == InvoiceType.NOTA_CREDITO,
+        )
+    )).scalars().all())
+
+
+async def _remaining_to_credit_by_key(
+    db: AsyncSession, ref_lines: list[InvoiceLine], previous_notes: list[Invoice],
+) -> dict[tuple, float]:
+    """Quantity still creditable per kind of line (_credit_line_key): the original quantities minus what earlier credit
+    notes credited - the one place the cumulative quantity cap is computed, for create_credit_note and the NC screen."""
+    remaining: dict[tuple, float] = {}
+    for l in ref_lines:
+        remaining[_credit_line_key(l)] = remaining.get(_credit_line_key(l), 0.0) + float(l.quantity)
+    if previous_notes:
+        previous_lines = (await db.execute(
+            select(InvoiceLine).where(InvoiceLine.invoice_id.in_([n.id for n in previous_notes]))
+        )).scalars().all()
+        for l in previous_lines:
+            key = _credit_line_key(l)
+            if key in remaining:
+                remaining[key] -= float(l.quantity)
+    return remaining
+
+
+async def _credit_note_refund_figures(
+    db: AsyncSession, reference_invoice: Invoice, previous_notes: list[Invoice],
+) -> tuple[float, float, float]:
+    """(collected, refunded, due) on an invoice - the one place the refund cap is computed, for create_credit_note and
+    for the NC screen: what the customer really paid (the invoice's own payments - Fatura/Recibo, deposit on a Fatura -
+    plus those of the receipts that settle it), what earlier credit notes already gave back (their payments are
+    negative) and what is still owed once the earlier credit notes are deducted."""
+    from sqlalchemy import func, or_
+
+    receipt_ids = select(Invoice.id).where(
+        Invoice.reference_invoice_id == reference_invoice.id, Invoice.invoice_type == InvoiceType.RECIBO,
+    )
+    collected = float((await db.execute(
+        select(func.coalesce(func.sum(Payment.amount), 0)).where(
+            or_(Payment.invoice_id == reference_invoice.id, Payment.invoice_id.in_(receipt_ids))
+        )
+    )).scalar_one())
+    refunded = 0.0
+    if previous_notes:
+        refunded = -float((await db.execute(
+            select(func.coalesce(func.sum(Payment.amount), 0)).where(
+                Payment.invoice_id.in_([n.id for n in previous_notes])
+            )
+        )).scalar_one())
+    due = (
+        float(reference_invoice.total) - float(reference_invoice.retention_total or 0)
+        - sum(float(n.total) - float(n.retention_total or 0) for n in previous_notes)
+    )
+    return round(collected, 2), round(refunded, 2), round(due, 2)
+
+
+async def get_credit_note_info(db: AsyncSession, company_id: uuid.UUID, invoice_id: uuid.UUID) -> dict:
+    """What the NC screen needs: what can still be credited on each line, the refund figures of the invoice and the
+    cash points that can pay cash out right now (an open session), with the cash they hold."""
+    from app.models.point_of_sale import PointOfSale
+    from app.services.cash_session_service import get_open_session, get_current_expected_cash_balance
+
+    reference_invoice = (await db.execute(
+        select(Invoice).where(Invoice.id == invoice_id, Invoice.company_id == company_id)
+    )).scalar_one_or_none()
+    if reference_invoice is None:
+        raise ReferenceInvoiceNotFoundError("Fatura de referencia nao encontrada")
+    previous_notes = await _previous_credit_notes(db, reference_invoice)
+    collected, refunded, due = await _credit_note_refund_figures(db, reference_invoice, previous_notes)
+
+    # Per line, what can still be credited: the pool of a kind of line is handed out in line order, so the screen never
+    # proposes more than create_credit_note accepts.
+    ref_lines = list((await db.execute(
+        select(InvoiceLine).where(InvoiceLine.invoice_id == reference_invoice.id)
+        .order_by(InvoiceLine.created_at, InvoiceLine.id)
+    )).scalars().all())
+    pool = await _remaining_to_credit_by_key(db, ref_lines, previous_notes)
+    remaining_by_line: dict[str, float] = {}
+    for l in ref_lines:
+        key = _credit_line_key(l)
+        share = round(max(min(float(l.quantity), pool[key]), 0.0), 3)
+        pool[key] -= share
+        remaining_by_line[str(l.id)] = share
+
+    cash_points = []
+    for pos in (await db.execute(
+        select(PointOfSale).where(PointOfSale.company_id == company_id).order_by(PointOfSale.name)
+    )).scalars().all():
+        session = await get_open_session(db, company_id, pos.id)
+        if session is None:
+            continue
+        available = await get_current_expected_cash_balance(db, company_id, pos.id, session)
+        cash_points.append({"pos_id": str(pos.id), "name": pos.name, "available_cash": round(available, 2)})
+
+    return {
+        "remaining_by_line": remaining_by_line,
+        "collected": collected, "refunded": refunded, "due": due, "cash_points": cash_points,
+    }
+
+
 async def create_credit_note(
     db: AsyncSession,
     company_id: uuid.UUID,
@@ -480,7 +598,9 @@ async def create_credit_note(
     credit_note_cause: str,
     lines_input: list[dict],
     business_date: date | None = None,
-    cash_session_id: uuid.UUID | None = None,
+    restock: bool = False,
+    refunds: list[dict] | None = None,
+    refund_pos_id: uuid.UUID | None = None,
 ) -> Invoice:
     """
     Creates a Nota de Credito (NC) against an already-issued Factura/Factura-Recibo,
@@ -491,8 +611,17 @@ async def create_credit_note(
       re-priced against current catalog prices, and can be less than the original quantity
       (partial return).
     - credit_note_reason: "ANL" (anulacao) or "RTF" (rectificacao).
-    - No stock is deducted for a credit note (see create_invoice for sales); a future
-      stock-return flow is a separate concern.
+    - No stock moves for a credit note unless restock=True: the credited product lines go back to the
+      warehouse the sale took them from (the ORIGINAL invoice's activity), and only when the credited
+      document type deducts stock. It is an explicit choice of the caller - the rectification of a price
+      brings nothing back. When asked for but impossible, the credit note is refused rather than silently
+      issued without the return.
+    - The caps are cumulative: quantities and value already credited by earlier credit notes on the same
+      invoice count against the original.
+    - No money is given back unless refunds are given (method + amount, as at collection): only an overpayment
+      can be refunded, cash needs an explicitly chosen cash point with an open session and enough cash, and the
+      refund is recorded as negative payments on the credit note. The credit note belongs to that cash point's
+      session only when one was chosen - never to the issuer's own session implicitly.
     """
     business_date = business_date or date.today()
 
@@ -524,14 +653,27 @@ async def create_credit_note(
     if reference_invoice.document_status == DocumentLifecycleStatus.ANULADO:
         raise ReferenceInvoiceAlreadyCancelledError("A fatura de referencia ja foi anulada")
 
+    # A credit note corrects a document that already exists: it cannot be dated before it (possible only when the
+    # original was issued with a future date, allows_future_sale_date).
+    if business_date < reference_invoice.business_date:
+        raise EmptyInvoiceError(
+            "A nota de credito nao pode ter data anterior a da fatura de referencia "
+            f"({reference_invoice.business_date.strftime('%d/%m/%Y')})"
+        )
+
     ref_lines_result = await db.execute(select(InvoiceLine).where(InvoiceLine.invoice_id == reference_invoice.id))
     ref_lines_by_id = {str(l.id): l for l in ref_lines_result.scalars().all()}
+
+    # Caps are cumulative: what earlier credit notes on this invoice already credited counts against the original.
+    previous_notes = await _previous_credit_notes(db, reference_invoice)
+    previous_total = round(sum(float(n.total) for n in previous_notes), 2)
+    remaining_by_key = await _remaining_to_credit_by_key(db, list(ref_lines_by_id.values()), previous_notes)
 
     subtotal_total = 0.0
     vat_total = 0.0
     retention_total = 0.0
     line_objects = []
-    is_full_credit = True
+    restock_candidates = []
 
     for line_input in lines_input:
         ref_line = ref_lines_by_id.get(str(line_input["invoice_line_id"]))
@@ -543,8 +685,16 @@ async def create_credit_note(
             raise CreditNoteExceedsOriginalError(
                 f"Quantidade a creditar ({quantity}) excede a quantidade original ({ref_line.quantity})"
             )
-        if quantity < float(ref_line.quantity):
-            is_full_credit = False
+        line_key = _credit_line_key(ref_line)
+        if quantity > remaining_by_key[line_key] + 0.0005:
+            raise CreditNoteExceedsOriginalError(
+                f"Quantidade a creditar ({quantity}) excede a quantidade ainda por creditar de "
+                f"{ref_line.product_name_snapshot} ({max(remaining_by_key[line_key], 0):g})"
+            )
+        remaining_by_key[line_key] -= quantity
+        # Mirrors the sale: only product lines, never a service line, moved stock.
+        if ref_line.product_id and not ref_line.service_id:
+            restock_candidates.append((ref_line.product_id, quantity))
 
         unit_price = float(ref_line.unit_price)
         vat_rate = float(ref_line.vat_rate_snapshot)
@@ -581,19 +731,107 @@ async def create_credit_note(
             exemption_code=ref_line.exemption_code,
         ))
 
-    # A line from the original invoice not included at all in lines_input also makes this a partial credit.
-    if len(lines_input) < len(ref_lines_by_id):
-        is_full_credit = False
+    # Fully credited when nothing remains to credit on any line, earlier credit notes included - judging this
+    # note alone left an invoice credited in several partial notes as RECTIFICADO_PARCIAL forever.
+    is_full_credit = all(remaining <= 0.0005 for remaining in remaining_by_key.values())
 
     subtotal_total = round(subtotal_total, 2)
     vat_total = round(vat_total, 2)
     retention_total = round(retention_total, 2)
     grand_total = round(subtotal_total + vat_total, 2)
 
-    if grand_total > float(reference_invoice.total) + 0.01:
+    if previous_total + grand_total > float(reference_invoice.total) + 0.01:
+        if previous_total == 0:
+            raise CreditNoteExceedsOriginalError(
+                f"O valor da nota de credito ({grand_total}) excede o valor da fatura original ({reference_invoice.total})"
+            )
         raise CreditNoteExceedsOriginalError(
-            f"O valor da nota de credito ({grand_total}) excede o valor da fatura original ({reference_invoice.total})"
+            f"O valor da nota de credito ({grand_total}) excede o valor ainda por creditar da fatura original "
+            f"({round(max(float(reference_invoice.total) - previous_total, 0), 2)})"
         )
+
+    # An explicit stock return is checked BEFORE anything is created: asked for but impossible means refused
+    # (EmptyInvoiceError is already mapped to 422 by the route), never a credit note issued without the return.
+    restock_warehouse_by_product: dict[str, uuid.UUID] = {}
+    if restock:
+        if not reference_rules.deducts_stock:
+            raise EmptyInvoiceError("Este tipo de documento nao movimenta stock - nao ha nada a repor")
+        if not restock_candidates:
+            raise EmptyInvoiceError("Nenhuma das linhas creditadas e um produto com stock - nao ha nada a repor")
+        # The goods go back where the sale really took them from: the SAIDA movements written by create_invoice
+        # with the original invoice's reference ("{DocType} {series}/{number}"), not the activity's current
+        # warehouse, which may have changed since the sale.
+        sale_reference = (
+            f"{INVOICE_TYPE_TO_DOC_CODE.get(reference_invoice.invoice_type.value, '')} "
+            f"{reference_invoice.series}/{reference_invoice.number}"
+        )
+        sale_rows = (await db.execute(
+            select(StockMovement.product_id, StockMovement.warehouse_id).where(
+                StockMovement.company_id == company_id,
+                StockMovement.movement_type == MovementType.SAIDA,
+                StockMovement.reference == sale_reference,
+            )
+        )).all()
+        restock_warehouse_by_product = {str(product_id): warehouse_id for product_id, warehouse_id in sale_rows}
+        if any(str(product_id) not in restock_warehouse_by_product for product_id, _ in restock_candidates):
+            raise EmptyInvoiceError(
+                "A venda desta fatura nao tem saida de stock registada - nao e possivel repor o stock"
+            )
+
+    # Explicit money refund, checked BEFORE anything is created: the credit note and its refund exist together or not
+    # at all (same rule as the stock return).
+    refund_session_id = None
+    refund_lines: list[tuple[uuid.UUID, float, bool]] = []
+    if refunds:
+        from app.models.point_of_sale import PointOfSale
+        from app.services.cash_session_service import get_open_session, get_current_expected_cash_balance
+
+        method_ids = {uuid.UUID(str(r["payment_method_id"])) for r in refunds}
+        methods = {m.id: m for m in (await db.execute(
+            select(PaymentMethodCatalog).where(
+                PaymentMethodCatalog.id.in_(method_ids), PaymentMethodCatalog.is_active.is_(True),
+            )
+        )).scalars().all()}
+        for r in refunds:
+            method = methods.get(uuid.UUID(str(r["payment_method_id"])))
+            amount = round(float(r["amount"]), 2)
+            if method is None:
+                raise RefundNotAllowedError("Metodo de pagamento invalido ou inativo")
+            if amount <= 0:
+                raise RefundNotAllowedError("O valor a devolver deve ser maior que zero")
+            refund_lines.append((method.id, amount, bool(method.is_cash)))
+        refund_total = round(sum(amount for _, amount, _ in refund_lines), 2)
+
+        # Only an overpayment goes back: on a Fatura not yet settled the credit note first reduces what is owed.
+        collected, refunded, due_before = await _credit_note_refund_figures(db, reference_invoice, previous_notes)
+        due_after = due_before - (grand_total - retention_total)
+        refundable = round(max(collected - refunded - max(due_after, 0.0), 0.0), 2)
+        if refund_total > refundable + 0.01:
+            raise RefundNotAllowedError(
+                f"O valor a devolver ({refund_total:.2f}) excede o valor reembolsavel desta fatura ({refundable:.2f})"
+            )
+
+        cash_total = round(sum(amount for _, amount, is_cash in refund_lines if is_cash), 2)
+        if refund_pos_id is None and cash_total > 0:
+            raise RefundNotAllowedError("Selecione a caixa de onde sai o numerario a devolver")
+        if refund_pos_id is not None:
+            pos = (await db.execute(
+                select(PointOfSale).where(PointOfSale.id == refund_pos_id, PointOfSale.company_id == company_id)
+            )).scalar_one_or_none()
+            if pos is None:
+                raise RefundNotAllowedError("Caixa nao encontrada")
+            refund_session = await get_open_session(db, company_id, pos.id)
+            if refund_session is None:
+                raise RefundNotAllowedError(f"A caixa {pos.name} nao tem sessao aberta - abra a caixa antes de devolver")
+            if cash_total > 0:
+                available = await get_current_expected_cash_balance(db, company_id, pos.id, refund_session)
+                if cash_total > available + 0.01:
+                    raise RefundNotAllowedError(
+                        f"Numerario insuficiente na caixa {pos.name} (disponivel: {available:.2f})"
+                    )
+            refund_session_id = refund_session.id
+    elif refund_pos_id is not None:
+        raise RefundNotAllowedError("Foi escolhida uma caixa mas nenhum valor a devolver")
 
     doc_type_result = await db.execute(select(DocumentType).where(DocumentType.code == "NC"))
     doc_type = doc_type_result.scalar_one_or_none()
@@ -624,7 +862,7 @@ async def create_credit_note(
         company_id=company_id,
         activity_id=activity_id,
         customer_id=reference_invoice.customer_id,
-        cash_session_id=cash_session_id,
+        cash_session_id=refund_session_id,
         invoice_type=InvoiceType.NOTA_CREDITO,
         document_type_id=doc_type.id,
         series=series_row.series_code,
@@ -652,6 +890,21 @@ async def create_credit_note(
     for line in line_objects:
         line.invoice_id = credit_note.id
         db.add(line)
+
+    # The refund: negative payments on the credit note - money going out, so every sum of payments (the cash point's
+    # expected balance, the daily journal) counts it as such without a special case.
+    for refund_method_id, refund_amount, _ in refund_lines:
+        db.add(Payment(
+            company_id=company_id, invoice_id=credit_note.id, payment_method_id=refund_method_id, amount=-refund_amount,
+        ))
+
+    # Explicit stock return, inside the credit note's own transaction: both exist or neither does.
+    if restock:
+        for restock_product_id, restock_quantity in restock_candidates:
+            await return_stock_for_credit_note(
+                db, company_id, restock_warehouse_by_product[str(restock_product_id)], restock_product_id,
+                restock_quantity, invoice_reference,
+            )
 
     # Update the original invoice's fiscal lifecycle - see Video 5.
     if is_full_credit:

@@ -1,24 +1,17 @@
 ﻿import { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { X, Loader2, AlertTriangle } from 'lucide-react';
 import Modal from './Modal';
-import { getInvoiceDetail, createCreditNote, createDebitNote, createReceipt } from '../api/invoices';
+import { getInvoiceDetail, createDebitNote, createReceipt } from '../api/invoices';
 import { extractErrorMessage } from '../utils/errors';
 import { paymentMethodsApi } from '../api/catalogs';
 
-// Self-contained NC/ND/RC action modals against an already-issued invoice, usable
+// Self-contained ND/RC action modals against an already-issued invoice, usable
 // from any screen (Caixa's "Consultar documentos", Invoices.jsx) without leaving
 // the page - see discussion on keeping the cashier inside Caixa. Exposes
-// open{Nc,Nd,Rc}(invoiceId) via props.onReady(api) so the parent can trigger them,
+// open{Nd,Rc}(invoiceId) via props.onReady(api) so the parent can trigger them,
 // and calls props.onSuccess() after a successful creation so the parent can refresh
 // its own document list.
 const DocumentActionModals = forwardRef(function DocumentActionModals({ onSuccess, cashSessionId }, ref) {
-  const [ncModalOpen, setNcModalOpen] = useState(false);
-  const [ncInvoice, setNcInvoice] = useState(null);
-  const [ncLines, setNcLines] = useState([]);
-  const [ncReason, setNcReason] = useState('ANL');
-  const [ncCause, setNcCause] = useState('');
-  const [ncSaving, setNcSaving] = useState(false);
-  const [ncError, setNcError] = useState('');
 
   const [ndModalOpen, setNdModalOpen] = useState(false);
   const [ndInvoice, setNdInvoice] = useState(null);
@@ -44,22 +37,6 @@ const DocumentActionModals = forwardRef(function DocumentActionModals({ onSucces
 
   const INVOICE_TYPE_CODE = { FACTURA: 'FT', FACTURA_RECIBO: 'FR', PRO_FORMA: 'FP' };
 
-  async function openNc(invoiceId) {
-    const data = await getInvoiceDetail(invoiceId);
-    setNcInvoice(data);
-    setNcLines(data.lines.map((l) => ({
-      invoice_line_id: l.id,
-      product_name: l.product_name_snapshot,
-      original_quantity: l.quantity,
-      selected: true,
-      quantity: String(l.quantity),
-    })));
-    setNcReason('ANL');
-    setNcCause('');
-    setNcError('');
-    setNcModalOpen(true);
-  }
-
   async function openNd(invoiceId) {
     const data = await getInvoiceDetail(invoiceId);
     setNdInvoice(data);
@@ -80,37 +57,7 @@ const DocumentActionModals = forwardRef(function DocumentActionModals({ onSucces
     setRcModalOpen(true);
   }
 
-  useImperativeHandle(ref, () => ({ openNc, openNd, openRc }));
-
-  async function handleNcSubmit(e) {
-    e.preventDefault();
-    setNcError('');
-    const selectedLines = ncLines.filter((l) => l.selected);
-    if (selectedLines.length === 0) {
-      setNcError('Selecione pelo menos uma linha');
-      return;
-    }
-    if (!ncCause.trim()) {
-      setNcError('A causa e obrigatoria');
-      return;
-    }
-    setNcSaving(true);
-    try {
-      await createCreditNote({
-        activity_id: ncInvoice.activity_id,
-        reference_invoice_id: ncInvoice.id,
-        credit_note_reason: ncReason,
-        credit_note_cause: ncCause.trim(),
-        lines: selectedLines.map((l) => ({ invoice_line_id: l.invoice_line_id, quantity: parseFloat(l.quantity) })),
-      });
-      setNcModalOpen(false);
-      if (onSuccess) onSuccess();
-    } catch (err) {
-      setNcError(extractErrorMessage(err, 'Erro ao emitir nota de credito'));
-    } finally {
-      setNcSaving(false);
-    }
-  }
+  useImperativeHandle(ref, () => ({ openNd, openRc }));
 
   async function handleNdSubmit(e) {
     e.preventDefault();
@@ -170,52 +117,6 @@ const DocumentActionModals = forwardRef(function DocumentActionModals({ onSucces
 
   return (
     <>
-      <Modal open={ncModalOpen} onClose={() => setNcModalOpen(false)} title="Emitir Nota de Credito">
-        {ncInvoice && (
-          <form onSubmit={handleNcSubmit} className="flex flex-col gap-4">
-            <p className="text-[12px] text-text-muted">
-              Referente a <span className="font-mono text-text-primary">{INVOICE_TYPE_CODE[ncInvoice.invoice_type] || ncInvoice.invoice_type} {ncInvoice.series}/{ncInvoice.number}</span>
-            </p>
-            <div>
-              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Linhas a creditar</label>
-              <div className="flex flex-col gap-1.5 max-h-[220px] overflow-y-auto scrollbar-thin">
-                {ncLines.map((l, idx) => (
-                  <div key={l.invoice_line_id} className="flex items-center gap-2 bg-bg-inset border border-border rounded-md px-3 py-2">
-                    <input
-                      type="checkbox" checked={l.selected}
-                      onChange={(e) => setNcLines((prev) => prev.map((x, i) => (i === idx ? { ...x, selected: e.target.checked } : x)))}
-                    />
-                    <span className="text-[12px] text-text-primary flex-1 truncate">{l.product_name}</span>
-                    <input
-                      type="number" step="0.01" min="0" max={l.original_quantity}
-                      value={l.quantity}
-                      onChange={(e) => setNcLines((prev) => prev.map((x, i) => (i === idx ? { ...x, quantity: e.target.value } : x)))}
-                      className="w-20 bg-bg-elevated border border-border rounded px-2 py-1 text-[12px] text-text-primary font-mono outline-none focus:border-accent"
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div>
-              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Motivo</label>
-              <select value={ncReason} onChange={(e) => setNcReason(e.target.value)} className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent">
-                <option value="ANL">Anulacao</option>
-                <option value="RTF">Devolucao</option>
-              </select>
-            </div>
-            <div>
-              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Causa *</label>
-              <input value={ncCause} onChange={(e) => setNcCause(e.target.value)} maxLength={60} required className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent" />
-            </div>
-            {ncError && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{ncError}</div>}
-            <button type="submit" disabled={ncSaving} className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 cursor-pointer">
-              {ncSaving && <Loader2 size={16} className="animate-spin" />}
-              {ncSaving ? 'A emitir...' : 'Emitir nota de credito'}
-            </button>
-          </form>
-        )}
-      </Modal>
-
       <Modal open={ndModalOpen} onClose={() => setNdModalOpen(false)} title="Emitir Nota de Debito">
         {ndInvoice && (
           <form onSubmit={handleNdSubmit} className="flex flex-col gap-4">

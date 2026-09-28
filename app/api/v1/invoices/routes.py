@@ -24,6 +24,7 @@ from app.models.service import Service
 from app.models.unit_of_measure_catalog import UnitOfMeasureCatalog
 from app.models.invoice import Invoice, InvoiceStatus
 from app.workers.agt_worker import submit_invoice_to_agt
+from app.services.invoice_service import RefundNotAllowedError, get_credit_note_info
 from datetime import date
 from app.schemas.invoice import InvoiceCreateRequest, InvoiceResponse, InvoiceDetailResponse, CreditNoteCreateRequest, DebitNoteCreateRequest, ReceiptCreateRequest, ProFormaCreateRequest, ConvertProFormaRequest
 from app.utils.pdf_generator import generate_invoice_pdf_thermal, generate_invoice_pdf_a4
@@ -112,7 +113,6 @@ async def create_new_credit_note(
     current_user: User = Depends(require_permission("invoices:credit_note")),
 ):
     """Creates a Nota de Credito against an already-issued Factura/Factura-Recibo - see Video 5."""
-    session = await get_open_session_for_user(db, current_user.company_id, current_user.id)
     try:
         credit_note = await create_credit_note(
             db,
@@ -122,7 +122,9 @@ async def create_new_credit_note(
             credit_note_reason=payload.credit_note_reason,
             credit_note_cause=payload.credit_note_cause,
             lines_input=[{"invoice_line_id": l.invoice_line_id, "quantity": l.quantity} for l in payload.lines],
-            cash_session_id=session.id if session else None,
+            restock=payload.restock,
+            refunds=[{"payment_method_id": r.payment_method_id, "amount": r.amount} for r in payload.refunds],
+            refund_pos_id=payload.refund_pos_id,
         )
     except PeriodClosedError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
@@ -136,13 +138,26 @@ async def create_new_credit_note(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     except ReferenceInvoiceAlreadyCancelledError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
-    except CreditNoteExceedsOriginalError as e:
+    except (CreditNoteExceedsOriginalError, RefundNotAllowedError) as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     except DocumentTypeNotConfiguredError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     except SeriesNotConfiguredError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     return credit_note
+
+
+@router.get("/{invoice_id}/credit-note-info")
+async def credit_note_info(
+    invoice_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("invoices:credit_note")),
+):
+    """What is left to credit per line, the refund figures and the cash points with an open session - for the NC screen."""
+    try:
+        return await get_credit_note_info(db, current_user.company_id, invoice_id)
+    except ReferenceInvoiceNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
 @router.post("/debit-note", response_model=InvoiceResponse, status_code=status.HTTP_201_CREATED)

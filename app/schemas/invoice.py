@@ -133,12 +133,27 @@ class CreditNoteLineRequest(BaseModel):
         return v
 
 
+class CreditNoteRefundRequest(BaseModel):
+    payment_method_id: uuid.UUID
+    amount: float
+
+    @field_validator("amount")
+    @classmethod
+    def validate_amount(cls, v: float) -> float:
+        if v <= 0:
+            raise ValueError("O valor a devolver deve ser maior que zero")
+        return round(v, 2)
+
+
 class CreditNoteCreateRequest(BaseModel):
     activity_id: uuid.UUID
     reference_invoice_id: uuid.UUID
     credit_note_reason: str  # "ANL" ou "RTF"
     credit_note_cause: str
     lines: list[CreditNoteLineRequest]
+    restock: bool = False  # explicit choice: return the credited product lines to the sale warehouse
+    refunds: list[CreditNoteRefundRequest] = []  # explicit choice: money given back, by payment method
+    refund_pos_id: uuid.UUID | None = None  # the cash point the money comes out of - required for cash
 
     @field_validator("lines")
     @classmethod

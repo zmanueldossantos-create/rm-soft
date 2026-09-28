@@ -2065,7 +2065,7 @@ export default function Caixa() {
                         <td className="px-2.5 py-2 text-right font-mono text-text-primary whitespace-nowrap">{formatKz(inv.total)} Kz</td>
                         <td className="px-2.5 py-2 text-right font-mono text-text-muted whitespace-nowrap">{formatKz(inv.vat_total)} Kz</td>
                         <td className="px-2.5 py-2 text-right font-mono text-text-muted whitespace-nowrap">{Number(inv.retention_total) > 0 ? formatKz(inv.retention_total) + ' Kz' : '-'}</td>
-                        <td className="px-2.5 py-2 text-right font-mono text-text-muted whitespace-nowrap">{Number(inv.amount_paid) > 0 ? formatKz(inv.amount_paid) + ' Kz' : '-'}</td>
+                        <td className={'px-2.5 py-2 text-right font-mono whitespace-nowrap ' + (Number(inv.amount_paid) < 0 ? 'text-danger' : 'text-text-muted')} title={Number(inv.amount_paid) < 0 ? 'Reembolsado' : undefined}>{Number(inv.amount_paid) > 0 ? formatKz(inv.amount_paid) + ' Kz' : Number(inv.amount_paid) < 0 ? '-' + formatKz(-Number(inv.amount_paid)) + ' Kz' : '-'}</td>
                         <td className="px-2.5 py-2 text-right font-mono whitespace-nowrap">
                           {ruleOf(inv.invoice_type, 'accepts_receipt') && balanceOf(inv) > 0.005 ? (
                             <span className="text-accent">{formatKz(balanceOf(inv))} Kz</span>
