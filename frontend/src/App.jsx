@@ -31,6 +31,7 @@ import ContasAbertas from './pages/ContasAbertas';
 import Layout from './components/Layout';
 import { useAuthStore } from './store/authStore';
 import RequirePermission from './components/RequirePermission';
+import { homeFor } from './utils/roleHome';
 
 function ProtectedRoute({ children }) {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -39,12 +40,12 @@ function ProtectedRoute({ children }) {
 
 function SuperAdminRoute({ children }) {
   const user = useAuthStore((state) => state.user);
-  return user?.role === 'SUPER_ADMIN' ? children : <Navigate to="/dashboard" replace />;
+  return user?.role === 'SUPER_ADMIN' ? children : <Navigate to={homeFor(user?.role)} replace />;
 }
 
 function GestorRoute({ children }) {
   const user = useAuthStore((state) => state.user);
-  return user?.role === 'GESTOR' ? children : <Navigate to="/dashboard" replace />;
+  return user?.role === 'GESTOR' ? children : <Navigate to={homeFor(user?.role)} replace />;
 }
 
 export default function App() {
@@ -60,7 +61,7 @@ export default function App() {
             </ProtectedRoute>
           }
         >
-          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/dashboard" element={<RequirePermission perm="dashboard:view" allowSuperAdmin><Dashboard /></RequirePermission>} />
           <Route path="/products" element={<RequirePermission perm="products:manage"><Products /></RequirePermission>} />
           <Route path="/materia-prima" element={<RequirePermission perm="products:manage"><MateriaPrima /></RequirePermission>} />
           <Route path="/producao" element={<RequirePermission perm="recipes:view"><Producao /></RequirePermission>} />
