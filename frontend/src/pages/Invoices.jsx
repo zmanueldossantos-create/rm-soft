@@ -233,6 +233,11 @@ export default function Invoices() {
     openWizard('nc', detailInvoice.id);
   }
 
+  function openNdModal() {
+    if (!detailInvoice) return;
+    openWizard('nd', detailInvoice.id);
+  }
+
   function openRcModal() {
     setRcAmount('');
     setRcDocumentReference((INVOICE_TYPE_CODE[detailInvoice.invoice_type] || detailInvoice.invoice_type) + ' ' + detailInvoice.series + '/' + detailInvoice.number);
