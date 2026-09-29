@@ -40,6 +40,7 @@ class InvoiceCreateRequest(BaseModel):
     bank_account_id: uuid.UUID | None = None
     due_date: date | None = None
     amount_received: float | None = None
+    cash_pos_id: uuid.UUID | None = None  # the cash point cash enters - required when cash is collected
     payment_date: date | None = None
     observations: str | None = None
     document_reference: str | None = None
@@ -107,6 +108,8 @@ class InvoiceResponse(BaseModel):
     item_count: int = 0
     customer_name: str | None = None
     amount_paid: float = 0
+    amount_due: float = 0  # attached: what is really still owed, credit notes deducted
+    amount_credited: float = 0  # attached: net value of the credit notes issued against it
     converted_to_invoice_id: uuid.UUID | None = None
     atcud: str
     invoice_hash: str
@@ -196,7 +199,7 @@ class ReceiptCreateRequest(BaseModel):
     document_reference: str | None = None
     observations: str | None = None
     payment_method_id: uuid.UUID | None = None
-    cash_session_id: uuid.UUID | None = None
+    cash_pos_id: uuid.UUID | None = None  # the cash point cash enters - required for cash, resolved server side
 
     @field_validator("amount")
     @classmethod

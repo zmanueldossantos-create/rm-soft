@@ -7,7 +7,7 @@ import { Receipt, Plus, Loader2, Search, Trash2, FileText, Printer, Eye, X as XI
 import Modal from '../components/Modal';
 import InvoiceWizardModal from '../components/InvoiceWizardModal';
 import Select from '../components/Select';
-import { listInvoices, getInvoicePeriods, fetchInvoicePdfBlob, getInvoiceDetail, resubmitInvoice, createReceipt, convertProForma } from '../api/invoices';
+import { listInvoices, getInvoicePeriods, fetchInvoicePdfBlob, getInvoiceDetail, resubmitInvoice, createReceipt, convertProForma, getOpenCashPoints } from '../api/invoices';
 import PeriodFilter from '../components/PeriodFilter';
 import { listProducts } from '../api/products';
 import { listActivities } from '../api/activity';
@@ -160,6 +160,9 @@ export default function Invoices() {
   const [rcDocumentReference, setRcDocumentReference] = useState('');
   const [rcObservations, setRcObservations] = useState('');
   const [rcPaymentMethodId, setRcPaymentMethodId] = useState('');
+  // Cash received with a receipt enters an explicitly chosen cash point.
+  const [rcCashPosId, setRcCashPosId] = useState('');
+  const [rcCashPoints, setRcCashPoints] = useState([]);
   const [rcSaving, setRcSaving] = useState(false);
   const [rcFormError, setRcFormError] = useState('');
 
@@ -240,6 +243,8 @@ export default function Invoices() {
 
   function openRcModal() {
     setRcAmount('');
+    setRcCashPosId('');
+    getOpenCashPoints().then(setRcCashPoints).catch(() => setRcCashPoints([]));
     setRcDocumentReference((INVOICE_TYPE_CODE[detailInvoice.invoice_type] || detailInvoice.invoice_type) + ' ' + detailInvoice.series + '/' + detailInvoice.number);
     setRcObservations('');
     setRcPaymentMethodId('');
@@ -251,6 +256,8 @@ export default function Invoices() {
     const data = await getInvoiceDetail(invoiceId);
     setDetailInvoice(data);
     setRcAmount('');
+    setRcCashPosId('');
+    getOpenCashPoints().then(setRcCashPoints).catch(() => setRcCashPoints([]));
     setRcDocumentReference((INVOICE_TYPE_CODE[data.invoice_type] || data.invoice_type) + ' ' + data.series + '/' + data.number);
     setRcObservations('');
     setRcPaymentMethodId('');
@@ -270,6 +277,7 @@ export default function Invoices() {
         document_reference: rcDocumentReference || null,
         observations: rcObservations || null,
         payment_method_id: rcPaymentMethodId || null,
+        cash_pos_id: rcCashPosId || null,
       });
       setRcModalOpen(false);
       await openDetailModal(detailInvoice.id);
@@ -443,6 +451,16 @@ export default function Invoices() {
   // sum: a deposit on a Fatura is in both.
   const receivedOf = (inv) => Math.max(parseFloat(inv.amount_received) || 0, parseFloat(inv.amount_paid) || 0);
 
+  // What is still owed on a document - one rule for the rows and the footer. A document that takes a receipt (a Fatura)
+  // carries its real balance from the server (amount_due: credit notes, deposit, receipts and refunds counted). A credit
+  // note owes nothing: its effect is already in the balance of the invoice it credits. Any other document keeps
+  // total - withholding - collected.
+  const aPagarOf = (inv) => {
+    if (inv.invoice_type === 'NOTA_CREDITO') return 0;
+    if (ruleOf(inv.invoice_type, 'accepts_receipt')) return round2(parseFloat(inv.amount_due) || 0);
+    return round2((parseFloat(inv.total) || 0) - (parseFloat(inv.retention_total) || 0) - receivedOf(inv));
+  };
+
   // Debito = every document type except Nota de Credito (FT/FR/ND all increase what is owed);
   // Credito = Nota de Credito only. Used by the 3-row Total Debito/Credito/Diferenca footer.
   const footerTotals = useMemo(() => {
@@ -451,7 +469,7 @@ export default function Invoices() {
       return round2(list.reduce((sum, inv) => sum + (parseFloat(inv[field]) || 0), 0));
     }
     function aPagarFor(list) {
-      return round2(list.reduce((sum, inv) => sum + round2((parseFloat(inv.total) || 0) - (parseFloat(inv.retention_total) || 0) - receivedOf(inv)), 0));
+      return round2(list.reduce((sum, inv) => sum + aPagarOf(inv), 0));
     }
     function descontosFor(list) {
       return round2(list.reduce((sum, inv) => {
@@ -483,7 +501,7 @@ export default function Invoices() {
       aPagar: round2(debito.aPagar - credito.aPagar),
     };
     return { debito, credito, diff };
-  }, [filteredInvoices]);
+  }, [filteredInvoices, ruleOf]);
 
   return (
     <main className="max-w-[1600px] mx-auto px-4 sm:px-6 md:px-8 py-6 sm:py-9">
@@ -593,9 +611,11 @@ export default function Invoices() {
                   const customer = customerById[inv.customer_id];
                   const paymentMethod = paymentMethodById[inv.payment_method_id];
                   const received = receivedOf(inv);
-                  const aPagar = round2((inv.total || 0) - (inv.retention_total || 0) - received);
-                  const estadoPagamento = inv.invoice_type === 'NOTA_CREDITO' ? ((parseFloat(inv.amount_paid) || 0) < 0 ? 'Reembolsado' : '-') : (inv.total || 0) > 0 && aPagar <= 0.005 ? 'Pago' : received > 0 ? 'Parcial' : 'Pendente';
-                  const estadoPagamentoStyle = estadoPagamento === 'Reembolsado' ? 'bg-danger/10 text-danger' : estadoPagamento === 'Pago' ? 'bg-success/10 text-success' : estadoPagamento === 'Parcial' ? 'bg-accent/10 text-accent' : 'bg-text-muted/10 text-text-muted';
+                  const aPagar = aPagarOf(inv);
+                  // Wholly covered by credit notes: the debt was settled by credit, not paid (regularizado).
+                  const fullyCredited = (inv.total || 0) > 0 && (parseFloat(inv.amount_credited) || 0) >= round2((inv.total || 0) - (inv.retention_total || 0)) - 0.005;
+                  const estadoPagamento = inv.invoice_type === 'NOTA_CREDITO' ? ((parseFloat(inv.amount_paid) || 0) < 0 ? 'Reembolsado' : '-') : fullyCredited ? 'Regularizado' : (inv.total || 0) > 0 && aPagar <= 0.005 ? 'Pago' : received > 0 ? 'Parcial' : 'Pendente';
+                  const estadoPagamentoStyle = estadoPagamento === 'Reembolsado' ? 'bg-danger/10 text-danger' : estadoPagamento === 'Regularizado' ? 'bg-text-muted/15 text-text-primary' : estadoPagamento === 'Pago' ? 'bg-success/10 text-success' : estadoPagamento === 'Parcial' ? 'bg-accent/10 text-accent' : 'bg-text-muted/10 text-text-muted';
                   const docCode = INVOICE_TYPE_CODE[inv.invoice_type] || inv.invoice_type;
                   return (
                     <tr key={inv.id} className="border-b border-border hover:bg-bg-inset/40 transition-colors">
@@ -667,9 +687,9 @@ export default function Invoices() {
                             { label: 'Ticket 80mm', icon: <Receipt size={14} />, onClick: () => openPdfViewer(inv.id, 'thermal', 'RM SOFT - ' + inv.series + '-' + inv.number + ' (Ticket)') },
                             { label: 'A4', icon: <Printer size={14} />, onClick: () => openPdfViewer(inv.id, 'a4', 'RM SOFT - ' + inv.series + '-' + inv.number + ' (A4)') },
                             ...((ruleOf(inv.invoice_type, 'accepts_credit_note') || ruleOf(inv.invoice_type, 'accepts_debit_note')) && inv.document_status !== 'ANULADO' ? [
-                              ...(ruleOf(inv.invoice_type, 'accepts_credit_note') ? [{ perm: 'invoices:credit_note', label: 'Emitir Nota de Credito', icon: <RotateCcw size={14} />, onClick: () => openNcModalFromRow(inv.id) }] : []),
+                              ...(ruleOf(inv.invoice_type, 'accepts_credit_note') && inv.document_status !== 'RECTIFICADO' ? [{ perm: 'invoices:credit_note', label: 'Emitir Nota de Credito', icon: <RotateCcw size={14} />, onClick: () => openNcModalFromRow(inv.id) }] : []),
                               ...(ruleOf(inv.invoice_type, 'accepts_debit_note') ? [{ perm: 'invoices:debit_note', label: 'Emitir Nota de Debito', icon: <FilePlus size={14} />, onClick: () => openNdModalFromRow(inv.id) }] : []),
-                              ...(ruleOf(inv.invoice_type, 'accepts_receipt') && (Number(inv.total) - Number(inv.retention_total || 0) - Number(inv.amount_received || 0)) > 0.005 ? [{ perm: 'invoices:receipt', label: 'Emitir Recibo', icon: <Receipt size={14} />, onClick: () => openRcModalFromRow(inv.id) }] : []),
+                              ...(ruleOf(inv.invoice_type, 'accepts_receipt') && Number(inv.amount_due || 0) > 0.005 ? [{ perm: 'invoices:receipt', label: 'Emitir Recibo', icon: <Receipt size={14} />, onClick: () => openRcModalFromRow(inv.id) }] : []),
                             ] : []),
                             ...(isConvertible(inv.invoice_type) && !inv.converted_to_invoice_id ? [
                               { perm: 'invoices:proforma_convert', label: 'Converter em Fatura', icon: <FileText size={14} />, onClick: () => openConvertModalFromRow(inv.id) },
@@ -852,7 +872,7 @@ export default function Invoices() {
                 <span className="text-text-primary">TOTAL</span>
                 <span className="font-mono text-accent">{formatMoney(detailInvoice.total)}</span>
               </div>
-              {ruleOf(detailInvoice.invoice_type, 'accepts_receipt') && (Number(detailInvoice.retention_total) > 0 || Number(detailInvoice.amount_received) > 0) && (
+              {ruleOf(detailInvoice.invoice_type, 'accepts_receipt') && (Number(detailInvoice.retention_total) > 0 || Number(detailInvoice.amount_received) > 0 || Number(detailInvoice.amount_credited) > 0) && (
                 <>
                   {Number(detailInvoice.amount_received) > 0 && (
                     <div className="flex justify-between w-56 text-sm">
@@ -861,8 +881,8 @@ export default function Invoices() {
                     </div>
                   )}
                   <div className="flex justify-between w-56 text-sm">
-                    <span className="text-text-muted">Valor a pagar</span>
-                    <span className="font-mono text-text-primary">{formatMoney(Math.max(0, Math.round((Number(detailInvoice.total) - Number(detailInvoice.retention_total || 0) - Number(detailInvoice.amount_received || 0)) * 100) / 100))}</span>
+                    <span className="text-text-muted">{Number(detailInvoice.amount_credited) > 0 ? 'Valor a pagar (creditado ' + formatMoney(detailInvoice.amount_credited) + ')' : 'Valor a pagar'}</span>
+                    <span className="font-mono text-text-primary">{formatMoney(Number(detailInvoice.amount_due || 0))}</span>
                   </div>
                 </>
               )}
@@ -903,7 +923,7 @@ export default function Invoices() {
                   <FilePlus size={14} /> Emitir Nota de Debito
                 </button>
               )}
-              {ruleOf(detailInvoice.invoice_type, 'accepts_receipt') && detailInvoice.document_status !== 'ANULADO' && (Number(detailInvoice.total) - Number(detailInvoice.retention_total || 0) - Number(detailInvoice.amount_received || 0)) > 0.005 && (
+              {ruleOf(detailInvoice.invoice_type, 'accepts_receipt') && detailInvoice.document_status !== 'ANULADO' && Number(detailInvoice.amount_due || 0) > 0.005 && (
                 <button
                   type="button"
                   onClick={openRcModal}
@@ -947,6 +967,21 @@ export default function Invoices() {
                 ))}
               </select>
             </div>
+            {(!rcPaymentMethodId || paymentMethods.find((m) => m.id === rcPaymentMethodId)?.is_cash === true) && (
+              <div>
+                <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Caixa de entrada (numerario)</label>
+                {rcCashPoints.length === 0 ? (
+                  <p className="text-[12px] text-danger">Nenhuma caixa com sessao aberta - abra uma caixa para receber em numerario</p>
+                ) : (
+                  <select value={rcCashPosId} onChange={(e) => setRcCashPosId(e.target.value)} className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors">
+                    <option value="">Selecionar</option>
+                    {rcCashPoints.map((c) => (
+                      <option key={c.pos_id} value={c.pos_id}>{c.name}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            )}
             <div>
               <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Referencia</label>
               <input value={rcDocumentReference} disabled className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-muted font-mono outline-none opacity-70 cursor-not-allowed" />

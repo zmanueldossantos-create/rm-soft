@@ -11,7 +11,7 @@ import { paymentMethodsApi } from '../api/catalogs';
 // open{Nd,Rc}(invoiceId) via props.onReady(api) so the parent can trigger them,
 // and calls props.onSuccess() after a successful creation so the parent can refresh
 // its own document list.
-const DocumentActionModals = forwardRef(function DocumentActionModals({ onSuccess, cashSessionId }, ref) {
+const DocumentActionModals = forwardRef(function DocumentActionModals({ onSuccess, cashPosId }, ref) {
 
   const [ndModalOpen, setNdModalOpen] = useState(false);
   const [ndInvoice, setNdInvoice] = useState(null);
@@ -103,7 +103,7 @@ const DocumentActionModals = forwardRef(function DocumentActionModals({ onSucces
         document_reference: rcDocumentReference || null,
         observations: rcObservations || null,
         payment_method_id: rcPaymentMethodId || null,
-        cash_session_id: cashSessionId || null,
+        cash_pos_id: cashPosId || null,
       });
       setRcModalOpen(false);
       setRcPaymentMethodId('');

@@ -368,3 +368,223 @@ async def test_credit_note_info_gives_what_is_left_to_credit_per_line(db, compan
 
     await _credit_rtf(db, ids, invoice_id, 3)
     assert (await get_credit_note_info(db, ids['company'], invoice_id))['remaining_by_line'] == {str(line_id): 1.0}
+
+
+from app.services.invoice_service import ReceiptExceedsPendingError, attach_amount_due, create_receipt  # noqa: E402
+
+
+async def _due(db, invoice_id):
+    invoice = (await db.execute(select(Invoice).where(Invoice.id == invoice_id))).scalar_one()
+    await attach_amount_due(db, [invoice])
+    return invoice.amount_due, invoice.amount_credited
+
+
+@pytest.mark.asyncio
+async def test_amount_due_of_a_fatura_deducts_its_credit_notes_and_caps_the_receipt(db, company_with_essentials):
+    ids = _ids(company_with_essentials)
+    product_id, invoice_id = await _sold_product(db, ids)  # FACTURA 4 x 1140 = 4560, nothing paid
+    await _credit_rtf(db, ids, invoice_id, 1)
+    assert await _due(db, invoice_id) == (3420.0, 1140.0)
+
+    with pytest.raises(ReceiptExceedsPendingError):
+        await create_receipt(db, ids["company"], ids["activity"], reference_invoice_id=invoice_id, amount=4560.0)
+    await create_receipt(db, ids["company"], ids["activity"], reference_invoice_id=invoice_id, amount=3420.0)
+    assert await _due(db, invoice_id) == (0.0, 1140.0)
+
+
+@pytest.mark.asyncio
+async def test_a_fatura_fully_credited_owes_nothing(db, company_with_essentials):
+    ids = _ids(company_with_essentials)
+    product_id, invoice_id = await _sold_product(db, ids)
+    await _credit_rtf(db, ids, invoice_id, 4)
+    assert await _due(db, invoice_id) == (0.0, 4560.0)
+
+
+@pytest.mark.asyncio
+async def test_amount_due_counts_the_deposit_and_the_credit_notes(db, company_with_essentials):
+    ids = _ids(company_with_essentials)
+    product = Product(company_id=ids["company"], code="PRD-DP", name="Produto DP", vat_id=ids["vat"], price=1000.0,
+                      min_stock_threshold=0, product_type=ProductType.BEM)
+    db.add(product)
+    await db.commit()
+    await db.refresh(product)
+    product_id = product.id
+    db.add(Stock(company_id=ids["company"], product_id=product_id, warehouse_id=ids["warehouse"], quantity=10))
+    await db.commit()
+    invoice = await create_invoice(
+        db, ids["company"], ids["activity"], customer_id=None, invoice_type="FACTURA",
+        lines_input=[{"product_id": product_id, "quantity": 4}], amount_received=1000.0,
+    )
+    invoice_id = invoice.id
+    await _credit_rtf(db, ids, invoice_id, 1)
+    assert await _due(db, invoice_id) == (2420.0, 1140.0)
+
+
+from app.services.pos_documents_service import list_pos_documents  # noqa: E402
+
+
+@pytest.mark.asyncio
+async def test_caixa_stops_listing_a_fatura_once_credit_notes_leave_nothing_owed(db, company_with_essentials):
+    ctx = company_with_essentials
+    ids = _ids(ctx)
+    product_id, invoice_id = await _sold_product(db, ids)  # FACTURA issued outside any session, 4560 owed
+
+    listed = {inv.id: inv for inv in await list_pos_documents(db, ids["company"], ctx["pos"].id)}
+    assert listed[invoice_id].amount_due == 4560.0
+
+    await _credit_rtf(db, ids, invoice_id, 4)
+    listed = {inv.id for inv in await list_pos_documents(db, ids["company"], ctx["pos"].id)}
+    assert invoice_id not in listed
+
+
+from app.services.invoice_service import CashPointRequiredError  # noqa: E402
+
+
+async def _product_in_stock(db, ids, code):
+    product = Product(company_id=ids["company"], code=code, name="Produto " + code, vat_id=ids["vat"], price=1000.0,
+                      min_stock_threshold=0, product_type=ProductType.BEM)
+    db.add(product)
+    await db.commit()
+    await db.refresh(product)
+    product_id = product.id
+    db.add(Stock(company_id=ids["company"], product_id=product_id, warehouse_id=ids["warehouse"], quantity=10))
+    await db.commit()
+    return product_id
+
+
+async def _fr_from_invoicing_screen(db, ids, product_id, cash_pos_id=None):
+    return await create_invoice(
+        db, ids["company"], ids["activity"], customer_id=None, invoice_type="FACTURA_RECIBO",
+        lines_input=[{"product_id": product_id, "quantity": 1}], cash_pos_id=cash_pos_id, require_cash_point=True,
+    )
+
+
+@pytest.mark.asyncio
+async def test_cash_sale_from_invoicing_needs_a_chosen_cash_point(db, company_with_essentials):
+    ids = _ids(company_with_essentials)
+    product_id = await _product_in_stock(db, ids, "PRD-CP1")
+    with pytest.raises(CashPointRequiredError) as excinfo:
+        await _fr_from_invoicing_screen(db, ids, product_id)
+    assert "Selecione a caixa" in str(excinfo.value)
+    await db.rollback()
+    count = (await db.execute(select(func.count(Invoice.id)).where(Invoice.company_id == ids["company"]))).scalar_one()
+    assert count == 0
+
+
+@pytest.mark.asyncio
+async def test_cash_sale_from_invoicing_enters_the_chosen_cash_point(db, company_with_essentials):
+    ctx = company_with_essentials
+    ids = _ids(ctx)
+    product_id = await _product_in_stock(db, ids, "PRD-CP2")
+    session = await open_session(db, ids["company"], ctx["pos"].id, ctx["gestor"], opening_amount=0)
+    invoice = await _fr_from_invoicing_screen(db, ids, product_id, ctx["pos"].id)
+    assert invoice.cash_session_id == session.id
+    assert await get_current_expected_cash_balance(db, ids["company"], ctx["pos"].id, session) == 1140.0
+
+
+@pytest.mark.asyncio
+async def test_a_closed_cash_point_cannot_take_cash(db, company_with_essentials):
+    ctx = company_with_essentials
+    ids = _ids(ctx)
+    product_id = await _product_in_stock(db, ids, "PRD-CP3")  # no session opened on the POS
+    with pytest.raises(CashPointRequiredError) as excinfo:
+        await _fr_from_invoicing_screen(db, ids, product_id, ctx["pos"].id)
+    assert "nao tem sessao aberta" in str(excinfo.value)
+
+
+@pytest.mark.asyncio
+async def test_receipt_in_cash_needs_a_cash_point_and_other_methods_do_not(db, company_with_essentials):
+    ctx = company_with_essentials
+    ids = _ids(ctx)
+    product_id, invoice_id = await _sold_product(db, ids)  # FACTURA 4560, nothing paid
+
+    with pytest.raises(CashPointRequiredError):
+        await create_receipt(db, ids["company"], ids["activity"], reference_invoice_id=invoice_id, amount=1000.0,
+                             require_cash_point=True)
+    await db.rollback()
+    # A rollback expires every loaded object: reload the ones read below (no lazy load in async).
+    for obj in (ctx["pm_mb"], ctx["pos"], ctx["gestor"]):
+        await db.refresh(obj)
+
+    by_card = await create_receipt(db, ids["company"], ids["activity"], reference_invoice_id=invoice_id, amount=1000.0,
+                                   payment_method_id=ctx["pm_mb"].id, require_cash_point=True)
+    assert by_card.cash_session_id is None
+
+    session = await open_session(db, ids["company"], ctx["pos"].id, ctx["gestor"], opening_amount=0)
+    in_cash = await create_receipt(db, ids["company"], ids["activity"], reference_invoice_id=invoice_id, amount=1000.0,
+                                   cash_pos_id=ctx["pos"].id, require_cash_point=True)
+    assert in_cash.cash_session_id == session.id
+    assert await get_current_expected_cash_balance(db, ids["company"], ctx["pos"].id, session) == 1000.0
+
+
+@pytest.mark.asyncio
+async def test_mixed_invoice_credit_note_returns_only_the_products_to_stock(db, company_with_essentials):
+    ids = _ids(company_with_essentials)
+    product_id = await _product_in_stock(db, ids, "PRD-MX")
+    service = Service(company_id=ids["company"], code="SRV-MX", name="Servico MX", price=500.0, vat_id=ids["vat"])
+    db.add(service)
+    await db.commit()
+    await db.refresh(service)
+    service_id = service.id
+    invoice = await create_invoice(
+        db, ids["company"], ids["activity"], customer_id=None, invoice_type="FACTURA",
+        lines_input=[{"product_id": product_id, "quantity": 2}, {"service_id": service_id, "quantity": 1}],
+    )
+    invoice_id = invoice.id
+    assert await _stock(db, ids, product_id) == 8.0
+
+    lines = (await db.execute(select(InvoiceLine).where(InvoiceLine.invoice_id == invoice_id))).scalars().all()
+    await create_credit_note(
+        db, ids["company"], ids["activity"], reference_invoice_id=invoice_id,
+        credit_note_reason="ANL", credit_note_cause="Teste misto",
+        lines_input=[{"invoice_line_id": l.id, "quantity": float(l.quantity)} for l in lines], restock=True,
+    )
+
+    assert await _stock(db, ids, product_id) == 10.0
+    returns = (await db.execute(select(StockMovement).where(
+        StockMovement.company_id == ids["company"], StockMovement.movement_type == MovementType.RECEPCAO,
+    ))).scalars().all()
+    assert [(r.product_id, float(r.quantity)) for r in returns] == [(product_id, 2.0)]
+    assert await _status(db, invoice_id) == "ANULADO"
+
+
+from app.models.payment_term import PaymentTerm  # noqa: E402
+
+
+async def _pronto_term(db):
+    term = PaymentTerm(name="Pronto pagamento", fixed_days=False, days=0, months_fixed_day=0, discount=0, is_active=True)
+    db.add(term)
+    await db.commit()
+    await db.refresh(term)
+    return term.id
+
+
+@pytest.mark.asyncio
+async def test_a_document_paid_on_issue_is_pronto_pagamento_due_on_its_date(db, company_with_essentials):
+    ctx = company_with_essentials
+    ids = _ids(ctx)
+    pronto_id = await _pronto_term(db)
+    product_id = await _product_in_stock(db, ids, "PRD-PT1")
+    await open_session(db, ids["company"], ctx["pos"].id, ctx["gestor"], opening_amount=0)
+    invoice = await _fr_from_invoicing_screen(db, ids, product_id, ctx["pos"].id)
+    assert invoice.payment_term_id == pronto_id
+    assert invoice.due_date == invoice.business_date
+
+
+@pytest.mark.asyncio
+async def test_a_fatura_from_invoicing_needs_its_mandatory_payment_term(db, company_with_essentials):
+    ids = _ids(company_with_essentials)
+    product_id = await _product_in_stock(db, ids, "PRD-PT2")
+    from app.services.document_rules import get_document_rules
+    if not (await get_document_rules(db, "FT")).code:
+        pytest.skip("no FT rules")
+    from app.models.document_type import DocumentType
+    ft = (await db.execute(select(DocumentType).where(DocumentType.code == "FT"))).scalar_one()
+    ft.requires_payment_term = True
+    await db.commit()
+    with pytest.raises(EmptyInvoiceError) as excinfo:
+        await create_invoice(
+            db, ids["company"], ids["activity"], customer_id=None, invoice_type="FACTURA",
+            lines_input=[{"product_id": product_id, "quantity": 1}], enforce_document_rules=True,
+        )
+    assert "condicao de pagamento" in str(excinfo.value)

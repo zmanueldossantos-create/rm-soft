@@ -55,6 +55,12 @@ export async function getCreditNoteInfo(invoiceId) {
   return res.data;
 }
 
+// The cash points with an open session (and the cash they hold) - where cash enters or leaves from Faturas.
+export async function getOpenCashPoints() {
+  const res = await apiClient.get('/invoices/open-cash-points');
+  return res.data;
+}
+
 export async function createDebitNote(payload) {
   const res = await apiClient.post('/invoices/debit-note', payload);
   return res.data;

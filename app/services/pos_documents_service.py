@@ -48,4 +48,11 @@ async def list_pos_documents(db: AsyncSession, company_id: uuid.UUID, pos_id: uu
         for inv in invoices:
             inv.amount_paid = float(paid_by_id.get(inv.id, 0) or 0)
 
+        # The real balance, credit notes deducted: an invoice listed only because it awaited a payment is dropped once
+        # nothing is owed on it any more (the SQL filter above only knows amount_received).
+        from app.services.invoice_service import attach_amount_due
+        await attach_amount_due(db, invoices)
+        own_sessions = set((await db.execute(session_ids)).scalars().all())
+        invoices = [inv for inv in invoices if inv.cash_session_id in own_sessions or inv.amount_due > 0.005]
+
     return invoices

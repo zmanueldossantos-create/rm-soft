@@ -27,9 +27,11 @@ import {
 } from '../api/tesouraria';
 import { listUsers } from '../api/users';
 import { useAuthStore } from '../store/authStore';
-import { extractErrorMessage } from '../utils/errors';
+import { extractErrorMessage } from '../utils/errors';
+import { dueDateFor, isProntoTerm } from '../utils/paymentTerms';
 
-const balanceOf = (inv) => Number(inv.total) - Number(inv.retention_total || 0) - Number(inv.amount_paid || 0);
+// What is still owed, from the server (credit notes, deposit, receipts and refunds counted) - never recomputed here.
+const balanceOf = (inv) => Number(inv.amount_due || 0);
 
 // The cart is kept per cash point, in sessionStorage (cleared when the tab closes) - so switching between
 // two of the gestor's cash points, or reloading the page, does not silently lose items in progress.
@@ -1519,15 +1521,11 @@ export default function Caixa() {
             <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wide">Condicoes de faturacao (FT)</p>
             <div className={'flex flex-col gap-2.5' + (!billsLater ? ' opacity-40 pointer-events-none' : '')}>
               <Select
-                value={ftPaymentTermId}
+                value={billsLater ? ftPaymentTermId : (paymentTerms.find(isProntoTerm)?.id || '')}
                 onChange={(termId) => {
                   setFtPaymentTermId(termId);
                   const term = paymentTerms.find((t) => t.id === termId);
-                  if (term && term.days > 0) {
-                    setFtDueDate(addDays(new Date().toISOString().slice(0, 10), term.days));
-                  } else {
-                    setFtDueDate('');
-                  }
+                  setFtDueDate(term ? dueDateFor(term, new Date().toISOString().slice(0, 10)) : '');
                 }}
                 options={paymentTerms.map((t) => ({ value: t.id, label: t.name }))}
                 placeholder="Condicao de pagamento"
@@ -2123,7 +2121,7 @@ export default function Caixa() {
           </a>
         </div>
       </Modal>
-      <DocumentActionModals cashSessionId={session?.id} ref={documentActionsRef} onSuccess={() => listRecentIssuedInvoices(selectedPosId).then(setRecentInvoices).catch(() => {})} />
+      <DocumentActionModals cashPosId={selectedPosId} ref={documentActionsRef} onSuccess={() => listRecentIssuedInvoices(selectedPosId).then(setRecentInvoices).catch(() => {})} />
     </main>
   );
 }

@@ -10,7 +10,8 @@ async def test_absence_of_a_row_means_follow_platform_default_false(db, company_
     company_id = company_with_essentials["company"].id
     prefs = await list_document_type_preferences(db, company_id)
     ft = next(p for p in prefs if p["code"] == "FT")
-    assert ft["requires_payment_term"] is False  # no row yet: company-level default is off
+    platform = (await db.execute(text("SELECT requires_payment_term FROM document_types WHERE code = 'FT'"))).scalar_one()
+    assert ft["requires_payment_term"] is platform  # no row yet: the company follows the platform catalog
 
 
 @pytest.mark.asyncio

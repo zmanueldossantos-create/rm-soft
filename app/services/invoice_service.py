@@ -100,6 +100,10 @@ class StockUnavailableError(Exception):
     pass
 
 
+class CashPointRequiredError(Exception):
+    """A cash collection from the invoicing screen needs an explicitly chosen cash point with an open session."""
+
+
 class RefundNotAllowedError(Exception):
     """The money refund asked with a credit note is not possible (amount, method, cash point) - nothing is issued."""
 
@@ -177,6 +181,9 @@ async def create_invoice(
     observations: str | None = None,
     discount_global_percent: float = 0,
     document_reference: str | None = None,
+    cash_pos_id: uuid.UUID | None = None,
+    require_cash_point: bool = False,
+    enforce_document_rules: bool = False,
 ) -> Invoice:
     """
     Creates an invoice with its lines, under the given Activity (which
@@ -394,6 +401,28 @@ async def create_invoice(
             if deposit_method_id is not None:
                 payments = [{"payment_method_id": deposit_method_id, "amount": amount_received}]
 
+    # Payment term. A document paid on issue is always "Pronto pagamento" (the 0-day term), due on its own date - for
+    # every caller. From the invoicing screen (enforce_document_rules) a mandatory term (company preference, else the
+    # platform catalog) cannot be missing.
+    if rules.paid_on_issue:
+        from app.models.payment_term import PaymentTerm
+        pronto_id = (await db.execute(
+            select(PaymentTerm.id).where(
+                PaymentTerm.days == 0, PaymentTerm.fixed_days.is_(False), PaymentTerm.is_active.is_(True),
+            ).order_by(PaymentTerm.created_at)
+        )).scalars().first()
+        payment_term_id = pronto_id or payment_term_id
+        due_date = business_date
+    elif enforce_document_rules and not payment_term_id:
+        from app.services.company_document_type_service import effective_requires_payment_term
+        if (await effective_requires_payment_term(db, company_id)).get(rules.code):
+            raise EmptyInvoiceError("A condicao de pagamento e obrigatoria para este tipo de documento")
+
+    # Cash collected here goes into an explicitly chosen cash point (see _cash_point_session).
+    cash_session_id = await _cash_point_session(
+        db, company_id, cash_pos_id, cash_session_id, [p["payment_method_id"] for p in (payments or [])], require_cash_point,
+    )
+
     atcud = _simulate_atcud(company_id, series, next_number)
     invoice_hash = _simulate_hash(company_id, series, next_number, grand_total, business_date)
     qr_code_data = _simulate_qr_payload(company_id, series, next_number, grand_total, atcud)
@@ -486,6 +515,68 @@ def _credit_line_key(line) -> tuple:
     )
 
 
+async def attach_amount_due(db: AsyncSession, invoices: list[Invoice]) -> None:
+    """Attaches, like amount_paid, what is really still owed on each document (amount_due) and the net value of the
+    credit notes issued against it (amount_credited) - the one place the balance of a document is computed, for the
+    Faturas list and detail, the Caixa documents and the receipt cap.
+
+    amount_due = (total - withholding) - credit notes (net of their withholding) - (collected - refunded), never below
+    0, and only for the types that take a receipt (the others are settled when issued, or owe nothing). Collected is
+    the document's own payments (deposit on a Fatura) plus those of its receipts; refunded is what its credit notes
+    gave back (their payments are negative)."""
+    from sqlalchemy import func
+    from app.services.document_rules import DOC_CODE_BY_INVOICE_TYPE
+
+    for inv in invoices:
+        inv.amount_due = 0.0
+        inv.amount_credited = 0.0
+    if not invoices:
+        return
+    ids = [inv.id for inv in invoices]
+
+    credited: dict = {}
+    note_owner: dict = {}
+    for note_id, ref_id, total, retention in (await db.execute(
+        select(Invoice.id, Invoice.reference_invoice_id, Invoice.total, Invoice.retention_total).where(
+            Invoice.reference_invoice_id.in_(ids), Invoice.invoice_type == InvoiceType.NOTA_CREDITO,
+        )
+    )).all():
+        credited[ref_id] = credited.get(ref_id, 0.0) + float(total) - float(retention or 0)
+        note_owner[note_id] = ref_id
+
+    payment_owner = {inv_id: inv_id for inv_id in ids}
+    for receipt_id, ref_id in (await db.execute(
+        select(Invoice.id, Invoice.reference_invoice_id).where(
+            Invoice.reference_invoice_id.in_(ids), Invoice.invoice_type == InvoiceType.RECIBO,
+        )
+    )).all():
+        payment_owner[receipt_id] = ref_id
+
+    collected: dict = {}
+    refunded: dict = {}
+    for paid_id, amount in (await db.execute(
+        select(Payment.invoice_id, func.sum(Payment.amount))
+        .where(Payment.invoice_id.in_(list(payment_owner) + list(note_owner)))
+        .group_by(Payment.invoice_id)
+    )).all():
+        if paid_id in note_owner:
+            refunded[note_owner[paid_id]] = refunded.get(note_owner[paid_id], 0.0) - float(amount)
+        else:
+            collected[payment_owner[paid_id]] = collected.get(payment_owner[paid_id], 0.0) + float(amount)
+
+    accepts_receipt = dict((await db.execute(select(DocumentType.code, DocumentType.accepts_receipt))).all())
+    for inv in invoices:
+        inv.amount_credited = round(credited.get(inv.id, 0.0), 2)
+        type_value = getattr(inv.invoice_type, "value", inv.invoice_type)
+        if not accepts_receipt.get(DOC_CODE_BY_INVOICE_TYPE.get(type_value, type_value)):
+            continue
+        due = (
+            float(inv.total) - float(inv.retention_total or 0) - inv.amount_credited
+            - (collected.get(inv.id, 0.0) - refunded.get(inv.id, 0.0))
+        )
+        inv.amount_due = round(max(due, 0.0), 2)
+
+
 async def _previous_credit_notes(db: AsyncSession, reference_invoice: Invoice) -> list[Invoice]:
     """The credit notes already issued against an invoice."""
     return list((await db.execute(
@@ -545,12 +636,64 @@ async def _credit_note_refund_figures(
     return round(collected, 2), round(refunded, 2), round(due, 2)
 
 
-async def get_credit_note_info(db: AsyncSession, company_id: uuid.UUID, invoice_id: uuid.UUID) -> dict:
-    """What the NC screen needs: what can still be credited on each line, the refund figures of the invoice and the
-    cash points that can pay cash out right now (an open session), with the cash they hold."""
+async def list_open_cash_points(db: AsyncSession, company_id: uuid.UUID) -> list[dict]:
+    """The cash points that can take or give back cash right now (an open session), with the cash they hold."""
     from app.models.point_of_sale import PointOfSale
     from app.services.cash_session_service import get_open_session, get_current_expected_cash_balance
 
+    cash_points = []
+    for pos in (await db.execute(
+        select(PointOfSale).where(PointOfSale.company_id == company_id).order_by(PointOfSale.name)
+    )).scalars().all():
+        session = await get_open_session(db, company_id, pos.id)
+        if session is None:
+            continue
+        available = await get_current_expected_cash_balance(db, company_id, pos.id, session)
+        cash_points.append({"pos_id": str(pos.id), "name": pos.name, "available_cash": round(available, 2)})
+    return cash_points
+
+
+async def _cash_point_session(
+    db: AsyncSession,
+    company_id: uuid.UUID,
+    cash_pos_id: uuid.UUID | None,
+    cash_session_id: uuid.UUID | None,
+    method_ids: list,
+    require_cash_point: bool,
+) -> uuid.UUID | None:
+    """The cash session a collection belongs to. An explicitly chosen cash point (cash_pos_id) must belong to the
+    company and have an open session - resolved here, never trusted from the screen. From the invoicing screen
+    (require_cash_point) cash may not be collected without one. Callers that hold their own session (the POS, hotel,
+    open accounts) pass it as cash_session_id and keep it."""
+    from sqlalchemy import func
+    from app.models.point_of_sale import PointOfSale
+    from app.services.cash_session_service import get_open_session
+
+    if cash_pos_id is not None:
+        pos = (await db.execute(
+            select(PointOfSale).where(PointOfSale.id == cash_pos_id, PointOfSale.company_id == company_id)
+        )).scalar_one_or_none()
+        if pos is None:
+            raise CashPointRequiredError("Caixa nao encontrada")
+        session = await get_open_session(db, company_id, pos.id)
+        if session is None:
+            raise CashPointRequiredError(f"A caixa {pos.name} nao tem sessao aberta - abra a caixa antes de receber")
+        return session.id
+    ids = [uuid.UUID(str(m)) for m in method_ids if m]
+    if require_cash_point and ids:
+        cash_count = (await db.execute(
+            select(func.count(PaymentMethodCatalog.id)).where(
+                PaymentMethodCatalog.id.in_(ids), PaymentMethodCatalog.is_cash.is_(True),
+            )
+        )).scalar_one()
+        if cash_count:
+            raise CashPointRequiredError("Selecione a caixa onde entra o numerario")
+    return cash_session_id
+
+
+async def get_credit_note_info(db: AsyncSession, company_id: uuid.UUID, invoice_id: uuid.UUID) -> dict:
+    """What the NC screen needs: what can still be credited on each line, the refund figures of the invoice and the
+    cash points that can pay cash out right now (an open session), with the cash they hold."""
     reference_invoice = (await db.execute(
         select(Invoice).where(Invoice.id == invoice_id, Invoice.company_id == company_id)
     )).scalar_one_or_none()
@@ -573,15 +716,7 @@ async def get_credit_note_info(db: AsyncSession, company_id: uuid.UUID, invoice_
         pool[key] -= share
         remaining_by_line[str(l.id)] = share
 
-    cash_points = []
-    for pos in (await db.execute(
-        select(PointOfSale).where(PointOfSale.company_id == company_id).order_by(PointOfSale.name)
-    )).scalars().all():
-        session = await get_open_session(db, company_id, pos.id)
-        if session is None:
-            continue
-        available = await get_current_expected_cash_balance(db, company_id, pos.id, session)
-        cash_points.append({"pos_id": str(pos.id), "name": pos.name, "available_cash": round(available, 2)})
+    cash_points = await list_open_cash_points(db, company_id)
 
     return {
         "remaining_by_line": remaining_by_line,
@@ -1156,6 +1291,8 @@ async def create_receipt(
     observations: str | None = None,
     payment_method_id: uuid.UUID | None = None,
     cash_session_id: uuid.UUID | None = None,
+    cash_pos_id: uuid.UUID | None = None,
+    require_cash_point: bool = False,
 ) -> Invoice:
     """
     Creates a Recibo (RC) - a standalone payment acknowledgement against an already-issued
@@ -1201,7 +1338,9 @@ async def create_receipt(
         raise ReferenceInvoiceAlreadyCancelledError("A fatura de referencia ja foi anulada")
 
     already_received = float(reference_invoice.amount_received or 0)
-    pending = round(float(reference_invoice.total) - float(reference_invoice.retention_total or 0) - already_received, 2)
+    # What is really still owed: the credit notes on the invoice (and what they refunded) count.
+    await attach_amount_due(db, [reference_invoice])
+    pending = reference_invoice.amount_due
     if amount > pending + 0.01:
         raise ReceiptExceedsPendingError(
             f"O valor do recibo ({amount}) excede o valor pendente da fatura ({pending})"
@@ -1248,6 +1387,10 @@ async def create_receipt(
             raise EmptyInvoiceError("Metodo de pagamento invalido")
     if method_id is None:
         method_id = (await db.execute(select(PaymentMethodCatalog.id).where(PaymentMethodCatalog.code == "NU"))).scalar_one_or_none()
+    # Cash collected here goes into an explicitly chosen cash point (see _cash_point_session).
+    cash_session_id = await _cash_point_session(
+        db, company_id, cash_pos_id, cash_session_id, [method_id] if method_id else [], require_cash_point,
+    )
 
     receipt = Invoice(
         company_id=company_id,
@@ -1660,6 +1803,7 @@ async def list_invoices(
         paid_by_id = dict(paid_result.all())
         for inv in invoices_list:
             inv.amount_paid = float(paid_by_id.get(inv.id, 0) or 0)
+        await attach_amount_due(db, invoices_list)
 
     return invoices_list
 

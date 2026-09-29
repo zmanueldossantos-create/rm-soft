@@ -110,6 +110,7 @@ class PaymentMethodCatalogRequest(BaseModel):
     allows_payment: bool = True
     allows_receipt: bool = True
     is_cash: bool = False
+    uses_bank_account: bool = False
 
 
 class PaymentMethodCatalogResponse(BaseModel):
@@ -119,6 +120,7 @@ class PaymentMethodCatalogResponse(BaseModel):
     allows_payment: bool
     allows_receipt: bool
     is_cash: bool
+    uses_bank_account: bool = False
     is_active: bool
 
     class Config:

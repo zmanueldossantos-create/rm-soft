@@ -32,10 +32,24 @@ async def list_document_type_preferences(db: AsyncSession, company_id: uuid.UUID
             "id": d.id,
             "code": d.code,
             "name": d.name,
-            "requires_payment_term": prefs_by_type_id.get(d.id, False),
+            # No preference row: the company follows the platform catalog (effective_requires_payment_term).
+            "requires_payment_term": prefs_by_type_id.get(d.id, d.requires_payment_term),
         }
         for d in catalog
     ]
+
+
+async def effective_requires_payment_term(db: AsyncSession, company_id: uuid.UUID) -> dict[str, bool]:
+    """Document type code -> is the payment term mandatory for this company: its own preference when it set one, else
+    the platform catalog. The one rule read by the screens (/document-rules) and by the server on issue."""
+    types = (await db.execute(select(DocumentType))).scalars().all()
+    prefs = {
+        p.document_type_id: p.requires_payment_term
+        for p in (await db.execute(
+            select(CompanyDocumentTypePreference).where(CompanyDocumentTypePreference.company_id == company_id)
+        )).scalars().all()
+    }
+    return {d.code: prefs.get(d.id, d.requires_payment_term) for d in types}
 
 
 async def set_document_type_preference(

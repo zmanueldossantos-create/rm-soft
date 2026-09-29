@@ -36,6 +36,8 @@ class PaymentMethodCatalog(Base):
     allows_payment: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     allows_receipt: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_cash: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # The money lands on a bank account (transfer, card, cheque...): the invoice asks which account.
+    uses_bank_account: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

@@ -24,7 +24,9 @@ from app.models.service import Service
 from app.models.unit_of_measure_catalog import UnitOfMeasureCatalog
 from app.models.invoice import Invoice, InvoiceStatus
 from app.workers.agt_worker import submit_invoice_to_agt
-from app.services.invoice_service import RefundNotAllowedError, get_credit_note_info
+from app.services.invoice_service import (
+    CashPointRequiredError, RefundNotAllowedError, attach_amount_due, get_credit_note_info, list_open_cash_points,
+)
 from datetime import date
 from app.schemas.invoice import InvoiceCreateRequest, InvoiceResponse, InvoiceDetailResponse, CreditNoteCreateRequest, DebitNoteCreateRequest, ReceiptCreateRequest, ProFormaCreateRequest, ConvertProFormaRequest
 from app.utils.pdf_generator import generate_invoice_pdf_thermal, generate_invoice_pdf_a4
@@ -85,6 +87,9 @@ async def create_new_invoice(
             bank_account_id=payload.bank_account_id,
             due_date=payload.due_date,
             amount_received=payload.amount_received,
+            cash_pos_id=payload.cash_pos_id,
+            require_cash_point=True,
+            enforce_document_rules=True,
             payment_date=payload.payment_date,
             observations=payload.observations,
             document_reference=payload.document_reference,
@@ -95,7 +100,7 @@ async def create_new_invoice(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except ActivityNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except (ProductNotFoundError, CustomerNotFoundError, EmptyInvoiceError, PaymentAmountMismatchError) as e:
+    except (ProductNotFoundError, CustomerNotFoundError, EmptyInvoiceError, PaymentAmountMismatchError, CashPointRequiredError) as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     except StockUnavailableError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
@@ -218,7 +223,8 @@ async def create_new_receipt(
             document_reference=payload.document_reference,
             observations=payload.observations,
             payment_method_id=payload.payment_method_id,
-            cash_session_id=payload.cash_session_id,
+            cash_pos_id=payload.cash_pos_id,
+            require_cash_point=True,
         )
     except PeriodClosedError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
@@ -232,7 +238,7 @@ async def create_new_receipt(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     except ReferenceInvoiceAlreadyCancelledError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
-    except ReceiptExceedsPendingError as e:
+    except (ReceiptExceedsPendingError, CashPointRequiredError) as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     except DocumentTypeNotConfiguredError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
@@ -346,6 +352,15 @@ async def get_invoices_available_periods(
     return await get_invoice_periods(db, current_user.company_id)
 
 
+@router.get("/open-cash-points")
+async def open_cash_points(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("invoices:view")),
+):
+    """The cash points with an open session and the cash they hold - where cash can enter or leave from Faturas."""
+    return await list_open_cash_points(db, current_user.company_id)
+
+
 @router.get("/{invoice_id}", response_model=InvoiceDetailResponse)
 async def get_invoice_detail(
     invoice_id: uuid.UUID,
@@ -358,6 +373,7 @@ async def get_invoice_detail(
     except InvoiceNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
+    await attach_amount_due(db, [invoice])
     return InvoiceDetailResponse(
         **InvoiceResponse.model_validate(invoice).model_dump(),
         lines=[l for l in lines],

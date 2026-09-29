@@ -279,15 +279,15 @@ async def list_payment_methods(db: AsyncSession) -> list[PaymentMethodCatalog]:
     return list(result.scalars().all())
 
 
-async def create_payment_method(db: AsyncSession, code: str, name: str, allows_payment: bool, allows_receipt: bool, is_cash: bool = False) -> PaymentMethodCatalog:
-    method = PaymentMethodCatalog(code=code, name=name, allows_payment=allows_payment, allows_receipt=allows_receipt, is_cash=is_cash)
+async def create_payment_method(db: AsyncSession, code: str, name: str, allows_payment: bool, allows_receipt: bool, is_cash: bool = False, uses_bank_account: bool = False) -> PaymentMethodCatalog:
+    method = PaymentMethodCatalog(code=code, name=name, allows_payment=allows_payment, allows_receipt=allows_receipt, is_cash=is_cash, uses_bank_account=uses_bank_account)
     db.add(method)
     await db.commit()
     await db.refresh(method)
     return method
 
 
-async def update_payment_method(db: AsyncSession, method_id: uuid.UUID, code: str, name: str, allows_payment: bool, allows_receipt: bool, is_cash: bool = False) -> PaymentMethodCatalog:
+async def update_payment_method(db: AsyncSession, method_id: uuid.UUID, code: str, name: str, allows_payment: bool, allows_receipt: bool, is_cash: bool = False, uses_bank_account: bool = False) -> PaymentMethodCatalog:
     result = await db.execute(select(PaymentMethodCatalog).where(PaymentMethodCatalog.id == method_id))
     method = result.scalar_one_or_none()
     if method is None:
@@ -297,6 +297,7 @@ async def update_payment_method(db: AsyncSession, method_id: uuid.UUID, code: st
     method.allows_payment = allows_payment
     method.allows_receipt = allows_receipt
     method.is_cash = is_cash
+    method.uses_bank_account = uses_bank_account
     await db.commit()
     await db.refresh(method)
     return method

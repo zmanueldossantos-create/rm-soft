@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Plus, Trash2, Loader2, Copy, Eye, ArrowLeft, ArrowRight, Check } from 'lucide-react';
 import Select from './Select';
 import Modal from './Modal';
-import { createInvoice, createProForma, getInvoiceDetail, createCreditNote, createDebitNote, getCreditNoteInfo } from '../api/invoices';
+import { createInvoice, createProForma, getInvoiceDetail, createCreditNote, createDebitNote, getCreditNoteInfo, getOpenCashPoints } from '../api/invoices';
 import { listProducts } from '../api/products';
 import { listServices } from '../api/services';
 import { listActivities } from '../api/activity';
@@ -11,7 +11,8 @@ import { listVatRates } from '../api/vat';
 import { paymentTermsApi, paymentMethodsApi, unitsApi, documentRulesApi, banksApi, withholdingTaxesApi } from '../api/catalogs';
 import { getMyCompany, getMyCompanyBankAccounts } from '../api/company';
 import { listDocumentSeries } from '../api/documentSeries';
-import { extractErrorMessage } from '../utils/errors';
+import { extractErrorMessage } from '../utils/errors';
+import { dueDateFor, isProntoTerm } from '../utils/paymentTerms';
 import { useAuthStore } from '../store/authStore';
 
 const inputClass = "w-full bg-bg-inset border border-border rounded-md px-2.5 py-2 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors";
@@ -64,7 +65,7 @@ function addDays(dateStr, days) {
 
 const emptyLine = { item_type: 'product', product_id: '', service_id: '', quantity: '1', discount_percent: '0' };
 
-const STEP_LABELS = ['Tipo de documento', 'Cliente e datas', 'Pagamento', 'Revisao'];
+const STEP_LABELS = ['Tipo de documento', 'Cliente e datas', 'Produtos e servicos', 'Pagamento', 'Revisao'];
 
 export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'create', referenceInvoiceId = null, stacked = false }) {
   const [activities, setActivities] = useState([]);
@@ -115,6 +116,9 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
   const [refundMethodId, setRefundMethodId] = useState('');
   const [refundAmount, setRefundAmount] = useState('');
   const [refundPosId, setRefundPosId] = useState('');
+  // Cash collected from this screen (a Fatura/Recibo, a deposit on a Fatura) enters an explicitly chosen cash point.
+  const [cashPoints, setCashPoints] = useState([]);
+  const [cashPosId, setCashPosId] = useState('');
   const refundableFor = (ncTotal) => (refundInfo
     ? Math.max(refundInfo.collected - refundInfo.refunded - Math.max(refundInfo.due - ncTotal, 0), 0)
     : 0);
@@ -134,6 +138,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
     setRefundMethodId('');
     setRefundAmount('');
     setRefundPosId('');
+    setCashPosId('');
     setInvoiceType('');
     setActivityId('');
     setCustomerId('');
@@ -166,6 +171,11 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
         setUnits(unitsData);
         setPaymentTerms(termsData.filter((t) => t.is_active));
         setPaymentMethods(methodsData.filter((m) => m.is_active));
+        try {
+          setCashPoints(await getOpenCashPoints());
+        } catch {
+          setCashPoints([]);
+        }
         setBankAccounts(bankData.filter((b) => b.is_active));
         setCompany(companyData);
         setDocumentSeries(seriesData);
@@ -305,6 +315,22 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
   }
 
   const paidOnIssue = !!documentTypes.find((d) => d.code === INVOICE_TYPE_CODE[invoiceType])?.paid_on_issue;
+  // Money is collected when the document is paid on issue or records a deposit; it is cash when the method is cash or
+  // left empty (the server settles it as Numerario) - cash enters an explicitly chosen cash point.
+  const collectsPayment = paidOnIssue || (parseFloat(amountReceived) || 0) > 0;
+  const methodIsCash = !paymentMethodId || paymentMethods.find((m) => m.id === paymentMethodId)?.is_cash === true;
+  const collectsCash = collectsPayment && methodIsCash;
+  // The bank account is asked only for a method whose money lands on one (uses_bank_account on the payment method).
+  const methodUsesBank = paymentMethods.find((m) => m.id === paymentMethodId)?.uses_bank_account === true;
+  const lockCls = (locked) => (locked ? ' opacity-60 pointer-events-none' : '');
+  // Paid on issue (a Fatura/Recibo): "Pronto pagamento", due and paid on the document date - shown filled and locked.
+  useEffect(() => {
+    if (!paidOnIssue) return;
+    const pronto = paymentTerms.find(isProntoTerm);
+    if (pronto) setPaymentTermId(pronto.id);
+    setDueDate(businessDate);
+    setPaymentDate(businessDate);
+  }, [paidOnIssue, paymentTerms, businessDate]);
 
   const totals = useMemo(() => {
     let totalIliquido = 0;
@@ -384,24 +410,21 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
     }
   }
 
+  // The due date runs from the document date (as at the Caixa), never from a payment date.
   function applyPaymentTerm(termId) {
     setPaymentTermId(termId);
     const term = paymentTerms.find((t) => t.id === termId);
-    if (term && term.days > 0) {
-      setDueDate(addDays(paymentDate, term.days));
-    }
+    if (term) setDueDate(dueDateFor(term, businessDate));
   }
 
   function handleBusinessDateChange(newDate) {
     setBusinessDate(newDate);
+    const term = paymentTerms.find((t) => t.id === paymentTermId);
+    if (term) setDueDate(dueDateFor(term, newDate));
   }
 
   function handlePaymentDateChange(newDate) {
     setPaymentDate(newDate);
-    const term = paymentTerms.find((t) => t.id === paymentTermId);
-    if (term && term.days > 0) {
-      setDueDate(addDays(newDate, term.days));
-    }
   }
 
   const requiresPaymentTerm = !!documentTypes.find((d) => d.code === INVOICE_TYPE_CODE[invoiceType])?.requires_payment_term;
@@ -409,6 +432,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
   const isFormValid = activityId && invoiceType && businessDate && lines.length > 0 &&
     (!requiresPaymentTerm || paymentTermId) &&
     (!requiresCustomer || customerId) &&
+    (!collectsCash || cashPosId) &&
     lines.every((l) => {
       const item = getLineItem(l);
       return item && parseFloat(l.quantity) > 0;
@@ -517,12 +541,13 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
           customer_id: customerId || null,
           invoice_type: invoiceType,
           business_date: businessDate,
-          payment_term_id: paymentTermId || null,
-          payment_method_id: paymentMethodId || null,
-          bank_account_id: bankAccountId || null,
-          due_date: dueDate || null,
+          payment_term_id: paidOnIssue ? null : (paymentTermId || null),
+          payment_method_id: collectsPayment ? (paymentMethodId || null) : null,
+          cash_pos_id: collectsCash && cashPosId ? cashPosId : null,
+          bank_account_id: collectsPayment && methodUsesBank ? (bankAccountId || null) : null,
+          due_date: paidOnIssue ? null : (dueDate || null),
           amount_received: paidOnIssue ? (totals.received > 0 ? totals.received : null) : (amountReceived ? parseFloat(amountReceived) : null),
-          payment_date: paymentDate || null,
+          payment_date: paidOnIssue ? businessDate : (collectsPayment ? (paymentDate || null) : null),
           observations: observations || null,
           document_reference: documentReference || null,
           discount_global_percent: parseFloat(discountGlobalPercent) || 0,
@@ -549,7 +574,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
     if (n === 1) return true;
     if (n === 2) return !!invoiceType;
     if (n === 3) return !!invoiceType && !!activityId && !!businessDate;
-    if (n === 4) return !!invoiceType && !!activityId && !!businessDate;
+    if (n === 4 || n === 5) return !!invoiceType && !!activityId && !!businessDate && hasUsableLines;
     return false;
   }
 
@@ -561,6 +586,9 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
     }, 0);
 
   const isSingleScreen = mode !== 'create';
+  // Create mode: the products panel is its own tab (3); payment (4) shows a totals strip, review (5) the lines. NC / ND keep both.
+  const showLeft = isSingleScreen || step !== 3;
+  const showSidePanel = isSingleScreen || step === 3;
   const submitLabel = mode === 'nc' ? 'Emitir Nota de Credito' : mode === 'nd' ? 'Emitir Nota de Debito' : (invoiceType === 'PRO_FORMA' ? 'Gerar pro-forma' : 'Criar factura');
   const isSubmitDisabled = mode === 'nc' ? (saving || !ncCause || !ncReason) : mode === 'nd' ? (saving || lines.every((l) => !getLineItem(l) || parseFloat(l.quantity) <= 0)) : (saving || !isFormValid);
 
@@ -586,8 +614,8 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
             <Eye size={15} /> Pre-visualizar
           </button>
         )}
-        {!isSingleScreen && step < 4 ? (
-          <button type="button" onClick={() => setStep((s) => s + 1)} disabled={step === 1 && !invoiceType} className="flex items-center gap-1.5 bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-sm px-5 py-2 rounded-md transition-colors cursor-pointer">
+        {!isSingleScreen && step < STEP_LABELS.length ? (
+          <button type="button" onClick={() => setStep((s) => s + 1)} disabled={(step === 1 && !invoiceType) || (step === 3 && !hasUsableLines)} className="flex items-center gap-1.5 bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-sm px-5 py-2 rounded-md transition-colors cursor-pointer">
             Seguinte <ArrowRight size={14} />
           </button>
         ) : (
@@ -627,14 +655,14 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                       </span>
                       <span className={'text-[12.5px] whitespace-nowrap ' + (active ? 'font-medium text-text-primary' : 'text-text-muted')}>{label}</span>
                     </button>
-                    {n < 4 && <div className="flex-1 h-px bg-border" />}
+                    {n < STEP_LABELS.length && <div className="flex-1 h-px bg-border" />}
                   </div>
                 );
               })}
             </div>}
 
-            <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.2fr] gap-6">
-              <div className="min-h-[380px]">
+            <div className={'grid grid-cols-1 gap-6 h-[480px] ' + (showLeft && showSidePanel ? 'lg:grid-cols-[1fr_1.2fr]' : '')}>
+              <div className={'h-full overflow-y-auto scrollbar-thin pr-1' + (showLeft ? '' : ' hidden')}>
                 {isSingleScreen && mode === 'nc' && (
                   <div className="flex flex-col gap-4">
                     {referenceInvoice && (
@@ -742,6 +770,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                 {!isSingleScreen && step === 1 && (
                   <div className="flex flex-col gap-3">
                     <p className="text-[12.5px] text-text-muted mb-1">Selecionar o tipo de documento a emitir</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     {issuableTypeCards.map((c) => (
                       <button
                         key={c.type}
@@ -755,6 +784,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                         </div>
                       </button>
                     ))}
+                    </div>
                     {issuableTypeCards.length === 0 && (
                       <p className="text-[13px] text-text-muted">Nenhum tipo de documento disponivel para emissao aqui.</p>
                     )}
@@ -784,52 +814,66 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                   </div>
                 )}
 
-                {!isSingleScreen && step === 3 && (
+                {!isSingleScreen && step === 4 && (
                   <div className="flex flex-col gap-4">
+                <div className="grid grid-cols-4 gap-3 border border-border rounded-md px-4 py-3">
+                  <div><p className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Total</p><p className="font-mono text-[13px] text-text-primary">{formatMoney(totals.total)}</p></div>
+                  <div><p className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">IVA</p><p className="font-mono text-[13px] text-text-primary">{formatMoney(totals.totalIva)}</p></div>
+                  <div><p className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Retencao</p><p className="font-mono text-[13px] text-text-primary">{formatMoney(totals.totalRetencao)}</p></div>
+                  <div><p className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">A pagar</p><p className="font-mono text-[13px] text-accent font-medium">{formatMoney(totals.valorAPagar)}</p></div>
+                </div>
                     <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Condicao de pagamento{requiresPaymentTerm ? ' *' : ''}</label>
+                      <div className={lockCls(paidOnIssue)}>
+                        <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Condicao de pagamento{requiresPaymentTerm && !paidOnIssue ? ' *' : ''}</label>
                         <Select value={paymentTermId} onChange={applyPaymentTerm} options={paymentTerms.map((t) => ({ value: t.id, label: t.name }))} placeholder="Selecionar" />
                       </div>
                       <div>
                         <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Data de vencimento</label>
-                        <input type="date" value={dueDate} min={todayStr()} onChange={(e) => setDueDate(e.target.value)} className={inputClass} />
+                        <input type="date" value={dueDate} min={businessDate} readOnly={paidOnIssue || !!paymentTermId} onChange={(e) => setDueDate(e.target.value)} className={inputClass + (paidOnIssue || paymentTermId ? ' opacity-60 cursor-not-allowed' : '')} />
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">{paidOnIssue ? 'Valor recebido' : 'Valor recebido (adiantamento)'}</label>
+                        <input type="number" step="0.01" min="0" value={paidOnIssue ? totals.received : amountReceived} onChange={(e) => setAmountReceived(e.target.value)} placeholder="0.00" readOnly={paidOnIssue} className={inputClass + (paidOnIssue ? ' opacity-60 cursor-not-allowed' : '')} />
+                      </div>
                       <div>
                         <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Data de pagamento</label>
-                        <input type="date" value={paymentDate} min={todayStr()} onChange={(e) => handlePaymentDateChange(e.target.value)} className={inputClass} />
-                      </div>
-                      <div>
-                        <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Metodo de pagamento</label>
-                        <Select value={paymentMethodId} onChange={setPaymentMethodId} options={paymentMethods.map((m) => ({ value: m.id, label: m.name }))} placeholder="Selecionar" />
+                        <input type="date" value={paidOnIssue ? businessDate : paymentDate} min={todayStr()} readOnly={paidOnIssue || !collectsPayment} onChange={(e) => handlePaymentDateChange(e.target.value)} className={inputClass + (paidOnIssue || !collectsPayment ? ' opacity-60 cursor-not-allowed' : '')} />
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
-                      <div>
+                      <div className={lockCls(!collectsPayment)}>
+                        <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Metodo de pagamento</label>
+                        <Select value={paymentMethodId} onChange={setPaymentMethodId} options={paymentMethods.map((m) => ({ value: m.id, label: m.name }))} placeholder="Numerario" />
+                      </div>
+                      <div className={lockCls(!collectsPayment || !methodUsesBank)}>
                         <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Conta bancaria</label>
                         <Select value={bankAccountId} onChange={setBankAccountId} options={bankAccounts.map((b) => ({ value: b.id, label: (bankById[b.bank_id]?.acronym || '?') + ' - ' + b.account_number }))} placeholder="Selecionar" />
                       </div>
-                      <div>
-                        <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Referencia</label>
-                        <input value={documentReference} onChange={(e) => setDocumentReference(e.target.value)} placeholder="Ex: PO-2026-004" className={inputClass} />
-                      </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Valor recebido</label>
-                        <input type="number" step="0.01" min="0" value={paidOnIssue ? totals.received : amountReceived} onChange={(e) => setAmountReceived(e.target.value)} placeholder="0.00" readOnly={paidOnIssue} className={inputClass + (paidOnIssue ? ' opacity-70 cursor-not-allowed' : '')} />
+                        <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Referencia</label>
+                        <input value={documentReference} onChange={(e) => setDocumentReference(e.target.value)} placeholder="Ex: PO-2026-004" className={inputClass} />
                       </div>
                       <div>
                         <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Desconto global %</label>
                         <input type="number" step="0.01" min="0" max="100" value={discountGlobalPercent} onChange={(e) => setDiscountGlobalPercent(e.target.value)} className={inputClass} />
                       </div>
                     </div>
+                    <div className={lockCls(!collectsCash)}>
+                      <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Caixa de entrada{collectsCash ? ' *' : ''}</label>
+                      {collectsCash && cashPoints.length === 0 ? (
+                        <p className="text-[12px] text-danger">Nenhuma caixa com sessao aberta - abra uma caixa para receber em numerario</p>
+                      ) : (
+                        <Select value={collectsCash ? cashPosId : ''} onChange={setCashPosId} options={cashPoints.map((cp) => ({ value: cp.pos_id, label: cp.name }))} placeholder={collectsCash ? 'Selecionar' : 'Sem recebimento em numerario'} />
+                      )}
+                    </div>
                   </div>
                 )}
 
-                {!isSingleScreen && step === 4 && (
+                {!isSingleScreen && step === 5 && (
                   <div className="flex flex-col gap-4">
                     <div>
                       <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Observacoes</label>
@@ -837,15 +881,53 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                     </div>
                     <div className="border border-border rounded-md p-3.5">
                       <p className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-2">Resumo</p>
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[12.5px]">
-                        <span className="text-text-muted">Tipo</span><span className="text-text-primary">{currentTypeLabel || '-'}</span>
-                        <span className="text-text-muted">Atividade</span><span className="text-text-primary">{activities.find((a) => a.id === activityId)?.name || '-'}</span>
-                        <span className="text-text-muted">Cliente</span><span className="text-text-primary">{selectedCustomer?.name || 'Sem cliente'}</span>
-                        <span className="text-text-muted">Data</span><span className="text-text-primary">{businessDate}</span>
-                        <span className="text-text-muted">Vencimento</span><span className="text-text-primary">{dueDate || '-'}</span>
-                        <span className="text-text-muted">Pagamento</span><span className="text-text-primary">{paymentMethods.find((m) => m.id === paymentMethodId)?.name || '-'}</span>
+                      <div className="grid grid-cols-3 lg:grid-cols-6 gap-x-4 gap-y-2 text-[12.5px]">
+                        <div className="min-w-0"><p className="text-[10.5px] uppercase tracking-wide text-text-muted">Tipo</p><p className="text-text-primary truncate">{currentTypeLabel || '-'}</p></div>
+                        <div className="min-w-0"><p className="text-[10.5px] uppercase tracking-wide text-text-muted">Atividade</p><p className="text-text-primary truncate">{activities.find((a) => a.id === activityId)?.name || '-'}</p></div>
+                        <div className="min-w-0"><p className="text-[10.5px] uppercase tracking-wide text-text-muted">Cliente</p><p className="text-text-primary truncate">{selectedCustomer?.name || 'Sem cliente'}</p></div>
+                        <div className="min-w-0"><p className="text-[10.5px] uppercase tracking-wide text-text-muted">Data</p><p className="text-text-primary truncate">{businessDate}</p></div>
+                        <div className="min-w-0"><p className="text-[10.5px] uppercase tracking-wide text-text-muted">Vencimento</p><p className="text-text-primary truncate">{dueDate || '-'}</p></div>
+                        <div className="min-w-0"><p className="text-[10.5px] uppercase tracking-wide text-text-muted">Pagamento</p><p className="text-text-primary truncate">{paymentMethods.find((m) => m.id === paymentMethodId)?.name || '-'}</p></div>
                       </div>
                     </div>
+                        <div className="border border-border rounded-md p-3.5">
+                          <p className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-2">Linhas</p>
+                          <table className="w-full text-[12px]">
+                            <thead>
+                              <tr className="text-[10.5px] uppercase tracking-wide text-text-muted border-b border-border">
+                                <th className="text-left font-medium py-1.5 pr-2">Artigo</th>
+                                <th className="text-right font-medium py-1.5 px-2">Qtd</th>
+                                <th className="text-right font-medium py-1.5 px-2">Preco</th>
+                                <th className="text-right font-medium py-1.5 px-2">Desc %</th>
+                                <th className="text-right font-medium py-1.5 px-2">IVA</th>
+                                <th className="text-right font-medium py-1.5 pl-2">Total</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {lines.filter((line) => getLineItem(line) && parseFloat(line.quantity) > 0).map((line, idx) => {
+                                const c = computeLine(line);
+                                return (
+                                  <tr key={idx} className="border-b border-border last:border-0">
+                                    <td className="py-1.5 pr-2 text-text-primary">{c.item.name}</td>
+                                    <td className="py-1.5 px-2 text-right font-mono">{line.quantity}</td>
+                                    <td className="py-1.5 px-2 text-right font-mono text-text-muted">{formatMoney(c.unitPrice)}</td>
+                                    <td className="py-1.5 px-2 text-right font-mono text-text-muted">{Number(line.discount_percent || 0).toFixed(2)}</td>
+                                    <td className="py-1.5 px-2 text-right text-text-muted">{c.vatRate}%</td>
+                                    <td className="py-1.5 pl-2 text-right font-mono text-text-primary">{formatMoney(c.total)}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                          <div className="flex flex-col gap-1 text-[12.5px] mt-3 ml-auto w-72">
+                            <div className="flex justify-between"><span className="text-text-muted">Total iliquido</span><span className="font-mono">{formatMoney(totals.totalIliquido)}</span></div>
+                            {totals.totalDescontos > 0 && <div className="flex justify-between"><span className="text-text-muted">Descontos</span><span className="font-mono">{formatMoney(totals.totalDescontos)}</span></div>}
+                            <div className="flex justify-between"><span className="text-text-muted">IVA</span><span className="font-mono">{formatMoney(totals.totalIva)}</span></div>
+                            {totals.totalRetencao > 0 && <div className="flex justify-between"><span className="text-text-muted">Retencoes</span><span className="font-mono">{formatMoney(totals.totalRetencao)}</span></div>}
+                            <div className="flex justify-between pt-1.5 mt-1 border-t border-border font-medium"><span>Total</span><span className="font-mono text-accent">{formatMoney(totals.total)}</span></div>
+                            <div className="flex justify-between"><span className="text-text-muted">Valor a pagar</span><span className="font-mono">{formatMoney(totals.valorAPagar)}</span></div>
+                          </div>
+                        </div>
                     {formError && (
                       <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{formError}</div>
                     )}
@@ -853,8 +935,8 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                 )}
               </div>
 
-              <div className="flex flex-col border border-border rounded-lg overflow-hidden">
-                <div className="p-4 flex-1 overflow-y-auto scrollbar-thin max-h-[340px]">
+              <div className={'flex flex-col border border-border rounded-lg overflow-hidden h-full' + (showSidePanel ? '' : ' hidden')}>
+                <div className="p-4 flex-1 overflow-y-auto scrollbar-thin min-h-0">
                   <div className="flex items-center justify-between mb-3">
                     <p className="text-[13px] font-medium text-text-primary">{mode === 'nc' ? 'Linhas da fatura original' : 'Produtos e servicos'}</p>
                     {mode !== 'nc' && (
@@ -884,47 +966,64 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                       ))}
                     </div>
                   ) : (
-                  <div className="flex flex-col gap-2.5">
-                    {lines.map((line, idx) => {
-                      const c = computeLine(line);
-                      return (
-                        <div key={idx} className="border border-border rounded-md p-2.5 flex flex-col gap-2">
-                          <div className="flex items-center gap-2">
-                            {canViewProducts && (
-                              <div className="flex bg-bg-inset border border-border rounded-md overflow-hidden shrink-0">
-                                <button type="button" onClick={() => updateLineType(idx, 'product')} className={'px-2 py-1.5 text-[10px] font-medium transition-colors cursor-pointer ' + (line.item_type === 'product' ? 'bg-accent text-white' : 'text-text-muted')}>Prod</button>
-                                <button type="button" onClick={() => updateLineType(idx, 'service')} className={'px-2 py-1.5 text-[10px] font-medium transition-colors cursor-pointer ' + (line.item_type === 'service' ? 'bg-accent text-white' : 'text-text-muted')}>Serv</button>
-                              </div>
-                            )}
-                            <div className="flex-1 min-w-0">
-                              {line.item_type === 'service' ? (
-                                <Select value={line.service_id} onChange={(v) => updateLine(idx, 'service_id', v)} options={services.map((s) => ({ value: s.id, label: s.code + ' - ' + s.name }))} placeholder="Selecionar servico" compact />
-                              ) : (
-                                <Select value={line.product_id} onChange={(v) => updateLine(idx, 'product_id', v)} options={products.map((p) => ({ value: p.id, label: p.code + ' - ' + p.name }))} placeholder="Selecionar produto" compact />
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-[12px]">
+                      <thead>
+                        <tr className="text-[10.5px] uppercase tracking-wide text-text-muted border-b border-border">
+                          {canViewProducts && <th className="text-left font-medium py-2 pr-2 w-[104px]">Tipo</th>}
+                          <th className="text-left font-medium py-2 pr-2">Artigo</th>
+                          <th className="text-right font-medium py-2 px-2 w-[96px]">Qtd</th>
+                          <th className="text-right font-medium py-2 px-2 w-[110px]">Preco</th>
+                          <th className="text-right font-medium py-2 px-2 w-[96px]">Desc %</th>
+                          <th className="text-right font-medium py-2 px-2 w-[64px]">IVA</th>
+                          <th className="text-right font-medium py-2 px-2 w-[120px]">Total</th>
+                          <th className="w-[60px]"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {lines.map((line, idx) => {
+                          const c = computeLine(line);
+                          return (
+                            <tr key={idx} className="border-b border-border last:border-0 align-middle">
+                              {canViewProducts && (
+                                <td className="py-2 pr-2">
+                                  <div className="flex bg-bg-inset border border-border rounded-md overflow-hidden h-[42px]">
+                                    <button type="button" onClick={() => updateLineType(idx, 'product')} className={'flex-1 px-2 text-[11px] font-medium transition-colors cursor-pointer ' + (line.item_type === 'product' ? 'bg-accent text-white' : 'text-text-muted')}>Prod</button>
+                                    <button type="button" onClick={() => updateLineType(idx, 'service')} className={'flex-1 px-2 text-[11px] font-medium transition-colors cursor-pointer ' + (line.item_type === 'service' ? 'bg-accent text-white' : 'text-text-muted')}>Serv</button>
+                                  </div>
+                                </td>
                               )}
-                            </div>
-                            <button type="button" onClick={() => duplicateLine(idx)} title="Duplicar" className="text-text-muted hover:text-accent transition-colors cursor-pointer shrink-0">
-                              <Copy size={13} />
-                            </button>
-                            <button type="button" onClick={() => removeLine(idx)} disabled={lines.length === 1} title="Remover" className="text-text-muted hover:text-danger disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer shrink-0">
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                          <div className="flex items-center gap-2 text-[11px]">
-                            <div className="flex items-center gap-1">
-                              <span className="text-text-muted">Qtd</span>
-                              <input type="number" step={c.item?.is_sold_by_weight ? '0.001' : '1'} min="0" value={line.quantity} onChange={(e) => updateLine(idx, 'quantity', e.target.value)} className="w-14 bg-bg-inset border border-border rounded px-1.5 py-1 text-[11px] text-text-primary font-mono outline-none focus:border-accent" />
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <span className="text-text-muted">Desc%</span>
-                              <input type="number" step="0.01" min="0" max="100" value={line.discount_percent} onChange={(e) => updateLine(idx, 'discount_percent', e.target.value)} className="w-14 bg-bg-inset border border-border rounded px-1.5 py-1 text-[11px] text-text-primary font-mono outline-none focus:border-accent" />
-                            </div>
-                            <span className="text-text-muted ml-auto">IVA {c.vatRate}%</span>
-                            <span className="font-mono text-accent font-medium">{formatMoney(c.total)}</span>
-                          </div>
-                        </div>
-                      );
-                    })}
+                              <td className="py-2 pr-2 min-w-[240px]">
+                                {line.item_type === 'service' ? (
+                                  <Select value={line.service_id} onChange={(v) => updateLine(idx, 'service_id', v)} options={services.map((s) => ({ value: s.id, label: s.code + ' - ' + s.name }))} placeholder="Selecionar servico" />
+                                ) : (
+                                  <Select value={line.product_id} onChange={(v) => updateLine(idx, 'product_id', v)} options={products.map((pr) => ({ value: pr.id, label: pr.code + ' - ' + pr.name }))} placeholder="Selecionar produto" />
+                                )}
+                              </td>
+                              <td className="py-2 px-2">
+                                <input type="number" step={c.item?.is_sold_by_weight ? '0.001' : '1'} min="0" value={line.quantity} onChange={(e) => updateLine(idx, 'quantity', e.target.value)} className={inputClass + ' text-right font-mono'} />
+                              </td>
+                              <td className="py-2 px-2 text-right font-mono text-text-muted whitespace-nowrap">{c.item ? formatMoney(c.unitPrice) : '-'}</td>
+                              <td className="py-2 px-2">
+                                <input type="number" step="0.01" min="0" max="100" value={line.discount_percent} onChange={(e) => updateLine(idx, 'discount_percent', e.target.value)} className={inputClass + ' text-right font-mono'} />
+                              </td>
+                              <td className="py-2 px-2 text-right text-text-muted whitespace-nowrap">{c.item ? c.vatRate + '%' : '-'}</td>
+                              <td className="py-2 px-2 text-right font-mono text-accent font-medium whitespace-nowrap">{formatMoney(c.total)}</td>
+                              <td className="py-2 pl-2">
+                                <div className="flex items-center justify-end gap-2.5">
+                                  <button type="button" onClick={() => duplicateLine(idx)} title="Duplicar" className="text-text-muted hover:text-accent transition-colors cursor-pointer">
+                                    <Copy size={14} />
+                                  </button>
+                                  <button type="button" onClick={() => removeLine(idx)} disabled={lines.length === 1} title="Remover" className="text-text-muted hover:text-danger disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer">
+                                    <Trash2 size={15} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
                   )}
                 </div>

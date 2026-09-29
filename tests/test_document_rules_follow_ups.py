@@ -4,6 +4,7 @@ from sqlalchemy import select, text
 
 from app.models.invoice_line import InvoiceLine
 from app.models.service import Service
+from app.services.invoice_service import ReceiptExceedsPendingError
 from app.services.invoice_service import (
     ReferenceInvoiceTypeNotEligibleError, create_credit_note, create_debit_note, create_invoice, create_receipt,
 )
@@ -67,7 +68,9 @@ async def test_a_receipt_on_a_fatura_recibo_follows_the_rule(db, company_with_es
         await create_receipt(db, company_id, activity_id, reference_invoice_id=fr_id, amount=100.0)
     try:
         await _set_rule(db, "FR", accepts_receipt=True)
-        receipt = await create_receipt(db, company_id, activity_id, reference_invoice_id=fr_id, amount=100.0)
-        assert float(receipt.amount_received) == 100.0
+        # The type is no longer refused: the receipt reaches the amount check - and a Fatura/Recibo is paid on
+        # issue (its own payment), so nothing is owed on it and any receipt is refused as exceeding the balance.
+        with pytest.raises(ReceiptExceedsPendingError):
+            await create_receipt(db, company_id, activity_id, reference_invoice_id=fr_id, amount=100.0)
     finally:
         await _set_rule(db, "FR", accepts_receipt=False)

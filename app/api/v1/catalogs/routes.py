@@ -185,13 +185,13 @@ async def get_payment_methods(db: AsyncSession = Depends(get_db), current_user: 
 
 @router.post("/payment-methods", response_model=PaymentMethodCatalogResponse, status_code=status.HTTP_201_CREATED)
 async def post_payment_method(payload: PaymentMethodCatalogRequest, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_role("SUPER_ADMIN"))):
-    return await catalog_service.create_payment_method(db, payload.code, payload.name, payload.allows_payment, payload.allows_receipt, payload.is_cash)
+    return await catalog_service.create_payment_method(db, payload.code, payload.name, payload.allows_payment, payload.allows_receipt, payload.is_cash, payload.uses_bank_account)
 
 
 @router.patch("/payment-methods/{item_id}", response_model=PaymentMethodCatalogResponse)
 async def patch_payment_method(item_id: uuid.UUID, payload: PaymentMethodCatalogRequest, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_role("SUPER_ADMIN"))):
     try:
-        return await catalog_service.update_payment_method(db, item_id, payload.code, payload.name, payload.allows_payment, payload.allows_receipt, payload.is_cash)
+        return await catalog_service.update_payment_method(db, item_id, payload.code, payload.name, payload.allows_payment, payload.allows_receipt, payload.is_cash, payload.uses_bank_account)
     except CatalogItemNotFoundError as e:
         _not_found(e)
 
@@ -276,8 +276,20 @@ async def get_document_types(db: AsyncSession = Depends(get_db), current_user: U
 @router.get("/document-rules", response_model=list[DocumentTypeResponse])
 async def get_document_rules_catalog(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """The document types with their rules, for every signed-in user: the screens (Caixa, Nova Fatura, Faturas) read the
-    rules to decide what they offer. Read-only - managing the catalog stays reserved to the super admin."""
-    return await catalog_service.list_document_types(db)
+    rules to decide what they offer. Read-only - managing the catalog stays reserved to the super admin.
+    requires_payment_term is the one effective for the user's company (its preference, else the platform)."""
+    from app.services.company_document_type_service import effective_requires_payment_term
+
+    types = await catalog_service.list_document_types(db)
+    if not current_user.company_id:
+        return types
+    effective = await effective_requires_payment_term(db, current_user.company_id)
+    result = []
+    for d in types:
+        row = DocumentTypeResponse.model_validate(d)
+        row.requires_payment_term = effective.get(d.code, row.requires_payment_term)
+        result.append(row)
+    return result
 
 
 @router.post("/document-types", response_model=DocumentTypeResponse, status_code=status.HTTP_201_CREATED)

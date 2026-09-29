@@ -280,7 +280,7 @@ export default function Configuracoes() {
       case 'provinces': return { country_id: countries[0]?.id || '', name: '' };
       case 'municipalities': return { province_id: provinces[0]?.id || '', name: '' };
       case 'banks': return { acronym: '', full_name: '' };
-      case 'payment_methods': return { code: '', name: '', allows_payment: true, allows_receipt: true, is_cash: false };
+      case 'payment_methods': return { code: '', name: '', allows_payment: true, allows_receipt: true, is_cash: false, uses_bank_account: false };
       case 'payment_terms': return { name: '', fixed_days: false, days: 0, months_fixed_day: 0, discount: 0 };
       case 'vat_codes': return { code: '', name: '', rate: 0, country_id: countries[0]?.id || '', valid_from: '', valid_until: '', observations: '' };
       case 'document_types': return { code: '', name: '', description: '', area: '', electronic_eligible: false, is_fiscal: true, rules_locked: false, saft_section: 'NONE', revenue_sign: 0, requires_origin: false, has_lines: true, paid_on_issue: false, sent_to_agt: false, deducts_stock: false, accepts_credit_note: false, accepts_debit_note: false, accepts_receipt: false, convertible: false, issuable_in_invoices: false, issuable_at_pos: false, requires_payment_term: false, requires_customer: false };
@@ -422,6 +422,10 @@ export default function Configuracoes() {
             <label className="flex items-center gap-2 text-[13px] text-text-primary cursor-pointer">
               <input type="checkbox" checked={form.is_cash} onChange={(e) => updateField('is_cash', e.target.checked)} />
               Numerário (dinheiro físico)
+            </label>
+            <label className="flex items-center gap-2 text-[13px] text-text-primary cursor-pointer">
+              <input type="checkbox" checked={!!form.uses_bank_account} onChange={(e) => updateField('uses_bank_account', e.target.checked)} />
+              Usa conta bancaria
             </label>
           </div>
         </>
