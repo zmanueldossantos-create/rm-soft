@@ -200,6 +200,7 @@ class ReceiptCreateRequest(BaseModel):
     observations: str | None = None
     payment_method_id: uuid.UUID | None = None
     cash_pos_id: uuid.UUID | None = None  # the cash point cash enters - required for cash, resolved server side
+    bank_account_id: uuid.UUID | None = None  # the company account the money lands on (method with uses_bank_account)
 
     @field_validator("amount")
     @classmethod

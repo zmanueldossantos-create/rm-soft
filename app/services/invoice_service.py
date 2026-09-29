@@ -1293,6 +1293,7 @@ async def create_receipt(
     cash_session_id: uuid.UUID | None = None,
     cash_pos_id: uuid.UUID | None = None,
     require_cash_point: bool = False,
+    bank_account_id: uuid.UUID | None = None,
 ) -> Invoice:
     """
     Creates a Recibo (RC) - a standalone payment acknowledgement against an already-issued
@@ -1391,6 +1392,16 @@ async def create_receipt(
     cash_session_id = await _cash_point_session(
         db, company_id, cash_pos_id, cash_session_id, [method_id] if method_id else [], require_cash_point,
     )
+    # The bank account the money lands on (a method with uses_bank_account) must be one of the company's.
+    if bank_account_id is not None:
+        from app.models.company_bank_account import CompanyBankAccount
+        known_account = (await db.execute(
+            select(CompanyBankAccount.id).where(
+                CompanyBankAccount.id == bank_account_id, CompanyBankAccount.company_id == company_id,
+            )
+        )).scalar_one_or_none()
+        if known_account is None:
+            raise EmptyInvoiceError("Conta bancaria invalida")
 
     receipt = Invoice(
         company_id=company_id,
@@ -1407,6 +1418,7 @@ async def create_receipt(
         total=receipt_total,
         retention_total=receipt_retention,
         cash_session_id=cash_session_id,
+        bank_account_id=bank_account_id,
         status=InvoiceStatus.PENDENTE,
         document_status=DocumentLifecycleStatus.EMITIDO,
         reference_invoice_id=reference_invoice.id,

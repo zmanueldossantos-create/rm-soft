@@ -5,7 +5,8 @@ import { useAuthStore } from '../store/authStore';
 import { createPortal } from 'react-dom';
 import { Receipt, Plus, Loader2, Search, Trash2, FileText, Printer, Eye, X as XIcon, RefreshCw, RotateCcw, FilePlus, MoreVertical, ChevronLeft, ChevronRight } from 'lucide-react';
 import Modal from '../components/Modal';
-import InvoiceWizardModal from '../components/InvoiceWizardModal';
+import InvoiceWizardModal from '../components/InvoiceWizardModal';
+import DocumentActionModals from '../components/DocumentActionModals';
 import Select from '../components/Select';
 import { listInvoices, getInvoicePeriods, fetchInvoicePdfBlob, getInvoiceDetail, resubmitInvoice, createReceipt, convertProForma, getOpenCashPoints } from '../api/invoices';
 import PeriodFilter from '../components/PeriodFilter';
@@ -121,7 +122,8 @@ export default function Invoices() {
   const [services, setServices] = useState([]);
   const [paymentMethods, setPaymentMethods] = useState([]);
   const [documentTypes, setDocumentTypes] = useState(null);
-  const ruleOf = useDocumentRules();
+  const ruleOf = useDocumentRules();
+  const rcActionsRef = useRef(null);
   useEffect(() => {
     // A user who cannot read the catalog keeps the default behaviour; the server enforces the rules anyway.
     documentRulesApi.list().then(setDocumentTypes).catch(() => {});
@@ -155,16 +157,6 @@ export default function Invoices() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState('');
 
-  const [rcModalOpen, setRcModalOpen] = useState(false);
-  const [rcAmount, setRcAmount] = useState('');
-  const [rcDocumentReference, setRcDocumentReference] = useState('');
-  const [rcObservations, setRcObservations] = useState('');
-  const [rcPaymentMethodId, setRcPaymentMethodId] = useState('');
-  // Cash received with a receipt enters an explicitly chosen cash point.
-  const [rcCashPosId, setRcCashPosId] = useState('');
-  const [rcCashPoints, setRcCashPoints] = useState([]);
-  const [rcSaving, setRcSaving] = useState(false);
-  const [rcFormError, setRcFormError] = useState('');
 
   const [convertModalOpen, setConvertModalOpen] = useState(false);
   const [convertTargetType, setConvertTargetType] = useState('FACTURA');
@@ -241,52 +233,18 @@ export default function Invoices() {
     openWizard('nd', detailInvoice.id);
   }
 
+  // Receipts go through the one shared receipt modal (DocumentActionModals) - same rules as at the Caixa.
   function openRcModal() {
-    setRcAmount('');
-    setRcCashPosId('');
-    getOpenCashPoints().then(setRcCashPoints).catch(() => setRcCashPoints([]));
-    setRcDocumentReference((INVOICE_TYPE_CODE[detailInvoice.invoice_type] || detailInvoice.invoice_type) + ' ' + detailInvoice.series + '/' + detailInvoice.number);
-    setRcObservations('');
-    setRcPaymentMethodId('');
-    setRcFormError('');
-    setRcModalOpen(true);
+    if (detailInvoice) rcActionsRef.current?.openRc(detailInvoice.id);
   }
 
-  async function openRcModalFromRow(invoiceId) {
-    const data = await getInvoiceDetail(invoiceId);
-    setDetailInvoice(data);
-    setRcAmount('');
-    setRcCashPosId('');
-    getOpenCashPoints().then(setRcCashPoints).catch(() => setRcCashPoints([]));
-    setRcDocumentReference((INVOICE_TYPE_CODE[data.invoice_type] || data.invoice_type) + ' ' + data.series + '/' + data.number);
-    setRcObservations('');
-    setRcPaymentMethodId('');
-    setRcFormError('');
-    setRcModalOpen(true);
+  function openRcModalFromRow(invoiceId) {
+    rcActionsRef.current?.openRc(invoiceId);
   }
 
-  async function handleRcSubmit(e) {
-    e.preventDefault();
-    setRcFormError('');
-    setRcSaving(true);
-    try {
-      await createReceipt({
-        activity_id: detailInvoice.activity_id,
-        reference_invoice_id: detailInvoice.id,
-        amount: parseFloat(rcAmount),
-        document_reference: rcDocumentReference || null,
-        observations: rcObservations || null,
-        payment_method_id: rcPaymentMethodId || null,
-        cash_pos_id: rcCashPosId || null,
-      });
-      setRcModalOpen(false);
-      await openDetailModal(detailInvoice.id);
-      await loadData();
-    } catch (err) {
-      setRcFormError(extractErrorMessage(err, 'Erro ao emitir recibo'));
-    } finally {
-      setRcSaving(false);
-    }
+  async function handleReceiptIssued() {
+    await loadData();
+    if (detailInvoice) await openDetailModal(detailInvoice.id);
   }
 
   function openConvertModal() {
@@ -948,62 +906,7 @@ export default function Invoices() {
         )}
       </Modal>
 
-      <Modal open={rcModalOpen} onClose={() => setRcModalOpen(false)} title="Emitir Recibo" maxWidthClass="max-w-md">
-        {detailInvoice && (
-          <form onSubmit={handleRcSubmit} className="flex flex-col gap-4">
-            <p className="text-[12px] text-text-muted">
-              Referente a <span className="font-mono text-text-primary">{INVOICE_TYPE_CODE[detailInvoice.invoice_type] || detailInvoice.invoice_type} {detailInvoice.series}/{detailInvoice.number}</span>
-            </p>
-            <div>
-              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Valor recebido *</label>
-              <input type="number" step="0.01" min="0.01" value={rcAmount} onChange={(e) => setRcAmount(e.target.value)} required placeholder="0.00" className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors" />
-            </div>
-            <div>
-              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">{'M\u00e9todo de pagamento'}</label>
-              <select value={rcPaymentMethodId} onChange={(e) => setRcPaymentMethodId(e.target.value)} className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors">
-                <option value="">{'Igual \u00e0 fatura (predefini\u00e7\u00e3o)'}</option>
-                {paymentMethods.map((m) => (
-                  <option key={m.id} value={m.id}>{m.name}</option>
-                ))}
-              </select>
-            </div>
-            {(!rcPaymentMethodId || paymentMethods.find((m) => m.id === rcPaymentMethodId)?.is_cash === true) && (
-              <div>
-                <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Caixa de entrada (numerario)</label>
-                {rcCashPoints.length === 0 ? (
-                  <p className="text-[12px] text-danger">Nenhuma caixa com sessao aberta - abra uma caixa para receber em numerario</p>
-                ) : (
-                  <select value={rcCashPosId} onChange={(e) => setRcCashPosId(e.target.value)} className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors">
-                    <option value="">Selecionar</option>
-                    {rcCashPoints.map((c) => (
-                      <option key={c.pos_id} value={c.pos_id}>{c.name}</option>
-                    ))}
-                  </select>
-                )}
-              </div>
-            )}
-            <div>
-              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Referencia</label>
-              <input value={rcDocumentReference} disabled className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-muted font-mono outline-none opacity-70 cursor-not-allowed" />
-            </div>
-            <div>
-              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Observacoes</label>
-              <input value={rcObservations} onChange={(e) => setRcObservations(e.target.value)} className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors" />
-            </div>
-            {rcFormError && (
-              <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{rcFormError}</div>
-            )}
-            <button
-              type="submit"
-              disabled={rcSaving || !rcAmount || parseFloat(rcAmount) <= 0}
-              className="bg-success hover:opacity-90 disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer"
-            >
-              {rcSaving ? <Loader2 size={17} className="animate-spin" /> : <Receipt size={17} />}
-              {rcSaving ? 'A emitir...' : 'Emitir Recibo'}
-            </button>
-          </form>
-        )}
-      </Modal>
+      <DocumentActionModals ref={rcActionsRef} onSuccess={handleReceiptIssued} />
 
       <Modal open={convertModalOpen} onClose={() => setConvertModalOpen(false)} title="Converter Pro-forma" maxWidthClass="max-w-md">
         {detailInvoice && (

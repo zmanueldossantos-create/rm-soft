@@ -588,3 +588,15 @@ async def test_a_fatura_from_invoicing_needs_its_mandatory_payment_term(db, comp
             lines_input=[{"product_id": product_id, "quantity": 1}], enforce_document_rules=True,
         )
     assert "condicao de pagamento" in str(excinfo.value)
+
+
+@pytest.mark.asyncio
+async def test_a_receipt_on_an_unknown_bank_account_is_refused(db, company_with_essentials):
+    import uuid as _uuid
+    ctx = company_with_essentials
+    ids = _ids(ctx)
+    product_id, invoice_id = await _sold_product(db, ids)
+    with pytest.raises(EmptyInvoiceError) as excinfo:
+        await create_receipt(db, ids['company'], ids['activity'], reference_invoice_id=invoice_id, amount=100.0,
+                             payment_method_id=ctx['pm_mb'].id, bank_account_id=_uuid.uuid4())
+    assert 'Conta bancaria invalida' in str(excinfo.value)
