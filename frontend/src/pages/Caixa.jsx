@@ -5,7 +5,7 @@ import { listDenominations, recordDenominationCount, getLatestDenominationCount 
 import { listProductCategories } from '../api/productCategories';
 import { listServices } from '../api/services';
 import { listVatRates } from '../api/vat';
-import { withholdingTaxesApi, paymentTermsApi } from '../api/catalogs';
+import { withholdingTaxesApi, paymentTermsApi, unitsApi } from '../api/catalogs';
 import useDocumentRules, { DOC_CODE_BY_TYPE } from '../utils/documentRules';
 import { getMyCompanyBankAccounts } from '../api/company';
 import { createProFormaFromPos } from '../api/pos';
@@ -155,6 +155,25 @@ export default function Caixa() {
 
   const [proFormaModalOpen, setProFormaModalOpen] = useState(false);
   const [docsTab, setDocsTab] = useState('docs'); // Consultar documentos: 'docs' (issued) or 'proformas'
+  // The cart starts where it sits and runs down to the footer (h-11): only its lines scroll.
+  // Units of measure catalog: a cart line shows the article's own unit code (as the invoice form does).
+  const [units, setUnits] = useState([]);
+  useEffect(() => {
+    unitsApi.list().then(setUnits).catch(() => setUnits([]));
+  }, []);
+  const cartRef = useRef(null);
+  const [cartHeight, setCartHeight] = useState(0);
+  useEffect(() => {
+    function measure() {
+      const el = cartRef.current;
+      const next = !el || window.innerWidth < 1024 ? 0
+        : Math.max(420, Math.floor(window.innerHeight - el.getBoundingClientRect().top - window.scrollY + window.scrollY - 44 - 16));
+      setCartHeight((h) => (h === next ? h : next));
+    }
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  });
   const [pendingProFormas, setPendingProFormas] = useState([]);
   const [proFormaLoading, setProFormaLoading] = useState(false);
   const [proFormaError, setProFormaError] = useState('');
@@ -617,7 +636,7 @@ export default function Caixa() {
         discountPercent: 0,
         vatId: item.vat_id,
         withholdingTaxId: isService ? item.withholding_tax_id : null,
-        unit: isService ? 'Un' : (item.is_sold_by_weight ? 'Kg' : 'Un'),
+        unit: units.find((u) => u.id === item.unit_of_measure_id)?.code || (!isService && item.is_sold_by_weight ? 'Kg' : 'Un'),
       }];
     });
   }
@@ -875,8 +894,48 @@ export default function Caixa() {
     );
   }
 
+  // Sidebar drawers: one at a time. The open one is the active icon; clicking it again closes it.
+  const activeSideDrawer = proFormaModalOpen ? 'docs' : articlesModalOpen ? 'articles' : moedeiroModalOpen ? 'moedeiro'
+    : movementModalOpen ? 'movement' : dailyReportModalOpen ? 'report' : null;
+  function closeSideDrawers() {
+    setProFormaModalOpen(false);
+    setArticlesModalOpen(false);
+    setMoedeiroModalOpen(false);
+    setMovementModalOpen(false);
+    setDailyReportModalOpen(false);
+  }
+  function toggleSideDrawer(key, open) {
+    const wasActive = activeSideDrawer === key;
+    closeSideDrawers();
+    if (!wasActive) open();
+  }
+
   return (
+    <div className="pl-16">
     <main className="max-w-[1600px] mx-auto px-4 sm:px-6 md:px-8 py-6 sm:py-9">
+      {/* Caixa actions: a fixed icon sidebar between the navbar and the footer - labels on hover; each opens a drawer. */}
+      <aside className="fixed left-0 top-14 bottom-11 z-40 w-16 bg-bg-elevated border-r border-border flex flex-col items-center gap-2 py-3">
+        <button onClick={() => toggleSideDrawer('docs', openProFormaSearchModal)} className={'group relative w-11 h-11 flex items-center justify-center rounded-lg border hover:border-accent hover:bg-accent/5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer ' + (activeSideDrawer === 'docs' ? 'border-accent bg-accent/5' : 'border-accent/20 bg-bg-inset')}>
+          <FileSearch size={18} className="text-accent" />
+          <span className="pointer-events-none absolute left-full ml-2 whitespace-nowrap rounded-md bg-bg-elevated border border-border px-2.5 py-1 text-[12px] text-text-primary shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-50">Consultar documentos</span>
+        </button>
+        <button onClick={() => toggleSideDrawer('articles', () => setArticlesModalOpen(true))} className={'group relative w-11 h-11 flex items-center justify-center rounded-lg border hover:border-accent hover:bg-accent/5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer ' + (activeSideDrawer === 'articles' ? 'border-accent bg-accent/5' : 'border-accent/20 bg-bg-inset')}>
+          <ShoppingCart size={18} className="text-accent" />
+          <span className="pointer-events-none absolute left-full ml-2 whitespace-nowrap rounded-md bg-bg-elevated border border-border px-2.5 py-1 text-[12px] text-text-primary shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-50">Consultar artigos</span>
+        </button>
+        <button onClick={() => toggleSideDrawer('moedeiro', () => openMoedeiroModal('ABERTURA'))} disabled={!session || !can('moedeiro:record')} className={'group relative w-11 h-11 flex items-center justify-center rounded-lg border hover:border-accent hover:bg-accent/5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer ' + (activeSideDrawer === 'moedeiro' ? 'border-accent bg-accent/5' : 'border-accent/20 bg-bg-inset')}>
+          <Coins size={18} className="text-accent" />
+          <span className="pointer-events-none absolute left-full ml-2 whitespace-nowrap rounded-md bg-bg-elevated border border-border px-2.5 py-1 text-[12px] text-text-primary shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-50">Moedeiro</span>
+        </button>
+        <button onClick={() => toggleSideDrawer('movement', openMovementModal)} disabled={!selectedPosId || !can('tesouraria:view')} className={'group relative w-11 h-11 flex items-center justify-center rounded-lg border hover:border-accent hover:bg-accent/5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer ' + (activeSideDrawer === 'movement' ? 'border-accent bg-accent/5' : 'border-accent/20 bg-bg-inset')}>
+          <ArrowLeftRight size={18} className="text-accent" />
+          <span className="pointer-events-none absolute left-full ml-2 whitespace-nowrap rounded-md bg-bg-elevated border border-border px-2.5 py-1 text-[12px] text-text-primary shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-50">Operacoes de Caixa</span>
+        </button>
+        <button onClick={() => toggleSideDrawer('report', openDailyReportModal)} disabled={!selectedPosId || !can('tesouraria:daily_report')} className={'group relative w-11 h-11 flex items-center justify-center rounded-lg border hover:border-accent hover:bg-accent/5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer ' + (activeSideDrawer === 'report' ? 'border-accent bg-accent/5' : 'border-accent/20 bg-bg-inset')}>
+          <FileText size={18} className="text-accent" />
+          <span className="pointer-events-none absolute left-full ml-2 whitespace-nowrap rounded-md bg-bg-elevated border border-border px-2.5 py-1 text-[12px] text-text-primary shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-50">Relatorio do dia</span>
+        </button>
+      </aside>
       <div className="flex items-center justify-between mb-1 flex-wrap gap-3">
         <h2 className="font-display font-semibold text-[22px] text-text-primary flex items-center gap-2.5">
           <Wallet size={22} className="text-accent" />
@@ -947,8 +1006,8 @@ export default function Caixa() {
             Sessão aberta às {new Date(session.opened_at).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}
           </p>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-            <div className="lg:col-span-2">
+          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_440px] gap-5">
+            <div className="min-w-0">
               <div className="relative mb-4">
                 <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" />
                 <input
@@ -990,56 +1049,9 @@ export default function Caixa() {
                 )}
               </div>
 
-              <div className="grid grid-cols-3 sm:grid-cols-6 gap-2.5 mb-4">
-                <button
-                  onClick={openProFormaSearchModal}
-                  className="flex flex-col items-center justify-center gap-1.5 bg-bg-inset border border-accent/20 hover:border-accent hover:bg-accent/5 rounded-lg py-3.5 text-center transition-colors cursor-pointer"
-                >
-                  <FileSearch size={18} className="text-accent" />
-                  <span className="text-[11px] font-medium text-text-primary leading-tight">Consultar<br />documentos</span>
-                </button>
-                <button
-                  onClick={() => setArticlesModalOpen(true)}
-                  className="flex flex-col items-center justify-center gap-1.5 bg-bg-inset border border-accent/20 hover:border-accent hover:bg-accent/5 rounded-lg py-3.5 text-center transition-colors cursor-pointer"
-                >
-                  <ShoppingCart size={18} className="text-accent" />
-                  <span className="text-[11px] font-medium text-text-primary leading-tight">Consultar<br />artigos</span>
-                </button>
-                <button
-                  onClick={() => openMoedeiroModal('ABERTURA')}
-                  disabled={!session || !can('moedeiro:record')}
-                  className="flex flex-col items-center justify-center gap-1.5 bg-bg-inset border border-accent/20 hover:border-accent hover:bg-accent/5 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg py-3.5 text-center transition-colors cursor-pointer"
-                >
-                  <Coins size={18} className="text-accent" />
-                  <span className="text-[11px] font-medium text-text-primary leading-tight">Moedeiro</span>
-                </button>
-                <button
-                  onClick={openMovementModal}
-                  disabled={!selectedPosId || !can('tesouraria:view')}
-                  className="flex flex-col items-center justify-center gap-1.5 bg-bg-inset border border-accent/20 hover:border-accent hover:bg-accent/5 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg py-3.5 text-center transition-colors cursor-pointer"
-                >
-                  <ArrowLeftRight size={18} className="text-accent" />
-                  <span className="text-[11px] font-medium text-text-primary leading-tight">Operacoes<br />de Caixa</span>
-                </button>
-                <button
-                  onClick={openDailyReportModal}
-                  disabled={!selectedPosId || !can('tesouraria:daily_report')}
-                  className="flex flex-col items-center justify-center gap-1.5 bg-bg-inset border border-accent/20 hover:border-accent hover:bg-accent/5 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg py-3.5 text-center transition-colors cursor-pointer"
-                >
-                  <FileText size={18} className="text-accent" />
-                  <span className="text-[11px] font-medium text-text-primary leading-tight">Relatorio<br />do dia</span>
-                </button>
-                <button
-                  onClick={() => { setCart([]); setSelectedCustomerId(''); }}
-                  className="flex flex-col items-center justify-center gap-1.5 bg-bg-inset border border-accent/20 hover:border-accent hover:bg-accent/5 rounded-lg py-3.5 text-center transition-colors cursor-pointer"
-                >
-                  <Plus size={18} className="text-accent" />
-                  <span className="text-[11px] font-medium text-text-primary leading-tight">Novo</span>
-                </button>
-              </div>
 
               {activeCategoryId === 'services' ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-[520px] overflow-y-auto scrollbar-thin pr-1">
+                <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2.5 max-h-[520px] overflow-y-auto scrollbar-thin pr-1">
                   {filteredServices.map((s) => (
                     <button
                       key={s.id}
@@ -1053,7 +1065,7 @@ export default function Caixa() {
                   ))}
                 </div>
               ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-[520px] overflow-y-auto scrollbar-thin pr-1">
+                <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2.5 max-h-[520px] overflow-y-auto scrollbar-thin pr-1">
                   {filteredProducts.map((p) => (
                     <button
                       key={p.id}
@@ -1085,11 +1097,11 @@ export default function Caixa() {
               )}
             </div>
 
-            <div className="bg-bg-elevated border border-border rounded-lg p-4 flex flex-col h-fit sticky top-4">
+            <div ref={cartRef} style={cartHeight ? { height: cartHeight + 'px' } : undefined} className="bg-bg-elevated border border-border rounded-lg p-4 flex flex-col min-h-0">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <ShoppingCart size={16} className="text-accent" />
-                  <p className="font-display font-semibold text-text-primary text-sm">Carrinho</p>
+                  <div className="flex items-center gap-2"><p className="font-display font-semibold text-text-primary text-sm">Carrinho</p><button type="button" onClick={() => { setCart([]); setSelectedCustomerId(''); }} title="Nova venda" className="flex items-center gap-1 text-accent hover:text-accent-hover text-[12px] font-medium cursor-pointer"><Plus size={13} /> Novo</button></div>
                 </div>
                 <div className="w-64">
                   <Select
@@ -1128,16 +1140,16 @@ export default function Caixa() {
               </div>
 
               {cart.length === 0 ? (
-                <p className="text-text-muted text-[12px] text-center py-8">Carrinho vazio</p>
+                <p className="flex-1 text-text-muted text-[12px] text-center py-8">Carrinho vazio</p>
               ) : (
-                <div className="mb-4 max-h-[340px] overflow-y-auto scrollbar-thin border border-border rounded-md">
-                  <table className="w-full text-[11px]">
-                    <thead className="sticky top-0 bg-bg-inset">
-                      <tr className="text-text-muted">
-                        <th className="text-left font-medium px-2 py-1.5">Artigo</th>
-                        <th className="text-center font-medium px-1 py-1.5 w-16">Qtd</th>
-                        <th className="text-center font-medium px-1 py-1.5 w-9">Un</th>
-                        <th className="text-right font-medium px-2 py-1.5">Total</th>
+                <div className="mb-4 flex-1 min-h-0 overflow-y-auto scrollbar-thin border border-border rounded-md">
+                  <table className="w-full text-[12px]">
+                    <thead className="sticky top-0 bg-bg-inset z-10">
+                      <tr className="text-[10.5px] uppercase tracking-wide text-text-muted">
+                        <th className="text-left font-medium px-2.5 py-2">Artigo</th>
+                        <th className="text-center font-medium px-1 py-2 w-[92px]">Qtd</th>
+                        <th className="text-right font-medium px-2 py-2 w-[96px]">Preco</th>
+                        <th className="text-right font-medium px-2.5 py-2 w-[104px]">Total</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1145,50 +1157,51 @@ export default function Caixa() {
                         const lineTotal = line.price * line.quantity * (1 - (line.discountPercent || 0) / 100);
                         return (
                           <Fragment key={line.key}>
-                            <tr key={line.key} className="border-t border-border">
-                              <td className="px-2 py-1.5 align-top">
-                                <p className="font-medium text-text-primary truncate max-w-[110px]">{line.name}</p>
-                                <div className="flex items-center gap-1.5 mt-0.5">
+                            <tr className="border-t border-border">
+                              <td className="px-2.5 py-2 align-top">
+                                <p className="font-medium text-text-primary leading-tight">{line.name}</p>
+                                <div className="flex items-center gap-2 mt-1">
                                   <button
                                     onClick={() => setExpandedDiscountKey(expandedDiscountKey === line.key ? null : line.key)}
-                                    className={'text-[9px] font-semibold px-1 py-0.5 rounded cursor-pointer transition-colors ' + (line.discountPercent > 0 ? 'text-accent bg-accent/10' : 'text-text-muted hover:text-accent hover:bg-accent/10')}
+                                    className={'text-[10px] font-semibold px-1.5 py-0.5 rounded cursor-pointer transition-colors ' + (line.discountPercent > 0 ? 'text-accent bg-accent/10' : 'text-text-muted hover:text-accent hover:bg-accent/10')}
                                     title="Aplicar desconto"
                                   >
-                                    {line.discountPercent > 0 ? `-${line.discountPercent}%` : '%'}
+                                    {line.discountPercent > 0 ? `-${line.discountPercent}%` : '% desc.'}
                                   </button>
-                                  <button onClick={() => removeFromCart(line.key)} className="text-text-muted hover:text-danger cursor-pointer">
-                                    <Trash2 size={10} />
-                                  </button>
-                                </div>
-                              </td>
-                              <td className="px-1 py-1.5 align-top">
-                                <div className="flex items-center justify-center gap-0.5">
-                                  <button onClick={() => updateCartQuantity(line.key, line.quantity - 1)} className="w-5 h-5 flex items-center justify-center rounded border border-border text-text-muted hover:text-text-primary cursor-pointer">
-                                    <Minus size={9} />
-                                  </button>
-                                  <span className="w-5 text-center font-mono text-text-primary">{line.quantity}</span>
-                                  <button onClick={() => updateCartQuantity(line.key, line.quantity + 1)} className="w-5 h-5 flex items-center justify-center rounded border border-border text-text-muted hover:text-text-primary cursor-pointer">
-                                    <Plus size={9} />
+                                  <button onClick={() => removeFromCart(line.key)} title="Remover" className="text-text-muted hover:text-danger cursor-pointer">
+                                    <Trash2 size={12} />
                                   </button>
                                 </div>
                               </td>
-                              <td className="px-1 py-1.5 align-top text-center text-text-muted">{line.unit}</td>
-                              <td className="px-2 py-1.5 align-top text-right font-mono text-text-primary">{formatKz(lineTotal)}</td>
+                              <td className="px-1 py-2 align-top">
+                                <div className="flex items-center justify-center gap-1">
+                                  <button onClick={() => updateCartQuantity(line.key, line.quantity - 1)} className="w-6 h-6 flex items-center justify-center rounded border border-border text-text-muted hover:text-text-primary hover:border-accent cursor-pointer">
+                                    <Minus size={11} />
+                                  </button>
+                                  <span className="min-w-[28px] text-center font-mono text-text-primary">{line.quantity}</span>
+                                  <button onClick={() => updateCartQuantity(line.key, line.quantity + 1)} className="w-6 h-6 flex items-center justify-center rounded border border-border text-text-muted hover:text-text-primary hover:border-accent cursor-pointer">
+                                    <Plus size={11} />
+                                  </button>
+                                </div>
+                                <p className="text-center text-[10px] text-text-muted mt-0.5">{line.unit}</p>
+                              </td>
+                              <td className="px-2 py-2 align-top text-right font-mono text-text-muted whitespace-nowrap">{formatKz(line.price)}</td>
+                              <td className="px-2.5 py-2 align-top text-right font-mono text-text-primary font-medium whitespace-nowrap">{formatKz(lineTotal)}</td>
                             </tr>
                             {expandedDiscountKey === line.key && (
-                              <tr key={line.key + '-discount'} className="border-t border-border/50">
-                                <td colSpan={4} className="px-2 pb-1.5 pt-0.5">
+                              <tr className="border-t border-border/50">
+                                <td colSpan={4} className="px-2.5 pb-2 pt-1">
                                   <div className="flex items-center gap-1.5">
-                                    <span className="text-[10px] text-text-muted">Desconto:</span>
+                                    <span className="text-[11px] text-text-muted">Desconto:</span>
                                     <input
                                       type="number" min="0" max="100" step="1"
                                       value={line.discountPercent || ''}
                                       onChange={(e) => updateCartDiscount(line.key, e.target.value)}
                                       placeholder="0"
                                       autoFocus
-                                      className="w-14 bg-bg-inset border border-border rounded px-1.5 py-0.5 text-[11px] text-text-primary font-mono outline-none focus:border-accent transition-colors"
+                                      className="w-16 bg-bg-inset border border-border rounded px-1.5 py-0.5 text-[12px] text-text-primary font-mono outline-none focus:border-accent transition-colors"
                                     />
-                                    <span className="text-[10px] text-text-muted">%</span>
+                                    <span className="text-[11px] text-text-muted">%</span>
                                   </div>
                                 </td>
                               </tr>
@@ -1387,7 +1400,7 @@ export default function Caixa() {
         </div>
       </Modal>
 
-      <Modal open={dailyReportModalOpen} onClose={() => setDailyReportModalOpen(false)} title="Relatorio do dia" maxWidthClass="max-w-2xl">
+      <Modal variant="drawer" drawerLeftClass="left-16" open={dailyReportModalOpen} onClose={() => setDailyReportModalOpen(false)} title="Relatorio do dia" maxWidthClass="max-w-2xl">
         <div className="flex flex-col gap-4">
           <div className="flex items-end gap-2.5">
             <div className="flex-1">
@@ -1587,7 +1600,7 @@ export default function Caixa() {
         </div>
       </Modal>
 
-      <Modal open={moedeiroModalOpen} onClose={() => setMoedeiroModalOpen(false)} title="Moedeiro (billetagem)" maxWidthClass="max-w-md">
+      <Modal variant="drawer" drawerLeftClass="left-16" open={moedeiroModalOpen} onClose={() => setMoedeiroModalOpen(false)} title="Moedeiro (billetagem)" maxWidthClass="max-w-md">
         <div className="flex flex-col gap-4">
           <div>
             <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Tipo de contagem</label>
@@ -1695,7 +1708,7 @@ export default function Caixa() {
         </div>
       </Modal>
 
-      <Modal open={movementModalOpen} onClose={() => setMovementModalOpen(false)} title="Operacoes de Caixa">
+      <Modal variant="drawer" drawerLeftClass="left-16" open={movementModalOpen} onClose={() => setMovementModalOpen(false)} title="Operacoes de Caixa">
         <div className="flex items-center gap-1.5 mb-4 border-b border-border">
           <button
             onClick={() => setMovementModalTab('form')}
@@ -1955,7 +1968,7 @@ export default function Caixa() {
         </div>
       </Modal>
 
-      <Modal open={articlesModalOpen} onClose={() => setArticlesModalOpen(false)} title="Consultar artigos">
+      <Modal variant="drawer" drawerLeftClass="left-16" open={articlesModalOpen} onClose={() => setArticlesModalOpen(false)} title="Consultar artigos">
         <div className="flex flex-col gap-3">
           <div className="relative">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
@@ -1989,8 +2002,8 @@ export default function Caixa() {
       </Modal>
 
 
-      <Modal open={proFormaModalOpen} onClose={() => setProFormaModalOpen(false)} title="Consultar documentos" maxWidthClass="max-w-4xl">
-        <div className="flex flex-col gap-3 min-h-[460px]">
+      <Modal variant="drawer" drawerLeftClass="left-16" open={proFormaModalOpen} onClose={() => setProFormaModalOpen(false)} title="Consultar documentos" maxWidthClass="max-w-4xl">
+        <div className="flex flex-col gap-3">
           <div className="flex gap-1 border-b border-border">
             {[['docs', 'Documentos emitidos', recentInvoices.length], ['proformas', 'Pro-formas pendentes', pendingProFormas.length]].map(([key, label, count]) => (
               <button key={key} type="button" onClick={() => setDocsTab(key)} className={'px-3.5 py-2 text-[13px] font-medium border-b-2 -mb-px transition-colors cursor-pointer ' + (docsTab === key ? 'border-accent text-text-primary' : 'border-transparent text-text-muted hover:text-text-primary')}>
@@ -2007,7 +2020,7 @@ export default function Caixa() {
             <p className="text-text-muted text-[13px] text-center py-8">Nenhuma pro-forma pendente de liquidacao</p>
           ) : (
             <div>
-              <div className="max-h-[280px] overflow-y-auto overflow-x-auto scrollbar-thin">
+              <div className="max-h-[calc(100vh-15rem)] overflow-y-auto overflow-x-auto scrollbar-thin">
               <table className="w-full text-[12px] border-collapse">
                 <thead className="sticky top-0 bg-bg-elevated">
                   <tr className="border-b border-border text-[10px] font-semibold text-text-muted uppercase tracking-wide">
@@ -2050,7 +2063,7 @@ export default function Caixa() {
             ) : recentInvoices.length === 0 ? (
               <p className="text-text-muted text-[13px] text-center py-6">Nenhum documento emitido ainda</p>
             ) : (
-              <div className="max-h-[420px] overflow-y-auto overflow-x-auto scrollbar-thin">
+              <div className="max-h-[calc(100vh-15rem)] overflow-y-auto overflow-x-auto scrollbar-thin">
                 <table className="w-full text-[12px] border-collapse">
                   <thead className="sticky top-0 bg-bg-elevated">
                     <tr className="border-b border-border text-[10px] font-semibold text-text-muted uppercase tracking-wide">
@@ -2132,5 +2145,6 @@ export default function Caixa() {
       </Modal>
       <DocumentActionModals cashPosId={selectedPosId} ref={documentActionsRef} onSuccess={() => listRecentIssuedInvoices(selectedPosId).then(setRecentInvoices).catch(() => {})} />
     </main>
+    </div>
   );
 }
