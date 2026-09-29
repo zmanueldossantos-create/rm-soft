@@ -154,6 +154,7 @@ export default function Caixa() {
   const [lastInvoice, setLastInvoice] = useState(null);
 
   const [proFormaModalOpen, setProFormaModalOpen] = useState(false);
+  const [docsTab, setDocsTab] = useState('docs'); // Consultar documentos: 'docs' (issued) or 'proformas'
   const [pendingProFormas, setPendingProFormas] = useState([]);
   const [proFormaLoading, setProFormaLoading] = useState(false);
   const [proFormaError, setProFormaError] = useState('');
@@ -747,6 +748,7 @@ export default function Caixa() {
   async function openProFormaSearchModal() {
     setProFormaError('');
     setProFormaModalOpen(true);
+    setDocsTab('docs');
     setProFormaLoading(true);
     setRecentInvoicesLoading(true);
     try {
@@ -1988,7 +1990,15 @@ export default function Caixa() {
 
 
       <Modal open={proFormaModalOpen} onClose={() => setProFormaModalOpen(false)} title="Consultar documentos" maxWidthClass="max-w-4xl">
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3 min-h-[460px]">
+          <div className="flex gap-1 border-b border-border">
+            {[['docs', 'Documentos emitidos', recentInvoices.length], ['proformas', 'Pro-formas pendentes', pendingProFormas.length]].map(([key, label, count]) => (
+              <button key={key} type="button" onClick={() => setDocsTab(key)} className={'px-3.5 py-2 text-[13px] font-medium border-b-2 -mb-px transition-colors cursor-pointer ' + (docsTab === key ? 'border-accent text-text-primary' : 'border-transparent text-text-muted hover:text-text-primary')}>
+                {label} <span className="ml-1 text-[11px] font-mono text-text-muted">{count}</span>
+              </button>
+            ))}
+          </div>
+          <div className={docsTab === 'proformas' ? '' : 'hidden'}>
           {proFormaLoading ? (
             <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin text-accent" /></div>
           ) : proFormaError ? (
@@ -1997,7 +2007,6 @@ export default function Caixa() {
             <p className="text-text-muted text-[13px] text-center py-8">Nenhuma pro-forma pendente de liquidacao</p>
           ) : (
             <div>
-              <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wide mb-2">Pro-formas pendentes de liquidacao</p>
               <div className="max-h-[280px] overflow-y-auto overflow-x-auto scrollbar-thin">
               <table className="w-full text-[12px] border-collapse">
                 <thead className="sticky top-0 bg-bg-elevated">
@@ -2034,8 +2043,8 @@ export default function Caixa() {
             </div>
           )}
 
-          <div className="border-t border-border pt-3 mt-1">
-            <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wide mb-2">Documentos emitidos</p>
+          </div>
+          <div className={docsTab === 'docs' ? '' : 'hidden'}>
             {recentInvoicesLoading ? (
               <div className="flex justify-center py-6"><Loader2 size={18} className="animate-spin text-accent" /></div>
             ) : recentInvoices.length === 0 ? (

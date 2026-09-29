@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Plus, Trash2, Loader2, Copy, Eye, ArrowLeft, ArrowRight, Check } from 'lucide-react';
+import { Plus, Trash2, Loader2, Copy, Eye, ArrowLeft, ArrowRight, Check, FileText } from 'lucide-react';
 import Select from './Select';
 import Modal from './Modal';
 import { createInvoice, createProForma, getInvoiceDetail, createCreditNote, createDebitNote, getCreditNoteInfo, getOpenCashPoints } from '../api/invoices';
@@ -776,12 +776,11 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                         key={c.type}
                         type="button"
                         onClick={() => setInvoiceType(c.type)}
-                        className={'text-left border-2 rounded-xl p-3.5 flex items-start gap-3 transition-colors cursor-pointer ' + (invoiceType === c.type ? 'border-accent bg-accent/5' : 'border-border hover:border-accent/50')}
+                        className={'flex flex-col items-center justify-center gap-1.5 bg-bg-inset border rounded-lg py-3.5 px-3 text-center transition-colors cursor-pointer ' + (invoiceType === c.type ? 'border-accent bg-accent/5' : 'border-accent/20 hover:border-accent hover:bg-accent/5')}
                       >
-                        <div>
-                          <p className="text-sm font-medium text-text-primary">{c.name}</p>
-                          {c.description && <p className="text-[12px] text-text-muted mt-0.5">{c.description}</p>}
-                        </div>
+                        <FileText size={18} className="text-accent" />
+                        <span className="text-[12px] font-medium text-text-primary leading-tight">{c.name}</span>
+                        {c.description && <span className="text-[11px] text-text-muted leading-tight">{c.description}</span>}
                       </button>
                     ))}
                     </div>
