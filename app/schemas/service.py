@@ -65,6 +65,7 @@ class ServiceResponse(BaseModel):
     resource_type_id: uuid.UUID | None
     description: str | None
     unit_of_measure_id: uuid.UUID | None
+    unit_of_measure_code: str | None = None  # attached by the list: the unit's code (UN, CX...)
     price: float | None
     duration_minutes: int | None = None
     brand: str | None

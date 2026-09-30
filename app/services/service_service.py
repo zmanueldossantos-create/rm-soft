@@ -90,7 +90,17 @@ async def list_services(db: AsyncSession, company_id: uuid.UUID) -> list[Service
     result = await db.execute(
         select(Service).where(Service.company_id == company_id).order_by(Service.created_at.desc())
     )
-    return list(result.scalars().all())
+    services = list(result.scalars().all())
+    # The unit code travels with each article: any screen that can list it (the Caixa included) shows its unit
+    # without needing access to the units catalog.
+    from app.models.unit_of_measure_catalog import UnitOfMeasureCatalog
+    unit_ids = {a.unit_of_measure_id for a in services if a.unit_of_measure_id}
+    codes = dict((await db.execute(
+        select(UnitOfMeasureCatalog.id, UnitOfMeasureCatalog.code).where(UnitOfMeasureCatalog.id.in_(unit_ids))
+    )).all()) if unit_ids else {}
+    for a in services:
+        a.unit_of_measure_code = codes.get(a.unit_of_measure_id)
+    return services
 
 
 async def get_service_or_raise(db: AsyncSession, company_id: uuid.UUID, service_id: uuid.UUID) -> Service:

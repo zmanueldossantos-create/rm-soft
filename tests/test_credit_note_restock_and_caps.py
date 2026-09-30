@@ -600,3 +600,22 @@ async def test_a_receipt_on_an_unknown_bank_account_is_refused(db, company_with_
         await create_receipt(db, ids['company'], ids['activity'], reference_invoice_id=invoice_id, amount=100.0,
                              payment_method_id=ctx['pm_mb'].id, bank_account_id=_uuid.uuid4())
     assert 'Conta bancaria invalida' in str(excinfo.value)
+
+
+from app.models.unit_of_measure_catalog import UnitOfMeasureCatalog  # noqa: E402
+from app.services.product_service import list_products  # noqa: E402
+
+
+@pytest.mark.asyncio
+async def test_listed_products_carry_their_unit_code(db, company_with_essentials):
+    ids = _ids(company_with_essentials)
+    unit = UnitOfMeasureCatalog(code='CX', name='Caixa')
+    db.add(unit)
+    await db.commit()
+    await db.refresh(unit)
+    product_id = await _product_in_stock(db, ids, 'PRD-UN')
+    product = (await db.execute(select(Product).where(Product.id == product_id))).scalar_one()
+    product.unit_of_measure_id = unit.id
+    await db.commit()
+    listed = {p.id: p for p in await list_products(db, ids['company'])}
+    assert listed[product_id].unit_of_measure_code == 'CX'

@@ -169,6 +169,7 @@ class ProductResponse(BaseModel):
     is_sold_by_weight: bool
     product_type: str
     unit_of_measure_id: uuid.UUID | None
+    unit_of_measure_code: str | None = None  # attached by the list: the unit's code (UN, CX...)
     unit_of_measure_legacy: str | None
     batch_yield: float
     is_raw_material: bool

@@ -5,7 +5,7 @@ import { listDenominations, recordDenominationCount, getLatestDenominationCount 
 import { listProductCategories } from '../api/productCategories';
 import { listServices } from '../api/services';
 import { listVatRates } from '../api/vat';
-import { withholdingTaxesApi, paymentTermsApi, unitsApi } from '../api/catalogs';
+import { withholdingTaxesApi, paymentTermsApi } from '../api/catalogs';
 import useDocumentRules, { DOC_CODE_BY_TYPE } from '../utils/documentRules';
 import { getMyCompanyBankAccounts } from '../api/company';
 import { createProFormaFromPos } from '../api/pos';
@@ -156,11 +156,6 @@ export default function Caixa() {
   const [proFormaModalOpen, setProFormaModalOpen] = useState(false);
   const [docsTab, setDocsTab] = useState('docs'); // Consultar documentos: 'docs' (issued) or 'proformas'
   // The cart starts where it sits and runs down to the footer (h-11): only its lines scroll.
-  // Units of measure catalog: a cart line shows the article's own unit code (as the invoice form does).
-  const [units, setUnits] = useState([]);
-  useEffect(() => {
-    unitsApi.list().then(setUnits).catch(() => setUnits([]));
-  }, []);
   const cartRef = useRef(null);
   const [cartHeight, setCartHeight] = useState(0);
   useEffect(() => {
@@ -636,7 +631,7 @@ export default function Caixa() {
         discountPercent: 0,
         vatId: item.vat_id,
         withholdingTaxId: isService ? item.withholding_tax_id : null,
-        unit: units.find((u) => u.id === item.unit_of_measure_id)?.code || (!isService && item.is_sold_by_weight ? 'Kg' : 'Un'),
+        unit: item.unit_of_measure_code || (!isService && item.is_sold_by_weight ? 'Kg' : 'Un'),
       }];
     });
   }
@@ -1086,7 +1081,7 @@ export default function Caixa() {
                           <p className="font-mono text-accent text-[13px] font-semibold">{formatKz(p.price)} Kz</p>
                           {p.managed_by_stock && (
                             <span className={'text-[10px] font-mono ' + ((stockLevels[p.id] ?? 0) <= 0 ? 'text-danger' : (stockLevels[p.id] ?? 0) <= (p.min_stock_threshold || 0) ? 'text-accent' : 'text-text-muted')}>
-                              {stockLevels[p.id] ?? 0} {units.find((u) => u.id === p.unit_of_measure_id)?.code || (p.is_sold_by_weight ? 'Kg' : 'Un')}
+                              {stockLevels[p.id] ?? 0} {p.unit_of_measure_code || (p.is_sold_by_weight ? 'Kg' : 'Un')}
                             </span>
                           )}
                         </div>
