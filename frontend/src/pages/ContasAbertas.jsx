@@ -601,7 +601,7 @@ export default function ContasAbertas() {
                       <p className="text-[11px] text-accent font-mono">{formatKz(p.price)} Kz</p>
                       {p.managed_by_stock && (
                         <span className={'text-[10px] font-mono ' + ((stockLevels[p.id] ?? 0) <= 0 ? 'text-danger' : (stockLevels[p.id] ?? 0) <= (p.min_stock_threshold || 0) ? 'text-accent' : 'text-text-muted')}>
-                          {stockLevels[p.id] ?? 0} {p.is_sold_by_weight ? 'Kg' : 'un'}
+                          {stockLevels[p.id] ?? 0} {p.unit_of_measure_code || 'Un'}
                         </span>
                       )}
                     </div>

@@ -679,3 +679,24 @@ async def test_the_sale_unit_of_another_product_is_refused(db, company_with_esse
     other_box = await _box_of(db, ids, other_id, "CX7")
     with pytest.raises(ProductNotFoundError, match="Unidade de venda invalida"):
         await _ft_in_box(db, ids, product_id, other_box.id)
+
+
+@pytest.mark.asyncio
+async def test_a_decimal_quantity_only_in_a_fractional_unit(db, company_with_essentials):
+    ids = _ids(company_with_essentials)
+    product_id = await _product_in_stock(db, ids, "PRD-KG")
+    with pytest.raises(ProductNotFoundError, match="deve ser inteira"):
+        await create_invoice(db, ids["company"], ids["activity"], customer_id=None, invoice_type="FACTURA",
+                             lines_input=[{"product_id": product_id, "quantity": 1.5}])
+    await db.rollback()
+    kilo = UnitOfMeasureCatalog(code="KGT", name="Quilo teste", is_fractional=True)
+    db.add(kilo)
+    await db.commit()
+    await db.refresh(kilo)
+    product = (await db.execute(select(Product).where(Product.id == product_id))).scalar_one()
+    product.unit_of_measure_id = kilo.id
+    await db.commit()
+    before = await _stock(db, ids, product_id)
+    await create_invoice(db, ids["company"], ids["activity"], customer_id=None, invoice_type="FACTURA",
+                         lines_input=[{"product_id": product_id, "quantity": 1.25}])
+    assert await _stock(db, ids, product_id) == pytest.approx(before - 1.25)

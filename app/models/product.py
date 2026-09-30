@@ -69,7 +69,6 @@ class Product(Base):
     purchase_price: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)  # preco de compra
     min_stock_threshold: Mapped[float] = mapped_column(Numeric(12, 3), nullable=False, default=0)
     expiry_date: Mapped[date | None] = mapped_column(Date, nullable=True)  # DLC
-    is_sold_by_weight: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)  # section 5.5
     product_type: Mapped[ProductType] = mapped_column(Enum(ProductType), nullable=False, default=ProductType.BEM)
     # Platform catalog reference (Configuracoes > Unidades) - replaces the
     # old free-text field; existing rows keep their raw text separately

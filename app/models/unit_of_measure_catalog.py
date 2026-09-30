@@ -19,6 +19,8 @@ class UnitOfMeasureCatalog(Base):
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     # Universal units always hold the same count (a dozen is 12): a product's sale unit in it must use that factor.
     fixed_factor: Mapped[float | None] = mapped_column(Numeric(14, 4), nullable=True)
+    # A fractional unit (KG, L) takes decimal quantities (1.250 kg); any other is sold in whole units only.
+    is_fractional: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

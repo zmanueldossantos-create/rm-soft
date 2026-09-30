@@ -165,29 +165,32 @@ async def _exemption_code_for(db: AsyncSession, article, vat_rate: float) -> str
 
 
 async def _sale_unit_for_line(
-    db: AsyncSession, company_id: uuid.UUID, product: Product, sale_unit_id,
+    db: AsyncSession, company_id: uuid.UUID, product: Product, sale_unit_id, quantity: float | None = None,
 ) -> tuple[float, float, uuid.UUID | None, str | None]:
     """Price, factor, sale unit id and unit code of a product line: the product itself (its base unit, factor 1)
-    unless the line is sold in one of ITS active sale units (a pallet of 30 eggs at 3000)."""
+    unless the line is sold in one of ITS active sale units (a pallet of 30 eggs at 3000). An internal-use article is
+    never sold; a decimal quantity (1.250) is only allowed in a fractional unit (KG, L)."""
     if getattr(product, "internal_use_only", False):
         raise ProductNotFoundError(f"{product.name} e de uso interno e nao pode ser vendido")
-    if not sale_unit_id:
-        base_code = (await db.execute(
-            select(UnitOfMeasureCatalog.code).where(UnitOfMeasureCatalog.id == product.unit_of_measure_id)
-        )).scalar_one_or_none() if product.unit_of_measure_id else None
-        return float(product.price), 1.0, None, base_code
-    sale_unit = (await db.execute(
-        select(ProductSaleUnit).where(
-            ProductSaleUnit.id == sale_unit_id, ProductSaleUnit.product_id == product.id,
-            ProductSaleUnit.company_id == company_id, ProductSaleUnit.is_active.is_(True),
-        )
-    )).scalar_one_or_none()
-    if sale_unit is None:
-        raise ProductNotFoundError(f"Unidade de venda invalida ou inativa para {product.name}")
-    code = (await db.execute(
-        select(UnitOfMeasureCatalog.code).where(UnitOfMeasureCatalog.id == sale_unit.unit_of_measure_id)
-    )).scalar_one_or_none()
-    return float(sale_unit.price), float(sale_unit.factor), sale_unit.id, code
+    if sale_unit_id:
+        sale_unit = (await db.execute(
+            select(ProductSaleUnit).where(
+                ProductSaleUnit.id == sale_unit_id, ProductSaleUnit.product_id == product.id,
+                ProductSaleUnit.company_id == company_id, ProductSaleUnit.is_active.is_(True),
+            )
+        )).scalar_one_or_none()
+        if sale_unit is None:
+            raise ProductNotFoundError(f"Unidade de venda invalida ou inativa para {product.name}")
+        unit_id, price, factor, line_sale_unit_id = sale_unit.unit_of_measure_id, float(sale_unit.price), float(sale_unit.factor), sale_unit.id
+    else:
+        unit_id, price, factor, line_sale_unit_id = product.unit_of_measure_id, float(product.price), 1.0, None
+    unit = (await db.execute(
+        select(UnitOfMeasureCatalog).where(UnitOfMeasureCatalog.id == unit_id)
+    )).scalar_one_or_none() if unit_id else None
+    code = unit.code if unit else None
+    if quantity is not None and abs(quantity - round(quantity)) > 1e-9 and not (unit and unit.is_fractional):
+        raise ProductNotFoundError(f"{product.name}: a quantidade deve ser inteira ({code or 'unidade'})")
+    return price, factor, line_sale_unit_id, code
 
 
 async def create_invoice(
@@ -335,7 +338,7 @@ async def create_invoice(
             vat = vat_result.scalar_one_or_none()
             vat_rate = float(vat.rate) if vat else 0.0
             unit_price, line_unit_factor, line_sale_unit_id, line_unit_code = await _sale_unit_for_line(
-                db, company_id, product, line_input.get("sale_unit_id"),
+                db, company_id, product, line_input.get("sale_unit_id"), quantity=float(line_input["quantity"]),
             )
             line_input["_unit_factor"] = line_unit_factor  # stock moves quantity x factor (base units)
             item_name = product.name
@@ -1226,7 +1229,7 @@ async def create_debit_note(
             vat = vat_result.scalar_one_or_none()
             vat_rate = float(vat.rate) if vat else 0.0
             unit_price, line_unit_factor, line_sale_unit_id, line_unit_code = await _sale_unit_for_line(
-                db, company_id, product, line_input.get("sale_unit_id"),
+                db, company_id, product, line_input.get("sale_unit_id"), quantity=float(line_input["quantity"]),
             )
             line_input["_unit_factor"] = line_unit_factor  # stock moves quantity x factor (base units)
             item_name = product.name
@@ -1597,7 +1600,7 @@ async def create_pro_forma(
             vat = vat_result.scalar_one_or_none()
             vat_rate = float(vat.rate) if vat else 0.0
             unit_price, line_unit_factor, line_sale_unit_id, line_unit_code = await _sale_unit_for_line(
-                db, company_id, product, line_input.get("sale_unit_id"),
+                db, company_id, product, line_input.get("sale_unit_id"), quantity=float(line_input["quantity"]),
             )
             line_input["_unit_factor"] = line_unit_factor  # stock moves quantity x factor (base units)
             item_name = product.name

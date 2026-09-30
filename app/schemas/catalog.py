@@ -283,6 +283,7 @@ class UnitOfMeasureCatalogRequest(BaseModel):
     code: str
     name: str
     fixed_factor: float | None = None  # e.g. 12 for a dozen; empty for units whose count depends on the product
+    is_fractional: bool = False  # takes decimal quantities (KG, L)
 
 
 class UnitOfMeasureCatalogResponse(BaseModel):
@@ -290,6 +291,7 @@ class UnitOfMeasureCatalogResponse(BaseModel):
     code: str
     name: str
     fixed_factor: float | None = None
+    is_fractional: bool = False
     is_active: bool
 
     class Config:

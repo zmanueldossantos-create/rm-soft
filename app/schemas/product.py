@@ -33,7 +33,6 @@ class ProductCreateRequest(BaseModel):
     price: float
     min_stock_threshold: float = 0
     expiry_date: date | None = None
-    is_sold_by_weight: bool = False
     product_type: str = "BEM"
     unit_of_measure_id: uuid.UUID | None = None
     batch_yield: float = 1
@@ -99,7 +98,6 @@ class ProductUpdateRequest(BaseModel):
     price: float
     min_stock_threshold: float = 0
     expiry_date: date | None = None
-    is_sold_by_weight: bool = False
     product_type: str = "BEM"
     unit_of_measure_id: uuid.UUID | None = None
     batch_yield: float = 1
@@ -166,11 +164,11 @@ class ProductResponse(BaseModel):
     price: float
     min_stock_threshold: float
     expiry_date: date | None
-    is_sold_by_weight: bool
     product_type: str
     unit_of_measure_id: uuid.UUID | None
     unit_of_measure_code: str | None = None  # attached by the list: the unit's code (UN, CX...)
-    sale_units: list[dict] = []  # attached by the list: active sale units (id, code, factor, price, barcode)
+    sale_units: list[dict] = []  # attached by the list: active sale units (id, code, factor, price, barcode, is_fractional)
+    unit_is_fractional: bool = False  # attached by the list: the base unit takes decimal quantities
     unit_of_measure_legacy: str | None
     batch_yield: float
     is_raw_material: bool

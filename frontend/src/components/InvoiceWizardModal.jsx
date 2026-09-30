@@ -314,7 +314,8 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
         retentionAmount = round2(subtotal * (Number(wh.rate) / 100));
       }
     }
-    return { item, unitPrice, vatRate, unitLabel, gross, discountAmount, subtotal, vatAmount, total, retentionAmount };
+    const unitFractional = saleUnit ? !!saleUnit.is_fractional : !!item?.unit_is_fractional;
+    return { item, unitPrice, vatRate, unitLabel, unitFractional, gross, discountAmount, subtotal, vatAmount, total, retentionAmount };
   }
 
   const paidOnIssue = !!documentTypes.find((d) => d.code === INVOICE_TYPE_CODE[invoiceType])?.paid_on_issue;
@@ -1006,7 +1007,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                                 )}
                               </td>
                               <td className="py-2 px-2">
-                                <input type="number" step={c.item?.is_sold_by_weight ? '0.001' : '1'} min="0" value={line.quantity} onChange={(e) => updateLine(idx, 'quantity', e.target.value)} className={inputClass + ' text-right font-mono'} />
+                                <input type="number" step={c.unitFractional ? '0.001' : '1'} min="0" value={line.quantity} onChange={(e) => updateLine(idx, 'quantity', e.target.value)} className={inputClass + ' text-right font-mono'} />
                               </td>
                               <td className="py-2 px-2 text-right font-mono text-text-muted whitespace-nowrap">{c.item ? formatMoney(c.unitPrice) : '-'}</td>
                               <td className="py-2 px-2">

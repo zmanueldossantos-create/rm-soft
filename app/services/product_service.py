@@ -95,7 +95,6 @@ async def create_product(
     price: float,
     min_stock_threshold: float,
     expiry_date: date | None,
-    is_sold_by_weight: bool,
     product_type: str = "BEM",
     unit_of_measure_id: uuid.UUID | None = None,
     batch_yield: float = 1,
@@ -129,7 +128,6 @@ async def create_product(
         price=price,
         min_stock_threshold=min_stock_threshold,
         expiry_date=expiry_date,
-        is_sold_by_weight=is_sold_by_weight,
         product_type=product_type,
         unit_of_measure_id=unit_of_measure_id,
         batch_yield=batch_yield,
@@ -167,6 +165,12 @@ async def list_products(db: AsyncSession, company_id: uuid.UUID) -> list[Product
     )).all()) if unit_ids else {}
     for a in products:
         a.unit_of_measure_code = codes.get(a.unit_of_measure_id)
+    # Fractional units (KG, L): the screens then accept decimal quantities for the base unit or a sale unit.
+    fractional_ids = set((await db.execute(
+        select(UnitOfMeasureCatalog.id).where(UnitOfMeasureCatalog.is_fractional.is_(True))
+    )).scalars().all())
+    for a in products:
+        a.unit_is_fractional = a.unit_of_measure_id in fractional_ids
     # Their active sale units travel with them too (one query for the whole list): the Caixa and the invoice form offer
     # them at once, and a scanned barcode can be one of them.
     from app.models.product_sale_unit import ProductSaleUnit
@@ -182,6 +186,7 @@ async def list_products(db: AsyncSession, company_id: uuid.UUID) -> list[Product
             by_product.setdefault(sale_unit.product_id, []).append({
                 "id": sale_unit.id, "unit_of_measure_code": code, "factor": float(sale_unit.factor),
                 "price": float(sale_unit.price), "barcode": sale_unit.barcode,
+                "is_fractional": sale_unit.unit_of_measure_id in fractional_ids,
             })
     for a in products:
         a.sale_units = by_product.get(a.id, [])
@@ -209,7 +214,6 @@ async def update_product(
     price: float,
     min_stock_threshold: float,
     expiry_date: date | None,
-    is_sold_by_weight: bool,
     product_type: str = "BEM",
     unit_of_measure_id: uuid.UUID | None = None,
     batch_yield: float = 1,
@@ -242,7 +246,6 @@ async def update_product(
     product.price = price
     product.min_stock_threshold = min_stock_threshold
     product.expiry_date = expiry_date
-    product.is_sold_by_weight = is_sold_by_weight
     product.product_type = product_type
     product.unit_of_measure_id = unit_of_measure_id
     product.batch_yield = batch_yield

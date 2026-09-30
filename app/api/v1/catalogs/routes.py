@@ -350,13 +350,13 @@ async def get_units(db: AsyncSession = Depends(get_db), current_user: User = Dep
 
 @router.post("/units", response_model=UnitOfMeasureCatalogResponse, status_code=status.HTTP_201_CREATED)
 async def post_unit(payload: UnitOfMeasureCatalogRequest, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_role("SUPER_ADMIN"))):
-    return await catalog_service.create_unit(db, payload.code, payload.name, payload.fixed_factor)
+    return await catalog_service.create_unit(db, payload.code, payload.name, payload.fixed_factor, payload.is_fractional)
 
 
 @router.patch("/units/{item_id}", response_model=UnitOfMeasureCatalogResponse)
 async def patch_unit(item_id: uuid.UUID, payload: UnitOfMeasureCatalogRequest, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_role("SUPER_ADMIN"))):
     try:
-        return await catalog_service.update_unit(db, item_id, payload.code, payload.name, payload.fixed_factor)
+        return await catalog_service.update_unit(db, item_id, payload.code, payload.name, payload.fixed_factor, payload.is_fractional)
     except CatalogItemNotFoundError as e:
         _not_found(e)
 

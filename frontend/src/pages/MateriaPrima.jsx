@@ -106,7 +106,6 @@ export default function MateriaPrima() {
       price: 0,
       min_stock_threshold: parseFloat(form.min_stock_threshold || '0'),
       expiry_date: null,
-      is_sold_by_weight: false,
       product_type: 'BEM',
       unit_of_measure_id: form.unit_of_measure_id || null,
       batch_yield: 1,

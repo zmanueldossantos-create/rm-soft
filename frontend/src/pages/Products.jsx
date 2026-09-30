@@ -42,7 +42,7 @@ const STATUS_COLOR = {
 
 const emptyForm = {
   code: '', name: '', barcode: '', vat_id: '', price: '', purchasePrice: '',
-  minStockThreshold: '0', expiryDate: '', isSoldByWeight: false,
+  minStockThreshold: '0', expiryDate: '',
   unitOfMeasureId: '', categoryId: '', brand: '',
   managedByBatch: false, managedByStock: true, managedByExpiry: false,
   notAvailablePos: false, internalUseOnly: false, status: 'ACTIVO',
@@ -134,7 +134,6 @@ export default function Products() {
       purchasePrice: product.purchase_price != null ? String(product.purchase_price) : '',
       minStockThreshold: String(product.min_stock_threshold),
       expiryDate: product.expiry_date || '',
-      isSoldByWeight: product.is_sold_by_weight,
       unitOfMeasureId: product.unit_of_measure_id || '',
       categoryId: product.category_id || '',
       brand: product.brand || '',
@@ -221,7 +220,6 @@ export default function Products() {
       purchase_price: form.purchasePrice !== '' ? parseFloat(form.purchasePrice) : null,
       min_stock_threshold: parseFloat(form.minStockThreshold || '0'),
       expiry_date: form.expiryDate || null,
-      is_sold_by_weight: form.isSoldByWeight,
       product_type: 'BEM',
       unit_of_measure_id: form.unitOfMeasureId || null,
       category_id: form.categoryId || null,
@@ -344,7 +342,7 @@ export default function Products() {
                       <div className="flex items-center gap-2">
                         {p.name}
                         {p.barcode && <Barcode size={13} className="text-text-muted" />}
-                        {p.is_sold_by_weight && <Scale size={13} className="text-text-muted" />}
+                        {p.unit_is_fractional && <Scale size={13} className="text-text-muted" />}
                       </div>
                     </td>
                     <td className="px-6 py-4 font-mono text-text-primary">{p.price.toFixed(2)} Kz</td>
@@ -471,10 +469,6 @@ export default function Products() {
             <label className="flex items-center gap-2.5 cursor-pointer select-none">
               <input type="checkbox" checked={form.managedByStock} onChange={(e) => updateField('managedByStock', e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
               <span className="text-sm text-text-primary">Gerido por stocks</span>
-            </label>
-            <label className="flex items-center gap-2.5 cursor-pointer select-none">
-              <input type="checkbox" checked={form.isSoldByWeight} onChange={(e) => updateField('isSoldByWeight', e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
-              <span className="text-sm text-text-primary">Vendido ao peso</span>
             </label>
             <label className="flex items-center gap-2.5 cursor-pointer select-none">
               <input type="checkbox" checked={form.notAvailablePos} onChange={(e) => updateField('notAvailablePos', e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />

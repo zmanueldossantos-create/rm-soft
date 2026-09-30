@@ -528,15 +528,15 @@ async def list_units(db: AsyncSession) -> list[UnitOfMeasureCatalog]:
     return list(result.scalars().all())
 
 
-async def create_unit(db: AsyncSession, code: str, name: str, fixed_factor: float | None = None) -> UnitOfMeasureCatalog:
-    item = UnitOfMeasureCatalog(code=code, name=name, fixed_factor=fixed_factor if fixed_factor and fixed_factor > 0 else None)
+async def create_unit(db: AsyncSession, code: str, name: str, fixed_factor: float | None = None, is_fractional: bool = False) -> UnitOfMeasureCatalog:
+    item = UnitOfMeasureCatalog(code=code, name=name, fixed_factor=fixed_factor if fixed_factor and fixed_factor > 0 else None, is_fractional=is_fractional)
     db.add(item)
     await db.commit()
     await db.refresh(item)
     return item
 
 
-async def update_unit(db: AsyncSession, item_id: uuid.UUID, code: str, name: str, fixed_factor: float | None = None) -> UnitOfMeasureCatalog:
+async def update_unit(db: AsyncSession, item_id: uuid.UUID, code: str, name: str, fixed_factor: float | None = None, is_fractional: bool = False) -> UnitOfMeasureCatalog:
     result = await db.execute(select(UnitOfMeasureCatalog).where(UnitOfMeasureCatalog.id == item_id))
     item = result.scalar_one_or_none()
     if item is None:
@@ -544,6 +544,7 @@ async def update_unit(db: AsyncSession, item_id: uuid.UUID, code: str, name: str
     item.code = code
     item.name = name
     item.fixed_factor = fixed_factor if fixed_factor and fixed_factor > 0 else None
+    item.is_fractional = is_fractional
     await db.commit()
     await db.refresh(item)
     return item

@@ -279,7 +279,7 @@ async def test_cannot_update_another_companys_product(db, company_with_essential
             db, company_a.id, product_b.id,
             code=product_b.code, name="Hackeado", barcode=None,
             vat_id=setup_b["vat"].id, price=1, min_stock_threshold=0,
-            expiry_date=None, is_sold_by_weight=False,
+            expiry_date=None,
         )
 
 

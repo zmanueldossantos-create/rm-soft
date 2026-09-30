@@ -634,11 +634,13 @@ export default function Caixa() {
         discountPercent: 0,
         vatId: item.vat_id,
         withholdingTaxId: isService ? item.withholding_tax_id : null,
-        unit: saleUnit ? saleUnit.unit_of_measure_code : (item.unit_of_measure_code || (!isService && item.is_sold_by_weight ? 'Kg' : 'Un')),
+        unit: saleUnit ? saleUnit.unit_of_measure_code : (item.unit_of_measure_code || 'Un'),
         saleUnitId: saleUnit ? saleUnit.id : null,
-        baseUnit: item.unit_of_measure_code || (!isService && item.is_sold_by_weight ? 'Kg' : 'Un'),
+        baseUnit: item.unit_of_measure_code || 'Un',
         basePrice: item.price,
         saleUnits: isService ? [] : (item.sale_units || []),
+        fractional: saleUnit ? !!saleUnit.is_fractional : (!isService && !!item.unit_is_fractional),
+        baseFractional: !isService && !!item.unit_is_fractional,
       }];
     });
   }
@@ -658,6 +660,7 @@ export default function Caixa() {
       return prev.map((l) => (l.key === key ? {
         ...l, key: newKey, saleUnitId: saleUnit ? saleUnit.id : null,
         price: saleUnit ? saleUnit.price : l.basePrice, unit: saleUnit ? saleUnit.unit_of_measure_code : l.baseUnit,
+        fractional: saleUnit ? !!saleUnit.is_fractional : !!l.baseFractional,
       } : l));
     });
   }
@@ -687,6 +690,14 @@ export default function Caixa() {
       setCart((prev) => prev.filter((line) => line.key !== key));
       return;
     }
+    setCart((prev) => prev.map((line) => (line.key === key ? { ...line, quantity } : line)));
+  }
+
+  // A fractional line (1.250 kg) takes its quantity typed in, committed on blur / Enter; an empty or zero entry never
+  // removes the line (only the - button does).
+  function setCartQuantityExact(key, value) {
+    const quantity = parseFloat(String(value).replace(',', '.'));
+    if (!(quantity > 0)) return;
     setCart((prev) => prev.map((line) => (line.key === key ? { ...line, quantity } : line)));
   }
 
@@ -1128,7 +1139,7 @@ export default function Caixa() {
                           <p className="font-mono text-accent text-[13px] font-semibold">{formatKz(p.price)} Kz</p>
                           {p.managed_by_stock && (
                             <span className={'text-[10px] font-mono ' + ((stockLevels[p.id] ?? 0) <= 0 ? 'text-danger' : (stockLevels[p.id] ?? 0) <= (p.min_stock_threshold || 0) ? 'text-accent' : 'text-text-muted')}>
-                              {stockLevels[p.id] ?? 0} {p.unit_of_measure_code || (p.is_sold_by_weight ? 'Kg' : 'Un')}
+                              {stockLevels[p.id] ?? 0} {p.unit_of_measure_code || 'Un'}
                             </span>
                           )}
                         </div>
@@ -1220,7 +1231,11 @@ export default function Caixa() {
                                   <button onClick={() => updateCartQuantity(line.key, line.quantity - 1)} className="w-6 h-6 flex items-center justify-center rounded border border-border text-text-muted hover:text-text-primary hover:border-accent cursor-pointer">
                                     <Minus size={11} />
                                   </button>
-                                  <span className="min-w-[28px] text-center font-mono text-text-primary">{line.quantity}</span>
+                                  {line.fractional ? (
+  <input key={line.key + ':' + line.quantity} type="text" inputMode="decimal" defaultValue={line.quantity} onBlur={(e) => setCartQuantityExact(line.key, e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }} className="w-16 bg-bg-inset border border-border rounded px-1.5 py-0.5 text-center font-mono text-[12px] text-text-primary outline-none focus:border-accent" />
+) : (
+  <span className="min-w-[28px] text-center font-mono text-text-primary">{line.quantity}</span>
+)}
                                   <button onClick={() => updateCartQuantity(line.key, line.quantity + 1)} className="w-6 h-6 flex items-center justify-center rounded border border-border text-text-muted hover:text-text-primary hover:border-accent cursor-pointer">
                                     <Plus size={11} />
                                   </button>
