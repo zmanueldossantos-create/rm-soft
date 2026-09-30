@@ -45,10 +45,10 @@ export default function Modal({
       </div>
       <button
         onClick={onClose}
-        className="text-text-muted hover:text-text-primary transition-colors cursor-pointer"
+        className="w-8 h-8 shrink-0 rounded-full border border-border flex items-center justify-center text-text-muted hover:text-accent hover:border-accent hover:bg-accent/5 transition-colors cursor-pointer"
         aria-label="Fechar"
       >
-        <X size={20} />
+        <X size={16} />
       </button>
     </div>
   );
