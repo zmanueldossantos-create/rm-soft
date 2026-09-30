@@ -13,6 +13,7 @@ class InvoiceLineCreateRequest(BaseModel):
     service_id: uuid.UUID | None = None
     quantity: float
     discount_percent: float = 0
+    sale_unit_id: uuid.UUID | None = None  # sold in one of the product's sale units; empty = its base unit
 
     @field_validator("quantity")
     @classmethod
@@ -62,6 +63,9 @@ class InvoiceLineResponse(BaseModel):
     product_name_snapshot: str
     quantity: float
     unit_price: float
+    sale_unit_id: uuid.UUID | None = None
+    unit_code_snapshot: str | None = None
+    unit_factor: float = 1
     discount_percent: float
     vat_rate_snapshot: float
     line_subtotal: float

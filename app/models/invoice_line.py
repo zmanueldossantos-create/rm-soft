@@ -28,6 +28,11 @@ class InvoiceLine(Base):
 
     product_name_snapshot: Mapped[str] = mapped_column(String(255), nullable=False)  # in case product is edited/deactivated later
     quantity: Mapped[float] = mapped_column(Numeric(12, 3), nullable=False)
+    # Sale unit the line was sold in (a pallet of 30 eggs): quantity counts that unit, stock moves quantity x unit_factor.
+    # Snapshots: a later change of the product's units never alters an issued document.
+    sale_unit_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("product_sale_units.id"), nullable=True)
+    unit_code_snapshot: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    unit_factor: Mapped[float] = mapped_column(Numeric(14, 4), nullable=False, default=1, server_default="1")
     unit_price: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
     discount_percent: Mapped[float] = mapped_column(Numeric(5, 2), nullable=False, default=0)
     vat_rate_snapshot: Mapped[float] = mapped_column(Numeric(5, 2), nullable=False)  # % at time of sale

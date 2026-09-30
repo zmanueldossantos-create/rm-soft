@@ -619,3 +619,63 @@ async def test_listed_products_carry_their_unit_code(db, company_with_essentials
     await db.commit()
     listed = {p.id: p for p in await list_products(db, ids['company'])}
     assert listed[product_id].unit_of_measure_code == 'CX'
+
+
+from app.models.product_sale_unit import ProductSaleUnit  # noqa: E402
+from app.services.invoice_service import ProductNotFoundError  # noqa: E402
+
+
+async def _box_of(db, ids, product_id, code, factor=5, price=4500):
+    unit = UnitOfMeasureCatalog(code=code, name="Caixa " + code)
+    db.add(unit)
+    await db.commit()
+    await db.refresh(unit)
+    sale_unit = ProductSaleUnit(company_id=ids["company"], product_id=product_id, unit_of_measure_id=unit.id, factor=factor, price=price)
+    db.add(sale_unit)
+    await db.commit()
+    await db.refresh(sale_unit)
+    return sale_unit
+
+
+async def _ft_in_box(db, ids, product_id, sale_unit_id, quantity=1):
+    return await create_invoice(
+        db, ids["company"], ids["activity"], customer_id=None, invoice_type="FACTURA",
+        lines_input=[{"product_id": product_id, "quantity": quantity, "sale_unit_id": sale_unit_id}],
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_box_sold_takes_its_factor_in_base_units_out_of_stock(db, company_with_essentials):
+    ids = _ids(company_with_essentials)
+    product_id = await _product_in_stock(db, ids, "PRD-SU1")
+    before = await _stock(db, ids, product_id)
+    assert before >= 5
+    box = await _box_of(db, ids, product_id, "CX5")
+    invoice = await _ft_in_box(db, ids, product_id, box.id)
+    line = (await db.execute(select(InvoiceLine).where(InvoiceLine.invoice_id == invoice.id))).scalar_one()
+    assert (float(line.quantity), float(line.unit_price), float(line.unit_factor)) == (1.0, 4500.0, 5.0)
+    assert (line.sale_unit_id, line.unit_code_snapshot) == (box.id, "CX5")
+    assert await _stock(db, ids, product_id) == before - 5
+
+
+@pytest.mark.asyncio
+async def test_a_credit_note_on_a_box_returns_its_base_units(db, company_with_essentials):
+    ids = _ids(company_with_essentials)
+    product_id = await _product_in_stock(db, ids, "PRD-SU2")
+    before = await _stock(db, ids, product_id)
+    box = await _box_of(db, ids, product_id, "CX6")
+    invoice = await _ft_in_box(db, ids, product_id, box.id)
+    credit_note = await _credit(db, ids, invoice.id, 1, restock=True)
+    assert await _stock(db, ids, product_id) == before
+    nc_line = (await db.execute(select(InvoiceLine).where(InvoiceLine.invoice_id == credit_note.id))).scalar_one()
+    assert (float(nc_line.unit_factor), nc_line.unit_code_snapshot, nc_line.sale_unit_id) == (5.0, "CX6", box.id)
+
+
+@pytest.mark.asyncio
+async def test_the_sale_unit_of_another_product_is_refused(db, company_with_essentials):
+    ids = _ids(company_with_essentials)
+    product_id = await _product_in_stock(db, ids, "PRD-SU3")
+    other_id = await _product_in_stock(db, ids, "PRD-SU4")
+    other_box = await _box_of(db, ids, other_id, "CX7")
+    with pytest.raises(ProductNotFoundError, match="Unidade de venda invalida"):
+        await _ft_in_box(db, ids, product_id, other_box.id)

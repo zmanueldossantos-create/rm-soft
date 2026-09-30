@@ -38,6 +38,8 @@ from app.models.invoice import Invoice, InvoiceStatus, InvoiceType, DocumentLife
 from app.models.cash_session import CashSession
 from app.models.invoice_line import InvoiceLine
 from app.models.product import Product
+from app.models.product_sale_unit import ProductSaleUnit
+from app.models.unit_of_measure_catalog import UnitOfMeasureCatalog
 from app.models.service import Service
 from app.models.withholding_tax import WithholdingTax
 from app.models.customer import LegalPersonType
@@ -162,6 +164,30 @@ async def _exemption_code_for(db: AsyncSession, article, vat_rate: float) -> str
     return vat_code.code
 
 
+async def _sale_unit_for_line(
+    db: AsyncSession, company_id: uuid.UUID, product: Product, sale_unit_id,
+) -> tuple[float, float, uuid.UUID | None, str | None]:
+    """Price, factor, sale unit id and unit code of a product line: the product itself (its base unit, factor 1)
+    unless the line is sold in one of ITS active sale units (a pallet of 30 eggs at 3000)."""
+    if not sale_unit_id:
+        base_code = (await db.execute(
+            select(UnitOfMeasureCatalog.code).where(UnitOfMeasureCatalog.id == product.unit_of_measure_id)
+        )).scalar_one_or_none() if product.unit_of_measure_id else None
+        return float(product.price), 1.0, None, base_code
+    sale_unit = (await db.execute(
+        select(ProductSaleUnit).where(
+            ProductSaleUnit.id == sale_unit_id, ProductSaleUnit.product_id == product.id,
+            ProductSaleUnit.company_id == company_id, ProductSaleUnit.is_active.is_(True),
+        )
+    )).scalar_one_or_none()
+    if sale_unit is None:
+        raise ProductNotFoundError(f"Unidade de venda invalida ou inativa para {product.name}")
+    code = (await db.execute(
+        select(UnitOfMeasureCatalog.code).where(UnitOfMeasureCatalog.id == sale_unit.unit_of_measure_id)
+    )).scalar_one_or_none()
+    return float(sale_unit.price), float(sale_unit.factor), sale_unit.id, code
+
+
 async def create_invoice(
     db: AsyncSession,
     company_id: uuid.UUID,
@@ -274,6 +300,7 @@ async def create_invoice(
             vat = vat_result.scalar_one_or_none()
             vat_rate = float(vat.rate) if vat else 0.0
             unit_price = float(service.price or 0)
+            line_unit_factor, line_sale_unit_id, line_unit_code = 1.0, None, None
             item_name = service.name
             line_product_id = None
             line_service_id = service.id
@@ -305,7 +332,10 @@ async def create_invoice(
             vat_result = await db.execute(select(VAT).where(VAT.id == product.vat_id))
             vat = vat_result.scalar_one_or_none()
             vat_rate = float(vat.rate) if vat else 0.0
-            unit_price = float(product.price)
+            unit_price, line_unit_factor, line_sale_unit_id, line_unit_code = await _sale_unit_for_line(
+                db, company_id, product, line_input.get("sale_unit_id"),
+            )
+            line_input["_unit_factor"] = line_unit_factor  # stock moves quantity x factor (base units)
             item_name = product.name
             line_product_id = product.id
             line_service_id = None
@@ -342,6 +372,9 @@ async def create_invoice(
             retention_amount=line_retention if line_retention > 0 else None,
             retention_type=line_retention_type if line_retention > 0 else None,
             exemption_code=line_exemption_code,
+            sale_unit_id=line_sale_unit_id,
+            unit_code_snapshot=line_unit_code,
+            unit_factor=line_unit_factor,
         ))
 
     subtotal_total = round(subtotal_total, 2)
@@ -487,7 +520,7 @@ async def create_invoice(
                 company_id=company_id,
                 warehouse_id=activity.warehouse_id,
                 product_id=line_input["product_id"],
-                quantity=float(line_input["quantity"]),
+                quantity=float(line_input["quantity"]) * float(line_input.get("_unit_factor", 1)),
                 reference=invoice_reference,
             )
     except InsufficientStockError as e:
@@ -829,7 +862,7 @@ async def create_credit_note(
         remaining_by_key[line_key] -= quantity
         # Mirrors the sale: only product lines, never a service line, moved stock.
         if ref_line.product_id and not ref_line.service_id:
-            restock_candidates.append((ref_line.product_id, quantity))
+            restock_candidates.append((ref_line.product_id, quantity * float(ref_line.unit_factor or 1)))  # base units
 
         unit_price = float(ref_line.unit_price)
         vat_rate = float(ref_line.vat_rate_snapshot)
@@ -864,6 +897,9 @@ async def create_credit_note(
             retention_amount=line_retention if line_retention > 0 else None,
             retention_type=ref_line.retention_type if line_retention > 0 else None,
             exemption_code=ref_line.exemption_code,
+            sale_unit_id=ref_line.sale_unit_id,
+            unit_code_snapshot=ref_line.unit_code_snapshot,
+            unit_factor=ref_line.unit_factor,
         ))
 
     # Fully credited when nothing remains to credit on any line, earlier credit notes included - judging this
@@ -1162,6 +1198,7 @@ async def create_debit_note(
             vat = vat_result.scalar_one_or_none()
             vat_rate = float(vat.rate) if vat else 0.0
             unit_price = float(service.price or 0)
+            line_unit_factor, line_sale_unit_id, line_unit_code = 1.0, None, None
             item_name = service.name
             line_product_id = None
             line_service_id = service.id
@@ -1186,7 +1223,10 @@ async def create_debit_note(
             vat_result = await db.execute(select(VAT).where(VAT.id == product.vat_id))
             vat = vat_result.scalar_one_or_none()
             vat_rate = float(vat.rate) if vat else 0.0
-            unit_price = float(product.price)
+            unit_price, line_unit_factor, line_sale_unit_id, line_unit_code = await _sale_unit_for_line(
+                db, company_id, product, line_input.get("sale_unit_id"),
+            )
+            line_input["_unit_factor"] = line_unit_factor  # stock moves quantity x factor (base units)
             item_name = product.name
             line_product_id = product.id
             line_service_id = None
@@ -1220,6 +1260,9 @@ async def create_debit_note(
             retention_amount=line_retention if line_retention > 0 else None,
             retention_type=line_retention_type if line_retention > 0 else None,
             exemption_code=line_exemption_code,
+            sale_unit_id=line_sale_unit_id,
+            unit_code_snapshot=line_unit_code,
+            unit_factor=line_unit_factor,
         ))
 
     subtotal_total = round(subtotal_total, 2)
@@ -1527,6 +1570,7 @@ async def create_pro_forma(
             vat = vat_result.scalar_one_or_none()
             vat_rate = float(vat.rate) if vat else 0.0
             unit_price = float(service.price or 0)
+            line_unit_factor, line_sale_unit_id, line_unit_code = 1.0, None, None
             item_name = service.name
             line_product_id = None
             line_service_id = service.id
@@ -1550,7 +1594,10 @@ async def create_pro_forma(
             vat_result = await db.execute(select(VAT).where(VAT.id == product.vat_id))
             vat = vat_result.scalar_one_or_none()
             vat_rate = float(vat.rate) if vat else 0.0
-            unit_price = float(product.price)
+            unit_price, line_unit_factor, line_sale_unit_id, line_unit_code = await _sale_unit_for_line(
+                db, company_id, product, line_input.get("sale_unit_id"),
+            )
+            line_input["_unit_factor"] = line_unit_factor  # stock moves quantity x factor (base units)
             item_name = product.name
             line_product_id = product.id
             line_service_id = None
@@ -1585,6 +1632,9 @@ async def create_pro_forma(
             retention_amount=line_retention if line_retention > 0 else None,
             retention_type=line_retention_type if line_retention > 0 else None,
             exemption_code=line_exemption_code,
+            sale_unit_id=line_sale_unit_id,
+            unit_code_snapshot=line_unit_code,
+            unit_factor=line_unit_factor,
         ))
 
     subtotal_total = round(subtotal_total, 2)
