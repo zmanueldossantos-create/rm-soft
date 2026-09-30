@@ -169,6 +169,8 @@ async def _sale_unit_for_line(
 ) -> tuple[float, float, uuid.UUID | None, str | None]:
     """Price, factor, sale unit id and unit code of a product line: the product itself (its base unit, factor 1)
     unless the line is sold in one of ITS active sale units (a pallet of 30 eggs at 3000)."""
+    if getattr(product, "internal_use_only", False):
+        raise ProductNotFoundError(f"{product.name} e de uso interno e nao pode ser vendido")
     if not sale_unit_id:
         base_code = (await db.execute(
             select(UnitOfMeasureCatalog.code).where(UnitOfMeasureCatalog.id == product.unit_of_measure_id)

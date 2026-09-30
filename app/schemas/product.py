@@ -170,6 +170,7 @@ class ProductResponse(BaseModel):
     product_type: str
     unit_of_measure_id: uuid.UUID | None
     unit_of_measure_code: str | None = None  # attached by the list: the unit's code (UN, CX...)
+    sale_units: list[dict] = []  # attached by the list: active sale units (id, code, factor, price, barcode)
     unit_of_measure_legacy: str | None
     batch_yield: float
     is_raw_material: bool

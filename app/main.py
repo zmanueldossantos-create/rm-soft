@@ -148,7 +148,12 @@ async def health():
     return {"status": "healthy"}
 
 
+# A stock rule refusal (warehouse frozen, product without stock) that no route catches itself: a clear 409, never a 500.
+from fastapi import Request as _Request  # noqa: E402
+from fastapi.responses import JSONResponse as _JSONResponse  # noqa: E402
+from app.services.stock_service import StockBlockedError as _StockBlockedError  # noqa: E402
 
 
-
-
+@app.exception_handler(_StockBlockedError)
+async def _stock_blocked_handler(request: _Request, exc: _StockBlockedError):
+    return _JSONResponse(status_code=409, content={"detail": str(exc)})

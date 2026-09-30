@@ -18,7 +18,7 @@ from app.models.movement_type import MovementType as MovementTypeCatalog, Moveme
 from app.models.movement_series import MovementSeries
 from app.models.stock_movement import StockMovement, MovementType as LedgerMovementType
 from app.models.stock_movement_document import StockMovementDocument, StockMovementDocumentLine
-from app.services.stock_service import _get_or_create_stock_row
+from app.services.stock_service import _get_or_create_stock_row, _stock_rule, InsufficientStockError as _StockRuleError
 from app.services.fiscal_period_service import ensure_period_open, PeriodClosedError
 import io
 import openpyxl
@@ -129,6 +129,10 @@ async def create_stock_movement_document(
         total_value += line_total
 
         # Update the real stock quantity + write the audit ledger row - see module docstring.
+        try:
+            await _stock_rule(db, product.id, warehouse_id, "in" if is_entrada else "out", strict=True)
+        except _StockRuleError as e:
+            raise InsufficientStockForMovementError(str(e))
         stock = await _get_or_create_stock_row(db, company_id, product.id, warehouse_id)
         if is_entrada:
             stock.quantity = float(stock.quantity) + quantity

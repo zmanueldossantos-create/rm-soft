@@ -167,6 +167,24 @@ async def list_products(db: AsyncSession, company_id: uuid.UUID) -> list[Product
     )).all()) if unit_ids else {}
     for a in products:
         a.unit_of_measure_code = codes.get(a.unit_of_measure_id)
+    # Their active sale units travel with them too (one query for the whole list): the Caixa and the invoice form offer
+    # them at once, and a scanned barcode can be one of them.
+    from app.models.product_sale_unit import ProductSaleUnit
+    by_product: dict = {}
+    if products:
+        rows = (await db.execute(
+            select(ProductSaleUnit, UnitOfMeasureCatalog.code)
+            .join(UnitOfMeasureCatalog, UnitOfMeasureCatalog.id == ProductSaleUnit.unit_of_measure_id)
+            .where(ProductSaleUnit.product_id.in_([a.id for a in products]), ProductSaleUnit.is_active.is_(True))
+            .order_by(ProductSaleUnit.factor)
+        )).all()
+        for sale_unit, code in rows:
+            by_product.setdefault(sale_unit.product_id, []).append({
+                "id": sale_unit.id, "unit_of_measure_code": code, "factor": float(sale_unit.factor),
+                "price": float(sale_unit.price), "barcode": sale_unit.barcode,
+            })
+    for a in products:
+        a.sale_units = by_product.get(a.id, [])
     return products
 
 

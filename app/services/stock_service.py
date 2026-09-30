@@ -161,6 +161,36 @@ async def rename_warehouse(db: AsyncSession, company_id: uuid.UUID, warehouse_id
     return warehouse
 
 
+class StockBlockedError(InsufficientStockError):
+    """A stock operation refused by a rule (warehouse frozen, product without stock). A subclass of InsufficientStockError
+    so every caller that already reports stock refusals (invoices, credit notes...) reports it too, message included."""
+
+
+async def _stock_rule(db: AsyncSession, product_id: uuid.UUID, warehouse_id: uuid.UUID, direction: str, strict: bool) -> bool:
+    """
+    THE stock rules, in one place: every operation that moves stock asks here first.
+    direction: "in" (reception, transfer in, credit note return, production output), "out" (sale, transfer out, loss,
+    production input, exit document) or "adjust" (inventory count - still allowed in a frozen warehouse).
+    Returns False for a product without stock (managed_by_stock off): nothing moves - silently for an automatic
+    operation (a sale), refused for a manual one (strict). A frozen warehouse refuses its blocked direction.
+    Negative stock stays the sale's own rule (deduct_stock_for_sale, per warehouse): a transfer or a loss can never
+    move goods that are not there.
+    """
+    product = (await db.execute(select(Product).where(Product.id == product_id))).scalar_one_or_none()
+    if product is not None and not product.managed_by_stock:
+        if strict:
+            raise StockBlockedError(f"{product.name} nao e gerido por stock")
+        return False
+    warehouse = (await db.execute(select(Warehouse).where(Warehouse.id == warehouse_id))).scalar_one_or_none()
+    if warehouse is not None:
+        name = getattr(warehouse, "name", "") or ""
+        if direction == "in" and warehouse.entradas_bloqueadas:
+            raise StockBlockedError(f"Entradas bloqueadas no armazem {name}".strip())
+        if direction == "out" and warehouse.saidas_bloqueadas:
+            raise StockBlockedError(f"Saidas bloqueadas no armazem {name}".strip())
+    return True
+
+
 async def _get_or_create_stock_row(db: AsyncSession, company_id: uuid.UUID, product_id: uuid.UUID, warehouse_id: uuid.UUID) -> Stock:
     result = await db.execute(
         select(Stock).where(Stock.product_id == product_id, Stock.warehouse_id == warehouse_id)
@@ -183,6 +213,7 @@ async def receive_stock(
     """Records incoming stock (purchase, production) into the CENTRAL warehouse - RECEPCAO movement."""
     await ensure_period_open(db, company_id, date.today())
     warehouse = await get_default_warehouse(db, company_id)
+    await _stock_rule(db, product_id, warehouse.id, "in", strict=True)
     stock = await _get_or_create_stock_row(db, company_id, product_id, warehouse.id)
 
     stock.quantity = float(stock.quantity) + quantity
@@ -219,6 +250,8 @@ async def transfer_stock(
     await get_warehouse_or_raise(db, company_id, from_warehouse_id)
     await get_warehouse_or_raise(db, company_id, to_warehouse_id)
 
+    await _stock_rule(db, product_id, from_warehouse_id, "out", strict=True)
+    await _stock_rule(db, product_id, to_warehouse_id, "in", strict=True)
     source_stock = await _get_or_create_stock_row(db, company_id, product_id, from_warehouse_id)
     if float(source_stock.quantity) < quantity:
         result = await db.execute(select(Product).where(Product.id == product_id))
@@ -261,6 +294,7 @@ async def record_stock_loss(
     """
     await ensure_period_open(db, company_id, date.today())
     warehouse = await get_warehouse_or_raise(db, company_id, warehouse_id)
+    await _stock_rule(db, product_id, warehouse.id, "out", strict=True)
     stock = await _get_or_create_stock_row(db, company_id, product_id, warehouse.id)
 
     if float(stock.quantity) < quantity:
@@ -296,6 +330,7 @@ async def adjust_stock(
     """
     await ensure_period_open(db, company_id, date.today())
     warehouse = await get_warehouse_or_raise(db, company_id, warehouse_id)
+    await _stock_rule(db, product_id, warehouse.id, "adjust", strict=True)
     stock = await _get_or_create_stock_row(db, company_id, product_id, warehouse.id)
 
     delta = new_quantity - float(stock.quantity)
@@ -326,6 +361,8 @@ async def deduct_stock_for_sale(
     is not enough stock - the invoice creation aborts entirely in that
     case (no partial sale).
     """
+    if not await _stock_rule(db, product_id, warehouse_id, "out", strict=False):
+        return  # a product without stock: sold, nothing moves
     stock = await _get_or_create_stock_row(db, company_id, product_id, warehouse_id)
 
     if float(stock.quantity) < quantity:
@@ -359,6 +396,8 @@ async def return_stock_for_credit_note(
     sale (SAIDA, reference = invoice) and its return can be matched. Only called when the credit note
     explicitly asks for it. No commit here - part of the credit note's own transaction.
     """
+    if not await _stock_rule(db, product_id, warehouse_id, "in", strict=False):
+        return
     stock = await _get_or_create_stock_row(db, company_id, product_id, warehouse_id)
     stock.quantity = float(stock.quantity) + quantity
     db.add(StockMovement(
@@ -512,6 +551,7 @@ async def produce_stock(
         raise NoRecipeError("Este produto nao tem receita definida")
 
     await get_warehouse_or_raise(db, company_id, warehouse_id)
+    await _stock_rule(db, finished_product_id, warehouse_id, "in", strict=True)
 
     product_result = await db.execute(select(Product).where(Product.id == finished_product_id))
     product = product_result.scalar_one()
@@ -521,6 +561,8 @@ async def produce_stock(
     ingredient_stocks = []
     for ing in recipe:
         needed = float(ing.quantity_per_batch) * batches_needed
+        if not await _stock_rule(db, ing.ingredient_product_id, warehouse_id, "out", strict=False):
+            continue  # an ingredient without stock (water...): used, nothing moves
         stock = await _get_or_create_stock_row(db, company_id, ing.ingredient_product_id, warehouse_id)
         if float(stock.quantity) < needed:
             result = await db.execute(select(Product).where(Product.id == ing.ingredient_product_id))

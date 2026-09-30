@@ -18,6 +18,24 @@ class NoOpenSessionError(Exception):
     pass
 
 
+async def _ensure_sellable_at_pos(db: AsyncSession, company_id: uuid.UUID, lines_input: list[dict]) -> None:
+    """THE Caixa guard - sale, pro-forma and open accounts (closed through checkout): an article marked 'nao disponivel
+    POS' is never sold from a cash point. The screen hides it; the server refuses it."""
+    from sqlalchemy import select
+    from app.models.product import Product
+    from app.models.service import Service
+    from app.services.invoice_service import ProductNotFoundError
+    for model, key in ((Product, "product_id"), (Service, "service_id")):
+        ids = {uuid.UUID(str(l[key])) for l in lines_input if l.get(key)}
+        if not ids:
+            continue
+        name = (await db.execute(
+            select(model.name).where(model.id.in_(ids), model.company_id == company_id, model.not_available_pos.is_(True))
+        )).scalars().first()
+        if name:
+            raise ProductNotFoundError(f"{name} nao esta disponivel para venda na caixa")
+
+
 async def checkout(
     db: AsyncSession,
     company_id: uuid.UUID,
@@ -50,6 +68,7 @@ async def checkout(
     session = await get_open_session(db, company_id, pos_id)
     if session is None:
         raise NoOpenSessionError("Nao ha nenhuma sessao de caixa aberta para este ponto de venda - abra a caixa antes de vender")
+    await _ensure_sellable_at_pos(db, company_id, lines_input)
 
     invoice = await create_invoice(
         db, company_id, session.activity_id, customer_id, invoice_type=invoice_type,
@@ -86,6 +105,7 @@ async def create_pro_forma_from_pos(
     session = await get_open_session(db, company_id, pos_id)
     if session is None:
         raise NoOpenSessionError("Nao ha nenhuma sessao de caixa aberta para este ponto de venda - abra a caixa antes de gerar documentos")
+    await _ensure_sellable_at_pos(db, company_id, lines_input)
 
     pro_forma = await create_pro_forma(
         db, company_id, session.activity_id, customer_id,
