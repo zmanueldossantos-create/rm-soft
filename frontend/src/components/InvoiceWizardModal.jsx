@@ -315,7 +315,10 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
       }
     }
     const unitFractional = saleUnit ? !!saleUnit.is_fractional : !!item?.unit_is_fractional;
-    return { item, unitPrice, vatRate, unitLabel, unitFractional, gross, discountAmount, subtotal, vatAmount, total, retentionAmount };
+    // Same rule and message as the server (_sale_unit_for_line): a decimal quantity only in a fractional unit.
+    const quantityError = item && line.item_type === 'product' && !unitFractional && qty > 0 && Math.abs(qty - Math.round(qty)) > 1e-9
+      ? item.name + ': a quantidade deve ser inteira (' + (unitLabel || 'unidade') + ')' : '';
+    return { item, unitPrice, vatRate, unitLabel, unitFractional, quantityError, gross, discountAmount, subtotal, vatAmount, total, retentionAmount };
   }
 
   const paidOnIssue = !!documentTypes.find((d) => d.code === INVOICE_TYPE_CODE[invoiceType])?.paid_on_issue;
@@ -438,6 +441,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
     (!requiresPaymentTerm || paymentTermId) &&
     (!requiresCustomer || customerId) &&
     (!collectsCash || cashPosId) &&
+    !lines.some((l) => getLineItem(l) && computeLine(l).quantityError) &&
     lines.every((l) => {
       const item = getLineItem(l);
       return item && parseFloat(l.quantity) > 0;
@@ -597,7 +601,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
   const showLeft = isSingleScreen || step !== 3;
   const showSidePanel = isSingleScreen || step === 3;
   const submitLabel = mode === 'nc' ? 'Emitir Nota de Credito' : mode === 'nd' ? 'Emitir Nota de Debito' : (invoiceType === 'PRO_FORMA' ? 'Gerar pro-forma' : 'Criar factura');
-  const isSubmitDisabled = mode === 'nc' ? (saving || !ncCause || !ncReason) : mode === 'nd' ? (saving || lines.every((l) => !getLineItem(l) || parseFloat(l.quantity) <= 0)) : (saving || !isFormValid);
+  const isSubmitDisabled = mode === 'nc' ? (saving || !ncCause || !ncReason) : mode === 'nd' ? (saving || lines.every((l) => !getLineItem(l) || parseFloat(l.quantity) <= 0) || lines.some((l) => getLineItem(l) && computeLine(l).quantityError)) : (saving || !isFormValid);
 
   const footer = (
     <div className="flex items-center justify-between px-6 py-3.5">
@@ -903,6 +907,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                               <tr className="text-[10.5px] uppercase tracking-wide text-text-muted border-b border-border">
                                 <th className="text-left font-medium py-1.5 pr-2">Artigo</th>
                                 <th className="text-right font-medium py-1.5 px-2">Qtd</th>
+<th className="text-left font-medium py-1.5 px-2">Unid.</th>
                                 <th className="text-right font-medium py-1.5 px-2">Preco</th>
                                 <th className="text-right font-medium py-1.5 px-2">Desc %</th>
                                 <th className="text-right font-medium py-1.5 px-2">IVA</th>
@@ -916,6 +921,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                                   <tr key={idx} className="border-b border-border last:border-0">
                                     <td className="py-1.5 pr-2 text-text-primary">{c.item.name}</td>
                                     <td className="py-1.5 px-2 text-right font-mono">{line.quantity}</td>
+<td className="py-1.5 px-2 text-text-muted">{c.unitLabel || '-'}</td>
                                     <td className="py-1.5 px-2 text-right font-mono text-text-muted">{formatMoney(c.unitPrice)}</td>
                                     <td className="py-1.5 px-2 text-right font-mono text-text-muted">{Number(line.discount_percent || 0).toFixed(2)}</td>
                                     <td className="py-1.5 px-2 text-right text-text-muted">{c.vatRate}%</td>
@@ -925,7 +931,10 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                               })}
                             </tbody>
                           </table>
-                          <div className="flex flex-col gap-1 text-[12.5px] mt-3 ml-auto w-72">
+                          {lines.some((l) => getLineItem(l) && computeLine(l).quantityError) && (
+<div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[12.5px] rounded-r mt-3 flex flex-col gap-0.5">{lines.filter((l) => getLineItem(l) && computeLine(l).quantityError).map((l, i) => <p key={i}>{computeLine(l).quantityError}</p>)}</div>
+)}
+<div className="flex flex-col gap-1 text-[12.5px] mt-3 ml-auto w-72">
                             <div className="flex justify-between"><span className="text-text-muted">Total iliquido</span><span className="font-mono">{formatMoney(totals.totalIliquido)}</span></div>
                             {totals.totalDescontos > 0 && <div className="flex justify-between"><span className="text-text-muted">Descontos</span><span className="font-mono">{formatMoney(totals.totalDescontos)}</span></div>}
                             <div className="flex justify-between"><span className="text-text-muted">IVA</span><span className="font-mono">{formatMoney(totals.totalIva)}</span></div>
@@ -1007,7 +1016,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                                 )}
                               </td>
                               <td className="py-2 px-2">
-                                <input type="number" step={c.unitFractional ? '0.001' : '1'} min="0" value={line.quantity} onChange={(e) => updateLine(idx, 'quantity', e.target.value)} className={inputClass + ' text-right font-mono'} />
+                                <input type="number" step={c.unitFractional ? '0.001' : '1'} min="0" value={line.quantity} onChange={(e) => updateLine(idx, 'quantity', e.target.value)} className={inputClass + ' text-right font-mono'} />{c.quantityError && <p className="text-[10.5px] text-danger mt-0.5 text-right">Quantidade inteira</p>}
                               </td>
                               <td className="py-2 px-2 text-right font-mono text-text-muted whitespace-nowrap">{c.item ? formatMoney(c.unitPrice) : '-'}</td>
                               <td className="py-2 px-2">
