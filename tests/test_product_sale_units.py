@@ -64,3 +64,65 @@ async def test_a_sale_unit_is_updated_and_deactivated_never_deleted(db, company_
     toggled = await toggle_sale_unit(db, company_id, product_id, unit.id)
     assert toggled.is_active is False
     assert len(await list_sale_units(db, company_id, product_id)) == 1
+
+
+from app.models.company import Company  # noqa: E402
+from app.services.product_sale_unit_service import SaleUnitNeedsConfirmationError  # noqa: E402
+
+
+async def _set_check(db, company_id, column, mode):
+    company = (await db.execute(select(Company).where(Company.id == company_id))).scalar_one()
+    setattr(company, column, mode)
+    await db.commit()
+
+
+@pytest.mark.asyncio
+async def test_a_factor_of_one_or_a_wrong_fixed_factor_is_always_refused(db, company_with_essentials):
+    company_id, product_id, egg_id, pallet_id, box_id = await _setup(db, company_with_essentials)
+    dozen = UnitOfMeasureCatalog(code="DZ", name="Duzia", fixed_factor=12)
+    db.add(dozen)
+    await db.commit()
+    await db.refresh(dozen)
+    with pytest.raises(SaleUnitInvalidError, match="fator de 1"):
+        await create_sale_unit(db, company_id, product_id, box_id, 1, 125)
+    with pytest.raises(SaleUnitInvalidError, match="contem sempre 12"):
+        await create_sale_unit(db, company_id, product_id, dozen.id, 30, 3000)
+    created = await create_sale_unit(db, company_id, product_id, dozen.id, 12, 1400)
+    assert float(created.factor) == 12.0
+
+
+@pytest.mark.asyncio
+async def test_a_unit_dearer_than_the_base_needs_an_explicit_confirmation(db, company_with_essentials):
+    company_id, product_id, egg_id, pallet_id, box_id = await _setup(db, company_with_essentials)
+    with pytest.raises(SaleUnitNeedsConfirmationError) as excinfo:
+        await create_sale_unit(db, company_id, product_id, box_id, 2, 3000)  # 1500 an egg, the egg alone is 125
+    assert "mais caro que a unidade base" in excinfo.value.warnings[0]
+    assert await list_sale_units(db, company_id, product_id) == []  # nothing saved
+    confirmed = await create_sale_unit(db, company_id, product_id, box_id, 2, 3000, confirm=True)
+    assert confirmed.is_active is True
+
+
+@pytest.mark.asyncio
+async def test_each_company_chooses_off_warn_or_block(db, company_with_essentials):
+    company_id, product_id, egg_id, pallet_id, box_id = await _setup(db, company_with_essentials)
+    await _set_check(db, company_id, "sale_unit_check_above_base", "block")
+    with pytest.raises(SaleUnitInvalidError, match="mais caro"):
+        await create_sale_unit(db, company_id, product_id, box_id, 2, 3000, confirm=True)
+    await _set_check(db, company_id, "sale_unit_check_above_base", "off")
+    unit = await create_sale_unit(db, company_id, product_id, box_id, 2, 3000)
+    assert unit.is_active is True
+
+
+@pytest.mark.asyncio
+async def test_below_cost_and_same_factor_are_warned(db, company_with_essentials):
+    company_id, product_id, egg_id, pallet_id, box_id = await _setup(db, company_with_essentials)
+    product = (await db.execute(select(Product).where(Product.id == product_id))).scalar_one()
+    product.purchase_price = 90
+    await db.commit()
+    with pytest.raises(SaleUnitNeedsConfirmationError) as excinfo:
+        await create_sale_unit(db, company_id, product_id, pallet_id, 30, 500)  # 16.67 an egg, bought at 90
+    assert "abaixo do custo" in excinfo.value.warnings[0]
+    await create_sale_unit(db, company_id, product_id, pallet_id, 30, 3000)
+    with pytest.raises(SaleUnitNeedsConfirmationError) as excinfo:
+        await create_sale_unit(db, company_id, product_id, box_id, 30, 3000)
+    assert "ja contem 30" in excinfo.value.warnings[0]

@@ -65,6 +65,10 @@ class Company(Base):
     auto_series_year: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     allows_future_sale_date: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     suggests_last_document_date: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Sale unit consistency checks, each 'off' / 'warn' (confirm explicitly) / 'block' - see product_sale_unit_service.
+    sale_unit_check_above_base: Mapped[str] = mapped_column(String(5), default="warn", server_default="warn", nullable=False)
+    sale_unit_check_below_cost: Mapped[str] = mapped_column(String(5), default="warn", server_default="warn", nullable=False)
+    sale_unit_check_same_factor: Mapped[str] = mapped_column(String(5), default="warn", server_default="warn", nullable=False)
 
     # Fiscal issuance mode - electronic mode requires the AGT-issued private
     # key and turns OFF auto_series_year (series are solicited from AGT instead).

@@ -7,6 +7,7 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.company import Company
 from app.models.product import Product
 from app.models.product_sale_unit import ProductSaleUnit
 from app.models.unit_of_measure_catalog import UnitOfMeasureCatalog
@@ -18,6 +19,14 @@ class SaleUnitNotFoundError(Exception):
 
 class SaleUnitInvalidError(Exception):
     """The sale unit breaks a rule (base unit, duplicate unit, barcode already used, factor)."""
+
+
+class SaleUnitNeedsConfirmationError(Exception):
+    """The sale unit looks inconsistent (price, factor): nothing is saved until the user confirms explicitly."""
+
+    def __init__(self, warnings: list[str]):
+        super().__init__("; ".join(warnings))
+        self.warnings = warnings
 
 
 async def _product(db: AsyncSession, company_id: uuid.UUID, product_id: uuid.UUID) -> Product:
@@ -41,14 +50,23 @@ async def _attach_unit_codes(db: AsyncSession, units: list[ProductSaleUnit]) -> 
 
 async def _check(
     db: AsyncSession, company_id: uuid.UUID, product: Product, unit_of_measure_id: uuid.UUID, factor: float,
-    barcode: str | None, exclude_id: uuid.UUID | None = None,
+    barcode: str | None, exclude_id: uuid.UUID | None = None, price: float | None = None, confirm: bool = False,
 ) -> None:
     if factor <= 0:
         raise SaleUnitInvalidError("O fator deve ser maior que zero")
+    if abs(factor - 1) < 1e-9:
+        raise SaleUnitInvalidError("Um fator de 1 e a propria unidade base do produto")
     if product.unit_of_measure_id and unit_of_measure_id == product.unit_of_measure_id:
         raise SaleUnitInvalidError("Esta ja e a unidade base do produto")
-    if (await db.execute(select(UnitOfMeasureCatalog.id).where(UnitOfMeasureCatalog.id == unit_of_measure_id))).scalar_one_or_none() is None:
+    unit = (await db.execute(select(UnitOfMeasureCatalog).where(UnitOfMeasureCatalog.id == unit_of_measure_id))).scalar_one_or_none()
+    if unit is None:
         raise SaleUnitInvalidError("Unidade de medida invalida")
+    base_code = (await db.execute(
+        select(UnitOfMeasureCatalog.code).where(UnitOfMeasureCatalog.id == product.unit_of_measure_id)
+    )).scalar_one_or_none() or "unidade base"
+    # A universal unit (a dozen) always holds the same count: no product may redefine it.
+    if unit.fixed_factor and abs(factor - float(unit.fixed_factor)) > 1e-9:
+        raise SaleUnitInvalidError(f"A unidade {unit.code} contem sempre {float(unit.fixed_factor):g} {base_code}")
     same_unit = select(ProductSaleUnit.id).where(
         ProductSaleUnit.product_id == product.id, ProductSaleUnit.unit_of_measure_id == unit_of_measure_id,
     )
@@ -66,6 +84,42 @@ async def _check(
             on_unit = on_unit.where(ProductSaleUnit.id != exclude_id)
         if on_product is not None or (await db.execute(on_unit)).first() is not None:
             raise SaleUnitInvalidError("Este codigo de barras ja esta em uso")
+    if price is not None:
+        await _consistency(db, company_id, product, unit.code, base_code, factor, price, exclude_id, confirm)
+
+
+async def _consistency(
+    db: AsyncSession, company_id: uuid.UUID, product: Product, unit_code: str, base_code: str, factor: float,
+    price: float, exclude_id: uuid.UUID | None, confirm: bool,
+) -> None:
+    """Price and factor consistency, each check set per company: 'off', 'warn' (saved only once confirmed) or 'block'."""
+    company = (await db.execute(select(Company).where(Company.id == company_id))).scalar_one()
+    per_base = round(price / factor, 2)
+    base_price = float(product.price or 0)
+    purchase = float(product.purchase_price) if product.purchase_price is not None else None
+    others = select(ProductSaleUnit.id).where(
+        ProductSaleUnit.product_id == product.id, ProductSaleUnit.is_active.is_(True), ProductSaleUnit.factor == factor,
+    )
+    if exclude_id is not None:
+        others = others.where(ProductSaleUnit.id != exclude_id)
+    same_factor = (await db.execute(others)).first() is not None
+
+    issues = []
+    if per_base > base_price + 0.005:
+        issues.append((company.sale_unit_check_above_base,
+                       f"Cada {base_code} sai a {per_base:.2f} na unidade {unit_code}, mais caro que a unidade base ({base_price:.2f})"))
+    if purchase is not None and per_base < purchase - 0.005:
+        issues.append((company.sale_unit_check_below_cost,
+                       f"Venda abaixo do custo: cada {base_code} sai a {per_base:.2f}, preco de compra {purchase:.2f}"))
+    if same_factor:
+        issues.append((company.sale_unit_check_same_factor,
+                       f"Outra unidade de venda deste produto ja contem {factor:g} {base_code}"))
+    for mode, message in issues:
+        if mode == "block":
+            raise SaleUnitInvalidError(message)
+    warnings = [message for mode, message in issues if mode == "warn"]
+    if warnings and not confirm:
+        raise SaleUnitNeedsConfirmationError(warnings)
 
 
 async def list_sale_units(db: AsyncSession, company_id: uuid.UUID, product_id: uuid.UUID) -> list[ProductSaleUnit]:
@@ -79,10 +133,10 @@ async def list_sale_units(db: AsyncSession, company_id: uuid.UUID, product_id: u
 
 async def create_sale_unit(
     db: AsyncSession, company_id: uuid.UUID, product_id: uuid.UUID, unit_of_measure_id: uuid.UUID, factor: float,
-    price: float, barcode: str | None = None,
+    price: float, barcode: str | None = None, confirm: bool = False,
 ) -> ProductSaleUnit:
     product = await _product(db, company_id, product_id)
-    await _check(db, company_id, product, unit_of_measure_id, factor, barcode)
+    await _check(db, company_id, product, unit_of_measure_id, factor, barcode, price=price, confirm=confirm)
     unit = ProductSaleUnit(
         company_id=company_id, product_id=product.id, unit_of_measure_id=unit_of_measure_id,
         factor=factor, price=price, barcode=barcode,
@@ -106,11 +160,11 @@ async def _sale_unit(db: AsyncSession, company_id: uuid.UUID, product_id: uuid.U
 
 async def update_sale_unit(
     db: AsyncSession, company_id: uuid.UUID, product_id: uuid.UUID, unit_id: uuid.UUID, unit_of_measure_id: uuid.UUID,
-    factor: float, price: float, barcode: str | None = None,
+    factor: float, price: float, barcode: str | None = None, confirm: bool = False,
 ) -> ProductSaleUnit:
     product = await _product(db, company_id, product_id)
     unit = await _sale_unit(db, company_id, product_id, unit_id)
-    await _check(db, company_id, product, unit_of_measure_id, factor, barcode, exclude_id=unit.id)
+    await _check(db, company_id, product, unit_of_measure_id, factor, barcode, exclude_id=unit.id, price=price, confirm=confirm)
     unit.unit_of_measure_id = unit_of_measure_id
     unit.factor = factor
     unit.price = price

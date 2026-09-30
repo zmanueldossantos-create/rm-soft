@@ -282,12 +282,14 @@ class MovementTypeResponse(BaseModel):
 class UnitOfMeasureCatalogRequest(BaseModel):
     code: str
     name: str
+    fixed_factor: float | None = None  # e.g. 12 for a dozen; empty for units whose count depends on the product
 
 
 class UnitOfMeasureCatalogResponse(BaseModel):
     id: uuid.UUID
     code: str
     name: str
+    fixed_factor: float | None = None
     is_active: bool
 
     class Config:

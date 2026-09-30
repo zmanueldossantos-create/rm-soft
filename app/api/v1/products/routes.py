@@ -13,7 +13,7 @@ from app.core.database import get_db
 from app.api.deps import require_permission
 from app.schemas.product_sale_unit import ProductSaleUnitRequest, ProductSaleUnitResponse
 from app.services.product_sale_unit_service import (
-    SaleUnitInvalidError, SaleUnitNotFoundError, create_sale_unit, list_sale_units, toggle_sale_unit, update_sale_unit,
+    SaleUnitInvalidError, SaleUnitNeedsConfirmationError, SaleUnitNotFoundError, create_sale_unit, list_sale_units, toggle_sale_unit, update_sale_unit,
 )
 from app.models.user import User
 from app.schemas.product import ProductCreateRequest, ProductUpdateRequest, ProductResponse
@@ -264,6 +264,8 @@ async def delete_product_image(
 # ---------- Sale units (pallet / egg, box / blister / tablet) ----------
 
 def _sale_unit_error(e: Exception):
+    if isinstance(e, SaleUnitNeedsConfirmationError):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"message": "Confirme para guardar", "warnings": e.warnings})
     if isinstance(e, SaleUnitNotFoundError):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
@@ -277,7 +279,7 @@ async def get_sale_units(
 ):
     try:
         return await list_sale_units(db, current_user.company_id, product_id)
-    except (SaleUnitNotFoundError, SaleUnitInvalidError) as e:
+    except (SaleUnitNotFoundError, SaleUnitInvalidError, SaleUnitNeedsConfirmationError) as e:
         _sale_unit_error(e)
 
 
@@ -289,8 +291,8 @@ async def post_sale_unit(
     current_user: User = Depends(require_permission("products:manage")),
 ):
     try:
-        return await create_sale_unit(db, current_user.company_id, product_id, payload.unit_of_measure_id, payload.factor, payload.price, payload.barcode)
-    except (SaleUnitNotFoundError, SaleUnitInvalidError) as e:
+        return await create_sale_unit(db, current_user.company_id, product_id, payload.unit_of_measure_id, payload.factor, payload.price, payload.barcode, payload.confirm)
+    except (SaleUnitNotFoundError, SaleUnitInvalidError, SaleUnitNeedsConfirmationError) as e:
         _sale_unit_error(e)
 
 
@@ -303,8 +305,8 @@ async def patch_sale_unit(
     current_user: User = Depends(require_permission("products:manage")),
 ):
     try:
-        return await update_sale_unit(db, current_user.company_id, product_id, unit_id, payload.unit_of_measure_id, payload.factor, payload.price, payload.barcode)
-    except (SaleUnitNotFoundError, SaleUnitInvalidError) as e:
+        return await update_sale_unit(db, current_user.company_id, product_id, unit_id, payload.unit_of_measure_id, payload.factor, payload.price, payload.barcode, payload.confirm)
+    except (SaleUnitNotFoundError, SaleUnitInvalidError, SaleUnitNeedsConfirmationError) as e:
         _sale_unit_error(e)
 
 
@@ -317,5 +319,5 @@ async def patch_sale_unit_status(
 ):
     try:
         return await toggle_sale_unit(db, current_user.company_id, product_id, unit_id)
-    except (SaleUnitNotFoundError, SaleUnitInvalidError) as e:
+    except (SaleUnitNotFoundError, SaleUnitInvalidError, SaleUnitNeedsConfirmationError) as e:
         _sale_unit_error(e)

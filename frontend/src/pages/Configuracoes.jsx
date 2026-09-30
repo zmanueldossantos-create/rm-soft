@@ -285,7 +285,7 @@ export default function Configuracoes() {
       case 'vat_codes': return { code: '', name: '', rate: 0, country_id: countries[0]?.id || '', valid_from: '', valid_until: '', observations: '' };
       case 'document_types': return { code: '', name: '', description: '', area: '', electronic_eligible: false, is_fiscal: true, rules_locked: false, saft_section: 'NONE', revenue_sign: 0, requires_origin: false, has_lines: true, paid_on_issue: false, sent_to_agt: false, deducts_stock: false, accepts_credit_note: false, accepts_debit_note: false, accepts_receipt: false, convertible: false, issuable_in_invoices: false, issuable_at_pos: false, requires_payment_term: false, requires_customer: false };
       case 'movement_types': return { code: '', name: '', direction: 'ENTRADA', is_auto: false, description: '' };
-      case 'units': return { code: '', name: '' };
+      case 'units': return { code: '', name: '', fixed_factor: '' };
       case 'withholding_taxes': return { name: '', rate: 0, tax_type: '' };
       case 'fiscal_regimes': return { name: '', description: '', allows_nor: true, allows_red: true, allows_ise: true, allows_int: false, allows_out: false };
       case 'modules': return { name: '', description: '' };
@@ -336,6 +336,9 @@ export default function Configuracoes() {
       }
       if (activeCatalog.key === 'document_types') {
         payload.revenue_sign = parseInt(payload.revenue_sign, 10);
+      }
+      if (activeCatalog.key === 'units') {
+        payload.fixed_factor = payload.fixed_factor === '' || payload.fixed_factor == null ? null : parseFloat(payload.fixed_factor);
       }
       if (editingId) {
         await activeCatalog.api.update(editingId, payload);
@@ -525,6 +528,7 @@ export default function Configuracoes() {
         <>
           <Field label="Código *"><input value={form.code} onChange={(e) => updateField('code', e.target.value)} required className={inputClass} /></Field>
           <Field label="Nome *"><input value={form.name} onChange={(e) => updateField('name', e.target.value)} required className={inputClass} /></Field>
+          <Field label="Fator fixo (opcional)"><input type="number" step="0.001" min="0" value={form.fixed_factor ?? ''} onChange={(e) => updateField('fixed_factor', e.target.value)} placeholder="Ex: 12 para duzia" className={inputClass} /></Field>
         </>
       );
     }

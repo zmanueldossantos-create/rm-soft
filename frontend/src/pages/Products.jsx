@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { Package, Plus, Loader2, Search, Pencil, Barcode, Scale, Upload, X } from 'lucide-react';
-import Modal from '../components/Modal';
+import Modal from '../components/Modal';
+import ProductSaleUnits from '../components/ProductSaleUnits';
 import Select from '../components/Select';
 import { listProducts, createProduct, updateProduct, toggleProductStatus, uploadProductImage, deleteProductImage } from '../api/products';
 import { listVatRates } from '../api/vat';
@@ -62,6 +63,7 @@ export default function Products() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editingProduct, setEditingProduct] = useState(null);
+  const [productTab, setProductTab] = useState('geral'); // product sheet tabs: 'geral' | 'unidades'
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
@@ -113,6 +115,7 @@ export default function Products() {
   function openCreateModal() {
     setEditingId(null);
     setEditingProduct(null);
+    setProductTab('geral');
     setForm({ ...emptyForm });
     setFormError('');
     setModalOpen(true);
@@ -121,6 +124,7 @@ export default function Products() {
   function openEditModal(product) {
     setEditingId(product.id);
     setEditingProduct(product);
+    setProductTab('geral');
     setForm({
       code: product.code,
       name: product.name,
@@ -150,6 +154,7 @@ export default function Products() {
     setModalOpen(false);
     setEditingId(null);
     setEditingProduct(null);
+    setProductTab('geral');
     setForm(emptyForm);
     setFormError('');
   }
@@ -370,7 +375,15 @@ export default function Products() {
       </div>
 
       <Modal open={modalOpen} onClose={closeModal} title={editingId ? 'Editar produto' : 'Novo produto'} maxWidthClass="max-w-4xl">
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4 max-h-[70vh] overflow-y-auto scrollbar-thin pr-1">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4 h-[70vh] overflow-y-auto scrollbar-thin pr-1">
+          <div className="flex gap-1 border-b border-border -mt-1">
+            {[['geral', 'Geral'], ['unidades', 'Unidades de venda']].map(([key, label]) => (
+              <button key={key} type="button" disabled={key === 'unidades' && !editingId} title={key === 'unidades' && !editingId ? 'Guarde o produto primeiro' : undefined} onClick={() => setProductTab(key)} className={'px-3.5 py-2 text-[13px] font-medium border-b-2 -mb-px transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ' + (productTab === key ? 'border-accent text-text-primary' : 'border-transparent text-text-muted hover:text-text-primary')}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className={productTab === 'geral' ? 'flex flex-col gap-4' : 'hidden'}>
           {editingId && (
             <div className="flex items-center gap-3">
               {editingProduct?.image_path ? (
@@ -454,7 +467,7 @@ export default function Products() {
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border">
+          <div className="grid grid-cols-3 gap-2 pt-2 border-t border-border">
             <label className="flex items-center gap-2.5 cursor-pointer select-none">
               <input type="checkbox" checked={form.managedByStock} onChange={(e) => updateField('managedByStock', e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
               <span className="text-sm text-text-primary">Gerido por stocks</span>
@@ -477,9 +490,12 @@ export default function Products() {
             </label>
             <label className="flex items-center gap-2.5 cursor-pointer select-none">
               <input type="checkbox" checked={form.internalUseOnly} onChange={(e) => updateField('internalUseOnly', e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
-              <span className="text-sm text-text-primary">Uso interno apenas (nunca vendavel)</span>
+              <span className="text-sm text-text-primary">Uso interno apenas</span>
             </label>
           </div>
+
+          </div>
+          {editingId && productTab === 'unidades' && <ProductSaleUnits productId={editingId} baseUnitId={form.unitOfMeasureId} units={units} />}
 
           {formError && (
             <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{formError}</div>
@@ -488,7 +504,7 @@ export default function Products() {
           <button
             type="submit"
             disabled={saving || !isFormValid}
-            className="mt-1 bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors"
+            className={(productTab === 'geral' ? '' : 'hidden ') + 'mt-1 bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors'}
           >
             {saving ? <Loader2 size={17} className="animate-spin" /> : <Plus size={17} />}
             {saving ? 'A guardar...' : editingId ? 'Guardar alterações' : 'Criar produto'}

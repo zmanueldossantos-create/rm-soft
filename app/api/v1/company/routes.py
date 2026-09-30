@@ -89,6 +89,11 @@ async def update_my_company_contact(
     company.uses_invoicing = payload.uses_invoicing
     company.auto_series_year = payload.auto_series_year if payload.uses_invoicing else False
     company.allows_future_sale_date = payload.allows_future_sale_date if payload.uses_invoicing else False
+    # Sale unit checks: only what is sent changes - a screen that does not send them keeps the company's choice.
+    for check in ("sale_unit_check_above_base", "sale_unit_check_below_cost", "sale_unit_check_same_factor"):
+        value = getattr(payload, check)
+        if value in ("off", "warn", "block"):
+            setattr(company, check, value)
     company.suggests_last_document_date = payload.suggests_last_document_date if payload.uses_invoicing else False
     company.issuance_mode = payload.issuance_mode
     company.electronic_signature_key = payload.electronic_signature_key if payload.issuance_mode == "ELETRONICA" else None

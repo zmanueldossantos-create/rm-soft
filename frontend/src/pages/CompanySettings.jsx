@@ -65,6 +65,7 @@ export default function CompanySettings() {
   const [usesInvoicing, setUsesInvoicing] = useState(true);
   const [autoSeriesYear, setAutoSeriesYear] = useState(true);
   const [allowsFutureSaleDate, setAllowsFutureSaleDate] = useState(false);
+  const [saleUnitChecks, setSaleUnitChecks] = useState({ sale_unit_check_above_base: 'warn', sale_unit_check_below_cost: 'warn', sale_unit_check_same_factor: 'warn' });
   const [suggestsLastDocumentDate, setSuggestsLastDocumentDate] = useState(false);
   const [issuanceMode, setIssuanceMode] = useState('MANUAL');
   const [electronicSignatureKey, setElectronicSignatureKey] = useState('');
@@ -159,6 +160,11 @@ export default function CompanySettings() {
       setUsesInvoicing(data.uses_invoicing);
       setAutoSeriesYear(data.auto_series_year);
       setAllowsFutureSaleDate(data.allows_future_sale_date);
+      setSaleUnitChecks({
+        sale_unit_check_above_base: data.sale_unit_check_above_base || 'warn',
+        sale_unit_check_below_cost: data.sale_unit_check_below_cost || 'warn',
+        sale_unit_check_same_factor: data.sale_unit_check_same_factor || 'warn',
+      });
       setSuggestsLastDocumentDate(data.suggests_last_document_date);
       setIssuanceMode(data.issuance_mode || 'MANUAL');
       setElectronicSignatureKey(data.electronic_signature_key || '');
@@ -484,6 +490,7 @@ export default function CompanySettings() {
         primary_currency_id: primaryCurrencyId || null, secondary_currency_id: secondaryCurrencyId || null,
         uses_invoicing: usesInvoicing, auto_series_year: autoSeriesYear,
         allows_future_sale_date: allowsFutureSaleDate, suggests_last_document_date: suggestsLastDocumentDate,
+        ...saleUnitChecks,
         issuance_mode: issuanceMode, electronic_signature_key: issuanceMode === 'ELETRONICA' ? (electronicSignatureKey || null) : null,
       });
       setSaved(true);
@@ -804,6 +811,18 @@ export default function CompanySettings() {
                 <input type="checkbox" checked={suggestsLastDocumentDate} disabled={!usesInvoicing} onChange={(e) => setSuggestsLastDocumentDate(e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer disabled:opacity-50" />
                 <span className="text-sm text-text-primary">Sugere data do último documento</span>
               </label>
+            </div>
+            <div className="mt-6">
+              <p className="text-[13px] font-medium text-text-primary mb-1">Controlos das unidades de venda</p>
+              <p className="text-[12px] text-text-muted mb-3">O que o sistema faz quando uma unidade de venda de um produto parece incoerente.</p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {[['sale_unit_check_above_base', 'Mais cara que a unidade base'], ['sale_unit_check_below_cost', 'Abaixo do preco de compra'], ['sale_unit_check_same_factor', 'Mesmo conteudo que outra unidade']].map(([field, label]) => (
+                  <div key={field}>
+                    <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">{label}</label>
+                    <Select value={saleUnitChecks[field]} onChange={(v) => setSaleUnitChecks((s) => ({ ...s, [field]: v }))} options={[{ value: 'off', label: 'Nao verificar' }, { value: 'warn', label: 'Avisar e pedir confirmacao' }, { value: 'block', label: 'Bloquear' }]} />
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 

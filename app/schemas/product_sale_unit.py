@@ -8,6 +8,7 @@ class ProductSaleUnitRequest(BaseModel):
     factor: float
     price: float
     barcode: str | None = None
+    confirm: bool = False  # the user confirmed the warnings returned by a first attempt
 
     @field_validator("factor")
     @classmethod
