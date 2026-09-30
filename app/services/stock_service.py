@@ -93,7 +93,6 @@ async def create_warehouse(
     province_id: uuid.UUID | None = None, municipality_id: uuid.UUID | None = None,
     address: str | None = None, allow_negative_stock: bool = False,
     entradas_bloqueadas: bool = False, saidas_bloqueadas: bool = False,
-    gerido_por_familia_tipo: bool = False,
 ) -> Warehouse:
     """Creates an additional (secondary) warehouse for the company - GESTOR only. The
     default/central warehouse itself is only ever auto-created at company creation."""
@@ -101,7 +100,7 @@ async def create_warehouse(
         company_id=company_id, name=name, code=code, province_id=province_id,
         municipality_id=municipality_id, address=address,
         allow_negative_stock=allow_negative_stock, entradas_bloqueadas=entradas_bloqueadas,
-        saidas_bloqueadas=saidas_bloqueadas, gerido_por_familia_tipo=gerido_por_familia_tipo,
+        saidas_bloqueadas=saidas_bloqueadas,
         is_active=True,
     )
     db.add(warehouse)
@@ -115,7 +114,7 @@ async def update_warehouse(
     code: str | None = None, province_id: uuid.UUID | None = None,
     municipality_id: uuid.UUID | None = None, address: str | None = None,
     allow_negative_stock: bool = False, entradas_bloqueadas: bool = False,
-    saidas_bloqueadas: bool = False, gerido_por_familia_tipo: bool = False,
+    saidas_bloqueadas: bool = False,
 ) -> Warehouse:
     """Full edit of a SECONDARY warehouse - the central warehouse (oldest active one,
     see get_default_warehouse) can never be edited, matching "magasin principal
@@ -133,7 +132,6 @@ async def update_warehouse(
     warehouse.allow_negative_stock = allow_negative_stock
     warehouse.entradas_bloqueadas = entradas_bloqueadas
     warehouse.saidas_bloqueadas = saidas_bloqueadas
-    warehouse.gerido_por_familia_tipo = gerido_por_familia_tipo
     await db.commit()
     await db.refresh(warehouse)
     return warehouse

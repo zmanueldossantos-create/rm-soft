@@ -50,6 +50,7 @@ export async function checkout(posId, customerId, lines, payments, invoiceType =
     due_date: ftDetails.dueDate || null,
     lines: lines.map((l) => ({
       product_id: l.productId || null,
+      sale_unit_id: l.saleUnitId || null,
       service_id: l.serviceId || null,
       quantity: l.quantity,
       discount_percent: l.discountPercent || 0,
@@ -66,6 +67,7 @@ export async function createProFormaFromPos(posId, customerId, lines, discountGl
     discount_global_percent: discountGlobalPercent,
     lines: lines.map((l) => ({
       product_id: l.productId || null,
+      sale_unit_id: l.saleUnitId || null,
       service_id: l.serviceId || null,
       quantity: l.quantity,
       discount_percent: l.discountPercent || 0,

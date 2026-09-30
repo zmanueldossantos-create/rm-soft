@@ -85,7 +85,6 @@ export default function Stock() {
   const [newWarehouseAllowNegative, setNewWarehouseAllowNegative] = useState(false);
   const [newWarehouseEntradasBloqueadas, setNewWarehouseEntradasBloqueadas] = useState(false);
   const [newWarehouseSaidasBloqueadas, setNewWarehouseSaidasBloqueadas] = useState(false);
-  const [newWarehouseGeridoPorFamilia, setNewWarehouseGeridoPorFamilia] = useState(false);
   const [provinces, setProvinces] = useState([]);
   const [municipalities, setMunicipalities] = useState([]);
   const [creatingWarehouse, setCreatingWarehouse] = useState(false);
@@ -196,7 +195,6 @@ export default function Stock() {
     setNewWarehouseAllowNegative(false);
     setNewWarehouseEntradasBloqueadas(false);
     setNewWarehouseSaidasBloqueadas(false);
-    setNewWarehouseGeridoPorFamilia(false);
     setNewWarehouseError('');
   }
 
@@ -216,7 +214,6 @@ export default function Stock() {
     setNewWarehouseAllowNegative(!!warehouse.allow_negative_stock);
     setNewWarehouseEntradasBloqueadas(!!warehouse.entradas_bloqueadas);
     setNewWarehouseSaidasBloqueadas(!!warehouse.saidas_bloqueadas);
-    setNewWarehouseGeridoPorFamilia(!!warehouse.gerido_por_familia_tipo);
     setNewWarehouseError('');
     setNewWarehouseModalOpen(true);
   }
@@ -234,7 +231,6 @@ export default function Stock() {
       allow_negative_stock: newWarehouseAllowNegative,
       entradas_bloqueadas: newWarehouseEntradasBloqueadas,
       saidas_bloqueadas: newWarehouseSaidasBloqueadas,
-      gerido_por_familia_tipo: newWarehouseGeridoPorFamilia,
     };
     try {
       if (editingWarehouseId) {
@@ -749,10 +745,6 @@ export default function Stock() {
             <label className="flex items-center gap-2.5 cursor-pointer select-none">
               <input type="checkbox" checked={newWarehouseAllowNegative} onChange={(e) => setNewWarehouseAllowNegative(e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
               <span className="text-sm text-text-primary">Permitir quantidades negativas</span>
-            </label>
-            <label className="flex items-center gap-2.5 cursor-pointer select-none">
-              <input type="checkbox" checked={newWarehouseGeridoPorFamilia} onChange={(e) => setNewWarehouseGeridoPorFamilia(e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
-              <span className="text-sm text-text-primary">Gerido por Familia/Tipo</span>
             </label>
             <label className="flex items-center gap-2.5 cursor-pointer select-none">
               <input type="checkbox" checked={newWarehouseEntradasBloqueadas} onChange={(e) => setNewWarehouseEntradasBloqueadas(e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />

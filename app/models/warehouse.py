@@ -30,7 +30,6 @@ class Warehouse(Base):
     allow_negative_stock: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     entradas_bloqueadas: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     saidas_bloqueadas: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    gerido_por_familia_tipo: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

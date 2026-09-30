@@ -19,7 +19,6 @@ class WarehouseResponse(BaseModel):
     allow_negative_stock: bool = False
     entradas_bloqueadas: bool = False
     saidas_bloqueadas: bool = False
-    gerido_por_familia_tipo: bool = False
     is_active: bool
     created_at: datetime
 
@@ -60,7 +59,6 @@ class WarehouseCreateFullRequest(BaseModel):
     allow_negative_stock: bool = False
     entradas_bloqueadas: bool = False
     saidas_bloqueadas: bool = False
-    gerido_por_familia_tipo: bool = False
 
     @field_validator("name")
     @classmethod

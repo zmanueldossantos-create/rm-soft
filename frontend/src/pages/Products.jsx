@@ -473,14 +473,6 @@ export default function Products() {
               <span className="text-sm text-text-primary">Gerido por stocks</span>
             </label>
             <label className="flex items-center gap-2.5 cursor-pointer select-none">
-              <input type="checkbox" checked={form.managedByBatch} onChange={(e) => updateField('managedByBatch', e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
-              <span className="text-sm text-text-primary">Gerido por lotes</span>
-            </label>
-            <label className="flex items-center gap-2.5 cursor-pointer select-none">
-              <input type="checkbox" checked={form.managedByExpiry} onChange={(e) => updateField('managedByExpiry', e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
-              <span className="text-sm text-text-primary">Gerido por validade</span>
-            </label>
-            <label className="flex items-center gap-2.5 cursor-pointer select-none">
               <input type="checkbox" checked={form.isSoldByWeight} onChange={(e) => updateField('isSoldByWeight', e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
               <span className="text-sm text-text-primary">Vendido ao peso</span>
             </label>

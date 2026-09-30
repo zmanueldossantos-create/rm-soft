@@ -596,7 +596,8 @@ export default function Caixa() {
     if (activeCategoryId !== 'all' && activeCategoryId !== 'services' && p.category_id !== activeCategoryId) return false;
     if (!productSearch.trim()) return true;
     const q = productSearch.toLowerCase();
-    return p.code.toLowerCase().includes(q) || p.name.toLowerCase().includes(q);
+    return p.code.toLowerCase().includes(q) || p.name.toLowerCase().includes(q)
+      || (p.barcode || '').includes(q) || (p.sale_units || []).some((u) => (u.barcode || '').includes(q));
   });
 
   const filteredServices = services.filter((s) => {
@@ -609,12 +610,14 @@ export default function Caixa() {
     return path ? 'http://127.0.0.1:8001' + path : null;
   }
 
-  function addToCart(item, isService = false) {
+  // saleUnit: one of the product's sale units (a box of 30) - the line sells that unit at its price, the server takes
+  // quantity x factor out of stock. The same product in two units makes two cart lines.
+  function addToCart(item, isService = false, saleUnit = null) {
     if (isService && (item.price === null || item.price === undefined)) {
       setError('Este servico nao tem preco definido - configure um preco antes de o vender');
       return;
     }
-    const itemKey = (isService ? 'service:' : 'product:') + item.id;
+    const itemKey = (isService ? 'service:' : 'product:') + item.id + (saleUnit ? ':' + saleUnit.id : '');
     setCart((prev) => {
       const existing = prev.find((line) => line.key === itemKey);
       if (existing) {
@@ -626,14 +629,57 @@ export default function Caixa() {
         serviceId: isService ? item.id : null,
         code: item.code,
         name: item.name,
-        price: item.price,
+        price: saleUnit ? saleUnit.price : item.price,
         quantity: 1,
         discountPercent: 0,
         vatId: item.vat_id,
         withholdingTaxId: isService ? item.withholding_tax_id : null,
-        unit: item.unit_of_measure_code || (!isService && item.is_sold_by_weight ? 'Kg' : 'Un'),
+        unit: saleUnit ? saleUnit.unit_of_measure_code : (item.unit_of_measure_code || (!isService && item.is_sold_by_weight ? 'Kg' : 'Un')),
+        saleUnitId: saleUnit ? saleUnit.id : null,
+        baseUnit: item.unit_of_measure_code || (!isService && item.is_sold_by_weight ? 'Kg' : 'Un'),
+        basePrice: item.price,
+        saleUnits: isService ? [] : (item.sale_units || []),
       }];
     });
+  }
+
+  // Switches a cart line to another unit of the same product ('base' or one of its sale units): price and unit follow;
+  // if the product already has a line in that unit, the quantities merge.
+  function changeCartUnit(key, unitValue) {
+    setCart((prev) => {
+      const line = prev.find((l) => l.key === key);
+      if (!line || !line.productId) return prev;
+      const saleUnit = (line.saleUnits || []).find((u) => u.id === unitValue) || null;
+      const newKey = 'product:' + line.productId + (saleUnit ? ':' + saleUnit.id : '');
+      if (newKey === key) return prev;
+      if (prev.some((l) => l.key === newKey)) {
+        return prev.filter((l) => l.key !== key).map((l) => (l.key === newKey ? { ...l, quantity: l.quantity + line.quantity } : l));
+      }
+      return prev.map((l) => (l.key === key ? {
+        ...l, key: newKey, saleUnitId: saleUnit ? saleUnit.id : null,
+        price: saleUnit ? saleUnit.price : l.basePrice, unit: saleUnit ? saleUnit.unit_of_measure_code : l.baseUnit,
+      } : l));
+    });
+  }
+
+  // Barcode scan (search field + Enter, as a scanner types it): a product's own barcode adds its base unit, a sale
+  // unit's barcode adds that unit directly.
+  function scanBarcode() {
+    const code = productSearch.trim();
+    if (!code) return;
+    for (const p of products) {
+      if (p.barcode && p.barcode === code) {
+        addToCart(p);
+        setProductSearch('');
+        return;
+      }
+      const saleUnit = (p.sale_units || []).find((u) => u.barcode === code);
+      if (saleUnit) {
+        addToCart(p, false, saleUnit);
+        setProductSearch('');
+        return;
+      }
+    }
   }
 
   function updateCartQuantity(key, quantity) {
@@ -1010,6 +1056,7 @@ export default function Caixa() {
                   placeholder="Pesquisar produto..."
                   value={productSearch}
                   onChange={(e) => setProductSearch(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); scanBarcode(); } }}
                   className="w-full bg-bg-elevated border border-border rounded-md pl-10 pr-4 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors"
                 />
               </div>
@@ -1178,7 +1225,11 @@ export default function Caixa() {
                                     <Plus size={11} />
                                   </button>
                                 </div>
-                                <p className="text-center text-[10px] text-text-muted mt-0.5">{line.unit}</p>
+                                {line.saleUnits && line.saleUnits.length > 0 ? (
+  <div className="mt-1"><Select compact value={line.saleUnitId || 'base'} onChange={(v) => changeCartUnit(line.key, v)} options={[{ value: 'base', label: line.baseUnit }, ...line.saleUnits.map((u) => ({ value: u.id, label: u.unit_of_measure_code }))]} /></div>
+) : (
+  <p className="text-center text-[10px] text-text-muted mt-0.5">{line.unit}</p>
+)}
                               </td>
                               <td className="px-2 py-2 align-top text-right font-mono text-text-muted whitespace-nowrap">{formatKz(line.price)}</td>
                               <td className="px-2.5 py-2 align-top text-right font-mono text-text-primary font-medium whitespace-nowrap">{formatKz(lineTotal)}</td>

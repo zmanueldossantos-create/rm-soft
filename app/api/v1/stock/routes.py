@@ -73,7 +73,7 @@ async def post_warehouse(
     return await create_warehouse(
         db, current_user.company_id, payload.name, payload.code, payload.province_id,
         payload.municipality_id, payload.address, payload.allow_negative_stock,
-        payload.entradas_bloqueadas, payload.saidas_bloqueadas, payload.gerido_por_familia_tipo,
+        payload.entradas_bloqueadas, payload.saidas_bloqueadas,
     )
 
 
@@ -207,7 +207,7 @@ async def patch_warehouse(
             db, current_user.company_id, warehouse_id, payload.name, payload.code,
             payload.province_id, payload.municipality_id, payload.address,
             payload.allow_negative_stock, payload.entradas_bloqueadas,
-            payload.saidas_bloqueadas, payload.gerido_por_familia_tipo,
+            payload.saidas_bloqueadas,
         )
     except PeriodClosedError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))

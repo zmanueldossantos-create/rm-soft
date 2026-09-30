@@ -63,7 +63,7 @@ function addDays(dateStr, days) {
   return d.toISOString().slice(0, 10);
 }
 
-const emptyLine = { item_type: 'product', product_id: '', service_id: '', quantity: '1', discount_percent: '0' };
+const emptyLine = { item_type: 'product', product_id: '', service_id: '', quantity: '1', discount_percent: '0', sale_unit_id: '' };
 
 const STEP_LABELS = ['Tipo de documento', 'Cliente e datas', 'Produtos e servicos', 'Pagamento', 'Revisao'];
 
@@ -294,9 +294,12 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
 
   function computeLine(line) {
     const item = getLineItem(line);
-    const unitPrice = item ? Number(item.price || 0) : 0;
+    // Sold in one of the product's sale units (a box of 30): its own price and unit code.
+    const saleUnit = line.item_type === 'product' && line.sale_unit_id ? (item?.sale_units || []).find((u) => u.id === line.sale_unit_id) : null;
+    const unitPrice = saleUnit ? Number(saleUnit.price) : (item ? Number(item.price || 0) : 0);
     const vatRate = item ? Number(vatById[item.vat_id]?.rate || 0) : 0;
-    const unitLabel = item?.unit_of_measure_id ? (unitById[item.unit_of_measure_id]?.code || '') : (item?.unit_of_measure_legacy || '');
+    const unitLabel = saleUnit ? saleUnit.unit_of_measure_code
+      : (item?.unit_of_measure_id ? (unitById[item.unit_of_measure_id]?.code || item.unit_of_measure_code || '') : (item?.unit_of_measure_legacy || ''));
     const qty = parseFloat(line.quantity) || 0;
     const discPct = parseFloat(line.discount_percent) || 0;
     const gross = qty * unitPrice;
@@ -377,7 +380,8 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
   }, [totals.total]);
 
   function updateLine(index, field, value) {
-    setLines((prev) => prev.map((l, i) => (i === index ? { ...l, [field]: value } : l)));
+    // Another article: the unit chosen for the previous one no longer applies.
+    setLines((prev) => prev.map((l, i) => (i === index ? { ...l, [field]: value, ...(field === 'product_id' ? { sale_unit_id: '' } : {}) } : l)));
   }
 
   function updateLineType(index, itemType) {
@@ -499,6 +503,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
         observations: observations || null,
         lines: lines.map((l) => ({
           product_id: l.item_type === 'service' ? null : l.product_id,
+          sale_unit_id: l.item_type === 'service' ? null : (l.sale_unit_id || null),
           service_id: l.item_type === 'service' ? l.service_id : null,
           quantity: parseFloat(l.quantity),
           discount_percent: parseFloat(l.discount_percent) || 0,
@@ -521,6 +526,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
     try {
       const commonLines = lines.map((l) => ({
         product_id: l.item_type === 'service' ? null : l.product_id,
+        sale_unit_id: l.item_type === 'service' ? null : (l.sale_unit_id || null),
         service_id: l.item_type === 'service' ? l.service_id : null,
         quantity: parseFloat(l.quantity),
         discount_percent: parseFloat(l.discount_percent) || 0,
@@ -996,7 +1002,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                                 {line.item_type === 'service' ? (
                                   <Select value={line.service_id} onChange={(v) => updateLine(idx, 'service_id', v)} options={services.map((s) => ({ value: s.id, label: s.code + ' - ' + s.name }))} placeholder="Selecionar servico" />
                                 ) : (
-                                  <Select value={line.product_id} onChange={(v) => updateLine(idx, 'product_id', v)} options={products.map((pr) => ({ value: pr.id, label: pr.code + ' - ' + pr.name }))} placeholder="Selecionar produto" />
+                                  <div className="flex flex-col gap-1.5"><Select value={line.product_id} onChange={(v) => updateLine(idx, 'product_id', v)} options={products.map((pr) => ({ value: pr.id, label: pr.code + ' - ' + pr.name }))} placeholder="Selecionar produto" />{(productById[line.product_id]?.sale_units || []).length > 0 && (<Select compact value={line.sale_unit_id || 'base'} onChange={(v) => updateLine(idx, 'sale_unit_id', v === 'base' ? '' : v)} options={[{ value: 'base', label: productById[line.product_id]?.unit_of_measure_code || 'Unidade base' }, ...productById[line.product_id].sale_units.map((u) => ({ value: u.id, label: u.unit_of_measure_code + ' (' + u.factor + ')' }))]} />)}</div>
                                 )}
                               </td>
                               <td className="py-2 px-2">
