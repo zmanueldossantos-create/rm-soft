@@ -157,3 +157,54 @@ from app.services.stock_service import StockBlockedError as _StockBlockedError  
 @app.exception_handler(_StockBlockedError)
 async def _stock_blocked_handler(request: _Request, exc: _StockBlockedError):
     return _JSONResponse(status_code=409, content={"detail": str(exc)})
+
+# Request validation errors (a quantity typed "1," in a number field...) in Portuguese, one place for every route: the field
+# is named, the line too when the error comes from a list; our own validators already speak Portuguese and pass as they are.
+# The response keeps its shape (422, a list of {type, loc, msg}) - the screens read msg (utils/errors.js).
+from fastapi.exceptions import RequestValidationError as _RequestValidationError  # noqa: E402
+
+_FIELD_LABELS = {
+    "quantity": "Quantidade", "price": "Preco", "unit_price": "Preco unitario", "amount": "Valor",
+    "discount_percent": "Desconto", "discount_global_percent": "Desconto global", "factor": "Fator",
+    "purchase_price": "Preco de compra", "sale_price": "Preco de venda", "barcode": "Codigo de barras",
+    "code": "Codigo", "name": "Nome", "phone_number": "Telefone", "email": "Email", "nif": "NIF",
+    "business_date": "Data", "due_date": "Data de vencimento", "payment_date": "Data de pagamento",
+    "product_id": "Produto", "service_id": "Servico", "customer_id": "Cliente", "rate": "Taxa",
+}
+_TYPE_MESSAGES = {
+    "float_parsing": "valor numerico invalido", "float_type": "valor numerico invalido",
+    "decimal_parsing": "valor numerico invalido", "decimal_type": "valor numerico invalido",
+    "int_parsing": "numero inteiro invalido", "int_type": "numero inteiro invalido",
+    "missing": "campo obrigatorio", "uuid_parsing": "identificador invalido", "uuid_type": "identificador invalido",
+    "date_parsing": "data invalida", "date_from_datetime_parsing": "data invalida", "date_type": "data invalida",
+    "bool_parsing": "valor invalido", "bool_type": "valor invalido",
+    "string_too_short": "texto demasiado curto", "string_too_long": "texto demasiado longo", "string_type": "texto invalido",
+    "greater_than": "deve ser maior que {gt}", "greater_than_equal": "deve ser maior ou igual a {ge}",
+    "less_than": "deve ser menor que {lt}", "less_than_equal": "deve ser menor ou igual a {le}",
+    "json_invalid": "pedido invalido", "enum": "valor nao permitido",
+}
+
+
+def _pt_validation_message(error: dict) -> str:
+    if error.get("type") == "value_error":
+        return str(error.get("msg", ""))  # our own validators: already Portuguese ("Value error, ..." stripped on screen)
+    loc = [part for part in error.get("loc", ()) if part not in ("body", "query", "path")]
+    field = next((part for part in reversed(loc) if isinstance(part, str)), "")
+    line = next((part for part in loc if isinstance(part, int)), None)
+    text = _TYPE_MESSAGES.get(error.get("type", ""), "valor invalido")
+    try:
+        text = text.format(**(error.get("ctx") or {}))
+    except (KeyError, IndexError, ValueError):
+        pass
+    label = _FIELD_LABELS.get(field, field)
+    prefix = (f"Linha {line + 1} - " if line is not None else "") + (f"{label}: " if label else "")
+    return prefix + text
+
+
+@app.exception_handler(_RequestValidationError)
+async def _pt_validation_handler(request: _Request, exc: _RequestValidationError):
+    detail = [
+        {"type": e.get("type"), "loc": [str(part) for part in e.get("loc", ())], "msg": _pt_validation_message(e)}
+        for e in exc.errors()
+    ]
+    return _JSONResponse(status_code=422, content={"detail": detail})

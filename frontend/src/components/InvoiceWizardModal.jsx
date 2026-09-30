@@ -316,9 +316,13 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
     }
     const unitFractional = saleUnit ? !!saleUnit.is_fractional : !!item?.unit_is_fractional;
     // Same rule and message as the server (_sale_unit_for_line): a decimal quantity only in a fractional unit.
-    const quantityError = item && line.item_type === 'product' && !unitFractional && qty > 0 && Math.abs(qty - Math.round(qty)) > 1e-9
-      ? item.name + ': a quantidade deve ser inteira (' + (unitLabel || 'unidade') + ')' : '';
-    return { item, unitPrice, vatRate, unitLabel, unitFractional, quantityError, gross, discountAmount, subtotal, vatAmount, total, retentionAmount };
+    // An empty, zero or unreadable quantity ("1," in a number field) is an error too, then the whole-unit rule.
+    const quantityInvalid = !!item && !(qty > 0);
+    const quantityError = quantityInvalid ? item.name + ': quantidade invalida'
+      : (item && line.item_type === 'product' && !unitFractional && Math.abs(qty - Math.round(qty)) > 1e-9
+        ? item.name + ': a quantidade deve ser inteira (' + (unitLabel || 'unidade') + ')' : '');
+    const quantityHint = quantityInvalid ? 'Quantidade invalida' : 'Quantidade inteira';
+    return { item, unitPrice, vatRate, unitLabel, unitFractional, quantityError, quantityHint, gross, discountAmount, subtotal, vatAmount, total, retentionAmount };
   }
 
   const paidOnIssue = !!documentTypes.find((d) => d.code === INVOICE_TYPE_CODE[invoiceType])?.paid_on_issue;
@@ -672,7 +676,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
               })}
             </div>}
 
-            <div className={'grid grid-cols-1 gap-6 h-[480px] ' + (showLeft && showSidePanel ? 'lg:grid-cols-[1fr_1.2fr]' : '')}>
+            <div className={mode === 'nd' ? 'grid grid-cols-1 grid-rows-[auto_minmax(0,1fr)] gap-4 h-[480px]' : 'grid grid-cols-1 gap-6 h-[480px] ' + (showLeft && showSidePanel ? 'lg:grid-cols-[1fr_1.2fr]' : '')}>
               <div className={'h-full overflow-y-auto scrollbar-thin pr-1' + (showLeft ? '' : ' hidden')}>
                 {isSingleScreen && mode === 'nc' && (
                   <div className="flex flex-col gap-4">
@@ -758,19 +762,16 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                 )}
 
                 {isSingleScreen && mode === 'nd' && (
-                  <div className="flex flex-col gap-4">
-                    {referenceInvoice && (
-                      <p className="text-[12px] text-text-muted">
-                        Referente a <span className="font-mono text-text-primary">{INVOICE_TYPE_CODE[referenceInvoice.invoice_type] || referenceInvoice.invoice_type} {referenceInvoice.series}/{referenceInvoice.number}</span>
-                      </p>
-                    )}
-                    <div>
-                      <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Referencia</label>
-                      <input value={documentReference} disabled className={inputClass + ' opacity-60 cursor-not-allowed'} />
-                    </div>
-                    <div>
-                      <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Observacoes</label>
-                      <textarea value={observations} onChange={(e) => setObservations(e.target.value)} rows={3} className={inputClass + ' resize-none'} placeholder="Opcional" />
+                  <div className="flex flex-col gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Referencia</label>
+                        <input value={documentReference} disabled className={inputClass + ' opacity-60 cursor-not-allowed'} />
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Observacoes</label>
+                        <input value={observations} onChange={(e) => setObservations(e.target.value)} className={inputClass} placeholder="Opcional" />
+                      </div>
                     </div>
                     {formError && (
                       <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{formError}</div>
@@ -1016,7 +1017,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                                 )}
                               </td>
                               <td className="py-2 px-2">
-                                <input type="number" step={c.unitFractional ? '0.001' : '1'} min="0" value={line.quantity} onChange={(e) => updateLine(idx, 'quantity', e.target.value)} className={inputClass + ' text-right font-mono'} />{c.quantityError && <p className="text-[10.5px] text-danger mt-0.5 text-right">Quantidade inteira</p>}
+                                <input type="number" step={c.unitFractional ? '0.001' : '1'} min="0" value={line.quantity} onChange={(e) => updateLine(idx, 'quantity', e.target.value)} className={inputClass + ' text-right font-mono'} />{c.quantityError && <p className="text-[10.5px] text-danger mt-0.5 text-right">{c.quantityHint}</p>}
                               </td>
                               <td className="py-2 px-2 text-right font-mono text-text-muted whitespace-nowrap">{c.item ? formatMoney(c.unitPrice) : '-'}</td>
                               <td className="py-2 px-2">
