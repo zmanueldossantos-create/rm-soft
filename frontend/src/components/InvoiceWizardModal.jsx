@@ -447,7 +447,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
       return item && parseFloat(l.quantity) > 0;
     });
 
-  const hasUsableLines = lines.some((l) => getLineItem(l) && parseFloat(l.quantity) > 0);
+  const hasUsableLines = (lines.some((l) => getLineItem(l) && parseFloat(l.quantity) > 0)) && !lines.some((l) => getLineItem(l) && computeLine(l).quantityError);  // a line with an impossible quantity (1.5 bags) is not usable: no next tab, no emission
 
   async function handleNcSubmit() {
     setFormError('');
