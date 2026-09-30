@@ -11,6 +11,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.api.deps import require_permission
+from app.schemas.product_sale_unit import ProductSaleUnitRequest, ProductSaleUnitResponse
+from app.services.product_sale_unit_service import (
+    SaleUnitInvalidError, SaleUnitNotFoundError, create_sale_unit, list_sale_units, toggle_sale_unit, update_sale_unit,
+)
 from app.models.user import User
 from app.schemas.product import ProductCreateRequest, ProductUpdateRequest, ProductResponse
 from app.schemas.recipe import RecipeSetRequest, RecipeIngredientResponse
@@ -255,3 +259,63 @@ async def delete_product_image(
     await db.commit()
     await db.refresh(product)
     return product
+
+
+# ---------- Sale units (pallet / egg, box / blister / tablet) ----------
+
+def _sale_unit_error(e: Exception):
+    if isinstance(e, SaleUnitNotFoundError):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.get("/{product_id}/sale-units", response_model=list[ProductSaleUnitResponse])
+async def get_sale_units(
+    product_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("products:view")),
+):
+    try:
+        return await list_sale_units(db, current_user.company_id, product_id)
+    except (SaleUnitNotFoundError, SaleUnitInvalidError) as e:
+        _sale_unit_error(e)
+
+
+@router.post("/{product_id}/sale-units", response_model=ProductSaleUnitResponse, status_code=status.HTTP_201_CREATED)
+async def post_sale_unit(
+    product_id: uuid.UUID,
+    payload: ProductSaleUnitRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("products:manage")),
+):
+    try:
+        return await create_sale_unit(db, current_user.company_id, product_id, payload.unit_of_measure_id, payload.factor, payload.price, payload.barcode)
+    except (SaleUnitNotFoundError, SaleUnitInvalidError) as e:
+        _sale_unit_error(e)
+
+
+@router.patch("/{product_id}/sale-units/{unit_id}", response_model=ProductSaleUnitResponse)
+async def patch_sale_unit(
+    product_id: uuid.UUID,
+    unit_id: uuid.UUID,
+    payload: ProductSaleUnitRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("products:manage")),
+):
+    try:
+        return await update_sale_unit(db, current_user.company_id, product_id, unit_id, payload.unit_of_measure_id, payload.factor, payload.price, payload.barcode)
+    except (SaleUnitNotFoundError, SaleUnitInvalidError) as e:
+        _sale_unit_error(e)
+
+
+@router.patch("/{product_id}/sale-units/{unit_id}/toggle-status", response_model=ProductSaleUnitResponse)
+async def patch_sale_unit_status(
+    product_id: uuid.UUID,
+    unit_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("products:manage")),
+):
+    try:
+        return await toggle_sale_unit(db, current_user.company_id, product_id, unit_id)
+    except (SaleUnitNotFoundError, SaleUnitInvalidError) as e:
+        _sale_unit_error(e)

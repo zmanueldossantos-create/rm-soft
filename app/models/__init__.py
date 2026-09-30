@@ -8,6 +8,7 @@ from app.models.company import Company
 from app.models.user import User
 from app.models.vat import VAT
 from app.models.product import Product
+from app.models.product_sale_unit import ProductSaleUnit
 from app.models.customer import Customer, CustomerStatus
 from app.models.supplier import Supplier
 from app.models.permission import Permission
