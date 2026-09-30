@@ -43,3 +43,6 @@ apply_*.py
 *_dump.txt
 test_accents.txt
 company_id_scan.txt
+
+# Scripts de patch des sessions de travail (patch_*.py) - meme regle que fix_*.py / apply_*.py
+patch_*.py
