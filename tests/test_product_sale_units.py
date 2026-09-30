@@ -126,3 +126,14 @@ async def test_below_cost_and_same_factor_are_warned(db, company_with_essentials
     with pytest.raises(SaleUnitNeedsConfirmationError) as excinfo:
         await create_sale_unit(db, company_id, product_id, box_id, 30, 3000)
     assert "ja contem 30" in excinfo.value.warnings[0]
+
+
+def test_the_sale_unit_travels_from_a_caixa_line_to_the_invoicing_service():
+    import uuid as _uuid
+    from app.schemas.cash_session import CheckoutLineInput
+    from app.schemas.invoice import InvoiceLineCreateRequest, line_inputs
+    product_id, sale_unit_id = _uuid.uuid4(), _uuid.uuid4()
+    caixa_line = CheckoutLineInput(product_id=product_id, quantity=2, sale_unit_id=sale_unit_id)
+    faturas_line = InvoiceLineCreateRequest(product_id=product_id, quantity=2, sale_unit_id=sale_unit_id)
+    for sent in line_inputs([caixa_line]) + line_inputs([faturas_line]):
+        assert sent["sale_unit_id"] == sale_unit_id and sent["quantity"] == 2 and sent["discount_percent"] == 0

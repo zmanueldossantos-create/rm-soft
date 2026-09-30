@@ -21,7 +21,7 @@ from app.schemas.cash_session import (
     LiquidatePendingInvoiceRequest,
     CreateProFormaRequest,
 )
-from app.schemas.invoice import InvoiceResponse
+from app.schemas.invoice import InvoiceResponse, line_inputs
 from app.services.cash_session_service import (
     open_session,
     close_session,
@@ -174,7 +174,7 @@ async def post_checkout(
         await ensure_may_bill_later(db, current_user, payload.invoice_type)
         return await checkout(
             db, current_user.company_id, pos_id, current_user, payload.customer_id,
-            [{"product_id": l.product_id, "service_id": l.service_id, "quantity": l.quantity, "discount_percent": l.discount_percent} for l in payload.lines],
+            line_inputs(payload.lines),
             [{"payment_method_id": p.payment_method_id, "amount": p.amount} for p in payload.payments],
             invoice_type=payload.invoice_type,
             discount_global_percent=payload.discount_global_percent,
@@ -216,7 +216,7 @@ async def post_create_pro_forma(
     try:
         return await create_pro_forma_from_pos(
             db, current_user.company_id, pos_id, current_user, payload.customer_id,
-            [{"product_id": l.product_id, "service_id": l.service_id, "quantity": l.quantity, "discount_percent": l.discount_percent} for l in payload.lines],
+            line_inputs(payload.lines),
             discount_global_percent=payload.discount_global_percent,
         )
     except NoOpenSessionError as e:

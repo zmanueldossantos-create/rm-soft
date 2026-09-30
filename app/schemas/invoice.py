@@ -31,6 +31,13 @@ class InvoiceLineCreateRequest(BaseModel):
         return v
 
 
+def line_inputs(lines) -> list[dict]:
+    """The ONE way a request's sale lines reach the invoicing services (Faturas and Caixa alike): every field of the
+    line schema travels, so a field added later (sale_unit_id...) can never be silently dropped by a route rebuilding
+    the dict by hand."""
+    return [line.model_dump() for line in lines]
+
+
 class InvoiceCreateRequest(BaseModel):
     activity_id: uuid.UUID
     customer_id: uuid.UUID | None = None

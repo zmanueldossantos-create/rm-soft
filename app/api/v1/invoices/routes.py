@@ -28,7 +28,7 @@ from app.services.invoice_service import (
     CashPointRequiredError, RefundNotAllowedError, attach_amount_due, get_credit_note_info, list_open_cash_points,
 )
 from datetime import date
-from app.schemas.invoice import InvoiceCreateRequest, InvoiceResponse, InvoiceDetailResponse, CreditNoteCreateRequest, DebitNoteCreateRequest, ReceiptCreateRequest, ProFormaCreateRequest, ConvertProFormaRequest
+from app.schemas.invoice import InvoiceCreateRequest, InvoiceResponse, InvoiceDetailResponse, CreditNoteCreateRequest, DebitNoteCreateRequest, ReceiptCreateRequest, ProFormaCreateRequest, ConvertProFormaRequest, line_inputs
 from app.utils.pdf_generator import generate_invoice_pdf_thermal, generate_invoice_pdf_a4
 from app.services.cash_session_service import get_open_session_for_user
 from app.services.invoice_service import (
@@ -94,7 +94,7 @@ async def create_new_invoice(
             observations=payload.observations,
             document_reference=payload.document_reference,
             discount_global_percent=payload.discount_global_percent,
-            lines_input=[{"product_id": l.product_id, "service_id": l.service_id, "quantity": l.quantity, "discount_percent": l.discount_percent} for l in payload.lines],
+            lines_input=line_inputs(payload.lines),
         )
     except PeriodClosedError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
@@ -180,7 +180,7 @@ async def create_new_debit_note(
             activity_id=payload.activity_id,
             reference_invoice_id=payload.reference_invoice_id,
             customer_id=payload.customer_id,
-            lines_input=[{"product_id": l.product_id, "service_id": l.service_id, "quantity": l.quantity, "discount_percent": l.discount_percent} for l in payload.lines],
+            lines_input=line_inputs(payload.lines),
             document_reference=payload.document_reference,
             observations=payload.observations,
             cash_session_id=session.id if session else None,
@@ -262,7 +262,7 @@ async def create_new_pro_forma(
             company_id=current_user.company_id,
             activity_id=payload.activity_id,
             customer_id=payload.customer_id,
-            lines_input=[{"product_id": l.product_id, "service_id": l.service_id, "quantity": l.quantity, "discount_percent": l.discount_percent} for l in payload.lines],
+            lines_input=line_inputs(payload.lines),
             document_reference=payload.document_reference,
             observations=payload.observations,
             discount_global_percent=payload.discount_global_percent,

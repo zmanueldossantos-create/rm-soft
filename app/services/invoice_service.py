@@ -1749,6 +1749,7 @@ async def convert_pro_forma_to_invoice(
     lines_input = [
         {
             "product_id": line.product_id,
+            "sale_unit_id": line.sale_unit_id,  # the converted invoice keeps the unit sold
             "service_id": line.service_id,
             "quantity": float(line.quantity),
             "discount_percent": float(line.discount_percent or 0),

@@ -8,6 +8,9 @@ from datetime import date, datetime
 from pydantic import BaseModel, field_validator
 
 
+from app.schemas.invoice import InvoiceLineCreateRequest
+
+
 class OpenSessionRequest(BaseModel):
     pos_id: uuid.UUID
     # Optional - when omitted, the float carries over from this POS's last closed
@@ -70,18 +73,8 @@ class CheckoutPaymentInput(BaseModel):
         return v
 
 
-class CheckoutLineInput(BaseModel):
-    product_id: uuid.UUID | None = None
-    service_id: uuid.UUID | None = None
-    quantity: float
-    discount_percent: float = 0
-
-    @field_validator("quantity")
-    @classmethod
-    def validate_quantity(cls, v: float) -> float:
-        if v <= 0:
-            raise ValueError("Quantidade deve ser maior que zero")
-        return v
+class CheckoutLineInput(InvoiceLineCreateRequest):
+    """A Caixa sale line IS an invoice sale line (same fields, sale unit included) - only its own rule below is added."""
 
     @field_validator("service_id")
     @classmethod
