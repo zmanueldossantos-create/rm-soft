@@ -24,16 +24,3 @@ export async function downloadMovementExcelTemplate() {
   a.click();
   URL.revokeObjectURL(blobUrl);
 }
-
-export async function importMovementDocument({ movementTypeId, warehouseId, movementDate, description, file }) {
-  const formData = new FormData();
-  formData.append('movement_type_id', movementTypeId);
-  formData.append('warehouse_id', warehouseId);
-  if (movementDate) formData.append('movement_date', movementDate);
-  if (description) formData.append('description', description);
-  formData.append('file', file);
-  const res = await apiClient.post('/movements/import', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
-  return res.data;
-}

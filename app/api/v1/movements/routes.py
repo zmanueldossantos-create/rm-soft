@@ -24,7 +24,6 @@ from app.services.movement_document_service import (
     InsufficientStockForMovementError,
     MovementDocumentNotFoundError,
     generate_movement_excel_template,
-    parse_movement_excel,
     InvalidExcelFileError,
 )
 
@@ -100,41 +99,3 @@ async def get_movement_document_detail(
         **MovementDocumentResponse.model_validate(document).model_dump(),
         lines=[l for l in lines],
     )
-
-
-@router.post("/import", response_model=MovementDocumentResponse, status_code=status.HTTP_201_CREATED)
-async def import_movement_document(
-    movement_type_id: uuid.UUID = Form(...),
-    warehouse_id: uuid.UUID = Form(...),
-    movement_date: date_type | None = Form(None),
-    description: str | None = Form(None),
-    file: UploadFile = File(...),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("movements:import")),
-):
-    """Creates a stock movement document from an uploaded Excel file (automatic Entrada/Saida)."""
-    file_bytes = await file.read()
-    try:
-        lines_input = await parse_movement_excel(db, current_user.company_id, file_bytes)
-        document = await create_stock_movement_document(
-            db,
-            company_id=current_user.company_id,
-            movement_type_id=movement_type_id,
-            warehouse_id=warehouse_id,
-            lines_input=lines_input,
-            movement_date=movement_date,
-            description=description,
-        )
-    except InvalidExcelFileError as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
-    except MovementTypeNotConfiguredError as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
-    except MovementWarehouseNotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except MovementProductNotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except EmptyMovementError as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
-    except InsufficientStockForMovementError as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
-    return document

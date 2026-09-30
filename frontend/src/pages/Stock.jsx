@@ -490,7 +490,6 @@ export default function Stock() {
       <Modal open={receiveModalOpen} onClose={() => setReceiveModalOpen(false)} title="Registar Receção de Stock" maxWidthClass="max-w-6xl">
         <MovementForm
           filterDirection="ENTRADA"
-          defaultWarehouseId={centralWarehouse?.id}
           onSuccess={() => { setReceiveModalOpen(false); loadWarehouses(); if (selectedWarehouseId) loadLevels(selectedWarehouseId); }}
           onCancel={() => setReceiveModalOpen(false)}
         />

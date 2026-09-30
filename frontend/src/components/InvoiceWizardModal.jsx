@@ -786,7 +786,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                         className={'flex flex-col items-center justify-center gap-1.5 bg-bg-inset border rounded-lg py-3.5 px-3 text-center transition-colors cursor-pointer ' + (invoiceType === c.type ? 'border-accent bg-accent/5' : 'border-accent/20 hover:border-accent hover:bg-accent/5')}
                       >
                         <FileText size={18} className="text-accent" />
-                        <span className="text-[12px] font-medium text-text-primary leading-tight">{c.name}</span>
+                        <span className="text-[12px] font-medium text-text-primary leading-tight">{INVOICE_TYPE_CODE[c.type] ? INVOICE_TYPE_CODE[c.type] + ' - ' : ''}{c.name}</span>
                         {c.description && <span className="text-[11px] text-text-muted leading-tight">{c.description}</span>}
                       </button>
                     ))}
@@ -946,7 +946,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                   <div className="flex items-center justify-between mb-3">
                     <p className="text-[13px] font-medium text-text-primary">{mode === 'nc' ? 'Linhas da fatura original' : 'Produtos e servicos'}</p>
                     {mode !== 'nc' && (
-                      <button type="button" onClick={addLine} className="flex items-center gap-1 text-accent hover:text-accent-hover text-[12px] font-medium transition-colors cursor-pointer">
+                      <button type="button" onClick={addLine} className="flex items-center gap-1.5 border border-dashed border-accent/60 hover:border-accent hover:bg-accent/5 text-accent text-[13px] font-medium rounded-md px-3.5 py-2 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
                         <Plus size={13} /> Linha
                       </button>
                     )}
@@ -1003,7 +1003,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                                 {line.item_type === 'service' ? (
                                   <Select value={line.service_id} onChange={(v) => updateLine(idx, 'service_id', v)} options={services.map((s) => ({ value: s.id, label: s.code + ' - ' + s.name }))} placeholder="Selecionar servico" />
                                 ) : (
-                                  <div className="flex flex-col gap-1.5"><Select value={line.product_id} onChange={(v) => updateLine(idx, 'product_id', v)} options={products.map((pr) => ({ value: pr.id, label: pr.code + ' - ' + pr.name }))} placeholder="Selecionar produto" />{(productById[line.product_id]?.sale_units || []).length > 0 && (<Select compact value={line.sale_unit_id || 'base'} onChange={(v) => updateLine(idx, 'sale_unit_id', v === 'base' ? '' : v)} options={[{ value: 'base', label: productById[line.product_id]?.unit_of_measure_code || 'Unidade base' }, ...productById[line.product_id].sale_units.map((u) => ({ value: u.id, label: u.unit_of_measure_code + ' (' + u.factor + ')' }))]} />)}</div>
+                                  <div className="flex items-center gap-1.5"><div className="flex-1 min-w-0"><Select value={line.product_id} onChange={(v) => updateLine(idx, 'product_id', v)} options={products.map((pr) => ({ value: pr.id, label: pr.code + ' - ' + pr.name }))} placeholder="Selecionar produto" /></div>{(productById[line.product_id]?.sale_units || []).length > 0 && (<div className="w-28 shrink-0"><Select value={line.sale_unit_id || 'base'} onChange={(v) => updateLine(idx, 'sale_unit_id', v === 'base' ? '' : v)} options={[{ value: 'base', label: productById[line.product_id]?.unit_of_measure_code || 'Unidade base' }, ...productById[line.product_id].sale_units.map((u) => ({ value: u.id, label: u.unit_of_measure_code + ' (' + u.factor + ')' }))]} /></div>)}</div>
                                 )}
                               </td>
                               <td className="py-2 px-2">

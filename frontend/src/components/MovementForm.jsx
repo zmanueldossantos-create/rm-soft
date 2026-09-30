@@ -20,19 +20,22 @@ function formatMoney(v) {
 // underlying Tipo de Movimento (Manual vs Automatico) is resolved automatically: filling
 // the table manually uses the Manual variant, importing an Excel file uses the Automatico
 // variant, so the user never has to think about "type" as a separate concept.
-export default function MovementForm({ onSuccess, onCancel, filterDirection, defaultWarehouseId = null }) {
+// The warehouse is always chosen explicitly: a reception in the wrong one would silently distort the stock.
+export default function MovementForm({ onSuccess, onCancel, filterDirection }) {
   const [loaded, setLoaded] = useState(false);
   const [products, setProducts] = useState([]);
   const [movementTypes, setMovementTypes] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
   const [units, setUnits] = useState([]);
 
-  const [warehouseId, setWarehouseId] = useState(defaultWarehouseId || '');
+  const [warehouseId, setWarehouseId] = useState('');
   const [movementDate, setMovementDate] = useState(new Date().toISOString().slice(0, 10));
   const [description, setDescription] = useState('');
   const [suppliers, setSuppliers] = useState([]);
   const [supplierId, setSupplierId] = useState('');
   const [lines, setLines] = useState([{ product_id: '', quantity: '1', purchase_price: '0', sale_price: '0' }]);
+  const [scanCode, setScanCode] = useState('');
+  const [scanError, setScanError] = useState('');
   const [usedExcelImport, setUsedExcelImport] = useState(false);
   const [excelFileName, setExcelFileName] = useState('');
   const [excelError, setExcelError] = useState('');
@@ -92,6 +95,40 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection, def
     setLines((prev) => prev.map((l, i) => (i === index ? { ...l, [field]: value } : l)));
   }
 
+  // THE article lookup of this form (scan and Excel import alike): a product's barcode or internal code (base unit),
+  // or the barcode of one of its sale units - then factor base units (a box of 30 eggs = 30).
+  function lookupArticle(code) {
+    const c = String(code || '').trim().toLowerCase();
+    if (!c) return null;
+    for (const p of products) {
+      if ((p.barcode || '').toLowerCase() === c || (p.code || '').toLowerCase() === c) return { product: p, factor: 1 };
+      const saleUnit = (p.sale_units || []).find((u) => (u.barcode || '').toLowerCase() === c);
+      if (saleUnit) return { product: p, factor: Number(saleUnit.factor) };
+    }
+    return null;
+  }
+
+  // Barcode scan (field + Enter): adds the article, or raises the quantity of its existing line. Enter never submits.
+  function handleScan() {
+    const found = lookupArticle(scanCode);
+    if (!found) {
+      setScanError('Codigo nao encontrado: ' + scanCode);
+      return;
+    }
+    const { product, factor } = found;
+    setLines((prev) => {
+      const index = prev.findIndex((l) => l.product_id === product.id);
+      if (index >= 0) {
+        return prev.map((l, i) => (i === index ? { ...l, quantity: String((parseFloat(l.quantity) || 0) + factor) } : l));
+      }
+      const fresh = { product_id: product.id, quantity: String(factor), purchase_price: String(product.purchase_price ?? 0), sale_price: String(product.price ?? 0) };
+      const emptyIndex = prev.findIndex((l) => !l.product_id);
+      return emptyIndex >= 0 ? prev.map((l, i) => (i === emptyIndex ? fresh : l)) : [...prev, fresh];
+    });
+    setScanCode('');
+    setScanError('');
+  }
+
   function addLine() {
     setLines((prev) => [...prev, { product_id: '', quantity: '1', purchase_price: '0', sale_price: '0' }]);
   }
@@ -120,14 +157,15 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection, def
           if (!row || row.every((v) => v === null || v === '')) continue;
           const code = String(row[0] ?? '').trim();
           if (!code) continue;
-          const product = products.find((p) => p.code?.toLowerCase() === code.toLowerCase());
+          const found = lookupArticle(code);
+          const product = found?.product;
           if (!product) {
             notFound.push(code);
             continue;
           }
           parsedLines.push({
             product_id: product.id,
-            quantity: String(row[1] ?? '1'),
+            quantity: String((parseFloat(row[1] ?? '1') || 0) * found.factor),
             purchase_price: String(row[2] ?? '0'),
             sale_price: String(row[3] ?? '0'),
           });
@@ -241,14 +279,17 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection, def
 
       <div className="flex items-center gap-2 flex-wrap">
         <input ref={excelInputRef} type="file" accept=".xlsx,.xls" onChange={handleExcelFileChange} className="hidden" />
-        <button type="button" onClick={() => excelInputRef.current?.click()} title="Importar ficheiro Excel" className="flex items-center gap-1.5 border border-border hover:border-accent text-text-primary text-[13px] px-3 py-2 rounded-md transition-colors cursor-pointer">
+        <input value={scanCode} onChange={(e) => { setScanCode(e.target.value); setScanError(''); }} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleScan(); } }} autoFocus placeholder="Ler codigo de barras" className="flex-1 min-w-[180px] bg-bg-inset border border-border rounded-md px-3 py-2 text-[13px] text-text-primary font-mono outline-none focus:border-accent" />
+<button type="button" onClick={() => excelInputRef.current?.click()} title="Importar ficheiro Excel" className="flex items-center gap-1.5 border border-border hover:border-accent text-text-primary text-[13px] px-3 py-2 rounded-md transition-colors cursor-pointer">
           <Upload size={15} /> Importar Excel
         </button>
         <button type="button" onClick={downloadMovementExcelTemplate} title="Baixar modelo Excel" className="flex items-center gap-1.5 border border-border hover:border-accent text-text-primary text-[13px] px-3 py-2 rounded-md transition-colors cursor-pointer">
           <Download size={15} /> Modelo
         </button>
+<button type="button" onClick={() => { setUsedExcelImport(false); addLine(); }} className="flex items-center gap-1.5 border border-dashed border-accent/60 hover:border-accent hover:bg-accent/5 text-accent text-[13px] font-medium rounded-md px-3.5 py-2 transition-colors cursor-pointer"><Plus size={15} /> Linha</button>
         {excelFileName && usedExcelImport && <span className="text-[12px] text-text-muted">{excelFileName}</span>}
-        {excelError && <span className="text-[12px] text-danger">{excelError}</span>}
+        {scanError && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2 text-[12px] rounded-r">{scanError}</div>}
+{excelError && <span className="text-[12px] text-danger">{excelError}</span>}
       </div>
 
       <div className="border border-border rounded-lg overflow-hidden">
@@ -303,9 +344,6 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection, def
             })}
           </tbody>
         </table>
-        <button type="button" onClick={() => { setUsedExcelImport(false); addLine(); }} className="w-full flex items-center justify-center gap-1.5 text-accent hover:text-accent-hover text-sm font-medium py-2.5 border-t border-border transition-colors cursor-pointer">
-          <Plus size={15} /> Adicionar linha
-        </button>
       </div>
 
       {formError && (
