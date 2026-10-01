@@ -156,6 +156,7 @@ class ProductUpdateRequest(BaseModel):
 
 class ProductResponse(BaseModel):
     """Product data returned to the client."""
+    average_cost: float | None = None  # CMP, computed by the system (read only)
     id: uuid.UUID
     code: str
     name: str

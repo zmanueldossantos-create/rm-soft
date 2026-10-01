@@ -147,3 +147,35 @@ async def test_a_movement_date_lies_between_its_period_start_and_today(db, compa
     with pytest.raises(PeriodClosedError, match="anterior ao periodo escolhido"):
         await create_stock_movement_document(db, setup["company"].id, entrada.id, setup["activity_warehouse"].id,
                                              lines_input=line, movement_date=date.today().replace(day=1) - timedelta(days=1))
+
+
+@pytest.mark.asyncio
+async def test_priced_receptions_move_the_average_cost(db, company_with_essentials):
+    setup = company_with_essentials
+    product, bag_unit, _ = await _product_in_bags(db, setup, "MV-SC3")
+    entrada = await _make_movement_type(db, "ENC", MovementDirection.ENTRADA)
+    async def receive(lines):
+        await create_stock_movement_document(db, setup["company"].id, entrada.id, setup["activity_warehouse"].id, lines_input=lines)
+        await db.refresh(product)
+        return float(product.average_cost)
+    # 2 bags at 17 500 into an empty stock: 700 per kilo
+    assert await receive([{"product_id": product.id, "quantity": 2, "sale_unit_id": bag_unit.id, "purchase_price": 17500, "sale_price": 0}]) == 700.0
+    # 50 kg at 800 on top of 50 kg at 700: (50 x 700 + 50 x 800) / 100
+    assert await receive([{"product_id": product.id, "quantity": 50, "purchase_price": 800, "sale_price": 0}]) == 750.0
+    # 10 kg without a price: the quantity enters, the cost stays
+    assert await receive([{"product_id": product.id, "quantity": 10, "purchase_price": 0, "sale_price": 0}]) == 750.0
+
+
+@pytest.mark.asyncio
+async def test_the_stock_summary_values_at_the_average_cost(db, company_with_essentials):
+    from app.services.stock_service import get_stock_dashboard
+    setup = company_with_essentials
+    product, bag_unit, _ = await _product_in_bags(db, setup, "MV-SC4")
+    entrada = await _make_movement_type(db, "END4", MovementDirection.ENTRADA)
+    await create_stock_movement_document(db, setup["company"].id, entrada.id, setup["activity_warehouse"].id,
+                                         lines_input=[{"product_id": product.id, "quantity": 1, "sale_unit_id": bag_unit.id, "purchase_price": 17500, "sale_price": 0}])
+    summary = await get_stock_dashboard(db, setup["company"].id)
+    item = next(i for i in summary["items"] if i["product_id"] == product.id)
+    sale_price = float(product.price)
+    assert (item["average_cost"], item["cost_value"], item["cost_unknown"]) == (700.0, 17500.0, False)
+    assert item["margin_value"] == round(25 * sale_price - 17500, 2)

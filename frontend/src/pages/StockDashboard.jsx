@@ -74,7 +74,7 @@ export default function StockDashboard() {
 
       {!loading && !error && data && (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 mb-6">
             <div className="bg-bg-elevated border border-border rounded-lg p-4">
               <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wide flex items-center gap-1.5 mb-1.5"><Package2 size={12} />Produtos ativos</p>
               <p className="font-display font-semibold text-2xl text-text-primary">{data.total_products}</p>
@@ -96,12 +96,18 @@ export default function StockDashboard() {
               <p className="font-display font-semibold text-2xl text-danger">{data.zero_stock_count}</p>
             </button>
             <div className="bg-bg-elevated border border-border rounded-lg p-4">
-              <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wide flex items-center gap-1.5 mb-1.5"><Wallet size={12} />Valor em stock (custo)</p>
+              <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wide flex items-center gap-1.5 mb-1.5"><Wallet size={12} />Valor em stock (custo médio)</p>
               <p className="font-display font-semibold text-2xl text-text-primary">{formatMoney(data.total_cost_value)}</p>
+              {data.unknown_cost_count > 0 && <p className="text-[11px] text-[#f59e0b] mt-1">{data.unknown_cost_count} produto(s) sem custo conhecido</p>}
             </div>
             <div className="bg-bg-elevated border border-border rounded-lg p-4">
               <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wide flex items-center gap-1.5 mb-1.5"><Wallet size={12} />Valor em stock (venda)</p>
               <p className="font-display font-semibold text-2xl text-text-primary">{formatMoney(data.total_sale_value)}</p>
+            </div>
+            <div className="bg-bg-elevated border border-border rounded-lg p-4" title="Valor de venda menos custo medio, dos produtos com custo conhecido, se todo o stock fosse vendido ao preco da unidade base">
+              <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wide flex items-center gap-1.5 mb-1.5"><Wallet size={12} />Margem potencial</p>
+              <p className="font-display font-semibold text-2xl text-success">{formatMoney(data.total_margin_value)}</p>
+              {data.margin_rate != null && <p className="text-[11px] text-text-muted mt-1">{data.margin_rate.toLocaleString('pt-PT')} % do valor de venda</p>}
             </div>
           </div>
 
@@ -144,6 +150,7 @@ export default function StockDashboard() {
                       <th className="text-right text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Limite mínimo</th>
                       <th className="text-right text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Valor (custo)</th>
                       <th className="text-right text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Valor (venda)</th>
+                      <th className="text-right text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Margem</th>
                       <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Estado</th>
                     </tr>
                   </thead>
@@ -158,8 +165,9 @@ export default function StockDashboard() {
                         <td className="px-6 py-3.5 text-right font-mono text-text-primary">{formatQty(item.total_quantity)} <span className="text-text-muted text-[11px]">{item.unit_code}</span></td>
                         <td className="px-6 py-3.5"><UnitBreakdown quantity={item.total_quantity} baseCode={item.unit_code} units={item.sale_units} /></td>
                         <td className="px-6 py-3.5 text-right font-mono text-text-muted">{formatQty(item.min_stock_threshold)}</td>
-                        <td className="px-6 py-3.5 text-right font-mono text-text-muted">{formatMoney(item.cost_value)}</td>
+                        <td className="px-6 py-3.5 text-right font-mono text-text-muted">{item.cost_unknown ? <span className="text-[11px] font-semibold uppercase tracking-wide text-[#f59e0b] bg-[#f59e0b]/10 px-2 py-1 rounded">Sem custo</span> : formatMoney(item.cost_value)}</td>
                         <td className="px-6 py-3.5 text-right font-mono text-text-muted">{formatMoney(item.sale_value)}</td>
+                        <td className="px-6 py-3.5 text-right font-mono text-text-muted">{item.margin_value == null ? '-' : formatMoney(item.margin_value)}</td>
                         <td className="px-6 py-3.5">
                           {item.is_zero ? (
                             <span className="text-[11px] font-semibold uppercase tracking-wide text-danger bg-danger/10 px-2 py-1 rounded">Zero</span>

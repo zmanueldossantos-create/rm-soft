@@ -67,6 +67,9 @@ class Product(Base):
     barcode: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
     price: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)  # preco de venda
     purchase_price: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)  # preco de compra
+    # Weighted average cost (CMP) per base unit, computed by the system from priced reception lines - never typed in;
+    # None = cost unknown. The purchase price above stays a reference typed on the product sheet.
+    average_cost: Mapped[float | None] = mapped_column(Numeric(14, 4), nullable=True)
     min_stock_threshold: Mapped[float] = mapped_column(Numeric(12, 3), nullable=False, default=0)
     expiry_date: Mapped[date | None] = mapped_column(Date, nullable=True)  # DLC
     product_type: Mapped[ProductType] = mapped_column(Enum(ProductType), nullable=False, default=ProductType.BEM)

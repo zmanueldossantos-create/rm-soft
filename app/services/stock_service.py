@@ -226,6 +226,25 @@ async def receive_stock(
     return stock
 
 
+async def update_average_cost(db: AsyncSession, company_id: uuid.UUID, product: Product, base_quantity: float,
+                              unit_cost: float) -> None:
+    """
+    THE weighted average cost (CMP) rule, called before an entry's quantity is added to the stock: the new cost is
+    (stock x current cost + quantity x unit cost) / (stock + quantity), on the company's whole stock (every warehouse).
+    With no stock (or a negative one) or no known cost yet, the cost is this entry's. Only priced entries call it: a
+    line without a price enters at the current cost. Exits never change the unit cost.
+    """
+    from sqlalchemy import func as _func
+    stock_before = float((await db.execute(
+        select(_func.sum(Stock.quantity)).where(Stock.company_id == company_id, Stock.product_id == product.id)
+    )).scalar() or 0)
+    current = float(product.average_cost) if product.average_cost is not None else None
+    if current is None or stock_before <= 0:
+        product.average_cost = round(unit_cost, 4)
+    else:
+        product.average_cost = round((stock_before * current + base_quantity * unit_cost) / (stock_before + base_quantity), 4)
+
+
 class StockQuantityError(Exception):
     """A quantity that cannot be taken: unit not one of the product's, decimal quantity in a whole unit."""
 
@@ -758,7 +777,10 @@ async def get_stock_dashboard(db: AsyncSession, company_id: uuid.UUID, fiscal_pe
     items = []
     for product in products:
         quantity = quantities.get(product.id, 0.0)
-        purchase_price, sale_price = float(product.purchase_price or 0), float(product.price or 0)
+        average_cost = float(product.average_cost) if product.average_cost is not None else None
+        sale_price = float(product.price or 0)
+        cost_value = round(quantity * average_cost, 2) if average_cost is not None else 0.0
+        sale_value = round(quantity * sale_price, 2)
         threshold = float(product.min_stock_threshold or 0)
         items.append({
             "product_id": product.id,
@@ -766,13 +788,16 @@ async def get_stock_dashboard(db: AsyncSession, company_id: uuid.UUID, fiscal_pe
             "name": product.name,
             "is_raw_material": product.is_raw_material,
             "min_stock_threshold": threshold,
-            "purchase_price": purchase_price,
+            "average_cost": average_cost,
+            "cost_unknown": average_cost is None,
             "sale_price": sale_price,
             "total_quantity": quantity,
             "unit_code": unit_codes.get(product.unit_of_measure_id),
             "sale_units": sorted(sale_units.get(product.id, []), key=lambda u: -u["factor"]),
-            "cost_value": round(quantity * purchase_price, 2),
-            "sale_value": round(quantity * sale_price, 2),
+            "cost_value": cost_value,
+            "sale_value": sale_value,
+            # Potential margin if the whole stock were sold at the base unit's price - only when the cost is known.
+            "margin_value": round(sale_value - cost_value, 2) if average_cost is not None else None,
             "is_low": quantity <= threshold,
             "is_zero": quantity <= 0,
         })
@@ -786,6 +811,8 @@ async def get_stock_dashboard(db: AsyncSession, company_id: uuid.UUID, fiscal_pe
         )).all()
     ]
 
+    known = [i for i in items if not i["cost_unknown"]]
+    known_sales = sum(i["sale_value"] for i in known)
     return {
         "items": items,
         "total_products": len(items),
@@ -793,6 +820,9 @@ async def get_stock_dashboard(db: AsyncSession, company_id: uuid.UUID, fiscal_pe
         "zero_stock_count": sum(1 for i in items if i["is_zero"]),
         "total_cost_value": round(sum(i["cost_value"] for i in items), 2),
         "total_sale_value": round(sum(i["sale_value"] for i in items), 2),
+        "total_margin_value": round(sum(i["margin_value"] for i in known), 2),
+        "margin_rate": round(100 * sum(i["margin_value"] for i in known) / known_sales, 1) if known_sales else None,
+        "unknown_cost_count": sum(1 for i in items if i["cost_unknown"] and i["total_quantity"] > 0),
         "period_label": period_label,
         "periods": periods,
     }
