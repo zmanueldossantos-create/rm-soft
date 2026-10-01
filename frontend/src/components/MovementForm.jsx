@@ -40,7 +40,6 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection }) {
   const [lines, setLines] = useState([{ product_id: '', sale_unit_id: '', quantity: '1', purchase_price: '0', sale_price: '0' }]);
   const [scanCode, setScanCode] = useState('');
   const [scanError, setScanError] = useState('');
-  const [usedExcelImport, setUsedExcelImport] = useState(false);
   const [excelFileName, setExcelFileName] = useState('');
   const [excelError, setExcelError] = useState('');
   const excelInputRef = useRef(null);
@@ -80,19 +79,19 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection }) {
   }, [products]);
 
   // Resolved automatically: Excel import -> the "Automatico" variant, manual table -> "Manual".
-  const resolvedMovementType = movementTypes.find((t) => t.is_auto === usedExcelImport);
+  // Every reception entered by a user (by hand, by scan or by Excel import) is a manual one (EN); the automatic
+  // types are kept for the movements the system creates itself.
+  const resolvedMovementType = movementTypes.find((t) => !t.is_auto);
   const isEntrada = filterDirection === 'ENTRADA';
 
   const totals = useMemo(() => {
-    let totalQuantity = 0;
     let totalValue = 0;
     for (const line of lines) {
       const qty = parseFloat(line.quantity) || 0;
       const price = isEntrada ? (parseFloat(line.purchase_price) || 0) : (parseFloat(line.sale_price) || 0);
-      totalQuantity += qty;
       totalValue += qty * price;
     }
-    return { totalQuantity, totalValue };
+    return { totalValue };
   }, [lines, isEntrada]);
 
   function updateLine(index, field, value) {
@@ -170,6 +169,16 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection }) {
   const isFormValid = warehouseId && resolvedMovementType && lines.length > 0 && (!periodChoice || fiscalPeriodId) &&
     lines.every((l) => l.product_id && parseFloat(l.quantity) > 0);
 
+  // Lines of an Excel file left out: unknown codes and units the product does not have, told apart.
+  function skippedMessage(skipped) {
+    const codes = skipped.filter((s) => !s.includes(' (unidade '));
+    const units = skipped.filter((s) => s.includes(' (unidade ')).map((s) => s.replace(' (unidade ', ' ('));
+    return [
+      codes.length ? 'Codigos nao encontrados: ' + codes.join(', ') : '',
+      units.length ? 'Unidades desconhecidas: ' + units.join(', ') : '',
+    ].filter(Boolean).join(' - ') + ' (linhas ignoradas)';
+  }
+
   function handleExcelFileChange(e) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -218,9 +227,8 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection }) {
           return;
         }
         setLines(parsedLines);
-        setUsedExcelImport(true);
         if (notFound.length > 0) {
-          setExcelError('Codigos nao encontrados (ignorados): ' + notFound.join(', '));
+          setExcelError(skippedMessage(notFound));
         }
       } catch {
         setExcelError('Nao foi possivel ler o ficheiro Excel.');
@@ -231,7 +239,6 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection }) {
 
   function handleManualLineEdit(index, field, value) {
     if (field === 'product_id') setLines((prev) => prev.map((l, i) => (i === index ? { ...l, sale_unit_id: '' } : l)));
-    setUsedExcelImport(false);
     updateLine(index, field, value);
   }
 
@@ -311,8 +318,8 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection }) {
 
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 bg-bg-inset/40 border border-border rounded-md p-3.5">
         <div>
-          <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1 block">Qtd Total</label>
-          <p className="font-mono text-sm text-text-primary">{totals.totalQuantity.toFixed(2)}</p>
+          <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1 block">Linhas</label>
+          <p className="font-mono text-sm text-text-primary">{lines.filter((l) => l.product_id).length}</p>
         </div>
         <div>
           <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1 block">Valor Total</label>
@@ -329,11 +336,15 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection }) {
         <button type="button" onClick={downloadMovementExcelTemplate} title="Baixar modelo Excel" className="flex items-center gap-1.5 border border-border hover:border-accent text-text-primary text-[13px] px-3 py-2 rounded-md transition-colors cursor-pointer">
           <Download size={15} /> Modelo
         </button>
-<button type="button" onClick={() => { setUsedExcelImport(false); addLine(); }} className="flex items-center gap-1.5 border border-dashed border-accent/60 hover:border-accent hover:bg-accent/5 text-accent text-[13px] font-medium rounded-md px-3.5 py-2 transition-colors cursor-pointer"><Plus size={15} /> Linha</button>
-        {excelFileName && usedExcelImport && <span className="text-[12px] text-text-muted">{excelFileName}</span>}
+<button type="button" onClick={addLine} className="flex items-center gap-1.5 border border-dashed border-accent/60 hover:border-accent hover:bg-accent/5 text-accent text-[13px] font-medium rounded-md px-3.5 py-2 transition-colors cursor-pointer"><Plus size={15} /> Linha</button>
         {scanError && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2 text-[12px] rounded-r">{scanError}</div>}
-{excelError && <span className="text-[12px] text-danger">{excelError}</span>}
       </div>
+      {(excelFileName || excelError) && (
+        <div className="flex items-center gap-3 flex-wrap -mt-2">
+          {excelFileName && <span className="text-[12px] text-text-muted">{excelFileName}</span>}
+          {excelError && <span className="text-[12px] text-danger">{excelError}</span>}
+        </div>
+      )}
 
       <div className="border border-border rounded-lg overflow-hidden">
         <table className="w-full text-sm table-fixed">
@@ -370,7 +381,7 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection }) {
 ) : (units.find((u) => u.id === product?.unit_of_measure_id)?.code || '-')}
                   </td>
                   <td className="px-4 py-2.5 w-28">
-                    <input type="number" step={((product?.sale_units || []).find((u) => u.id === line.sale_unit_id)?.is_fractional ?? (!line.sale_unit_id && product?.unit_is_fractional)) ? '0.001' : '1'} min="0" value={line.quantity} onChange={(e) => handleManualLineEdit(idx, 'quantity', e.target.value)} className="w-full bg-bg-inset border border-border rounded-md px-2.5 py-1.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors text-right" />{(() => { const su = (product?.sale_units || []).find((u) => u.id === line.sale_unit_id); return su && qty > 0 ? <p className="text-[10.5px] text-text-muted mt-0.5 text-right">= {Math.round(qty * Number(su.factor) * 1000) / 1000} {product.unit_of_measure_code}</p> : null; })()}
+                    <input type="number" step={((product?.sale_units || []).find((u) => u.id === line.sale_unit_id)?.is_fractional ?? (!line.sale_unit_id && product?.unit_is_fractional)) ? '0.001' : '1'} min="0" value={line.quantity} onChange={(e) => handleManualLineEdit(idx, 'quantity', e.target.value)} className="w-full bg-bg-inset border border-border rounded-md px-2.5 py-1.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors text-right" />{(() => { const su = (product?.sale_units || []).find((u) => u.id === line.sale_unit_id); return su && qty > 0 ? <p className="text-[10.5px] text-text-muted mt-0.5 text-right">= {(qty * Number(su.factor)).toLocaleString('pt-PT', { maximumFractionDigits: 3 })} {product.unit_of_measure_code}</p> : null; })()}
                   </td>
                   <td className="px-4 py-2.5 w-36">
                     <input type="number" step="0.01" min="0" value={line.purchase_price} onChange={(e) => handleManualLineEdit(idx, 'purchase_price', e.target.value)} className="w-full bg-bg-inset border border-border rounded-md px-2.5 py-1.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors text-right" />
