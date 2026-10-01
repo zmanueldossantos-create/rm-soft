@@ -218,3 +218,12 @@ from app.services.fiscal_period_service import PeriodClosedError as _PeriodClose
 @app.exception_handler(_PeriodClosedError)
 async def _period_closed_handler(request: _Request, exc: _PeriodClosedError):
     return _JSONResponse(status_code=409, content={"detail": str(exc)})
+
+
+# A stock quantity that cannot be taken (unit not the product's, decimal quantity in a whole unit): a clear 422.
+from app.services.stock_service import StockQuantityError as _StockQuantityError  # noqa: E402
+
+
+@app.exception_handler(_StockQuantityError)
+async def _stock_quantity_handler(request: _Request, exc: _StockQuantityError):
+    return _JSONResponse(status_code=422, content={"detail": str(exc)})

@@ -36,6 +36,7 @@ class StockReceiveRequest(BaseModel):
 
 
 class StockAdjustRequest(BaseModel):
+    sale_unit_id: uuid.UUID | None = None  # quantity entered in one of the product's units; empty = base unit
     fiscal_period_id: uuid.UUID | None = None  # internal entry: the active or the soft-closed period; empty = the active one
     warehouse_id: uuid.UUID
     product_id: uuid.UUID
@@ -59,6 +60,7 @@ class StockAdjustRequest(BaseModel):
 
 
 class StockTransferRequest(BaseModel):
+    sale_unit_id: uuid.UUID | None = None  # quantity entered in one of the product's units; empty = base unit
     fiscal_period_id: uuid.UUID | None = None  # internal entry: the active or the soft-closed period; empty = the active one
     from_warehouse_id: uuid.UUID
     to_warehouse_id: uuid.UUID
@@ -75,6 +77,7 @@ class StockTransferRequest(BaseModel):
 
 
 class StockLossRequest(BaseModel):
+    sale_unit_id: uuid.UUID | None = None  # quantity entered in one of the product's units; empty = base unit
     fiscal_period_id: uuid.UUID | None = None  # internal entry: the active or the soft-closed period; empty = the active one
     warehouse_id: uuid.UUID
     product_id: uuid.UUID

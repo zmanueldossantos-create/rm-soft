@@ -102,6 +102,7 @@ export default function Stock() {
   const [fiscalPeriodId, setFiscalPeriodId] = useState(''); // internal entry: the period chosen when a soft-closed one exists
   const [periodChoice, setPeriodChoice] = useState(false);
   const [opWarehouseId, setOpWarehouseId] = useState(''); // loss / adjustment: chosen in the modal, never preselected
+  const [saleUnitId, setSaleUnitId] = useState(''); // the unit the quantity is entered in (SC...); empty = base unit
   const [transferFromWarehouseId, setTransferFromWarehouseId] = useState('');
   const [transferToWarehouseId, setTransferToWarehouseId] = useState('');
   const [lossCategory, setLossCategory] = useState('EXPIRACAO');
@@ -167,8 +168,15 @@ export default function Stock() {
     setReceiveModalOpen(true);
   }
 
+  // The unit of the quantity in the transfer / loss / adjustment modals: the product's own units, conversion shown,
+  // decimals only in a fractional unit - the server converts with the same rule as sales and receptions.
+  const selectedProduct = products.find((p) => p.id === selectedProductId);
+  const selectedSaleUnit = (selectedProduct?.sale_units || []).find((u) => u.id === saleUnitId) || null;
+  const quantityStep = (selectedSaleUnit ? selectedSaleUnit.is_fractional : selectedProduct?.unit_is_fractional) ? '0.001' : '1';
+
   function openTransferModal() {
     setFiscalPeriodId('');
+    setSaleUnitId('');
     setSelectedProductId('');
     setQuantity('');
     setReason('');
@@ -258,6 +266,7 @@ export default function Stock() {
 
   function openLossModal() {
     setFiscalPeriodId('');
+    setSaleUnitId('');
     setOpWarehouseId('');
     setSelectedProductId('');
     setQuantity('');
@@ -270,6 +279,7 @@ export default function Stock() {
 
   function openAdjustModal() {
     setFiscalPeriodId('');
+    setSaleUnitId('');
     setOpWarehouseId('');
     setSelectedProductId('');
     setQuantity('');
@@ -302,7 +312,7 @@ export default function Stock() {
     setFormError('');
     setSaving(true);
     try {
-      await transferStock(transferFromWarehouseId, transferToWarehouseId, selectedProductId, parseFloat(quantity), reason || null, fiscalPeriodId);
+      await transferStock(transferFromWarehouseId, transferToWarehouseId, selectedProductId, parseFloat(quantity), reason || null, fiscalPeriodId, saleUnitId);
       setSelectedProductId('');
       setQuantity('');
       setReason('');
@@ -320,7 +330,7 @@ export default function Stock() {
     setFormError('');
     setSaving(true);
     try {
-      await recordStockLoss(opWarehouseId, selectedProductId, parseFloat(quantity), lossCategory, reason || null, fiscalPeriodId);
+      await recordStockLoss(opWarehouseId, selectedProductId, parseFloat(quantity), lossCategory, reason || null, fiscalPeriodId, saleUnitId);
       setSelectedProductId('');
       setQuantity('');
       setReason('');
@@ -338,7 +348,7 @@ export default function Stock() {
     setFormError('');
     setSaving(true);
     try {
-      await adjustStock(opWarehouseId, selectedProductId, parseFloat(quantity), reason, fiscalPeriodId);
+      await adjustStock(opWarehouseId, selectedProductId, parseFloat(quantity), reason, fiscalPeriodId, saleUnitId);
       setSelectedProductId('');
       setQuantity('');
       setReason('');
@@ -530,7 +540,7 @@ export default function Stock() {
             <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Produto *</label>
             <Select
               value={selectedProductId}
-              onChange={setSelectedProductId}
+              onChange={(v) => { setSelectedProductId(v); setSaleUnitId(''); }}
               options={products.map((p) => ({ value: p.id, label: p.code + ' - ' + p.name }))}
               placeholder="Selecionar produto"
             />
@@ -539,15 +549,27 @@ export default function Stock() {
             <PostingPeriodSelect value={fiscalPeriodId} onChange={setFiscalPeriodId} onChoice={setPeriodChoice} />
             <div>
               <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Quantidade *</label>
-              <input
-                type="number"
-                step="0.001"
-                min="0.001"
-                value={quantity}
-                onChange={(e) => setQuantity(e.target.value)}
-                required
-                className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors"
-              />
+              <div className="flex gap-2">
+                {(selectedProduct?.sale_units || []).length > 0 ? (
+                  <div className="w-28 shrink-0">
+                    <Select value={saleUnitId || 'base'} onChange={(v) => setSaleUnitId(v === 'base' ? '' : v)} options={[{ value: 'base', label: selectedProduct.unit_of_measure_code || 'Base' }, ...selectedProduct.sale_units.map((u) => ({ value: u.id, label: u.unit_of_measure_code }))]} />
+                  </div>
+                ) : selectedProduct?.unit_of_measure_code ? (
+                  <span className="shrink-0 flex items-center px-3 rounded-md border border-border bg-bg-inset/40 text-sm font-mono text-text-muted">{selectedProduct.unit_of_measure_code}</span>
+                ) : null}
+                <input
+                  type="number"
+                  step={quantityStep}
+                  min={quantityStep}
+                  value={quantity}
+                  onChange={(e) => setQuantity(e.target.value)}
+                  required
+                  className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors"
+                />
+              </div>
+              {selectedSaleUnit && parseFloat(quantity) > 0 && (
+                <p className="text-[10.5px] text-text-muted mt-1 text-right">= {(parseFloat(quantity) * Number(selectedSaleUnit.factor)).toLocaleString('pt-PT', { maximumFractionDigits: 3 })} {selectedProduct.unit_of_measure_code}</p>
+              )}
             </div>
           </div>
           <div>
@@ -595,7 +617,7 @@ export default function Stock() {
             <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Produto *</label>
             <Select
               value={selectedProductId}
-              onChange={setSelectedProductId}
+              onChange={(v) => { setSelectedProductId(v); setSaleUnitId(''); }}
               options={products.map((p) => ({ value: p.id, label: p.code + ' - ' + p.name }))}
               placeholder="Selecionar produto"
             />
@@ -604,15 +626,27 @@ export default function Stock() {
             <PostingPeriodSelect value={fiscalPeriodId} onChange={setFiscalPeriodId} onChoice={setPeriodChoice} />
             <div>
               <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Quantidade *</label>
-              <input
-                type="number"
-                step="0.001"
-                min="0.001"
-                value={quantity}
-                onChange={(e) => setQuantity(e.target.value)}
-                required
-                className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors"
-              />
+              <div className="flex gap-2">
+                {(selectedProduct?.sale_units || []).length > 0 ? (
+                  <div className="w-28 shrink-0">
+                    <Select value={saleUnitId || 'base'} onChange={(v) => setSaleUnitId(v === 'base' ? '' : v)} options={[{ value: 'base', label: selectedProduct.unit_of_measure_code || 'Base' }, ...selectedProduct.sale_units.map((u) => ({ value: u.id, label: u.unit_of_measure_code }))]} />
+                  </div>
+                ) : selectedProduct?.unit_of_measure_code ? (
+                  <span className="shrink-0 flex items-center px-3 rounded-md border border-border bg-bg-inset/40 text-sm font-mono text-text-muted">{selectedProduct.unit_of_measure_code}</span>
+                ) : null}
+                <input
+                  type="number"
+                  step={quantityStep}
+                  min={quantityStep}
+                  value={quantity}
+                  onChange={(e) => setQuantity(e.target.value)}
+                  required
+                  className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors"
+                />
+              </div>
+              {selectedSaleUnit && parseFloat(quantity) > 0 && (
+                <p className="text-[10.5px] text-text-muted mt-1 text-right">= {(parseFloat(quantity) * Number(selectedSaleUnit.factor)).toLocaleString('pt-PT', { maximumFractionDigits: 3 })} {selectedProduct.unit_of_measure_code}</p>
+              )}
             </div>
           </div>
           <div>
@@ -680,7 +714,7 @@ export default function Stock() {
             <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Produto *</label>
             <Select
               value={selectedProductId}
-              onChange={setSelectedProductId}
+              onChange={(v) => { setSelectedProductId(v); setSaleUnitId(''); }}
               options={products.map((p) => ({ value: p.id, label: p.code + ' - ' + p.name }))}
               placeholder="Selecionar produto"
             />
@@ -689,15 +723,27 @@ export default function Stock() {
             <PostingPeriodSelect value={fiscalPeriodId} onChange={setFiscalPeriodId} onChoice={setPeriodChoice} />
             <div>
               <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Nova quantidade exata *</label>
-              <input
-                type="number"
-                step="0.001"
-                min="0"
-                value={quantity}
-                onChange={(e) => setQuantity(e.target.value)}
-                required
-                className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors"
-              />
+              <div className="flex gap-2">
+                {(selectedProduct?.sale_units || []).length > 0 ? (
+                  <div className="w-28 shrink-0">
+                    <Select value={saleUnitId || 'base'} onChange={(v) => setSaleUnitId(v === 'base' ? '' : v)} options={[{ value: 'base', label: selectedProduct.unit_of_measure_code || 'Base' }, ...selectedProduct.sale_units.map((u) => ({ value: u.id, label: u.unit_of_measure_code }))]} />
+                  </div>
+                ) : selectedProduct?.unit_of_measure_code ? (
+                  <span className="shrink-0 flex items-center px-3 rounded-md border border-border bg-bg-inset/40 text-sm font-mono text-text-muted">{selectedProduct.unit_of_measure_code}</span>
+                ) : null}
+                <input
+                  type="number"
+                  step={quantityStep}
+                  min="0"
+                  value={quantity}
+                  onChange={(e) => setQuantity(e.target.value)}
+                  required
+                  className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors"
+                />
+              </div>
+              {selectedSaleUnit && parseFloat(quantity) > 0 && (
+                <p className="text-[10.5px] text-text-muted mt-1 text-right">= {(parseFloat(quantity) * Number(selectedSaleUnit.factor)).toLocaleString('pt-PT', { maximumFractionDigits: 3 })} {selectedProduct.unit_of_measure_code}</p>
+              )}
             </div>
           </div>
           <div>

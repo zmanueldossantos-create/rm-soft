@@ -141,7 +141,7 @@ async def post_transfer_stock(
     try:
         await transfer_stock(
             db, current_user.company_id, payload.product_id,
-            payload.from_warehouse_id, payload.to_warehouse_id, payload.quantity, payload.reason, fiscal_period_id=payload.fiscal_period_id,
+            payload.from_warehouse_id, payload.to_warehouse_id, payload.quantity, payload.reason, sale_unit_id=payload.sale_unit_id, fiscal_period_id=payload.fiscal_period_id,
         )
     except PeriodClosedError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
@@ -163,7 +163,7 @@ async def post_stock_loss(
     try:
         await record_stock_loss(
             db, current_user.company_id, payload.warehouse_id, payload.product_id,
-            payload.quantity, payload.loss_category, payload.reason, fiscal_period_id=payload.fiscal_period_id,
+            payload.quantity, payload.loss_category, payload.reason, sale_unit_id=payload.sale_unit_id, fiscal_period_id=payload.fiscal_period_id,
         )
     except PeriodClosedError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
@@ -184,7 +184,7 @@ async def post_adjust_stock(
 ):
     """Manually corrects stock to an exact quantity in a specific warehouse - GESTOR only, reason required."""
     try:
-        await adjust_stock(db, current_user.company_id, payload.warehouse_id, payload.product_id, payload.new_quantity, payload.reason, fiscal_period_id=payload.fiscal_period_id)
+        await adjust_stock(db, current_user.company_id, payload.warehouse_id, payload.product_id, payload.new_quantity, payload.reason, sale_unit_id=payload.sale_unit_id, fiscal_period_id=payload.fiscal_period_id)
     except PeriodClosedError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except WarehouseNotFoundError as e:

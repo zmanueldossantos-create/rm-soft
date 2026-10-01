@@ -226,6 +226,29 @@ async def receive_stock(
     return stock
 
 
+class StockQuantityError(Exception):
+    """A quantity that cannot be taken: unit not one of the product's, decimal quantity in a whole unit."""
+
+
+async def _to_base_quantity(db: AsyncSession, company_id: uuid.UUID, product_id: uuid.UUID, quantity: float,
+                            sale_unit_id: uuid.UUID | None) -> float:
+    """
+    A quantity entered in one of the product's units (2 SC) in base units (50 KG) - the same conversion as sales and
+    receptions (resolve_line_unit): an unknown unit or a decimal quantity in a whole unit is refused.
+    """
+    from app.services.product_sale_unit_service import SaleUnitInvalidError, resolve_line_unit
+    product = (await db.execute(
+        select(Product).where(Product.id == product_id, Product.company_id == company_id)
+    )).scalar_one_or_none()
+    if product is None:
+        raise StockQuantityError("Produto nao encontrado")
+    try:
+        _price, factor, _sale_unit_id, _code = await resolve_line_unit(db, company_id, product, sale_unit_id, quantity)
+    except SaleUnitInvalidError as e:
+        raise StockQuantityError(str(e))
+    return quantity * factor
+
+
 async def transfer_stock(
     db: AsyncSession,
     company_id: uuid.UUID,
@@ -234,6 +257,7 @@ async def transfer_stock(
     to_warehouse_id: uuid.UUID,
     quantity: float,
     reason: str | None = None,
+    sale_unit_id: uuid.UUID | None = None,  # entered in one of the product's units (SC...); empty = base unit
     fiscal_period_id: uuid.UUID | None = None,
 ) -> None:
     """
@@ -244,6 +268,7 @@ async def transfer_stock(
     reads as one transfer.
     """
     posting_period = await resolve_posting_period(db, company_id, fiscal_period_id)
+    quantity = await _to_base_quantity(db, company_id, product_id, quantity, sale_unit_id)
     if from_warehouse_id == to_warehouse_id:
         raise ValueError("O armazem de origem e destino nao pode ser o mesmo")
 
@@ -286,6 +311,7 @@ async def record_stock_loss(
     quantity: float,
     loss_category: str,
     reason: str | None = None,
+    sale_unit_id: uuid.UUID | None = None,  # entered in one of the product's units (SC...); empty = base unit
     fiscal_period_id: uuid.UUID | None = None,
 ) -> Stock:
     """
@@ -294,6 +320,7 @@ async def record_stock_loss(
     correction. Requires the category; free-text reason is optional detail.
     """
     posting_period = await resolve_posting_period(db, company_id, fiscal_period_id)
+    quantity = await _to_base_quantity(db, company_id, product_id, quantity, sale_unit_id)
     warehouse = await get_warehouse_or_raise(db, company_id, warehouse_id)
     await _stock_rule(db, product_id, warehouse.id, "out", strict=True)
     stock = await _get_or_create_stock_row(db, company_id, product_id, warehouse.id)
@@ -323,6 +350,7 @@ async def adjust_stock(
     product_id: uuid.UUID,
     new_quantity: float,
     reason: str,
+    sale_unit_id: uuid.UUID | None = None,  # entered in one of the product's units (SC...); empty = base unit
     fiscal_period_id: uuid.UUID | None = None,
 ) -> Stock:
     """
@@ -331,6 +359,7 @@ async def adjust_stock(
     movement, reason required.
     """
     posting_period = await resolve_posting_period(db, company_id, fiscal_period_id)
+    new_quantity = await _to_base_quantity(db, company_id, product_id, new_quantity, sale_unit_id)
     warehouse = await get_warehouse_or_raise(db, company_id, warehouse_id)
     await _stock_rule(db, product_id, warehouse.id, "adjust", strict=True)
     stock = await _get_or_create_stock_row(db, company_id, product_id, warehouse.id)

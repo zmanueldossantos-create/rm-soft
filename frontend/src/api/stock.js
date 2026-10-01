@@ -51,8 +51,9 @@ export async function receiveStock(productId, quantity, reason) {
   return res.data;
 }
 
-export async function transferStock(fromWarehouseId, toWarehouseId, productId, quantity, reason, fiscalPeriodId = null) {
+export async function transferStock(fromWarehouseId, toWarehouseId, productId, quantity, reason, fiscalPeriodId = null, saleUnitId = null) {
   const res = await apiClient.post('/stock/transfer', {
+    sale_unit_id: saleUnitId || null,
     fiscal_period_id: fiscalPeriodId || null,
     from_warehouse_id: fromWarehouseId,
     to_warehouse_id: toWarehouseId,
@@ -63,8 +64,9 @@ export async function transferStock(fromWarehouseId, toWarehouseId, productId, q
   return res.data;
 }
 
-export async function recordStockLoss(warehouseId, productId, quantity, lossCategory, reason, fiscalPeriodId = null) {
+export async function recordStockLoss(warehouseId, productId, quantity, lossCategory, reason, fiscalPeriodId = null, saleUnitId = null) {
   const res = await apiClient.post('/stock/loss', {
+    sale_unit_id: saleUnitId || null,
     fiscal_period_id: fiscalPeriodId || null,
     warehouse_id: warehouseId,
     product_id: productId,
@@ -75,8 +77,9 @@ export async function recordStockLoss(warehouseId, productId, quantity, lossCate
   return res.data;
 }
 
-export async function adjustStock(warehouseId, productId, newQuantity, reason, fiscalPeriodId = null) {
+export async function adjustStock(warehouseId, productId, newQuantity, reason, fiscalPeriodId = null, saleUnitId = null) {
   const res = await apiClient.post('/stock/adjust', {
+    sale_unit_id: saleUnitId || null,
     fiscal_period_id: fiscalPeriodId || null,
     warehouse_id: warehouseId,
     product_id: productId,
