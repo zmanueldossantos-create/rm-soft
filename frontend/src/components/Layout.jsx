@@ -119,11 +119,12 @@ export default function Layout() {
   const toggleTheme = useThemeStore((state) => state.toggleTheme);
   const can = useCan();
   const [periodLabel, setPeriodLabel] = useState(null);
+  const [partialLabel, setPartialLabel] = useState(null); // the soft-closed period, if any
 
   useEffect(() => {
     if (user?.role && user.role !== 'SUPER_ADMIN') {
       getCurrentPeriod()
-        .then((data) => setPeriodLabel(data.label))
+        .then((data) => { setPeriodLabel(data.label); setPartialLabel(data.partial_label || null); })
         .catch(() => setPeriodLabel(null));
     }
   }, [user?.role]);
@@ -271,7 +272,7 @@ export default function Layout() {
           {periodLabel && (
             <span className="hidden md:flex items-center gap-1.5 font-mono text-[12px] text-text-muted border border-border rounded-md px-2.5 py-1.5">
               <Calendar size={13} className="text-accent" />
-              {periodLabel}
+              {periodLabel}{partialLabel && <span className="ml-1.5 text-amber-500">· {partialLabel} (parcial)</span>}
             </span>
           )}
           <button

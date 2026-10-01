@@ -118,6 +118,14 @@ async def partial_close_fiscal_year(db: AsyncSession, company_id: uuid.UUID, fis
             f"Feche (parcial ou definitivamente) o periodo de {MONTH_NAMES_PT[open_period.month]} "
             "antes de fechar parcialmente o ano"
         )
+    # A year is soft-closed only to move on to the next one: after December, never mid-year.
+    december = (await db.execute(
+        select(FiscalPeriod).where(FiscalPeriod.fiscal_year_id == fiscal_year_id, FiscalPeriod.month == 12)
+    )).scalar_one_or_none()
+    if december is None:
+        raise InvalidFiscalOperationError(
+            "So e possivel fechar parcialmente o ano depois de Dezembro - feche parcialmente Dezembro primeiro"
+        )
     other = (await db.execute(
         select(FiscalYear).where(
             FiscalYear.company_id == company_id, FiscalYear.status == FECHO_PARCIAL, FiscalYear.id != fiscal_year_id,
@@ -380,6 +388,7 @@ async def list_posting_periods(db: AsyncSession, company_id: uuid.UUID) -> list[
         ).order_by(FiscalYear.year, FiscalPeriod.month)
     )).all()
     return [
-        {"id": period.id, "label": f"{MONTH_NAMES_PT[period.month]} {year}", "status": period.status}
+        {"id": period.id, "label": f"{MONTH_NAMES_PT[period.month]} {year}", "status": period.status,
+         "year": year, "month": period.month}
         for period, year in rows
     ]

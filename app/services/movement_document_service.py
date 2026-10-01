@@ -86,6 +86,18 @@ async def create_stock_movement_document(
 
     # Internal entry: real date, booked in the chosen period (the soft-closed month for a late entry).
     posting_period = await resolve_posting_period(db, company_id, fiscal_period_id)
+    # The date is the real date of the physical event (a delivery of 30 September entered on 1 October): never in the
+    # future, never before the first day of the period it is booked in.
+    from app.models.fiscal_year import FiscalYear
+    from app.services.fiscal_period_service import MONTH_NAMES_PT, PeriodClosedError
+    period_year = (await db.execute(select(FiscalYear.year).where(FiscalYear.id == posting_period.fiscal_year_id))).scalar_one()
+    if movement_date > date.today():
+        raise PeriodClosedError("A data do movimento nao pode ser futura")
+    if movement_date < date(period_year, posting_period.month, 1):
+        raise PeriodClosedError(
+            f"A data do movimento ({movement_date.strftime('%d/%m/%Y')}) e anterior ao periodo escolhido "
+            f"({MONTH_NAMES_PT[posting_period.month]} de {period_year})"
+        )
 
     type_result = await db.execute(select(MovementTypeCatalog).where(MovementTypeCatalog.id == movement_type_id))
     movement_type = type_result.scalar_one_or_none()

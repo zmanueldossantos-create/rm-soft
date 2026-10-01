@@ -93,3 +93,12 @@ async def test_a_year_closes_for_good_only_when_every_month_is_closed(db, compan
         await close_fiscal_year(db, company_id, fiscal_year.id)
     await close_fiscal_period(db, company_id, december.id)
     assert (await close_fiscal_year(db, company_id, fiscal_year.id)).status == "FECHADO"
+
+
+@pytest.mark.asyncio
+async def test_a_year_is_never_soft_closed_mid_year(db, company_with_essentials):
+    company_id = company_with_essentials["company"].id
+    await _close_fixture_periods(db, company_id)
+    fiscal_year, _ = await _own_year(db, company_id, months=[(9, "FECHO_PARCIAL")])
+    with pytest.raises(InvalidFiscalOperationError, match="depois de Dezembro"):
+        await partial_close_fiscal_year(db, company_id, fiscal_year.id)

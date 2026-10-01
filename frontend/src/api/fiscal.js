@@ -48,3 +48,20 @@ export async function getCurrentPeriod() {
   const res = await apiClient.get('/fiscal/current-period');
   return res.data;
 }
+
+// Soft close (fecho parcial): automatic operations stop, internal late entries stay possible until the final close.
+export async function partialCloseFiscalPeriod(periodId) {
+  const res = await apiClient.patch('/fiscal/periods/' + periodId + '/partial-close');
+  return res.data;
+}
+
+export async function partialCloseFiscalYear(yearId) {
+  const res = await apiClient.patch('/fiscal/years/' + yearId + '/partial-close');
+  return res.data;
+}
+
+// The periods an internal entry may be booked in (the active one and the soft-closed one).
+export async function getPostingPeriods() {
+  const res = await apiClient.get('/fiscal/posting-periods');
+  return res.data;
+}

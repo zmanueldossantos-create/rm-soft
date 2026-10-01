@@ -131,3 +131,19 @@ async def test_half_a_bag_is_refused_at_reception(db, company_with_essentials):
             db, setup["company"].id, entrada.id, setup["activity_warehouse"].id,
             lines_input=[{"product_id": product.id, "quantity": 1.5, "sale_unit_id": bag_unit.id, "purchase_price": 0, "sale_price": 0}],
         )
+
+
+@pytest.mark.asyncio
+async def test_a_movement_date_lies_between_its_period_start_and_today(db, company_with_essentials):
+    from datetime import date, timedelta
+    from app.services.fiscal_period_service import PeriodClosedError
+    setup = company_with_essentials
+    product = await _make_product(db, setup["company"], setup["vat_nor"], code="MV-DT1")
+    entrada = await _make_movement_type(db, "END", MovementDirection.ENTRADA)
+    line = [{"product_id": product.id, "quantity": 1, "purchase_price": 0, "sale_price": 0}]
+    with pytest.raises(PeriodClosedError, match="nao pode ser futura"):
+        await create_stock_movement_document(db, setup["company"].id, entrada.id, setup["activity_warehouse"].id,
+                                             lines_input=line, movement_date=date.today() + timedelta(days=1))
+    with pytest.raises(PeriodClosedError, match="anterior ao periodo escolhido"):
+        await create_stock_movement_document(db, setup["company"].id, entrada.id, setup["activity_warehouse"].id,
+                                             lines_input=line, movement_date=date.today().replace(day=1) - timedelta(days=1))

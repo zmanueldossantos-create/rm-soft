@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { Plus, Loader2, Trash2, Upload, Download } from 'lucide-react';
-import Select from './Select';
+import Select from './Select';
+import PostingPeriodSelect from './PostingPeriodSelect';
 import * as XLSX from 'xlsx';
 import { createMovementDocument, downloadMovementExcelTemplate } from '../api/movements';
 import { listProducts } from '../api/products';
@@ -30,6 +31,9 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection }) {
 
   const [warehouseId, setWarehouseId] = useState('');
   const [movementDate, setMovementDate] = useState(new Date().toISOString().slice(0, 10));
+  const [fiscalPeriodId, setFiscalPeriodId] = useState('');
+  const [periodChoice, setPeriodChoice] = useState(false); // a soft-closed period exists: the period must be chosen
+  const [postingPeriods, setPostingPeriods] = useState([]);
   const [description, setDescription] = useState('');
   const [suppliers, setSuppliers] = useState([]);
   const [supplierId, setSupplierId] = useState('');
@@ -157,7 +161,13 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection }) {
     setLines((prev) => prev.filter((_, i) => i !== index));
   }
 
-  const isFormValid = warehouseId && resolvedMovementType && lines.length > 0 &&
+  // The movement date is the real date of the event: from the first day of the chosen period (the active one when none
+  // is chosen) up to today - the server checks it too.
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const boundPeriod = postingPeriods.find((p) => p.id === fiscalPeriodId) || postingPeriods.find((p) => p.status === 'ABERTO');
+  const movementDateMin = boundPeriod ? boundPeriod.year + '-' + String(boundPeriod.month).padStart(2, '0') + '-01' : undefined;
+
+  const isFormValid = warehouseId && resolvedMovementType && lines.length > 0 && (!periodChoice || fiscalPeriodId) &&
     lines.every((l) => l.product_id && parseFloat(l.quantity) > 0);
 
   function handleExcelFileChange(e) {
@@ -240,6 +250,7 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection }) {
         movement_date: movementDate,
         description: description || null,
         supplier_id: filterDirection === 'ENTRADA' ? (supplierId || null) : null,
+        fiscal_period_id: fiscalPeriodId || null,
         lines: lines.map((l) => ({
           product_id: l.product_id,
           sale_unit_id: l.sale_unit_id || null,
@@ -267,7 +278,7 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection }) {
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-5">
       <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
-        <div className="sm:col-span-5">
+        <div className="sm:col-span-3">
           <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Armazém *</label>
           <Select
             value={warehouseId}
@@ -278,8 +289,9 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection }) {
         </div>
         <div className="sm:col-span-2">
           <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Data do movimento *</label>
-          <input type="date" value={movementDate} onChange={(e) => setMovementDate(e.target.value)} required className={inputClass} />
+          <input type="date" value={movementDate} min={movementDateMin} max={todayIso} onChange={(e) => setMovementDate(e.target.value)} required className={inputClass} />
         </div>
+        <PostingPeriodSelect className="sm:col-span-2" value={fiscalPeriodId} onChange={setFiscalPeriodId} onChoice={setPeriodChoice} onPeriods={setPostingPeriods} />
         {filterDirection === 'ENTRADA' && (
           <div className="sm:col-span-2">
             <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Fornecedor (opcional)</label>
