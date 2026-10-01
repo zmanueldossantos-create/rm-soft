@@ -67,6 +67,9 @@ function WarehouseCard({ warehouse, isCentral, onEditClick, onToggleStatus, togg
   );
 }
 
+// An inventory count: one or more lines, each in one of the product's units (8 CX + 1 MCX + 6 UN).
+const EMPTY_COUNT = [{ saleUnitId: '', quantity: '' }];
+
 export default function Stock() {
   const can = useCan();
   const [warehouses, setWarehouses] = useState([]);
@@ -104,6 +107,7 @@ export default function Stock() {
   const [periodChoice, setPeriodChoice] = useState(false);
   const [opWarehouseId, setOpWarehouseId] = useState(''); // loss / adjustment: chosen in the modal, never preselected
   const [saleUnitId, setSaleUnitId] = useState(''); // the unit the quantity is entered in (SC...); empty = base unit
+  const [countLines, setCountLines] = useState(EMPTY_COUNT); // adjustment: the stock counted, possibly in several units
   const [transferFromWarehouseId, setTransferFromWarehouseId] = useState('');
   const [transferToWarehouseId, setTransferToWarehouseId] = useState('');
   const [lossCategory, setLossCategory] = useState('EXPIRACAO');
@@ -162,7 +166,7 @@ export default function Stock() {
 
   function openReceiveModal() {
     setSelectedProductId('');
-    setQuantity('');
+    setQuantity(''); setCountLines(EMPTY_COUNT);
     setReason('');
     setFormError('');
     setFormSuccess('');
@@ -175,11 +179,32 @@ export default function Stock() {
   const selectedSaleUnit = (selectedProduct?.sale_units || []).find((u) => u.id === saleUnitId) || null;
   const quantityStep = (selectedSaleUnit ? selectedSaleUnit.is_fractional : selectedProduct?.unit_is_fractional) ? '0.001' : '1';
 
+  // The adjustment counts the stock line by line; the total goes to the server in base units, the detail into the reason.
+  const unitOfCount = (c) => (selectedProduct?.sale_units || []).find((u) => u.id === c.saleUnitId) || null;
+  const countStep = (c) => ((unitOfCount(c) ? unitOfCount(c).is_fractional : selectedProduct?.unit_is_fractional) ? '0.001' : '1');
+  const countedLines = countLines.filter((c) => c.quantity !== '' && parseFloat(c.quantity) >= 0);
+  const countFilled = countedLines.length > 0;
+  const countTotal = Math.round(countedLines.reduce((sum, c) => sum + parseFloat(c.quantity) * (unitOfCount(c) ? Number(unitOfCount(c).factor) : 1), 0) * 1000) / 1000;
+  const countDetail = countedLines.map((c) => c.quantity + ' ' + (unitOfCount(c) ? unitOfCount(c).unit_of_measure_code : (selectedProduct?.unit_of_measure_code || ''))).join(' + ');
+  const countUsesUnits = countedLines.length > 1 || countedLines.some((c) => c.saleUnitId);
+
+  function updateCountLine(idx, field, value) {
+    setCountLines((prev) => prev.map((c, i) => (i === idx ? { ...c, [field]: value } : c)));
+  }
+
+  function addCountLine() {
+    setCountLines((prev) => [...prev, { saleUnitId: '', quantity: '' }]);
+  }
+
+  function removeCountLine(idx) {
+    setCountLines((prev) => prev.filter((_, i) => i !== idx));
+  }
+
   function openTransferModal() {
     setFiscalPeriodId('');
     setSaleUnitId('');
     setSelectedProductId('');
-    setQuantity('');
+    setQuantity(''); setCountLines(EMPTY_COUNT);
     setReason('');
     setTransferFromWarehouseId(selectedWarehouseId || centralWarehouse?.id || '');
     setTransferToWarehouseId('');
@@ -270,7 +295,7 @@ export default function Stock() {
     setSaleUnitId('');
     setOpWarehouseId('');
     setSelectedProductId('');
-    setQuantity('');
+    setQuantity(''); setCountLines(EMPTY_COUNT);
     setReason('');
     setLossCategory('');
     setFormError('');
@@ -283,7 +308,7 @@ export default function Stock() {
     setSaleUnitId('');
     setOpWarehouseId('');
     setSelectedProductId('');
-    setQuantity('');
+    setQuantity(''); setCountLines(EMPTY_COUNT);
     setReason('');
     setFormError('');
     setFormSuccess('');
@@ -297,7 +322,7 @@ export default function Stock() {
     try {
       await receiveStock(selectedProductId, parseFloat(quantity), reason || null);
       setSelectedProductId('');
-      setQuantity('');
+      setQuantity(''); setCountLines(EMPTY_COUNT);
       setReason('');
       setFormSuccess('Receção registada com sucesso.');
       await loadLevels(selectedWarehouseId);
@@ -315,7 +340,7 @@ export default function Stock() {
     try {
       await transferStock(transferFromWarehouseId, transferToWarehouseId, selectedProductId, parseFloat(quantity), reason || null, fiscalPeriodId, saleUnitId);
       setSelectedProductId('');
-      setQuantity('');
+      setQuantity(''); setCountLines(EMPTY_COUNT);
       setReason('');
       setFormSuccess('Transferência registada com sucesso.');
       await loadLevels(selectedWarehouseId);
@@ -333,7 +358,7 @@ export default function Stock() {
     try {
       await recordStockLoss(opWarehouseId, selectedProductId, parseFloat(quantity), lossCategory, reason || null, fiscalPeriodId, saleUnitId);
       setSelectedProductId('');
-      setQuantity('');
+      setQuantity(''); setCountLines(EMPTY_COUNT);
       setReason('');
       setFormSuccess('Perda registada com sucesso.');
       await loadLevels(selectedWarehouseId);
@@ -349,9 +374,9 @@ export default function Stock() {
     setFormError('');
     setSaving(true);
     try {
-      await adjustStock(opWarehouseId, selectedProductId, parseFloat(quantity), reason, fiscalPeriodId, saleUnitId);
+      await adjustStock(opWarehouseId, selectedProductId, countTotal, countUsesUnits ? reason + ' (Contagem: ' + countDetail + ')' : reason, fiscalPeriodId);
       setSelectedProductId('');
-      setQuantity('');
+      setQuantity(''); setCountLines(EMPTY_COUNT);
       setReason('');
       setFormSuccess('Stock ajustado com sucesso.');
       await loadLevels(selectedWarehouseId);
@@ -543,7 +568,7 @@ export default function Stock() {
             <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Produto *</label>
             <Select
               value={selectedProductId}
-              onChange={(v) => { setSelectedProductId(v); setSaleUnitId(''); }}
+              onChange={(v) => { setSelectedProductId(v); setSaleUnitId(''); setCountLines(EMPTY_COUNT); }}
               options={products.map((p) => ({ value: p.id, label: p.code + ' - ' + p.name }))}
               placeholder="Selecionar produto"
             />
@@ -620,7 +645,7 @@ export default function Stock() {
             <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Produto *</label>
             <Select
               value={selectedProductId}
-              onChange={(v) => { setSelectedProductId(v); setSaleUnitId(''); }}
+              onChange={(v) => { setSelectedProductId(v); setSaleUnitId(''); setCountLines(EMPTY_COUNT); }}
               options={products.map((p) => ({ value: p.id, label: p.code + ' - ' + p.name }))}
               placeholder="Selecionar produto"
             />
@@ -717,7 +742,7 @@ export default function Stock() {
             <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Produto *</label>
             <Select
               value={selectedProductId}
-              onChange={(v) => { setSelectedProductId(v); setSaleUnitId(''); }}
+              onChange={(v) => { setSelectedProductId(v); setSaleUnitId(''); setCountLines(EMPTY_COUNT); }}
               options={products.map((p) => ({ value: p.id, label: p.code + ' - ' + p.name }))}
               placeholder="Selecionar produto"
             />
@@ -726,26 +751,37 @@ export default function Stock() {
             <PostingPeriodSelect value={fiscalPeriodId} onChange={setFiscalPeriodId} onChoice={setPeriodChoice} />
             <div>
               <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Nova quantidade exata *</label>
-              <div className="flex gap-2">
-                {(selectedProduct?.sale_units || []).length > 0 ? (
-                  <div className="w-28 shrink-0">
-                    <Select value={saleUnitId || 'base'} onChange={(v) => setSaleUnitId(v === 'base' ? '' : v)} options={[{ value: 'base', label: selectedProduct.unit_of_measure_code || 'Base' }, ...selectedProduct.sale_units.map((u) => ({ value: u.id, label: u.unit_of_measure_code }))]} />
+              <div className="flex flex-col gap-2">
+                {countLines.map((c, idx) => (
+                  <div key={idx} className="flex gap-2 items-center">
+                    {(selectedProduct?.sale_units || []).length > 0 ? (
+                      <div className="w-28 shrink-0">
+                        <Select value={c.saleUnitId || 'base'} onChange={(v) => updateCountLine(idx, 'saleUnitId', v === 'base' ? '' : v)} options={[{ value: 'base', label: selectedProduct.unit_of_measure_code || 'Base' }, ...selectedProduct.sale_units.map((u) => ({ value: u.id, label: u.unit_of_measure_code }))]} />
+                      </div>
+                    ) : selectedProduct?.unit_of_measure_code ? (
+                      <span className="shrink-0 flex items-center self-stretch px-3 rounded-md border border-border bg-bg-inset/40 text-sm font-mono text-text-muted">{selectedProduct.unit_of_measure_code}</span>
+                    ) : null}
+                    <input
+                      type="number"
+                      step={countStep(c)}
+                      min="0"
+                      value={c.quantity}
+                      onChange={(e) => updateCountLine(idx, 'quantity', e.target.value)}
+                      className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors"
+                    />
+                    {countLines.length > 1 && (
+                      <button type="button" onClick={() => removeCountLine(idx)} className="shrink-0 text-text-muted hover:text-danger transition-colors cursor-pointer" title="Retirar linha">
+                        <Trash2 size={15} />
+                      </button>
+                    )}
                   </div>
-                ) : selectedProduct?.unit_of_measure_code ? (
-                  <span className="shrink-0 flex items-center px-3 rounded-md border border-border bg-bg-inset/40 text-sm font-mono text-text-muted">{selectedProduct.unit_of_measure_code}</span>
-                ) : null}
-                <input
-                  type="number"
-                  step={quantityStep}
-                  min="0"
-                  value={quantity}
-                  onChange={(e) => setQuantity(e.target.value)}
-                  required
-                  className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors"
-                />
+                ))}
+                {(selectedProduct?.sale_units || []).length > 0 && (
+                  <button type="button" onClick={addCountLine} className="self-start text-[12px] text-accent hover:underline cursor-pointer">+ Outra unidade</button>
+                )}
               </div>
-              {selectedSaleUnit && parseFloat(quantity) > 0 && (
-                <p className="text-[10.5px] text-text-muted mt-1 text-right">= {(parseFloat(quantity) * Number(selectedSaleUnit.factor)).toLocaleString('pt-PT', { maximumFractionDigits: 3 })} {selectedProduct.unit_of_measure_code}</p>
+              {countFilled && (
+                <p className="text-[10.5px] text-text-muted mt-1 text-right">= {countTotal.toLocaleString('pt-PT', { maximumFractionDigits: 3 })} {selectedProduct?.unit_of_measure_code || ''}</p>
               )}
             </div>
           </div>
@@ -771,7 +807,7 @@ export default function Stock() {
           )}
           <button
             type="submit"
-            disabled={saving || (periodChoice && !fiscalPeriodId) || !opWarehouseId || !selectedProductId || quantity === '' || reason.trim().length < 5}
+            disabled={saving || (periodChoice && !fiscalPeriodId) || !opWarehouseId || !selectedProductId || !countFilled || reason.trim().length < 5}
             className="mt-1 bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors"
           >
             {saving ? <Loader2 size={17} className="animate-spin" /> : <SlidersHorizontal size={17} />}
