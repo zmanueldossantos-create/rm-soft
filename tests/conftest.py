@@ -188,11 +188,11 @@ async def company_with_essentials(db):
     )
     db.add(gestor)
 
-    year = FiscalYear(company_id=company.id, year=date.today().year, is_open=True)
+    year = FiscalYear(company_id=company.id, year=date.today().year, status="ABERTO")
     db.add(year)
     await db.flush()
 
-    period = FiscalPeriod(company_id=company.id, fiscal_year_id=year.id, month=date.today().month, is_open=True)
+    period = FiscalPeriod(company_id=company.id, fiscal_year_id=year.id, month=date.today().month, status="ABERTO")
     db.add(period)
 
     # Platform-wide DocumentType catalog - invoice creation looks up "FT" (and other

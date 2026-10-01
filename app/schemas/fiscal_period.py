@@ -13,7 +13,8 @@ from pydantic import BaseModel
 class FiscalYearResponse(BaseModel):
     id: uuid.UUID
     year: int
-    is_open: bool
+    status: str  # ABERTO / FECHO_PARCIAL / FECHADO
+    is_open: bool  # ABERTO (every operation)
     created_at: datetime
 
     class Config:
@@ -24,7 +25,8 @@ class FiscalPeriodResponse(BaseModel):
     id: uuid.UUID
     fiscal_year_id: uuid.UUID
     month: int
-    is_open: bool
+    status: str  # ABERTO / FECHO_PARCIAL / FECHADO
+    is_open: bool  # ABERTO (every operation)
     created_at: datetime
 
     class Config:

@@ -9,7 +9,7 @@ it follows its own rule (section 3.1/3.3), tied to cash register sessions
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Integer, Boolean, DateTime, ForeignKey, func, UniqueConstraint
+from sqlalchemy import Integer, String, DateTime, ForeignKey, func, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import UUID
 
@@ -30,7 +30,13 @@ class FiscalYear(Base):
     company_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("companies.id"), nullable=False, index=True)
 
     year: Mapped[int] = mapped_column(Integer, nullable=False)  # ex. 2026
-    is_open: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # ABERTO (active), FECHO_PARCIAL (soft-closed: internal late entries only) or FECHADO - see fiscal_period_service.
+    status: Mapped[str] = mapped_column(String(15), default="ABERTO", server_default="ABERTO", nullable=False)
+
+    @property
+    def is_open(self) -> bool:
+        """Open to every operation, automatic ones included: ABERTO only."""
+        return self.status == "ABERTO"
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

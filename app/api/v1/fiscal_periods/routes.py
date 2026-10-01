@@ -28,7 +28,9 @@ from app.services.fiscal_period_service import (
     list_fiscal_periods,
     close_fiscal_period,
     get_next_fiscal_month,
-    get_current_period_label,
+    get_period_overview,
+    partial_close_fiscal_period,
+    partial_close_fiscal_year,
     FiscalYearNotFoundError,
     FiscalPeriodNotFoundError,
     InvalidFiscalOperationError,
@@ -128,15 +130,38 @@ async def close_period(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
 
 
+@router.patch("/years/{fiscal_year_id}/partial-close", response_model=FiscalYearResponse)
+async def partial_close_year(
+    fiscal_year_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("fiscal_periods:close")),
+):
+    try:
+        return await partial_close_fiscal_year(db, current_user.company_id, fiscal_year_id)
+    except FiscalYearNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except InvalidFiscalOperationError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+
+
+@router.patch("/periods/{period_id}/partial-close", response_model=FiscalPeriodResponse)
+async def partial_close_period(
+    period_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("fiscal_periods:close")),
+):
+    try:
+        return await partial_close_fiscal_period(db, current_user.company_id, period_id)
+    except FiscalPeriodNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except InvalidFiscalOperationError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+
+
 @router.get("/current-period")
 async def get_current_period(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("fiscal_periods:current")),
 ):
-    """
-    Returns the currently open period label (e.g. "Agosto 2026") for the
-    navbar - null if no year/period is currently open.
-    """
-    label = await get_current_period_label(db, current_user.company_id)
-    return {"label": label}
-
+    """The active period label ("Outubro 2026") and the soft-closed one if any - null when none."""
+    return await get_period_overview(db, current_user.company_id)
