@@ -131,7 +131,7 @@ export default function Products() {
       barcode: product.barcode || '',
       vat_id: product.vat_id,
       price: String(product.price),
-      purchasePrice: product.purchase_price != null ? String(product.purchase_price) : '',
+      purchasePrice: product.purchase_price != null ? String(product.purchase_price) : '', averageCost: product.average_cost ?? null, // CMP, read only
       minStockThreshold: String(product.min_stock_threshold),
       expiryDate: product.expiry_date || '',
       unitOfMeasureId: product.unit_of_measure_id || '',
@@ -322,6 +322,8 @@ export default function Products() {
                   <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Código</th>
                   <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Nome</th>
                   <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Preço</th>
+                <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Preço compra</th>
+                <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Custo médio</th>
                   <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">IVA</th>
                   <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Estado</th>
                   <th className="text-right text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Ações</th>
@@ -346,6 +348,8 @@ export default function Products() {
                       </div>
                     </td>
                     <td className="px-6 py-4 font-mono text-text-primary">{p.price.toFixed(2)} Kz</td>
+                    <td className="px-6 py-4 font-mono text-text-primary">{p.purchase_price != null ? Number(p.purchase_price).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}</td>
+                    <td className="px-6 py-4 font-mono text-text-primary">{p.average_cost != null ? Number(p.average_cost).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}</td>
                     <td className="px-6 py-4 font-mono text-text-muted">{vatById[p.vat_id] ? vatById[p.vat_id].rate + '%' : '-'}</td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2.5">
@@ -429,7 +433,7 @@ export default function Products() {
             <Field label="Código de barras">
               <input value={form.barcode} onChange={(e) => updateField('barcode', e.target.value)} className={inputClass} />
             </Field>
-            <Field label="Unidade de medida">
+            <Field label="Unidade base">
               <Select value={form.unitOfMeasureId} onChange={(v) => updateField('unitOfMeasureId', v)} options={units.map((u) => ({ value: u.id, label: u.code + ' - ' + u.name }))} placeholder="Selecionar" />
             </Field>
           </div>
@@ -441,12 +445,17 @@ export default function Products() {
             <Field label="Preço de compra (Kz)">
               <input type="number" step="0.01" min="0" value={form.purchasePrice} onChange={(e) => updateField('purchasePrice', e.target.value)} className={inputClass} />
             </Field>
-            <Field label="IVA *">
-              <Select value={form.vat_id} onChange={(v) => updateField('vat_id', v)} options={vatRates.map((v) => ({ value: v.id, label: v.name + ' (' + v.rate + '%)' }))} placeholder="Selecionar IVA" />
+            <Field label="Custo médio (calculado)">
+              <div className="w-full bg-bg-inset/40 border border-border rounded-md px-3.5 py-2.5 text-sm font-mono text-text-muted cursor-not-allowed" title="Calculado pelo sistema a partir das entradas de stock com preço de compra (custo médio ponderado)">
+                {form.averageCost != null ? Number(form.averageCost).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' Kz' : 'Sem custo conhecido'}
+              </div>
             </Field>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+            <Field label="IVA *">
+              <Select value={form.vat_id} onChange={(v) => updateField('vat_id', v)} options={vatRates.map((v) => ({ value: v.id, label: v.name + ' (' + v.rate + '%)' }))} placeholder="Selecionar IVA" />
+            </Field>
             <Field label="Limite mínimo stock">
               <input type="number" step="0.001" min="0" value={form.minStockThreshold} onChange={(e) => updateField('minStockThreshold', e.target.value)} className={inputClass} />
             </Field>

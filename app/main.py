@@ -227,3 +227,12 @@ from app.services.stock_service import StockQuantityError as _StockQuantityError
 @app.exception_handler(_StockQuantityError)
 async def _stock_quantity_handler(request: _Request, exc: _StockQuantityError):
     return _JSONResponse(status_code=422, content={"detail": str(exc)})
+
+
+# The base unit of a product with a history cannot change: a clear 409.
+from app.services.product_service import BaseUnitLockedError as _BaseUnitLockedError  # noqa: E402
+
+
+@app.exception_handler(_BaseUnitLockedError)
+async def _base_unit_locked_handler(request: _Request, exc: _BaseUnitLockedError):
+    return _JSONResponse(status_code=409, content={"detail": str(exc)})

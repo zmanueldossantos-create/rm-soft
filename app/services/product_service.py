@@ -203,6 +203,34 @@ async def get_product_or_raise(db: AsyncSession, company_id: uuid.UUID, product_
     return product
 
 
+class BaseUnitLockedError(Exception):
+    """The base unit of a product that already has a history cannot change."""
+
+
+async def ensure_base_unit_can_change(db: AsyncSession, product: Product, new_unit_id) -> None:
+    """
+    The base unit is what every quantity of the product is counted in (stock, ledger, sale-unit factors, average cost).
+    Changing it would not convert anything - 75 KG would silently become 75 SC - so it is refused as soon as the
+    product has stock movements, invoice lines or sale units. A product without history may still be corrected.
+    """
+    if new_unit_id == product.unit_of_measure_id:
+        return
+    from app.models.invoice_line import InvoiceLine
+    from app.models.product_sale_unit import ProductSaleUnit
+    from app.models.stock_movement import StockMovement
+    checks = (
+        (StockMovement, StockMovement.product_id, 'movimentos de stock'),
+        (InvoiceLine, InvoiceLine.product_id, 'documentos de venda'),
+        (ProductSaleUnit, ProductSaleUnit.product_id, 'unidades de venda'),
+    )
+    for model, column, label in checks:
+        if (await db.execute(select(model.id).where(column == product.id).limit(1))).first() is not None:
+            raise BaseUnitLockedError(
+                f"A unidade base de {product.name} nao pode ser alterada: o produto ja tem {label}. "
+                "Todas as quantidades estao contadas nesta unidade."
+            )
+
+
 async def update_product(
     db: AsyncSession,
     company_id: uuid.UUID,
@@ -247,6 +275,7 @@ async def update_product(
     product.min_stock_threshold = min_stock_threshold
     product.expiry_date = expiry_date
     product.product_type = product_type
+    await ensure_base_unit_can_change(db, product, unit_of_measure_id)
     product.unit_of_measure_id = unit_of_measure_id
     product.batch_yield = batch_yield
     product.is_raw_material = is_raw_material

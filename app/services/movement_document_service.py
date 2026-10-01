@@ -155,6 +155,7 @@ async def create_stock_movement_document(
         # at the current cost. Computed BEFORE the quantity is added - see update_average_cost.
         if is_entrada and purchase_price > 0:
             await update_average_cost(db, company_id, product, base_quantity, purchase_price / factor)
+            product.purchase_price = round(purchase_price / factor, 2)  # the last price paid, per base unit
         stock = await _get_or_create_stock_row(db, company_id, product.id, warehouse_id)
         if is_entrada:
             stock.quantity = float(stock.quantity) + base_quantity
