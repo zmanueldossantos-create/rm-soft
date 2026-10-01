@@ -175,11 +175,32 @@ async def test_restock_follows_the_real_sale_warehouse_not_the_current_activity_
     assert in_new_warehouse == 0
 
 
+async def _open_period_for(db, company_id, day):
+    """Opens (in the test database) the fiscal year and period covering `day` when they do not exist yet."""
+    from app.models.fiscal_period import FiscalPeriod
+    from app.models.fiscal_year import FiscalYear
+    year = (await db.execute(
+        select(FiscalYear).where(FiscalYear.company_id == company_id, FiscalYear.year == day.year)
+    )).scalar_one_or_none()
+    if year is None:
+        year = FiscalYear(company_id=company_id, year=day.year, status="ABERTO")
+        db.add(year)
+        await db.commit()
+        await db.refresh(year)
+    period = (await db.execute(
+        select(FiscalPeriod).where(FiscalPeriod.fiscal_year_id == year.id, FiscalPeriod.month == day.month)
+    )).scalar_one_or_none()
+    if period is None:
+        db.add(FiscalPeriod(company_id=company_id, fiscal_year_id=year.id, month=day.month, status="ABERTO"))
+        await db.commit()
+
+
 @pytest.mark.asyncio
 async def test_credit_note_cannot_be_dated_before_its_invoice(db, company_with_essentials):
     from datetime import date, timedelta
-    if date.today().day == 1:
-        pytest.skip("the day before would fall in another fiscal period")
+    yesterday = date.today() - timedelta(days=1)
+    # On the 1st of a month (or of January) yesterday lies in another period: open it, so the test always checks the rule.
+    await _open_period_for(db, company_with_essentials["company"].id, yesterday)
     ids = _ids(company_with_essentials)
     product_id, invoice_id = await _sold_product(db, ids)  # issued today
     line_id = (await db.execute(select(InvoiceLine.id).where(InvoiceLine.invoice_id == invoice_id))).scalars().one()
@@ -189,7 +210,7 @@ async def test_credit_note_cannot_be_dated_before_its_invoice(db, company_with_e
             db, ids["company"], ids["activity"], reference_invoice_id=invoice_id,
             credit_note_reason="RTF", credit_note_cause="Teste",
             lines_input=[{"invoice_line_id": line_id, "quantity": 1}],
-            business_date=date.today() - timedelta(days=1),
+            business_date=yesterday,
         )
     assert "data anterior" in str(excinfo.value)
     notes = (await db.execute(select(func.count(Invoice.id)).where(Invoice.reference_invoice_id == invoice_id))).scalar_one()
