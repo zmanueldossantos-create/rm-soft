@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react';
 import { Gauge, Loader2, AlertTriangle, Package2, Wallet, Search } from 'lucide-react';
 import apiClient from '../api/client';
+import Select from '../components/Select';
+import UnitBreakdown from '../components/UnitBreakdown';
 import { extractErrorMessage } from '../utils/errors';
 
-async function getStockDashboard() {
-  const res = await apiClient.get('/stock/dashboard');
+// Without a period: the current stock; with one: the stock at the end of that fiscal period (from the ledger).
+async function getStockDashboard(periodId) {
+  const res = await apiClient.get('/stock/dashboard', { params: periodId ? { fiscal_period_id: periodId } : {} });
   return res.data;
 }
 
@@ -22,13 +25,17 @@ export default function StockDashboard() {
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('todos'); // todos | baixo | zero
+  const [periodId, setPeriodId] = useState(''); // '' = the current stock
+  const [periods, setPeriods] = useState([]);
 
   useEffect(() => {
     async function load() {
       setLoading(true);
       setError('');
       try {
-        setData(await getStockDashboard());
+        const summary = await getStockDashboard(periodId);
+        setData(summary);
+        setPeriods(summary.periods || []);
       } catch (err) {
         setError(extractErrorMessage(err, 'Erro ao carregar o resumo de stock'));
       } finally {
@@ -36,7 +43,7 @@ export default function StockDashboard() {
       }
     }
     load();
-  }, []);
+  }, [periodId]);
 
   const items = (data?.items || []).filter((item) => {
     if (filter === 'baixo' && !item.is_low) return false;
@@ -52,6 +59,7 @@ export default function StockDashboard() {
         Resumo de Stock
       </h2>
       <p className="text-text-muted text-sm mb-6">Visão consolidada do stock em todos os armazéns</p>
+      {data?.period_label && <p className="text-accent text-sm -mt-4 mb-6">Stock no fim de {data.period_label}, calculado pelos movimentos</p>}
 
       {loading && (
         <div className="flex items-center justify-center py-16 text-text-muted text-sm">
@@ -107,6 +115,13 @@ export default function StockDashboard() {
                 className="w-full bg-bg-inset border border-border rounded-md pl-10 pr-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors"
               />
             </div>
+            <div className="w-full sm:w-64">
+              <Select
+                value={periodId || 'atual'}
+                onChange={(v) => setPeriodId(v === 'atual' ? '' : v)}
+                options={[{ value: 'atual', label: 'Stock atual' }, ...periods.map((p) => ({ value: p.id, label: 'Fim de ' + p.label }))]}
+              />
+            </div>
             {filter !== 'todos' && (
               <button type="button" onClick={() => setFilter('todos')} className="text-[13px] text-text-muted hover:text-text-primary underline transition-colors cursor-pointer">
                 Limpar filtro
@@ -125,6 +140,7 @@ export default function StockDashboard() {
                       <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Código</th>
                       <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Nome</th>
                       <th className="text-right text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Stock total</th>
+                      <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Equivalência</th>
                       <th className="text-right text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Limite mínimo</th>
                       <th className="text-right text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Valor (custo)</th>
                       <th className="text-right text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Valor (venda)</th>
@@ -139,7 +155,8 @@ export default function StockDashboard() {
                           {item.name}
                           {item.is_raw_material && <span className="ml-2 text-[10px] font-semibold uppercase tracking-wide text-text-muted bg-bg-inset px-1.5 py-0.5 rounded">MP</span>}
                         </td>
-                        <td className="px-6 py-3.5 text-right font-mono text-text-primary">{formatQty(item.total_quantity)}</td>
+                        <td className="px-6 py-3.5 text-right font-mono text-text-primary">{formatQty(item.total_quantity)} <span className="text-text-muted text-[11px]">{item.unit_code}</span></td>
+                        <td className="px-6 py-3.5"><UnitBreakdown quantity={item.total_quantity} baseCode={item.unit_code} units={item.sale_units} /></td>
                         <td className="px-6 py-3.5 text-right font-mono text-text-muted">{formatQty(item.min_stock_threshold)}</td>
                         <td className="px-6 py-3.5 text-right font-mono text-text-muted">{formatMoney(item.cost_value)}</td>
                         <td className="px-6 py-3.5 text-right font-mono text-text-muted">{formatMoney(item.sale_value)}</td>

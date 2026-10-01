@@ -253,11 +253,13 @@ async def get_production_estimate(
 
 @router.get("/dashboard")
 async def get_dashboard(
+    fiscal_period_id: uuid.UUID | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("stock:view")),
 ):
-    """Aggregated stock overview across all warehouses - totals, low-stock alerts, value."""
-    return await get_stock_dashboard(db, current_user.company_id)
+    """Aggregated stock overview across all warehouses - totals, low-stock alerts, value; the current stock, or the
+    stock at the end of a fiscal period when one is given."""
+    return await get_stock_dashboard(db, current_user.company_id, fiscal_period_id)
 
 
 @router.get("/production-history")

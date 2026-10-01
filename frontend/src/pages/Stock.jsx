@@ -3,6 +3,7 @@ import { Package2, Plus, Loader2, Search, AlertTriangle, ArrowDownToLine, Slider
 import Modal from '../components/Modal';
 import MovementForm from '../components/MovementForm';
 import PostingPeriodSelect from '../components/PostingPeriodSelect';
+import UnitBreakdown from '../components/UnitBreakdown';
 import Select from '../components/Select';
 import { listStockLevels, receiveStock, adjustStock, transferStock, recordStockLoss, listWarehouses, createWarehouse, updateWarehouseFull, toggleWarehouseStatus } from '../api/stock';
 import { provincesApi, municipalitiesApi } from '../api/catalogs';
@@ -475,6 +476,7 @@ export default function Stock() {
                   <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Código</th>
                   <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Produto</th>
                   <th className="text-right text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Quantidade</th>
+                  <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Equivalência</th>
                   <th className="text-right text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Limite mínimo</th>
                   <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Estado</th>
                 </tr>
@@ -485,6 +487,7 @@ export default function Stock() {
                     <td className="px-6 py-4 font-mono text-text-muted">{l.product_code}</td>
                     <td className="px-6 py-4 font-display font-medium text-text-primary">{l.product_name}</td>
                     <td className="px-6 py-4 font-mono text-text-primary text-right">{formatQty(l.quantity)}</td>
+                      <td className="px-6 py-4">{(() => { const p = products.find((x) => x.id === l.product_id); return <UnitBreakdown quantity={l.quantity} baseCode={p?.unit_of_measure_code} units={(p?.sale_units || []).map((u) => ({ code: u.unit_of_measure_code, factor: Number(u.factor) }))} />; })()}</td>
                     <td className="px-6 py-4 font-mono text-text-muted text-right">{formatQty(l.min_stock_threshold)}</td>
                     <td className="px-6 py-4">
                       {l.is_low ? (

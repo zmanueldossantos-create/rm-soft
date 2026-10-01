@@ -681,38 +681,110 @@ async def list_production_history(
     return sorted(batches.values(), key=lambda b: b["created_at"], reverse=True)
 
 
-async def get_stock_dashboard(db: AsyncSession, company_id: uuid.UUID) -> dict:
-    """Aggregated stock overview across all warehouses - per-product total quantity,
-    low-stock flag (vs min_stock_threshold), and stock value (qty * purchase_price)."""
-    result = await db.execute(
-        select(Stock, Product)
-        .join(Product, Product.id == Stock.product_id)
-        .where(Stock.company_id == company_id, Product.is_active == True)  # noqa: E712
-    )
-    rows = result.all()
+async def get_stock_dashboard(db: AsyncSession, company_id: uuid.UUID, fiscal_period_id: uuid.UUID | None = None) -> dict:
+    """
+    Aggregated stock overview across all warehouses - per-product total quantity, low-stock flag (vs
+    min_stock_threshold), stock value (qty * purchase_price) and the product's units (for the equivalence column).
+    Without a period: the current stock. With a fiscal period: the stock at the END of that period, summed from the
+    stock ledger (every movement booked up to and including it; movements without a period count when dated before
+    the end of its month) - the ledger is complete, so it adds up to the stock table for the current period.
+    """
+    from datetime import date as _date
+    from sqlalchemy import and_, case, func, or_
+    from app.models.fiscal_period import FiscalPeriod
+    from app.models.fiscal_year import FiscalYear
+    from app.models.product_sale_unit import ProductSaleUnit
+    from app.models.unit_of_measure_catalog import UnitOfMeasureCatalog
+    from app.services.fiscal_period_service import MONTH_NAMES_PT
 
-    totals: dict[uuid.UUID, dict] = {}
-    for stock, product in rows:
-        entry = totals.setdefault(product.id, {
+    quantities: dict[uuid.UUID, float] = {}
+    period_label = None
+    if fiscal_period_id is None:
+        for product_id, quantity in (await db.execute(
+            select(Stock.product_id, func.sum(Stock.quantity)).where(Stock.company_id == company_id).group_by(Stock.product_id)
+        )).all():
+            quantities[product_id] = float(quantity or 0)
+    else:
+        chosen = (await db.execute(
+            select(FiscalPeriod, FiscalYear.year).join(FiscalYear, FiscalYear.id == FiscalPeriod.fiscal_year_id).where(
+                FiscalPeriod.id == fiscal_period_id, FiscalPeriod.company_id == company_id,
+            )
+        )).first()
+        if chosen is None:
+            raise StockQuantityError("Periodo fiscal invalido")
+        period, year = chosen
+        period_label = f"{MONTH_NAMES_PT[period.month]} {year}"
+        end_of_month = _date(year + (1 if period.month == 12 else 0), period.month % 12 + 1, 1)
+        # Each movement type's sign in the ledger (AJUSTE is stored as the signed difference).
+        signed = case(
+            (StockMovement.movement_type == MovementType.RECEPCAO, StockMovement.quantity),
+            (StockMovement.movement_type == MovementType.AJUSTE, StockMovement.quantity),
+            (StockMovement.movement_type == MovementType.TRANSFERENCIA,
+             case((StockMovement.is_transfer_source.is_(True), -StockMovement.quantity), else_=StockMovement.quantity)),
+            (StockMovement.movement_type == MovementType.PRODUCAO,
+             case((StockMovement.is_production_output.is_(True), StockMovement.quantity), else_=-StockMovement.quantity)),
+            else_=-StockMovement.quantity,  # SAIDA, PERDA
+        )
+        rows = (await db.execute(
+            select(StockMovement.product_id, func.sum(signed))
+            .select_from(StockMovement)
+            .outerjoin(FiscalPeriod, FiscalPeriod.id == StockMovement.fiscal_period_id)
+            .outerjoin(FiscalYear, FiscalYear.id == FiscalPeriod.fiscal_year_id)
+            .where(
+                StockMovement.company_id == company_id,
+                or_(
+                    and_(StockMovement.fiscal_period_id.is_(None), StockMovement.created_at < end_of_month),
+                    FiscalYear.year < year,
+                    and_(FiscalYear.year == year, FiscalPeriod.month <= period.month),
+                ),
+            )
+            .group_by(StockMovement.product_id)
+        )).all()
+        quantities = {product_id: float(quantity or 0) for product_id, quantity in rows}
+
+    products = (await db.execute(
+        select(Product).where(Product.company_id == company_id, Product.is_active == True, Product.id.in_(list(quantities)))  # noqa: E712
+    )).scalars().all() if quantities else []
+
+    unit_codes = dict((await db.execute(select(UnitOfMeasureCatalog.id, UnitOfMeasureCatalog.code))).all())
+    sale_units: dict[uuid.UUID, list[dict]] = {}
+    for product_id, unit_id, factor in (await db.execute(
+        select(ProductSaleUnit.product_id, ProductSaleUnit.unit_of_measure_id, ProductSaleUnit.factor).where(
+            ProductSaleUnit.company_id == company_id, ProductSaleUnit.is_active.is_(True),
+        )
+    )).all():
+        sale_units.setdefault(product_id, []).append({"code": unit_codes.get(unit_id), "factor": float(factor)})
+
+    items = []
+    for product in products:
+        quantity = quantities.get(product.id, 0.0)
+        purchase_price, sale_price = float(product.purchase_price or 0), float(product.price or 0)
+        threshold = float(product.min_stock_threshold or 0)
+        items.append({
             "product_id": product.id,
             "code": product.code,
             "name": product.name,
             "is_raw_material": product.is_raw_material,
-            "min_stock_threshold": float(product.min_stock_threshold or 0),
-            "purchase_price": float(product.purchase_price or 0),
-            "sale_price": float(product.price or 0),
-            "total_quantity": 0.0,
+            "min_stock_threshold": threshold,
+            "purchase_price": purchase_price,
+            "sale_price": sale_price,
+            "total_quantity": quantity,
+            "unit_code": unit_codes.get(product.unit_of_measure_id),
+            "sale_units": sorted(sale_units.get(product.id, []), key=lambda u: -u["factor"]),
+            "cost_value": round(quantity * purchase_price, 2),
+            "sale_value": round(quantity * sale_price, 2),
+            "is_low": quantity <= threshold,
+            "is_zero": quantity <= 0,
         })
-        entry["total_quantity"] += float(stock.quantity)
-
-    items = list(totals.values())
-    for item in items:
-        item["cost_value"] = round(item["total_quantity"] * item["purchase_price"], 2)
-        item["sale_value"] = round(item["total_quantity"] * item["sale_price"], 2)
-        item["is_low"] = item["total_quantity"] <= item["min_stock_threshold"]
-        item["is_zero"] = item["total_quantity"] <= 0
-
     items.sort(key=lambda i: i["name"])
+
+    periods = [
+        {"id": p.id, "label": f"{MONTH_NAMES_PT[p.month]} {year}", "status": p.status}
+        for p, year in (await db.execute(
+            select(FiscalPeriod, FiscalYear.year).join(FiscalYear, FiscalYear.id == FiscalPeriod.fiscal_year_id)
+            .where(FiscalPeriod.company_id == company_id).order_by(FiscalYear.year.desc(), FiscalPeriod.month.desc())
+        )).all()
+    ]
 
     return {
         "items": items,
@@ -721,4 +793,8 @@ async def get_stock_dashboard(db: AsyncSession, company_id: uuid.UUID) -> dict:
         "zero_stock_count": sum(1 for i in items if i["is_zero"]),
         "total_cost_value": round(sum(i["cost_value"] for i in items), 2),
         "total_sale_value": round(sum(i["sale_value"] for i in items), 2),
+        "period_label": period_label,
+        "periods": periods,
     }
+
+

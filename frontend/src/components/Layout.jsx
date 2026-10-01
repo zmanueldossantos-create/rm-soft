@@ -145,8 +145,14 @@ export default function Layout() {
     navigate('/login');
   }
 
+  // A menu entry is active on its own page and its sub-pages, unless a more precise entry matches better:
+  // /stock must not light up on /stock/dashboard, and /stock-movements is not a sub-page of /stock.
   function isActive(path) {
-    return location.pathname === path || location.pathname.startsWith(path + '/');
+    const here = location.pathname;
+    const matches = (p) => here === p || here.startsWith(p + '/');
+    if (!matches(path)) return false;
+    const groupPaths = [...stockItems, ...productionItems, ...settingsItems, ...accountingItems].map((i) => i.to);
+    return !groupPaths.some((p) => p !== path && p.length > path.length && matches(p));
   }
 
   // Menu groups - each item is shown only if the user holds its permission.
