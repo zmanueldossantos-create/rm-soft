@@ -19,6 +19,7 @@ from app.models.movement_series import MovementSeries
 from app.models.stock_movement import StockMovement, MovementType as LedgerMovementType
 from app.models.stock_movement_document import StockMovementDocument, StockMovementDocumentLine
 from app.services.stock_service import _get_or_create_stock_row, _stock_rule, InsufficientStockError as _StockRuleError
+from app.services.product_sale_unit_service import SaleUnitInvalidError, resolve_line_unit
 from app.services.fiscal_period_service import ensure_period_open, PeriodClosedError
 import io
 import openpyxl
@@ -113,19 +114,22 @@ async def create_stock_movement_document(
         if product is None:
             raise MovementProductNotFoundError("Produto nao encontrado")
 
-        unit_code = None
-        if product.unit_of_measure_id:
-            unit_result = await db.execute(select(UnitOfMeasureCatalog).where(UnitOfMeasureCatalog.id == product.unit_of_measure_id))
-            unit = unit_result.scalar_one_or_none()
-            unit_code = unit.code if unit else None
-
         quantity = float(line_input["quantity"])
+        # A line may be entered in one of the product's units (10 SC): its quantity and prices are per that unit, the stock
+        # moves quantity x factor base units - the same conversion as a sale (resolve_line_unit).
+        try:
+            _unit_price, factor, line_sale_unit_id, unit_code = await resolve_line_unit(
+                db, company_id, product, line_input.get("sale_unit_id"), quantity,
+            )
+        except SaleUnitInvalidError as e:
+            raise MovementProductNotFoundError(str(e))
+        base_quantity = quantity * factor
         purchase_price = float(line_input.get("purchase_price", 0) or 0)
         sale_price = float(line_input.get("sale_price", 0) or 0)
         line_value_price = purchase_price if is_entrada else sale_price
         line_total = round(quantity * line_value_price, 2)
 
-        total_quantity += quantity
+        total_quantity += base_quantity  # base units: bags and kilos are never added up
         total_value += line_total
 
         # Update the real stock quantity + write the audit ledger row - see module docstring.
@@ -135,15 +139,15 @@ async def create_stock_movement_document(
             raise InsufficientStockForMovementError(str(e))
         stock = await _get_or_create_stock_row(db, company_id, product.id, warehouse_id)
         if is_entrada:
-            stock.quantity = float(stock.quantity) + quantity
+            stock.quantity = float(stock.quantity) + base_quantity
         else:
-            if float(stock.quantity) < quantity:
+            if float(stock.quantity) < base_quantity:
                 raise InsufficientStockForMovementError(f"Stock insuficiente para {product.name}")
-            stock.quantity = float(stock.quantity) - quantity
+            stock.quantity = float(stock.quantity) - base_quantity
 
         db.add(StockMovement(
             company_id=company_id, product_id=product.id, warehouse_id=warehouse_id,
-            movement_type=ledger_type, quantity=quantity,
+            movement_type=ledger_type, quantity=base_quantity,
             reason=description, reference=f"{movement_type.code}{movement_date.year}/{next_number}",
         ))
 
@@ -152,6 +156,8 @@ async def create_stock_movement_document(
             product_code_snapshot=product.code,
             product_name_snapshot=product.name,
             unit_snapshot=unit_code,
+            sale_unit_id=line_sale_unit_id,
+            unit_factor=factor,
             quantity=quantity,
             purchase_price=purchase_price,
             sale_price=sale_price,
@@ -210,7 +216,8 @@ class InvalidExcelFileError(Exception):
     pass
 
 
-EXCEL_HEADERS = ["Codigo", "Quantidade", "Preco Compra", "Preco Venda"]
+# "Unidade" (optional): the code of one of the product's units (SC...) - empty = its base unit; older 4-column files stay valid.
+EXCEL_HEADERS = ["Codigo", "Quantidade", "Preco Compra", "Preco Venda", "Unidade"]
 
 
 def generate_movement_excel_template() -> bytes:
@@ -219,8 +226,8 @@ def generate_movement_excel_template() -> bytes:
     ws = wb.active
     ws.title = "Movimento"
     ws.append(EXCEL_HEADERS)
-    ws.append(["PROD-001", 10, 100.00, 150.00])
-    for col_idx, width in enumerate([16, 14, 16, 16], start=1):
+    ws.append(["PROD-001", 10, 100.00, 150.00, ""])
+    for col_idx, width in enumerate([16, 14, 16, 16, 12], start=1):
         ws.column_dimensions[chr(64 + col_idx)].width = width
     buffer = io.BytesIO()
     wb.save(buffer)

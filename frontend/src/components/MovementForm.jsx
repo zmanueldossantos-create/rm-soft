@@ -33,7 +33,7 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection }) {
   const [description, setDescription] = useState('');
   const [suppliers, setSuppliers] = useState([]);
   const [supplierId, setSupplierId] = useState('');
-  const [lines, setLines] = useState([{ product_id: '', quantity: '1', purchase_price: '0', sale_price: '0' }]);
+  const [lines, setLines] = useState([{ product_id: '', sale_unit_id: '', quantity: '1', purchase_price: '0', sale_price: '0' }]);
   const [scanCode, setScanCode] = useState('');
   const [scanError, setScanError] = useState('');
   const [usedExcelImport, setUsedExcelImport] = useState(false);
@@ -101,27 +101,29 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection }) {
     const c = String(code || '').trim().toLowerCase();
     if (!c) return null;
     for (const p of products) {
-      if ((p.barcode || '').toLowerCase() === c || (p.code || '').toLowerCase() === c) return { product: p, factor: 1 };
+      if ((p.barcode || '').toLowerCase() === c || (p.code || '').toLowerCase() === c) return { product: p, saleUnit: null, factor: 1 };
       const saleUnit = (p.sale_units || []).find((u) => (u.barcode || '').toLowerCase() === c);
-      if (saleUnit) return { product: p, factor: Number(saleUnit.factor) };
+      if (saleUnit) return { product: p, saleUnit, factor: Number(saleUnit.factor) };
     }
     return null;
   }
 
-  // Barcode scan (field + Enter): adds the article, or raises the quantity of its existing line. Enter never submits.
+  // Barcode scan (field + Enter): adds the article in the unit scanned (a bag's barcode = a line in SC), or raises by 1 the
+  // quantity of its existing line in that unit. Enter never submits.
   function handleScan() {
     const found = lookupArticle(scanCode);
     if (!found) {
       setScanError('Codigo nao encontrado: ' + scanCode);
       return;
     }
-    const { product, factor } = found;
+    const { product, saleUnit } = found;
+    const unitId = saleUnit ? saleUnit.id : '';
     setLines((prev) => {
-      const index = prev.findIndex((l) => l.product_id === product.id);
+      const index = prev.findIndex((l) => l.product_id === product.id && (l.sale_unit_id || '') === unitId);
       if (index >= 0) {
-        return prev.map((l, i) => (i === index ? { ...l, quantity: String((parseFloat(l.quantity) || 0) + factor) } : l));
+        return prev.map((l, i) => (i === index ? { ...l, quantity: String((parseFloat(l.quantity) || 0) + 1) } : l));
       }
-      const fresh = { product_id: product.id, quantity: String(factor), purchase_price: String(product.purchase_price ?? 0), sale_price: String(product.price ?? 0) };
+      const fresh = { product_id: product.id, sale_unit_id: unitId, quantity: '1', ...unitPrices(product, saleUnit) };
       const emptyIndex = prev.findIndex((l) => !l.product_id);
       return emptyIndex >= 0 ? prev.map((l, i) => (i === emptyIndex ? fresh : l)) : [...prev, fresh];
     });
@@ -129,8 +131,26 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection }) {
     setScanError('');
   }
 
+  // Default prices of a line in a unit: the product's purchase price x factor, and the unit's own sale price.
+  function unitPrices(product, saleUnit) {
+    const factor = saleUnit ? Number(saleUnit.factor) : 1;
+    return {
+      purchase_price: String(Math.round(Number(product.purchase_price || 0) * factor * 100) / 100),
+      sale_price: String(saleUnit ? saleUnit.price : (product.price ?? 0)),
+    };
+  }
+
+  function changeLineUnit(index, value) {
+    setLines((prev) => prev.map((l, i) => {
+      if (i !== index) return l;
+      const product = productById[l.product_id];
+      const saleUnit = (product?.sale_units || []).find((u) => u.id === value) || null;
+      return { ...l, sale_unit_id: saleUnit ? saleUnit.id : '', ...(product ? unitPrices(product, saleUnit) : {}) };
+    }));
+  }
+
   function addLine() {
-    setLines((prev) => [...prev, { product_id: '', quantity: '1', purchase_price: '0', sale_price: '0' }]);
+    setLines((prev) => [...prev, { product_id: '', sale_unit_id: '', quantity: '1', purchase_price: '0', sale_price: '0' }]);
   }
 
   function removeLine(index) {
@@ -163,9 +183,18 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection }) {
             notFound.push(code);
             continue;
           }
+          const unitCode = String(row[4] ?? '').trim().toUpperCase();
+          const isBase = !unitCode || unitCode === (product.unit_of_measure_code || '').toUpperCase();
+          const unitByCode = isBase ? null : (product.sale_units || []).find((u) => (u.unit_of_measure_code || '').toUpperCase() === unitCode);
+          if (!isBase && !unitByCode) {
+            notFound.push(code + ' (unidade ' + unitCode + ')');
+            continue;
+          }
+          const lineUnit = unitByCode || (isBase && unitCode ? null : found.saleUnit);
           parsedLines.push({
             product_id: product.id,
-            quantity: String((parseFloat(row[1] ?? '1') || 0) * found.factor),
+            sale_unit_id: lineUnit ? lineUnit.id : '',
+            quantity: String(row[1] ?? '1'),
             purchase_price: String(row[2] ?? '0'),
             sale_price: String(row[3] ?? '0'),
           });
@@ -191,6 +220,7 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection }) {
   }
 
   function handleManualLineEdit(index, field, value) {
+    if (field === 'product_id') setLines((prev) => prev.map((l, i) => (i === index ? { ...l, sale_unit_id: '' } : l)));
     setUsedExcelImport(false);
     updateLine(index, field, value);
   }
@@ -212,6 +242,7 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection }) {
         supplier_id: filterDirection === 'ENTRADA' ? (supplierId || null) : null,
         lines: lines.map((l) => ({
           product_id: l.product_id,
+          sale_unit_id: l.sale_unit_id || null,
           quantity: parseFloat(l.quantity),
           purchase_price: parseFloat(l.purchase_price) || 0,
           sale_price: parseFloat(l.sale_price) || 0,
@@ -297,7 +328,7 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection }) {
           <thead>
             <tr className="border-b border-border bg-bg-inset/40">
               <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-4 py-2">Produto</th>
-              <th className="text-right text-[11px] uppercase tracking-wide text-text-muted font-medium px-4 py-2 w-16">Un.</th>
+              <th className="text-right text-[11px] uppercase tracking-wide text-text-muted font-medium px-4 py-2 w-28">Un.</th>
               <th className="text-right text-[11px] uppercase tracking-wide text-text-muted font-medium px-4 py-2 w-28">Qtd</th>
               <th className="text-right text-[11px] uppercase tracking-wide text-text-muted font-medium px-4 py-2 w-36">Preço Compra</th>
               <th className="text-right text-[11px] uppercase tracking-wide text-text-muted font-medium px-4 py-2 w-36">Preço Venda</th>
@@ -321,11 +352,13 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection }) {
                       placeholder="Selecionar produto"
                     />
                   </td>
-                  <td className="px-4 py-2.5 w-16 text-right font-mono text-text-muted text-[13px]">
-                    {units.find((u) => u.id === product?.unit_of_measure_id)?.code || '-'}
+                  <td className="px-4 py-2.5 w-28 text-right font-mono text-text-muted text-[13px]">
+                    {(product?.sale_units || []).length > 0 ? (
+  <Select compact value={line.sale_unit_id || 'base'} onChange={(v) => changeLineUnit(idx, v === 'base' ? '' : v)} options={[{ value: 'base', label: product.unit_of_measure_code || 'Base' }, ...product.sale_units.map((u) => ({ value: u.id, label: u.unit_of_measure_code }))]} />
+) : (units.find((u) => u.id === product?.unit_of_measure_id)?.code || '-')}
                   </td>
                   <td className="px-4 py-2.5 w-28">
-                    <input type="number" step="0.001" min="0" value={line.quantity} onChange={(e) => handleManualLineEdit(idx, 'quantity', e.target.value)} className="w-full bg-bg-inset border border-border rounded-md px-2.5 py-1.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors text-right" />
+                    <input type="number" step={((product?.sale_units || []).find((u) => u.id === line.sale_unit_id)?.is_fractional ?? (!line.sale_unit_id && product?.unit_is_fractional)) ? '0.001' : '1'} min="0" value={line.quantity} onChange={(e) => handleManualLineEdit(idx, 'quantity', e.target.value)} className="w-full bg-bg-inset border border-border rounded-md px-2.5 py-1.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors text-right" />{(() => { const su = (product?.sale_units || []).find((u) => u.id === line.sale_unit_id); return su && qty > 0 ? <p className="text-[10.5px] text-text-muted mt-0.5 text-right">= {Math.round(qty * Number(su.factor) * 1000) / 1000} {product.unit_of_measure_code}</p> : null; })()}
                   </td>
                   <td className="px-4 py-2.5 w-36">
                     <input type="number" step="0.01" min="0" value={line.purchase_price} onChange={(e) => handleManualLineEdit(idx, 'purchase_price', e.target.value)} className="w-full bg-bg-inset border border-border rounded-md px-2.5 py-1.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors text-right" />

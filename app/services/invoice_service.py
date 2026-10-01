@@ -172,25 +172,11 @@ async def _sale_unit_for_line(
     never sold; a decimal quantity (1.250) is only allowed in a fractional unit (KG, L)."""
     if getattr(product, "internal_use_only", False):
         raise ProductNotFoundError(f"{product.name} e de uso interno e nao pode ser vendido")
-    if sale_unit_id:
-        sale_unit = (await db.execute(
-            select(ProductSaleUnit).where(
-                ProductSaleUnit.id == sale_unit_id, ProductSaleUnit.product_id == product.id,
-                ProductSaleUnit.company_id == company_id, ProductSaleUnit.is_active.is_(True),
-            )
-        )).scalar_one_or_none()
-        if sale_unit is None:
-            raise ProductNotFoundError(f"Unidade de venda invalida ou inativa para {product.name}")
-        unit_id, price, factor, line_sale_unit_id = sale_unit.unit_of_measure_id, float(sale_unit.price), float(sale_unit.factor), sale_unit.id
-    else:
-        unit_id, price, factor, line_sale_unit_id = product.unit_of_measure_id, float(product.price), 1.0, None
-    unit = (await db.execute(
-        select(UnitOfMeasureCatalog).where(UnitOfMeasureCatalog.id == unit_id)
-    )).scalar_one_or_none() if unit_id else None
-    code = unit.code if unit else None
-    if quantity is not None and abs(quantity - round(quantity)) > 1e-9 and not (unit and unit.is_fractional):
-        raise ProductNotFoundError(f"{product.name}: a quantidade deve ser inteira ({code or 'unidade'})")
-    return price, factor, line_sale_unit_id, code
+    from app.services.product_sale_unit_service import SaleUnitInvalidError, resolve_line_unit
+    try:
+        return await resolve_line_unit(db, company_id, product, sale_unit_id, quantity)
+    except SaleUnitInvalidError as e:
+        raise ProductNotFoundError(str(e))
 
 
 async def create_invoice(

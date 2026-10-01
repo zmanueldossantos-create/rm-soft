@@ -52,6 +52,9 @@ class StockMovementDocumentLine(Base):
     product_code_snapshot: Mapped[str] = mapped_column(String(50), nullable=False)
     product_name_snapshot: Mapped[str] = mapped_column(String(200), nullable=False)
     unit_snapshot: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # The unit the line was entered in (10 SC): quantity and prices per that unit, stock moved quantity x unit_factor.
+    sale_unit_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("product_sale_units.id"), nullable=True)
+    unit_factor: Mapped[float] = mapped_column(Numeric(14, 4), nullable=False, default=1, server_default="1")
 
     quantity: Mapped[float] = mapped_column(Numeric(14, 3), nullable=False)
     purchase_price: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False, default=0)

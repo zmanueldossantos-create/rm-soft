@@ -10,6 +10,7 @@ from pydantic import BaseModel, field_validator
 class MovementDocumentLineRequest(BaseModel):
     product_id: uuid.UUID
     quantity: float
+    sale_unit_id: uuid.UUID | None = None  # entered in one of the product's units (SC...); empty = its base unit
     purchase_price: float = 0
     sale_price: float = 0
 
@@ -36,6 +37,8 @@ class MovementDocumentLineResponse(BaseModel):
     product_code_snapshot: str
     product_name_snapshot: str
     unit_snapshot: str | None
+    sale_unit_id: uuid.UUID | None = None
+    unit_factor: float = 1
     quantity: float
     purchase_price: float
     sale_price: float

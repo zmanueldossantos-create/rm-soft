@@ -180,3 +180,32 @@ async def toggle_sale_unit(db: AsyncSession, company_id: uuid.UUID, product_id: 
     await db.commit()
     await db.refresh(unit)
     return (await _attach_unit_codes(db, [unit]))[0]
+
+
+async def resolve_line_unit(
+    db: AsyncSession, company_id: uuid.UUID, product: Product, sale_unit_id, quantity: float | None = None,
+) -> tuple[float, float, uuid.UUID | None, str | None]:
+    """
+    THE unit conversion of a line, for selling and receiving alike: price, factor (base units in one unit), sale unit id
+    and unit code. The product's base unit (factor 1) unless one of ITS active sale units is given. A decimal quantity is
+    only allowed in a fractional unit (KG, L). Stock always moves quantity x factor.
+    """
+    if sale_unit_id:
+        sale_unit = (await db.execute(
+            select(ProductSaleUnit).where(
+                ProductSaleUnit.id == sale_unit_id, ProductSaleUnit.product_id == product.id,
+                ProductSaleUnit.company_id == company_id, ProductSaleUnit.is_active.is_(True),
+            )
+        )).scalar_one_or_none()
+        if sale_unit is None:
+            raise SaleUnitInvalidError(f"Unidade de venda invalida ou inativa para {product.name}")
+        unit_id, price, factor, line_sale_unit_id = sale_unit.unit_of_measure_id, float(sale_unit.price), float(sale_unit.factor), sale_unit.id
+    else:
+        unit_id, price, factor, line_sale_unit_id = product.unit_of_measure_id, float(product.price), 1.0, None
+    unit = (await db.execute(
+        select(UnitOfMeasureCatalog).where(UnitOfMeasureCatalog.id == unit_id)
+    )).scalar_one_or_none() if unit_id else None
+    code = unit.code if unit else None
+    if quantity is not None and abs(quantity - round(quantity)) > 1e-9 and not (unit and unit.is_fractional):
+        raise SaleUnitInvalidError(f"{product.name}: a quantidade deve ser inteira ({code or 'unidade'})")
+    return price, factor, line_sale_unit_id, code

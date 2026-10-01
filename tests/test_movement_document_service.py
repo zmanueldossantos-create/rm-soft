@@ -80,3 +80,54 @@ async def test_create_stock_movement_document_saida_decreases_stock_and_rejects_
             db, company.id, saida_type.id, setup["activity_warehouse"].id,
             lines_input=[{"product_id": product.id, "quantity": 100, "purchase_price": 50.0, "sale_price": 80.0}],
         )
+
+
+from app.models.product_sale_unit import ProductSaleUnit  # noqa: E402
+from app.models.stock import Stock  # noqa: E402
+from app.models.unit_of_measure_catalog import UnitOfMeasureCatalog  # noqa: E402
+from app.services.movement_document_service import MovementDirection, MovementProductNotFoundError  # noqa: E402
+
+
+async def _product_in_bags(db, setup, code):
+    product = await _make_product(db, setup["company"], setup["vat_nor"], code=code)
+    kilo = UnitOfMeasureCatalog(code="K" + code[-3:], name="Quilo " + code, is_fractional=True)
+    bag = UnitOfMeasureCatalog(code="S" + code[-3:], name="Saco " + code)
+    db.add_all([kilo, bag])
+    await db.commit()
+    await db.refresh(kilo)
+    await db.refresh(bag)
+    product.unit_of_measure_id = kilo.id
+    sale_unit = ProductSaleUnit(company_id=setup["company"].id, product_id=product.id, unit_of_measure_id=bag.id, factor=25, price=21000)
+    db.add(sale_unit)
+    await db.commit()
+    await db.refresh(sale_unit)
+    return product, sale_unit, bag.code
+
+
+@pytest.mark.asyncio
+async def test_a_reception_in_bags_moves_base_units(db, company_with_essentials):
+    setup = company_with_essentials
+    product, bag_unit, bag_code = await _product_in_bags(db, setup, "MV-SC1")
+    entrada = await _make_movement_type(db, "ENS", MovementDirection.ENTRADA)
+    doc = await create_stock_movement_document(
+        db, setup["company"].id, entrada.id, setup["activity_warehouse"].id,
+        lines_input=[{"product_id": product.id, "quantity": 2, "sale_unit_id": bag_unit.id, "purchase_price": 17500.0, "sale_price": 21000.0}],
+    )
+    stock = (await db.execute(select(Stock).where(Stock.product_id == product.id))).scalar_one()
+    assert float(stock.quantity) == 50.0
+    assert float(doc.total_quantity) == 50.0
+    from app.models.stock_movement_document import StockMovementDocumentLine
+    line = (await db.execute(select(StockMovementDocumentLine).where(StockMovementDocumentLine.document_id == doc.id))).scalar_one()
+    assert (float(line.quantity), float(line.unit_factor), line.unit_snapshot, line.sale_unit_id) == (2.0, 25.0, bag_code, bag_unit.id)
+
+
+@pytest.mark.asyncio
+async def test_half_a_bag_is_refused_at_reception(db, company_with_essentials):
+    setup = company_with_essentials
+    product, bag_unit, _ = await _product_in_bags(db, setup, "MV-SC2")
+    entrada = await _make_movement_type(db, "ENT2", MovementDirection.ENTRADA)
+    with pytest.raises(MovementProductNotFoundError, match="deve ser inteira"):
+        await create_stock_movement_document(
+            db, setup["company"].id, entrada.id, setup["activity_warehouse"].id,
+            lines_input=[{"product_id": product.id, "quantity": 1.5, "sale_unit_id": bag_unit.id, "purchase_price": 0, "sale_price": 0}],
+        )
