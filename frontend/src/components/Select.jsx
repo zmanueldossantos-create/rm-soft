@@ -7,6 +7,8 @@ import { ChevronDown, Check, Search } from 'lucide-react';
 // The options panel renders through a portal into document.body, positioned
 // via the trigger's bounding rect - this keeps it visible even inside
 // scrollable/overflow-clipped containers (e.g. a table with overflow-x-auto).
+// The closed field always shows its value on one line, left-aligned, cut with an ellipsis (full label on hover);
+// singleLine only applies the same to the options of the open list.
 export default function Select({ value, onChange, options, placeholder, compact = false, singleLine = false, disabled = false }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -76,9 +78,9 @@ export default function Select({ value, onChange, options, placeholder, compact 
         type="button"
         disabled={disabled}
         onClick={() => (open ? setOpen(false) : openDropdown())}
-        className={'w-full flex items-center justify-between bg-bg-inset border border-border rounded-md text-text-primary font-mono outline-none focus:border-accent focus:ring-2 focus:ring-accent/30 transition-colors ' + (disabled ? 'opacity-70 cursor-not-allowed ' : 'cursor-pointer ') + (compact ? 'px-2.5 py-1 text-[12px]' : 'px-3.5 py-2.5 text-sm')}
+        className={'w-full flex items-center justify-between gap-2 text-left bg-bg-inset border border-border rounded-md text-text-primary font-mono outline-none focus:border-accent focus:ring-2 focus:ring-accent/30 transition-colors ' + (disabled ? 'opacity-70 cursor-not-allowed ' : 'cursor-pointer ') + (compact ? 'px-2.5 py-1 text-[12px]' : 'px-3.5 py-2.5 text-sm')}
       >
-        <span className={(selected ? '' : 'text-text-muted') + (singleLine ? ' truncate min-w-0' : '')} title={singleLine && selected ? selected.label : undefined}>
+        <span className={(selected ? '' : 'text-text-muted') + ' truncate min-w-0'} title={selected ? selected.label : undefined}>
           {selected ? selected.label : placeholder || 'Selecionar...'}
         </span>
         <ChevronDown size={16} className={'text-text-muted transition-transform shrink-0 ' + (open ? 'rotate-180' : '')} />
