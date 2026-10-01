@@ -23,6 +23,7 @@ class ConsumptionReasonResponse(BaseModel):
 
 
 class InternalConsumptionCreateRequest(BaseModel):
+    fiscal_period_id: uuid.UUID | None = None  # internal entry: the active or the soft-closed period; empty = the active one
     activity_id: uuid.UUID
     product_id: uuid.UUID
     quantity: float

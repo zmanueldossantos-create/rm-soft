@@ -16,6 +16,7 @@ class MovementDocumentLineRequest(BaseModel):
 
 
 class MovementDocumentCreateRequest(BaseModel):
+    fiscal_period_id: uuid.UUID | None = None  # internal entry: the active or the soft-closed period; empty = the active one
     movement_type_id: uuid.UUID
     warehouse_id: uuid.UUID
     movement_date: date | None = None

@@ -55,6 +55,7 @@ class ProductionEstimateResponse(BaseModel):
 
 
 class ProduceStockRequest(BaseModel):
+    fiscal_period_id: uuid.UUID | None = None  # internal entry: the active or the soft-closed period; empty = the active one
     warehouse_id: uuid.UUID
     finished_product_id: uuid.UUID
     quantity_to_produce: float

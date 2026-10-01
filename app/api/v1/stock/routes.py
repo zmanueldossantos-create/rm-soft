@@ -120,7 +120,7 @@ async def post_receive_stock(
 ):
     """Records incoming stock (purchase/production) into the CENTRAL warehouse."""
     try:
-        await receive_stock(db, current_user.company_id, payload.product_id, payload.quantity, payload.reason)
+        await receive_stock(db, current_user.company_id, payload.product_id, payload.quantity, payload.reason, fiscal_period_id=payload.fiscal_period_id)
         central = await get_default_warehouse(db, current_user.company_id)
     except PeriodClosedError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
@@ -141,7 +141,7 @@ async def post_transfer_stock(
     try:
         await transfer_stock(
             db, current_user.company_id, payload.product_id,
-            payload.from_warehouse_id, payload.to_warehouse_id, payload.quantity, payload.reason,
+            payload.from_warehouse_id, payload.to_warehouse_id, payload.quantity, payload.reason, fiscal_period_id=payload.fiscal_period_id,
         )
     except PeriodClosedError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
@@ -163,7 +163,7 @@ async def post_stock_loss(
     try:
         await record_stock_loss(
             db, current_user.company_id, payload.warehouse_id, payload.product_id,
-            payload.quantity, payload.loss_category, payload.reason,
+            payload.quantity, payload.loss_category, payload.reason, fiscal_period_id=payload.fiscal_period_id,
         )
     except PeriodClosedError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
@@ -184,7 +184,7 @@ async def post_adjust_stock(
 ):
     """Manually corrects stock to an exact quantity in a specific warehouse - GESTOR only, reason required."""
     try:
-        await adjust_stock(db, current_user.company_id, payload.warehouse_id, payload.product_id, payload.new_quantity, payload.reason)
+        await adjust_stock(db, current_user.company_id, payload.warehouse_id, payload.product_id, payload.new_quantity, payload.reason, fiscal_period_id=payload.fiscal_period_id)
     except PeriodClosedError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except WarehouseNotFoundError as e:
@@ -284,7 +284,7 @@ async def post_produce_stock(
     try:
         await produce_stock(
             db, current_user.company_id, payload.warehouse_id, payload.finished_product_id,
-            payload.quantity_to_produce, payload.reason,
+            payload.quantity_to_produce, payload.reason, fiscal_period_id=payload.fiscal_period_id,
         )
     except NoRecipeError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))

@@ -344,3 +344,42 @@ async def ensure_period_open(db: AsyncSession, company_id: uuid.UUID, check_date
         hint = (f"Contacte o GESTOR para abrir o periodo de {MONTH_NAMES_PT[next_month]} de {fiscal_year.year} antes de faturar."
                 if next_month is not None else "Contacte o GESTOR para abrir o periodo antes de faturar.")
     raise PeriodClosedError(f"O periodo de {label} nao esta aberto. {hint}")
+
+
+
+async def resolve_posting_period(db: AsyncSession, company_id: uuid.UUID, fiscal_period_id: uuid.UUID | None = None) -> FiscalPeriod:
+    """
+    THE period of an INTERNAL entry (reception, transfer, loss, adjustment, production, internal consumption): the one
+    given when it is ABERTO or FECHO_PARCIAL (a late entry belonging to the soft-closed month), otherwise the active
+    one. The entry keeps its real date; it is booked in this period. A FECHADO period never takes anything.
+    Sales and credit-note returns use the active period too (they already went through ensure_period_open).
+    """
+    if fiscal_period_id is None:
+        active = await _period_with_status(db, company_id, ABERTO)
+        if active is None:
+            raise PeriodClosedError("Nao existe nenhum periodo aberto. Contacte o GESTOR para abrir o periodo.")
+        return active[0]
+    row = (await db.execute(
+        select(FiscalPeriod, FiscalYear.year).join(FiscalYear, FiscalYear.id == FiscalPeriod.fiscal_year_id).where(
+            FiscalPeriod.id == fiscal_period_id, FiscalPeriod.company_id == company_id,
+        )
+    )).first()
+    if row is None:
+        raise PeriodClosedError("Periodo fiscal invalido")
+    period, year = row
+    if period.status == FECHADO:
+        raise PeriodClosedError(f"O periodo de {MONTH_NAMES_PT[period.month]} de {year} esta fechado definitivamente")
+    return period
+
+
+async def list_posting_periods(db: AsyncSession, company_id: uuid.UUID) -> list[dict]:
+    """The periods an internal entry may be booked in: the active one and the soft-closed one, oldest first."""
+    rows = (await db.execute(
+        select(FiscalPeriod, FiscalYear.year).join(FiscalYear, FiscalYear.id == FiscalPeriod.fiscal_year_id).where(
+            FiscalPeriod.company_id == company_id, FiscalPeriod.status.in_([ABERTO, FECHO_PARCIAL]),
+        ).order_by(FiscalYear.year, FiscalPeriod.month)
+    )).all()
+    return [
+        {"id": period.id, "label": f"{MONTH_NAMES_PT[period.month]} {year}", "status": period.status}
+        for period, year in rows
+    ]

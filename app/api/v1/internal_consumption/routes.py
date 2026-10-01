@@ -90,7 +90,7 @@ async def post_record_consumption(
     try:
         record = await record_consumption(
             db, current_user.company_id, payload.activity_id, payload.product_id, payload.quantity,
-            payload.reason_id, current_user.id, payload.resource_id, payload.notes,
+            payload.reason_id, current_user.id, payload.resource_id, payload.notes, fiscal_period_id=payload.fiscal_period_id,
         )
         return {"id": record.id}
     except ActivityNotFoundError as e:

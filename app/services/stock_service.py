@@ -14,7 +14,7 @@ warehouse, never the central one directly.
 """
 import uuid
 from datetime import datetime, date, timedelta
-from app.services.fiscal_period_service import ensure_period_open, PeriodClosedError
+from app.services.fiscal_period_service import ensure_period_open, PeriodClosedError, resolve_posting_period
 
 from sqlalchemy import select, extract
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -207,16 +207,17 @@ async def receive_stock(
     product_id: uuid.UUID,
     quantity: float,
     reason: str | None = None,
+    fiscal_period_id: uuid.UUID | None = None,
 ) -> Stock:
     """Records incoming stock (purchase, production) into the CENTRAL warehouse - RECEPCAO movement."""
-    await ensure_period_open(db, company_id, date.today())
+    posting_period = await resolve_posting_period(db, company_id, fiscal_period_id)
     warehouse = await get_default_warehouse(db, company_id)
     await _stock_rule(db, product_id, warehouse.id, "in", strict=True)
     stock = await _get_or_create_stock_row(db, company_id, product_id, warehouse.id)
 
     stock.quantity = float(stock.quantity) + quantity
     db.add(StockMovement(
-        company_id=company_id, product_id=product_id, warehouse_id=warehouse.id,
+        company_id=company_id, fiscal_period_id=posting_period.id, product_id=product_id, warehouse_id=warehouse.id,
         movement_type=MovementType.RECEPCAO, quantity=quantity, reason=reason,
     ))
 
@@ -233,6 +234,7 @@ async def transfer_stock(
     to_warehouse_id: uuid.UUID,
     quantity: float,
     reason: str | None = None,
+    fiscal_period_id: uuid.UUID | None = None,
 ) -> None:
     """
     Internally moves stock between any two of the company's warehouses
@@ -241,7 +243,7 @@ async def transfer_stock(
     addition to destination) sharing the same reason so the audit trail
     reads as one transfer.
     """
-    await ensure_period_open(db, company_id, date.today())
+    posting_period = await resolve_posting_period(db, company_id, fiscal_period_id)
     if from_warehouse_id == to_warehouse_id:
         raise ValueError("O armazem de origem e destino nao pode ser o mesmo")
 
@@ -263,12 +265,12 @@ async def transfer_stock(
     dest_stock.quantity = float(dest_stock.quantity) + quantity
 
     db.add(StockMovement(
-        company_id=company_id, product_id=product_id, warehouse_id=from_warehouse_id,
+        company_id=company_id, fiscal_period_id=posting_period.id, product_id=product_id, warehouse_id=from_warehouse_id,
         movement_type=MovementType.TRANSFERENCIA, quantity=quantity, reason=reason,
         counterpart_warehouse_id=to_warehouse_id, is_transfer_source=True,
     ))
     db.add(StockMovement(
-        company_id=company_id, product_id=product_id, warehouse_id=to_warehouse_id,
+        company_id=company_id, fiscal_period_id=posting_period.id, product_id=product_id, warehouse_id=to_warehouse_id,
         movement_type=MovementType.TRANSFERENCIA, quantity=quantity, reason=reason,
         counterpart_warehouse_id=from_warehouse_id, is_transfer_source=False,
     ))
@@ -284,13 +286,14 @@ async def record_stock_loss(
     quantity: float,
     loss_category: str,
     reason: str | None = None,
+    fiscal_period_id: uuid.UUID | None = None,
 ) -> Stock:
     """
     Writes off stock with no sale - expiry, breakage, theft, or other
     (see LossCategory) - PERDA movement, distinct from a generic AJUSTE
     correction. Requires the category; free-text reason is optional detail.
     """
-    await ensure_period_open(db, company_id, date.today())
+    posting_period = await resolve_posting_period(db, company_id, fiscal_period_id)
     warehouse = await get_warehouse_or_raise(db, company_id, warehouse_id)
     await _stock_rule(db, product_id, warehouse.id, "out", strict=True)
     stock = await _get_or_create_stock_row(db, company_id, product_id, warehouse.id)
@@ -303,7 +306,7 @@ async def record_stock_loss(
 
     stock.quantity = float(stock.quantity) - quantity
     db.add(StockMovement(
-        company_id=company_id, product_id=product_id, warehouse_id=warehouse.id,
+        company_id=company_id, fiscal_period_id=posting_period.id, product_id=product_id, warehouse_id=warehouse.id,
         movement_type=MovementType.PERDA, quantity=quantity,
         loss_category=LossCategory(loss_category), reason=reason,
     ))
@@ -320,13 +323,14 @@ async def adjust_stock(
     product_id: uuid.UUID,
     new_quantity: float,
     reason: str,
+    fiscal_period_id: uuid.UUID | None = None,
 ) -> Stock:
     """
     Manually corrects stock to an exact new quantity (physical count
     reconciliation, damage, etc.) in a specific warehouse - AJUSTE
     movement, reason required.
     """
-    await ensure_period_open(db, company_id, date.today())
+    posting_period = await resolve_posting_period(db, company_id, fiscal_period_id)
     warehouse = await get_warehouse_or_raise(db, company_id, warehouse_id)
     await _stock_rule(db, product_id, warehouse.id, "adjust", strict=True)
     stock = await _get_or_create_stock_row(db, company_id, product_id, warehouse.id)
@@ -334,7 +338,7 @@ async def adjust_stock(
     delta = new_quantity - float(stock.quantity)
     stock.quantity = new_quantity
     db.add(StockMovement(
-        company_id=company_id, product_id=product_id, warehouse_id=warehouse.id,
+        company_id=company_id, fiscal_period_id=posting_period.id, product_id=product_id, warehouse_id=warehouse.id,
         movement_type=MovementType.AJUSTE, quantity=delta, reason=reason,  # signed - preserves direction for display
     ))
 
@@ -350,6 +354,7 @@ async def deduct_stock_for_sale(
     product_id: uuid.UUID,
     quantity: float,
     reference: str,
+    fiscal_period_id: uuid.UUID | None = None,
 ) -> None:
     """
     Deducts stock for a sold line item from the SELLING ACTIVITY's own
@@ -359,6 +364,7 @@ async def deduct_stock_for_sale(
     is not enough stock - the invoice creation aborts entirely in that
     case (no partial sale).
     """
+    posting_period = await resolve_posting_period(db, company_id, fiscal_period_id)
     if not await _stock_rule(db, product_id, warehouse_id, "out", strict=False):
         return  # a product without stock: sold, nothing moves
     stock = await _get_or_create_stock_row(db, company_id, product_id, warehouse_id)
@@ -374,7 +380,7 @@ async def deduct_stock_for_sale(
 
     stock.quantity = float(stock.quantity) - quantity
     db.add(StockMovement(
-        company_id=company_id, product_id=product_id, warehouse_id=warehouse_id,
+        company_id=company_id, fiscal_period_id=posting_period.id, product_id=product_id, warehouse_id=warehouse_id,
         movement_type=MovementType.SAIDA, quantity=quantity, reference=reference,
     ))
     # No commit here - part of the caller's (invoice creation) transaction.
@@ -387,6 +393,7 @@ async def return_stock_for_credit_note(
     product_id: uuid.UUID,
     quantity: float,
     reference: str,
+    fiscal_period_id: uuid.UUID | None = None,
 ) -> None:
     """
     Puts credited goods back into the warehouse the sale took them from - the mirror of
@@ -394,12 +401,13 @@ async def return_stock_for_credit_note(
     sale (SAIDA, reference = invoice) and its return can be matched. Only called when the credit note
     explicitly asks for it. No commit here - part of the credit note's own transaction.
     """
+    posting_period = await resolve_posting_period(db, company_id, fiscal_period_id)
     if not await _stock_rule(db, product_id, warehouse_id, "in", strict=False):
         return
     stock = await _get_or_create_stock_row(db, company_id, product_id, warehouse_id)
     stock.quantity = float(stock.quantity) + quantity
     db.add(StockMovement(
-        company_id=company_id, product_id=product_id, warehouse_id=warehouse_id,
+        company_id=company_id, fiscal_period_id=posting_period.id, product_id=product_id, warehouse_id=warehouse_id,
         movement_type=MovementType.RECEPCAO, quantity=quantity, reference=reference,
         reason="Devolucao - nota de credito",
     ))
@@ -535,6 +543,7 @@ async def produce_stock(
     finished_product_id: uuid.UUID,
     quantity_to_produce: float,
     reason: str | None = None,
+    fiscal_period_id: uuid.UUID | None = None,
 ) -> Stock:
     """
     Transforms ingredients into a finished product, within ONE warehouse
@@ -543,7 +552,7 @@ async def produce_stock(
     ingredient is insufficient, nothing is deducted or produced (raises
     InsufficientStockError before touching any row).
     """
-    await ensure_period_open(db, company_id, date.today())
+    posting_period = await resolve_posting_period(db, company_id, fiscal_period_id)
     recipe = await _get_recipe_rows(db, company_id, finished_product_id)
     if not recipe:
         raise NoRecipeError("Este produto nao tem receita definida")
@@ -575,7 +584,7 @@ async def produce_stock(
     for stock, needed, ingredient_product_id in ingredient_stocks:
         stock.quantity = float(stock.quantity) - needed
         db.add(StockMovement(
-            company_id=company_id, product_id=ingredient_product_id, warehouse_id=warehouse_id,
+            company_id=company_id, fiscal_period_id=posting_period.id, product_id=ingredient_product_id, warehouse_id=warehouse_id,
             movement_type=MovementType.PRODUCAO, quantity=needed, reason=reason,
             is_production_output=False,
         ))
@@ -583,7 +592,7 @@ async def produce_stock(
     finished_stock = await _get_or_create_stock_row(db, company_id, finished_product_id, warehouse_id)
     finished_stock.quantity = float(finished_stock.quantity) + quantity_to_produce
     db.add(StockMovement(
-        company_id=company_id, product_id=finished_product_id, warehouse_id=warehouse_id,
+        company_id=company_id, fiscal_period_id=posting_period.id, product_id=finished_product_id, warehouse_id=warehouse_id,
         movement_type=MovementType.PRODUCAO, quantity=quantity_to_produce, reason=reason,
         is_production_output=True,
     ))

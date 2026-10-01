@@ -46,6 +46,7 @@ async def create_movement_document(
             movement_date=payload.movement_date,
             description=payload.description,
             supplier_id=payload.supplier_id,
+            fiscal_period_id=payload.fiscal_period_id,
         )
     except PeriodClosedError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))

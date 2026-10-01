@@ -20,7 +20,7 @@ from app.models.stock_movement import StockMovement, MovementType as LedgerMovem
 from app.models.stock_movement_document import StockMovementDocument, StockMovementDocumentLine
 from app.services.stock_service import _get_or_create_stock_row, _stock_rule, InsufficientStockError as _StockRuleError
 from app.services.product_sale_unit_service import SaleUnitInvalidError, resolve_line_unit
-from app.services.fiscal_period_service import ensure_period_open, PeriodClosedError
+from app.services.fiscal_period_service import ensure_period_open, PeriodClosedError, resolve_posting_period
 import io
 import openpyxl
 
@@ -77,13 +77,15 @@ async def create_stock_movement_document(
     movement_date: date | None = None,
     description: str | None = None,
     supplier_id: uuid.UUID | None = None,
+    fiscal_period_id: uuid.UUID | None = None,
 ) -> StockMovementDocument:
     """
     lines_input items: {product_id, quantity, purchase_price, sale_price}
     """
     movement_date = movement_date or date.today()
 
-    await ensure_period_open(db, company_id, movement_date)
+    # Internal entry: real date, booked in the chosen period (the soft-closed month for a late entry).
+    posting_period = await resolve_posting_period(db, company_id, fiscal_period_id)
 
     type_result = await db.execute(select(MovementTypeCatalog).where(MovementTypeCatalog.id == movement_type_id))
     movement_type = type_result.scalar_one_or_none()
@@ -146,7 +148,7 @@ async def create_stock_movement_document(
             stock.quantity = float(stock.quantity) - base_quantity
 
         db.add(StockMovement(
-            company_id=company_id, product_id=product.id, warehouse_id=warehouse_id,
+            company_id=company_id, fiscal_period_id=posting_period.id, product_id=product.id, warehouse_id=warehouse_id,
             movement_type=ledger_type, quantity=base_quantity,
             reason=description, reference=f"{movement_type.code}{movement_date.year}/{next_number}",
         ))
@@ -166,6 +168,7 @@ async def create_stock_movement_document(
 
     document = StockMovementDocument(
         company_id=company_id,
+        fiscal_period_id=posting_period.id,
         movement_type_id=movement_type_id,
         warehouse_id=warehouse_id,
         supplier_id=supplier_id,

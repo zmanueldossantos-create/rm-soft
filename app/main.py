@@ -208,3 +208,13 @@ async def _pt_validation_handler(request: _Request, exc: _RequestValidationError
         for e in exc.errors()
     ]
     return _JSONResponse(status_code=422, content={"detail": detail})
+
+
+
+# A fiscal period refusal (closed, soft-closed for an automatic operation...) that no route catches itself: a clear 409.
+from app.services.fiscal_period_service import PeriodClosedError as _PeriodClosedError  # noqa: E402
+
+
+@app.exception_handler(_PeriodClosedError)
+async def _period_closed_handler(request: _Request, exc: _PeriodClosedError):
+    return _JSONResponse(status_code=409, content={"detail": str(exc)})

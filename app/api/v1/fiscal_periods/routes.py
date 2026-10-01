@@ -29,6 +29,7 @@ from app.services.fiscal_period_service import (
     close_fiscal_period,
     get_next_fiscal_month,
     get_period_overview,
+    list_posting_periods,
     partial_close_fiscal_period,
     partial_close_fiscal_year,
     FiscalYearNotFoundError,
@@ -165,3 +166,13 @@ async def get_current_period(
 ):
     """The active period label ("Outubro 2026") and the soft-closed one if any - null when none."""
     return await get_period_overview(db, current_user.company_id)
+
+
+
+@router.get("/posting-periods")
+async def get_posting_periods(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("fiscal_periods:current")),
+):
+    """The periods an internal entry may be booked in (active + soft-closed), for the period selector of those forms."""
+    return await list_posting_periods(db, current_user.company_id)

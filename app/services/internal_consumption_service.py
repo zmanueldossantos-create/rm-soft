@@ -19,7 +19,8 @@ from app.models.resource import Resource
 from app.models.user import User
 from app.services.activity_service import get_activity_or_raise
 from app.services.consumption_reason_service import get_consumption_reason_or_raise
-from app.services.stock_service import deduct_stock_for_sale, InsufficientStockError
+from app.services.stock_service import deduct_stock_for_sale, InsufficientStockError
+from app.services.fiscal_period_service import resolve_posting_period
 
 
 class NoWarehouseError(Exception):
@@ -33,7 +34,7 @@ class ProductNotFoundError(Exception):
 async def record_consumption(
     db: AsyncSession, company_id: uuid.UUID, activity_id: uuid.UUID, product_id: uuid.UUID,
     quantity: float, reason_id: uuid.UUID, consumed_by_user_id: uuid.UUID,
-    resource_id: uuid.UUID | None = None, notes: str | None = None,
+    resource_id: uuid.UUID | None = None, notes: str | None = None, fiscal_period_id: uuid.UUID | None = None,
 ) -> InternalConsumption:
     activity = await get_activity_or_raise(db, company_id, activity_id)
     if activity.warehouse_id is None:
@@ -46,14 +47,16 @@ async def record_consumption(
     if product is None:
         raise ProductNotFoundError("Produto nao encontrado")
 
+    # Internal entry: booked in the chosen period (active or soft-closed), never in a closed one.
+    posting_period = await resolve_posting_period(db, company_id, fiscal_period_id)
     # Raises InsufficientStockError if there isn't enough - no partial consumption.
     await deduct_stock_for_sale(
         db, company_id, activity.warehouse_id, product_id, quantity,
-        reference=f"Consumo interno - {reason.name}",
+        reference=f"Consumo interno - {reason.name}", fiscal_period_id=posting_period.id,
     )
 
     record = InternalConsumption(
-        company_id=company_id, activity_id=activity_id, warehouse_id=activity.warehouse_id,
+        company_id=company_id, fiscal_period_id=posting_period.id, activity_id=activity_id, warehouse_id=activity.warehouse_id,
         product_id=product_id, quantity=quantity, reason_id=reason_id,
         resource_id=resource_id, consumed_by_user_id=consumed_by_user_id, notes=notes,
     )
