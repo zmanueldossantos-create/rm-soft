@@ -51,8 +51,9 @@ export async function receiveStock(productId, quantity, reason) {
   return res.data;
 }
 
-export async function transferStock(fromWarehouseId, toWarehouseId, productId, quantity, reason) {
+export async function transferStock(fromWarehouseId, toWarehouseId, productId, quantity, reason, fiscalPeriodId = null) {
   const res = await apiClient.post('/stock/transfer', {
+    fiscal_period_id: fiscalPeriodId || null,
     from_warehouse_id: fromWarehouseId,
     to_warehouse_id: toWarehouseId,
     product_id: productId,
@@ -62,8 +63,9 @@ export async function transferStock(fromWarehouseId, toWarehouseId, productId, q
   return res.data;
 }
 
-export async function recordStockLoss(warehouseId, productId, quantity, lossCategory, reason) {
+export async function recordStockLoss(warehouseId, productId, quantity, lossCategory, reason, fiscalPeriodId = null) {
   const res = await apiClient.post('/stock/loss', {
+    fiscal_period_id: fiscalPeriodId || null,
     warehouse_id: warehouseId,
     product_id: productId,
     quantity,
@@ -73,8 +75,9 @@ export async function recordStockLoss(warehouseId, productId, quantity, lossCate
   return res.data;
 }
 
-export async function adjustStock(warehouseId, productId, newQuantity, reason) {
+export async function adjustStock(warehouseId, productId, newQuantity, reason, fiscalPeriodId = null) {
   const res = await apiClient.post('/stock/adjust', {
+    fiscal_period_id: fiscalPeriodId || null,
     warehouse_id: warehouseId,
     product_id: productId,
     new_quantity: newQuantity,
@@ -94,8 +97,9 @@ export async function getProductionEstimate(warehouseId, productId) {
   return res.data;
 }
 
-export async function produceStock(warehouseId, finishedProductId, quantityToProduce, reason) {
+export async function produceStock(warehouseId, finishedProductId, quantityToProduce, reason, fiscalPeriodId = null) {
   const res = await apiClient.post('/stock/produce', {
+    fiscal_period_id: fiscalPeriodId || null,
     warehouse_id: warehouseId,
     finished_product_id: finishedProductId,
     quantity_to_produce: quantityToProduce,

@@ -7,7 +7,8 @@ import { getRecipe, setRecipe } from '../api/recipe';
 import { listWarehouses, getProductionEstimate, produceStock } from '../api/stock';
 import apiClient from '../api/client';
 import { unitsApi } from '../api/catalogs';
-import { extractErrorMessage } from '../utils/errors';
+import { extractErrorMessage } from '../utils/errors';
+import PostingPeriodSelect from '../components/PostingPeriodSelect';
 
 async function getProductsWithRecipe() {
   const res = await apiClient.get('/products/with-recipe');
@@ -15,7 +16,7 @@ async function getProductsWithRecipe() {
 }
 
 const emptyRecipeForm = { productId: '', batchYield: '1', rows: [] };
-const emptyProduceForm = { productId: '', warehouseId: '', quantity: '', reason: '' };
+const emptyProduceForm = { productId: '', warehouseId: '', quantity: '', reason: '', fiscalPeriodId: '' };
 
 export default function Producao() {
   const [allProducts, setAllProducts] = useState([]);
@@ -35,6 +36,7 @@ export default function Producao() {
 
   const [produceModalOpen, setProduceModalOpen] = useState(false);
   const [produceForm, setProduceForm] = useState(emptyProduceForm);
+  const [producePeriodChoice, setProducePeriodChoice] = useState(false); // a soft-closed period exists: choose it explicitly
   const [produceEstimate, setProduceEstimate] = useState(null);
   const [produceEstimateLoading, setProduceEstimateLoading] = useState(false);
   const [produceEstimateError, setProduceEstimateError] = useState('');
@@ -185,7 +187,7 @@ export default function Producao() {
   }
 
   function openProduceModal(product) {
-    setProduceForm({ productId: product.id, warehouseId: warehouses[0]?.id || '', quantity: '', numBatches: '', batchYield: product.batch_yield, reason: '' });
+    setProduceForm({ productId: product.id, warehouseId: '', fiscalPeriodId: '', quantity: '', numBatches: '', batchYield: product.batch_yield, reason: '' });
     setProduceEstimate(null);
     setProduceEstimateError('');
     setProduceError('');
@@ -240,7 +242,7 @@ export default function Producao() {
     setProduceError('');
     setProduceSaving(true);
     try {
-      await produceStock(produceForm.warehouseId, produceForm.productId, parseFloat(produceForm.quantity), produceForm.reason || null);
+      await produceStock(produceForm.warehouseId, produceForm.productId, parseFloat(produceForm.quantity), produceForm.reason || null, produceForm.fiscalPeriodId);
       closeProduceModal();
     } catch (err) {
       setProduceError(extractErrorMessage(err, 'Erro ao produzir'));
@@ -547,9 +549,10 @@ export default function Producao() {
             </div>
           )}
 
+          <PostingPeriodSelect value={produceForm.fiscalPeriodId} onChange={(v) => setProduceForm((prev) => ({ ...prev, fiscalPeriodId: v }))} onChoice={setProducePeriodChoice} />
           <button
             type="submit"
-            disabled={produceSaving || !produceForm.quantity || !produceForm.warehouseId || produceExceedsCapacity}
+            disabled={produceSaving || (producePeriodChoice && !produceForm.fiscalPeriodId) || !produceForm.quantity || !produceForm.warehouseId || produceExceedsCapacity}
             className="mt-1 bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors"
           >
             {produceSaving ? <Loader2 size={17} className="animate-spin" /> : <Factory size={17} />}

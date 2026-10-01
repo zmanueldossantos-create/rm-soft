@@ -7,7 +7,8 @@ import { listConsumptionReasons, recordConsumption, listInternalConsumption } fr
 import { getMyPermissions } from '../api/permissions';
 import { extractErrorMessage } from '../utils/errors';
 import Modal from '../components/Modal';
-import Select from '../components/Select';
+import Select from '../components/Select';
+import PostingPeriodSelect from '../components/PostingPeriodSelect';
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
@@ -32,7 +33,8 @@ export default function ConsumoInterno() {
   const [dateTo, setDateTo] = useState(todayIso());
 
   const [formOpen, setFormOpen] = useState(false);
-  const [form, setForm] = useState({ productId: '', quantity: '', reasonId: '', resourceId: '', notes: '' });
+  const [form, setForm] = useState({ productId: '', quantity: '', reasonId: '', resourceId: '', notes: '', fiscalPeriodId: '' });
+  const [consumptionPeriodChoice, setConsumptionPeriodChoice] = useState(false); // a soft-closed period exists: choose it explicitly
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -77,7 +79,7 @@ export default function ConsumoInterno() {
   }
 
   function openCreateForm() {
-    setForm({ productId: '', quantity: '', reasonId: '', resourceId: '', notes: '' });
+    setForm({ productId: '', quantity: '', reasonId: '', resourceId: '', notes: '', fiscalPeriodId: '' });
     setFormError('');
     setFormOpen(true);
   }
@@ -98,6 +100,7 @@ export default function ConsumoInterno() {
         reason_id: form.reasonId,
         resource_id: form.resourceId || null,
         notes: form.notes || null,
+        fiscal_period_id: form.fiscalPeriodId || null,
       });
       setFormOpen(false);
       await loadHistory();
@@ -246,9 +249,10 @@ export default function ConsumoInterno() {
           {formError && (
             <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{formError}</div>
           )}
+          <PostingPeriodSelect value={form.fiscalPeriodId} onChange={(v) => setForm((prev) => ({ ...prev, fiscalPeriodId: v }))} onChoice={setConsumptionPeriodChoice} />
           <button
             type="submit"
-            disabled={saving}
+            disabled={saving || (consumptionPeriodChoice && !form.fiscalPeriodId)}
             className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer"
           >
             {saving ? <Loader2 size={17} className="animate-spin" /> : <Plus size={17} />}

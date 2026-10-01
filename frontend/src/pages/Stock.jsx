@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Package2, Plus, Loader2, Search, AlertTriangle, ArrowDownToLine, SlidersHorizontal, Warehouse, Pencil, Check, X, ArrowRightLeft, Trash2, Power } from 'lucide-react';
 import Modal from '../components/Modal';
-import MovementForm from '../components/MovementForm';
+import MovementForm from '../components/MovementForm';
+import PostingPeriodSelect from '../components/PostingPeriodSelect';
 import Select from '../components/Select';
 import { listStockLevels, receiveStock, adjustStock, transferStock, recordStockLoss, listWarehouses, createWarehouse, updateWarehouseFull, toggleWarehouseStatus } from '../api/stock';
 import { provincesApi, municipalitiesApi } from '../api/catalogs';
@@ -98,6 +99,9 @@ export default function Stock() {
   const [selectedProductId, setSelectedProductId] = useState('');
   const [quantity, setQuantity] = useState('');
   const [reason, setReason] = useState('');
+  const [fiscalPeriodId, setFiscalPeriodId] = useState(''); // internal entry: the period chosen when a soft-closed one exists
+  const [periodChoice, setPeriodChoice] = useState(false);
+  const [opWarehouseId, setOpWarehouseId] = useState(''); // loss / adjustment: chosen in the modal, never preselected
   const [transferFromWarehouseId, setTransferFromWarehouseId] = useState('');
   const [transferToWarehouseId, setTransferToWarehouseId] = useState('');
   const [lossCategory, setLossCategory] = useState('EXPIRACAO');
@@ -164,6 +168,7 @@ export default function Stock() {
   }
 
   function openTransferModal() {
+    setFiscalPeriodId('');
     setSelectedProductId('');
     setQuantity('');
     setReason('');
@@ -252,16 +257,20 @@ export default function Stock() {
   }
 
   function openLossModal() {
+    setFiscalPeriodId('');
+    setOpWarehouseId('');
     setSelectedProductId('');
     setQuantity('');
     setReason('');
-    setLossCategory('EXPIRACAO');
+    setLossCategory('');
     setFormError('');
     setFormSuccess('');
     setLossModalOpen(true);
   }
 
   function openAdjustModal() {
+    setFiscalPeriodId('');
+    setOpWarehouseId('');
     setSelectedProductId('');
     setQuantity('');
     setReason('');
@@ -293,7 +302,7 @@ export default function Stock() {
     setFormError('');
     setSaving(true);
     try {
-      await transferStock(transferFromWarehouseId, transferToWarehouseId, selectedProductId, parseFloat(quantity), reason || null);
+      await transferStock(transferFromWarehouseId, transferToWarehouseId, selectedProductId, parseFloat(quantity), reason || null, fiscalPeriodId);
       setSelectedProductId('');
       setQuantity('');
       setReason('');
@@ -311,7 +320,7 @@ export default function Stock() {
     setFormError('');
     setSaving(true);
     try {
-      await recordStockLoss(selectedWarehouseId, selectedProductId, parseFloat(quantity), lossCategory, reason || null);
+      await recordStockLoss(opWarehouseId, selectedProductId, parseFloat(quantity), lossCategory, reason || null, fiscalPeriodId);
       setSelectedProductId('');
       setQuantity('');
       setReason('');
@@ -329,7 +338,7 @@ export default function Stock() {
     setFormError('');
     setSaving(true);
     try {
-      await adjustStock(selectedWarehouseId, selectedProductId, parseFloat(quantity), reason);
+      await adjustStock(opWarehouseId, selectedProductId, parseFloat(quantity), reason, fiscalPeriodId);
       setSelectedProductId('');
       setQuantity('');
       setReason('');
@@ -517,16 +526,17 @@ export default function Stock() {
               />
             </div>
           </div>
+          <div>
+            <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Produto *</label>
+            <Select
+              value={selectedProductId}
+              onChange={setSelectedProductId}
+              options={products.map((p) => ({ value: p.id, label: p.code + ' - ' + p.name }))}
+              placeholder="Selecionar produto"
+            />
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Produto *</label>
-              <Select
-                value={selectedProductId}
-                onChange={setSelectedProductId}
-                options={products.map((p) => ({ value: p.id, label: p.code + ' - ' + p.name }))}
-                placeholder="Selecionar produto"
-              />
-            </div>
+            <PostingPeriodSelect value={fiscalPeriodId} onChange={setFiscalPeriodId} onChoice={setPeriodChoice} />
             <div>
               <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Quantidade *</label>
               <input
@@ -561,7 +571,7 @@ export default function Stock() {
           )}
           <button
             type="submit"
-            disabled={saving || !selectedProductId || !quantity || !transferToWarehouseId || !transferFromWarehouseId}
+            disabled={saving || (periodChoice && !fiscalPeriodId) || !selectedProductId || !quantity || !transferToWarehouseId || !transferFromWarehouseId}
             className="mt-1 bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors"
           >
             {saving ? <Loader2 size={17} className="animate-spin" /> : <ArrowRightLeft size={17} />}
@@ -570,8 +580,17 @@ export default function Stock() {
         </form>
       </Modal>
 
-      <Modal open={lossModalOpen} onClose={() => setLossModalOpen(false)} title={'Registar perda' + (selectedWarehouse ? ' - ' + selectedWarehouse.name : '')}>
+      <Modal open={lossModalOpen} onClose={() => setLossModalOpen(false)} title="Registar perda" maxWidthClass="max-w-2xl">
         <form onSubmit={handleLossSubmit} className="flex flex-col gap-4">
+          <div>
+            <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Armazém *</label>
+            <Select
+              value={opWarehouseId}
+              onChange={setOpWarehouseId}
+              options={warehouses.filter((w) => w.is_active).map((w) => ({ value: w.id, label: w.name }))}
+              placeholder="Selecionar armazém"
+            />
+          </div>
           <div>
             <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Produto *</label>
             <Select
@@ -580,6 +599,21 @@ export default function Stock() {
               options={products.map((p) => ({ value: p.id, label: p.code + ' - ' + p.name }))}
               placeholder="Selecionar produto"
             />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <PostingPeriodSelect value={fiscalPeriodId} onChange={setFiscalPeriodId} onChoice={setPeriodChoice} />
+            <div>
+              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Quantidade *</label>
+              <input
+                type="number"
+                step="0.001"
+                min="0.001"
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+                required
+                className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors"
+              />
+            </div>
           </div>
           <div>
             <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Categoria *</label>
@@ -602,18 +636,6 @@ export default function Stock() {
             </div>
           </div>
           <div>
-            <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Quantidade *</label>
-            <input
-              type="number"
-              step="0.001"
-              min="0.001"
-              value={quantity}
-              onChange={(e) => setQuantity(e.target.value)}
-              required
-              className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors"
-            />
-          </div>
-          <div>
             <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Detalhe (opcional)</label>
             <input
               value={reason}
@@ -634,7 +656,7 @@ export default function Stock() {
           )}
           <button
             type="submit"
-            disabled={saving || !selectedProductId || !quantity}
+            disabled={saving || (periodChoice && !fiscalPeriodId) || !opWarehouseId || !lossCategory || !selectedProductId || !quantity}
             className="mt-1 bg-danger hover:bg-danger/90 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors"
           >
             {saving ? <Loader2 size={17} className="animate-spin" /> : <Trash2 size={17} />}
@@ -643,8 +665,17 @@ export default function Stock() {
         </form>
       </Modal>
 
-      <Modal open={adjustModalOpen} onClose={() => setAdjustModalOpen(false)} title={'Ajustar stock' + (selectedWarehouse ? ' - ' + selectedWarehouse.name : '')}>
+      <Modal open={adjustModalOpen} onClose={() => setAdjustModalOpen(false)} title="Ajustar stock" maxWidthClass="max-w-2xl">
         <form onSubmit={handleAdjustSubmit} className="flex flex-col gap-4">
+          <div>
+            <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Armazém *</label>
+            <Select
+              value={opWarehouseId}
+              onChange={setOpWarehouseId}
+              options={warehouses.filter((w) => w.is_active).map((w) => ({ value: w.id, label: w.name }))}
+              placeholder="Selecionar armazém"
+            />
+          </div>
           <div>
             <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Produto *</label>
             <Select
@@ -654,17 +685,20 @@ export default function Stock() {
               placeholder="Selecionar produto"
             />
           </div>
-          <div>
-            <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Nova quantidade exata *</label>
-            <input
-              type="number"
-              step="0.001"
-              min="0"
-              value={quantity}
-              onChange={(e) => setQuantity(e.target.value)}
-              required
-              className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors"
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <PostingPeriodSelect value={fiscalPeriodId} onChange={setFiscalPeriodId} onChoice={setPeriodChoice} />
+            <div>
+              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Nova quantidade exata *</label>
+              <input
+                type="number"
+                step="0.001"
+                min="0"
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+                required
+                className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors"
+              />
+            </div>
           </div>
           <div>
             <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Motivo *</label>
@@ -688,7 +722,7 @@ export default function Stock() {
           )}
           <button
             type="submit"
-            disabled={saving || !selectedProductId || quantity === '' || reason.trim().length < 5}
+            disabled={saving || (periodChoice && !fiscalPeriodId) || !opWarehouseId || !selectedProductId || quantity === '' || reason.trim().length < 5}
             className="mt-1 bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors"
           >
             {saving ? <Loader2 size={17} className="animate-spin" /> : <SlidersHorizontal size={17} />}
