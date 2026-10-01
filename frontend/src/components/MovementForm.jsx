@@ -50,20 +50,24 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection }) {
   useEffect(() => {
     async function loadData() {
       try {
-        const [productsData, typesData, warehousesData, unitsData, suppliersData] = await Promise.all([
-          listProducts(),
-          movementTypesApi.list(),
-          listWarehouses(),
-          unitsApi.list(),
-          filterDirection === 'ENTRADA' ? listSuppliers() : Promise.resolve([]),
-        ]);
-        setProducts(productsData.filter((p) => p.is_active));
-        setMovementTypes(typesData.filter((t) => t.is_active && t.direction === filterDirection));
-        setWarehouses(warehousesData.filter((w) => w.is_active));
-        setUnits(unitsData);
-        setSuppliers(suppliersData.filter((s) => s.is_active));
-      } catch (err) {
-        setFormError(extractErrorMessage(err, 'Erro ao carregar dados'));
+        // Each list loads on its own: a failing request no longer empties the others, and the message names it.
+        const sources = [
+          ['produtos', listProducts(), (d) => setProducts(d.filter((p) => p.is_active))],
+          ['tipos de movimento', movementTypesApi.list(), (d) => setMovementTypes(d.filter((t) => t.is_active && t.direction === filterDirection))],
+          ['armazens', listWarehouses(), (d) => setWarehouses(d.filter((w) => w.is_active))],
+          ['unidades', unitsApi.list(), (d) => setUnits(d)],
+          ['fornecedores', filterDirection === 'ENTRADA' ? listSuppliers() : Promise.resolve([]), (d) => setSuppliers(d.filter((s) => s.is_active))],
+        ];
+        const results = await Promise.allSettled(sources.map(([, request]) => request));
+        const failed = [];
+        results.forEach((result, i) => {
+          const [label, , apply] = sources[i];
+          if (result.status === 'fulfilled') apply(result.value);
+          else failed.push(label + ' (' + extractErrorMessage(result.reason, 'erro desconhecido') + ')');
+        });
+        if (failed.length > 0) {
+          setFormError('Nao foi possivel carregar: ' + failed.join(', ') + '. Feche e volte a abrir o formulario.');
+        }
       } finally {
         setLoaded(true);
       }
