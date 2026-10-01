@@ -65,7 +65,9 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection }) {
           if (result.status === 'fulfilled') apply(result.value);
           else failed.push(label + ' (' + extractErrorMessage(result.reason, 'erro desconhecido') + ')');
         });
-        if (failed.length > 0) {
+        if (failed.length > 0 && results.every((r) => r.status === 'rejected' && !r.reason?.response)) {
+          setFormError('Servidor inacessivel: nao foi possivel carregar o formulario. Verifique se o servidor esta ativo e volte a abrir.');
+        } else if (failed.length > 0) {
           setFormError('Nao foi possivel carregar: ' + failed.join(', ') + '. Feche e volte a abrir o formulario.');
         }
       } finally {

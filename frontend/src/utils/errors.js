@@ -4,6 +4,10 @@
 // this normalizes both shapes to avoid crashing React (objects are not
 // valid children) and to avoid showing raw error internals to the user.
 export function extractErrorMessage(err, fallback) {
+  // No answer at all (server stopped, network down): say so instead of each screen's generic message.
+  if (err && !err.response && err.request) {
+    return 'Servidor inacessivel - verifique a ligacao ou se o servidor esta ativo';
+  }
   const detail = err.response?.data?.detail;
 
   if (!detail) return fallback;
