@@ -332,7 +332,7 @@ async def ensure_period_open(db: AsyncSession, company_id: uuid.UUID, check_date
     if fiscal_year is None or fiscal_year.status != ABERTO:
         state = "esta fechado parcialmente" if fiscal_year is not None and fiscal_year.status == FECHO_PARCIAL else "nao esta aberto"
         raise PeriodClosedError(
-            f"O ano fiscal {check_date.year} {state}. Contacte o GESTOR para o abrir antes de faturar.{active_hint}"
+            f"O ano fiscal {check_date.year} {state}. Contacte o GESTOR para o abrir antes de continuar.{active_hint}"
         )
     period = (await db.execute(
         select(FiscalPeriod).where(FiscalPeriod.fiscal_year_id == fiscal_year.id, FiscalPeriod.month == check_date.month)
@@ -349,8 +349,8 @@ async def ensure_period_open(db: AsyncSession, company_id: uuid.UUID, check_date
         hint = active_hint.strip()
     else:
         next_month = await get_next_fiscal_month(db, fiscal_year.id)
-        hint = (f"Contacte o GESTOR para abrir o periodo de {MONTH_NAMES_PT[next_month]} de {fiscal_year.year} antes de faturar."
-                if next_month is not None else "Contacte o GESTOR para abrir o periodo antes de faturar.")
+        hint = (f"Contacte o GESTOR para abrir o periodo de {MONTH_NAMES_PT[next_month]} de {fiscal_year.year} antes de continuar."
+                if next_month is not None else "Contacte o GESTOR para abrir o periodo antes de continuar.")
     raise PeriodClosedError(f"O periodo de {label} nao esta aberto. {hint}")
 
 
