@@ -58,7 +58,6 @@ class MovementDocumentResponse(BaseModel):
     number: int
     movement_date: date
     description: str | None
-    total_quantity: float
     total_value: float
     created_at: datetime
 

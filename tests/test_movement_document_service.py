@@ -45,7 +45,6 @@ async def test_create_stock_movement_document_entrada_increases_stock(db, compan
 
     assert doc.series == f"ENT{doc.movement_date.year}"
     assert doc.number == 1
-    assert float(doc.total_quantity) == 15.0
     assert float(doc.total_value) == 3000.0  # 15 x 200 (purchase price, since ENTRADA)
 
     stock_result = await db.execute(select(Stock).where(Stock.product_id == product.id, Stock.warehouse_id == setup["activity_warehouse"].id))
@@ -115,7 +114,6 @@ async def test_a_reception_in_bags_moves_base_units(db, company_with_essentials)
     )
     stock = (await db.execute(select(Stock).where(Stock.product_id == product.id))).scalar_one()
     assert float(stock.quantity) == 50.0
-    assert float(doc.total_quantity) == 50.0
     from app.models.stock_movement_document import StockMovementDocumentLine
     line = (await db.execute(select(StockMovementDocumentLine).where(StockMovementDocumentLine.document_id == doc.id))).scalar_one()
     assert (float(line.quantity), float(line.unit_factor), line.unit_snapshot, line.sale_unit_id) == (2.0, 25.0, bag_code, bag_unit.id)

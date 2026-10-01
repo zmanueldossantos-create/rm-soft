@@ -116,7 +116,6 @@ async def create_stock_movement_document(
     series.current_number += 1
     next_number = series.current_number
 
-    total_quantity = 0.0
     total_value = 0.0
     line_objects = []
     is_entrada = movement_type.direction == MovementDirection.ENTRADA
@@ -143,7 +142,6 @@ async def create_stock_movement_document(
         line_value_price = purchase_price if is_entrada else sale_price
         line_total = round(quantity * line_value_price, 2)
 
-        total_quantity += base_quantity  # base units: bags and kilos are never added up
         total_value += line_total
 
         # Update the real stock quantity + write the audit ledger row - see module docstring.
@@ -193,7 +191,6 @@ async def create_stock_movement_document(
         number=next_number,
         movement_date=movement_date,
         description=description,
-        total_quantity=round(total_quantity, 3),
         total_value=round(total_value, 2),
     )
     db.add(document)
