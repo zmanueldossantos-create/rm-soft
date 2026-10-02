@@ -236,3 +236,12 @@ from app.services.product_service import BaseUnitLockedError as _BaseUnitLockedE
 @app.exception_handler(_BaseUnitLockedError)
 async def _base_unit_locked_handler(request: _Request, exc: _BaseUnitLockedError):
     return _JSONResponse(status_code=409, content={"detail": str(exc)})
+
+
+# A payment method used against its direction (money in / out): a clear 422.
+from app.services.invoice_service import PaymentMethodNotAllowedError as _PaymentMethodNotAllowedError  # noqa: E402
+
+
+@app.exception_handler(_PaymentMethodNotAllowedError)
+async def _payment_method_direction_handler(request: _Request, exc: _PaymentMethodNotAllowedError):
+    return _JSONResponse(status_code=422, content={"detail": str(exc)})

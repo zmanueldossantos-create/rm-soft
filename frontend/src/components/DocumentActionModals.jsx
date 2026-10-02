@@ -118,7 +118,7 @@ const DocumentActionModals = forwardRef(function DocumentActionModals({ onSucces
               </div>
               <div>
                 <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Metodo de pagamento *</label>
-                <Select value={rcPaymentMethodId} onChange={setRcPaymentMethodId} options={paymentMethods.map((m) => ({ value: m.id, label: m.name }))} placeholder="Selecionar" />
+                <Select value={rcPaymentMethodId} onChange={setRcPaymentMethodId} options={paymentMethods.filter((m) => m.allows_receipt !== false).map((m) => ({ value: m.id, label: m.name }))} placeholder="Selecionar" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">

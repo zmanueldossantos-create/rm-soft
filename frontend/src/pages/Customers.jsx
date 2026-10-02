@@ -569,7 +569,7 @@ export default function Customers() {
                   <Select value={form.paymentTermId} onChange={(v) => updateField('paymentTermId', v)} options={paymentTerms.map((t) => ({ value: t.id, label: t.name }))} placeholder="Selecionar" />
                 </Field>
                 <Field label="Método de pagamento">
-                  <Select value={form.paymentMethodId} onChange={(v) => updateField('paymentMethodId', v)} options={paymentMethods.map((m) => ({ value: m.id, label: m.name }))} placeholder="Selecionar" />
+                  <Select value={form.paymentMethodId} onChange={(v) => updateField('paymentMethodId', v)} options={paymentMethods.filter((m) => m.allows_receipt !== false).map((m) => ({ value: m.id, label: m.name }))} placeholder="Selecionar" />
                 </Field>
               </div>
               <Field label="Morada">

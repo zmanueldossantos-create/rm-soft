@@ -152,6 +152,25 @@ def _simulate_qr_payload(company_id: uuid.UUID, series: str, number: int, total:
     return f"A:SIMULATED*B:{company_id}*C:{series}/{number}*D:{total}*E:{atcud}"
 
 
+class PaymentMethodNotAllowedError(Exception):
+    """A payment method used against its direction (money in without allows_receipt, out without allows_payment)."""
+
+
+async def _ensure_methods_allowed(db: AsyncSession, method_ids, direction: str) -> None:
+    """
+    THE rule of a payment method by the direction of the money: 'in' (a sale, a receipt) needs allows_receipt,
+    'out' (a refund, later a supplier payment) needs allows_payment - the two boxes of the payment method catalog.
+    """
+    ids = {uuid.UUID(str(m)) for m in method_ids if m}
+    if not ids:
+        return
+    for method in (await db.execute(select(PaymentMethodCatalog).where(PaymentMethodCatalog.id.in_(ids)))).scalars().all():
+        if direction == 'in' and not method.allows_receipt:
+            raise PaymentMethodNotAllowedError(f"O metodo {method.name} nao pode ser usado para recebimentos")
+        if direction == 'out' and not method.allows_payment:
+            raise PaymentMethodNotAllowedError(f"O metodo {method.name} nao pode ser usado para pagamentos ou devolucoes")
+
+
 async def _exemption_code_for(db: AsyncSession, article, vat_rate: float) -> str | None:
     """Code of the exemption motive of a 0% article (M04, M11...), copied on the line like vat_rate_snapshot - the
     SAF-T needs it on every exempt line. Only official codes are kept: anything else (e.g. the catalog's "NA")
@@ -396,6 +415,7 @@ async def create_invoice(
     # Only reconcile when payments were actually supplied - see the auto-default above
     # for why an empty list is sometimes filled in before reaching this point.
     if payments:
+        await _ensure_methods_allowed(db, [p["payment_method_id"] for p in payments], "in")
         payments_sum = round(sum(float(p["amount"]) for p in payments), 2)
         if abs(payments_sum - cash_due_total) > 0.01:
             raise PaymentAmountMismatchError(
@@ -957,6 +977,8 @@ async def create_credit_note(
             amount = round(float(r["amount"]), 2)
             if method is None:
                 raise RefundNotAllowedError("Metodo de pagamento invalido ou inativo")
+            if not method.allows_payment:
+                raise RefundNotAllowedError(f"O metodo {method.name} nao pode ser usado para devolucoes")
             if amount <= 0:
                 raise RefundNotAllowedError("O valor a devolver deve ser maior que zero")
             refund_lines.append((method.id, amount, bool(method.is_cash)))
@@ -1415,6 +1437,7 @@ async def create_receipt(
             raise EmptyInvoiceError("Metodo de pagamento invalido")
     if method_id is None:
         method_id = (await db.execute(select(PaymentMethodCatalog.id).where(PaymentMethodCatalog.code == "NU"))).scalar_one_or_none()
+    await _ensure_methods_allowed(db, [method_id], "in")
     # Cash collected here goes into an explicitly chosen cash point (see _cash_point_session).
     cash_session_id = await _cash_point_session(
         db, company_id, cash_pos_id, cash_session_id, [method_id] if method_id else [], require_cash_point,

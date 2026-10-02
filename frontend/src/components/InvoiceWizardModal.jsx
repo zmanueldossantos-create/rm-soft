@@ -730,7 +730,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                           <div className="grid grid-cols-2 gap-3">
                             <div>
                               <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Metodo *</label>
-                              <Select value={refundMethodId} onChange={setRefundMethodId} options={paymentMethods.map((pm) => ({ value: pm.id, label: pm.name }))} placeholder="Selecionar" />
+                              <Select value={refundMethodId} onChange={setRefundMethodId} options={paymentMethods.filter((pm) => pm.allows_payment !== false).map((pm) => ({ value: pm.id, label: pm.name }))} placeholder="Selecionar" />
                             </div>
                             <div>
                               <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Valor a devolver *</label>
@@ -856,7 +856,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                     <div className="grid grid-cols-2 gap-4">
                       <div className={lockCls(!collectsPayment)}>
                         <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Metodo de pagamento</label>
-                        <Select value={paymentMethodId} onChange={setPaymentMethodId} options={paymentMethods.map((m) => ({ value: m.id, label: m.name }))} placeholder="Numerario" />
+                        <Select value={paymentMethodId} onChange={setPaymentMethodId} options={paymentMethods.filter((m) => m.allows_receipt !== false).map((m) => ({ value: m.id, label: m.name }))} placeholder="Numerario" />
                       </div>
                       <div className={lockCls(!collectsPayment || !methodUsesBank)}>
                         <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Conta bancaria</label>
