@@ -13,11 +13,6 @@ from app.models.warehouse import Warehouse
 from app.services.company_module_service import is_module_granted
 
 
-class ActivityAlreadyExistsError(Exception):
-    """Raised when the series_code already exists for this company."""
-    pass
-
-
 class ActivityNotFoundError(Exception):
     pass
 
@@ -25,30 +20,6 @@ class ActivityNotFoundError(Exception):
 class ModuleNotGrantedError(Exception):
     """Raised when GESTOR tries to configure an Activity for a Module the company was not granted."""
     pass
-
-
-async def _generate_unique_legacy_series_code(db: AsyncSession, company_id: uuid.UUID, name: str) -> str:
-    base = "".join(ch for ch in name.upper() if ch.isalnum())[:3] or "ACT"
-    candidate = base
-    suffix = 1
-    while True:
-        try:
-            await _check_series_code_available(db, company_id, candidate)
-            return candidate
-        except SeriesCodeTakenError:
-            suffix += 1
-            candidate = f"{base}{suffix}"
-
-
-async def _check_series_code_available(
-    db: AsyncSession, company_id: uuid.UUID, series_code: str, exclude_id: uuid.UUID | None = None
-) -> None:
-    query = select(Activity).where(Activity.company_id == company_id, Activity.series_code == series_code)
-    if exclude_id is not None:
-        query = query.where(Activity.id != exclude_id)
-    result = await db.execute(query)
-    if result.scalar_one_or_none() is not None:
-        raise ActivityAlreadyExistsError("Ja existe uma atividade com este codigo de serie")
 
 
 async def list_activities(db: AsyncSession, company_id: uuid.UUID) -> list[Activity]:
@@ -59,15 +30,10 @@ async def list_activities(db: AsyncSession, company_id: uuid.UUID) -> list[Activ
 async def create_activity(
     db: AsyncSession, company_id: uuid.UUID, module_id: uuid.UUID, name: str,
 ) -> Activity:
-    """series_code is a legacy column kept only for backward DB
-    compatibility - they have NO effect on real invoice numbering (see
-    document_series_service.get_or_create_current_series, which is company+doctype+
-    year(+establishment) scoped, never per-activity). Auto-derived here so the caller
-    (and the Atividades screen) no longer needs to think about them at all."""
+    """Creates an activity of a module the company was granted, with its own point-of-sale warehouse and default
+    cash point. Invoice numbering never depends on the activity: it goes through document_series."""
     if not await is_module_granted(db, company_id, module_id):
         raise ModuleNotGrantedError("A empresa nao tem acesso a este modulo - contacte o administrador da plataforma")
-
-    series_code = await _generate_unique_legacy_series_code(db, company_id, name)
 
     # Stock is received centrally (Armazem Principal) and internally
     # transferred to this activity's own point-of-sale warehouse before
@@ -81,7 +47,6 @@ async def create_activity(
         module_id=module_id,
         warehouse_id=warehouse.id,
         name=name,
-        series_code=series_code,
     )
     db.add(activity)
     await db.commit()
@@ -111,8 +76,7 @@ async def get_activity_or_raise(db: AsyncSession, company_id: uuid.UUID, activit
 async def update_activity(
     db: AsyncSession, company_id: uuid.UUID, activity_id: uuid.UUID, name: str,
 ) -> Activity:
-    """series_code is legacy, unused for real invoice numbering - see
-    create_activity docstring. Only the name is actually editable here now."""
+    """Renames the activity."""
     activity = await get_activity_or_raise(db, company_id, activity_id)
     activity.name = name
     await db.commit()

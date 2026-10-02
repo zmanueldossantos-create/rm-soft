@@ -12,7 +12,7 @@ now; only Invoice numbering is activity-scoped via series_code.
 import uuid
 from datetime import datetime
 
-from sqlalchemy import String, Boolean, DateTime, ForeignKey, UniqueConstraint, func
+from sqlalchemy import String, Boolean, DateTime, ForeignKey, func
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import UUID
 
@@ -21,10 +21,6 @@ from app.core.database import Base
 
 class Activity(Base):
     __tablename__ = "activities"
-    __table_args__ = (
-        UniqueConstraint("company_id", "series_code", name="uq_activity_company_series_code"),
-    )
-
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     company_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("companies.id"), nullable=False, index=True)
     # Which catalog Module this activity represents - the company must have
@@ -36,15 +32,10 @@ class Activity(Base):
     # alongside the Activity - see activity_service.create_activity.
     warehouse_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("warehouses.id"), nullable=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)  # e.g. "Padaria", "Bar Central"
-    # Short uppercase code used as the SAF-T invoice series (InvoiceNo = "{type} {series}/{number}").
-    series_code: Mapped[str] = mapped_column(String(10), nullable=False)
-    # How many digits the sequential number is zero-padded to (e.g. 3 -> "001").
-    # Snapshotted onto each Invoice at creation time so past documents never
-    # reformat retroactively if this setting changes later.
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     def __repr__(self) -> str:
-        return f"<Activity {self.name} ({self.series_code})>"
+        return f"<Activity {self.name}>"

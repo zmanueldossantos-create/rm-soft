@@ -173,7 +173,7 @@ async def company_with_essentials(db):
 
     activity = Activity(
         company_id=company.id, module_id=module.id, warehouse_id=activity_warehouse.id,
-        name="Atividade Teste", series_code="TST",
+        name="Atividade Teste",
     )
     db.add(activity)
     await db.flush()  # get activity.id before creating its default POS

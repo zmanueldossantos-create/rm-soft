@@ -18,7 +18,6 @@ from app.services.activity_service import (
     create_activity,
     update_activity,
     toggle_activity_status,
-    ActivityAlreadyExistsError,
     ActivityNotFoundError,
     ModuleNotGrantedError,
 )
@@ -70,8 +69,6 @@ async def create_new_activity(
         )
     except ModuleNotGrantedError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
-    except ActivityAlreadyExistsError as e:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
 
 
 @router.patch("/{activity_id}", response_model=ActivityResponse)
@@ -84,8 +81,6 @@ async def edit_activity(
     """Updates an activity's name and series code."""
     try:
         return await update_activity(db, current_user.company_id, activity_id, payload.name)
-    except ActivityAlreadyExistsError as e:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except ActivityNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
