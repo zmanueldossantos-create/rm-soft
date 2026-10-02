@@ -22,7 +22,7 @@ def _line(code):
 
 def test_exempt_lines_carry_their_code_and_official_reason():
     doc = {
-        "invoice_type": "FACTURA", "series": "S1", "number": 1, "number_digits": 3,
+        "invoice_type": "FACTURA", "series": "S1", "number": 1, 
         "business_date": date(2026, 9, 20), "created_at": datetime(2026, 9, 20, 10, 0, 0),
         "atcud": "SIMUL-1", "invoice_hash": "SIMUL-abc", "subtotal": 300.0, "vat_total": 0.0, "total": 300.0,
         "customer_id": None, "lines": [_line("M11"), _line(None), _line("NA")],

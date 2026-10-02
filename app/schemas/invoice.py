@@ -94,7 +94,6 @@ class InvoiceResponse(BaseModel):
     invoice_type: str
     series: str
     number: int
-    number_digits: int
     business_date: date
     subtotal: float
     vat_total: float

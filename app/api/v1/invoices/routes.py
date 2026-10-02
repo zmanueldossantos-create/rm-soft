@@ -476,7 +476,6 @@ async def download_invoice_pdf(
         "invoice_type": INVOICE_TYPE_CODE.get(invoice.invoice_type.value, invoice.invoice_type.value),
         "series": invoice.series,
         "number": invoice.number,
-        "number_digits": invoice.number_digits,
         "business_date": str(invoice.business_date),
         "due_date": str(invoice.due_date) if invoice.due_date else None,
         "payment_date": str(invoice.payment_date) if invoice.payment_date else None,

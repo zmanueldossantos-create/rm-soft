@@ -14,7 +14,7 @@ NS = {"s": "urn:OECD:StandardAuditFile-Tax:AO_1.01_01"}
 def _doc(invoice_type, number, subtotal, vat, converted=False):
     total = subtotal + vat
     return {
-        "invoice_type": invoice_type, "series": "S1", "number": number, "number_digits": 3,
+        "invoice_type": invoice_type, "series": "S1", "number": number, 
         "business_date": date(2026, 9, 20), "created_at": datetime(2026, 9, 20, 10, 0, 0),
         "atcud": "SIMUL-1", "invoice_hash": "SIMUL-abc",
         "subtotal": subtotal, "vat_total": vat, "total": total, "customer_id": None, "converted": converted,

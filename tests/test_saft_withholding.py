@@ -23,7 +23,7 @@ def _line(retention_type=None, retention_amount=None, name=None):
 
 def _generate(lines):
     doc = {
-        "invoice_type": "FACTURA", "series": "S1", "number": 1, "number_digits": 3,
+        "invoice_type": "FACTURA", "series": "S1", "number": 1, 
         "business_date": date(2026, 9, 20), "created_at": datetime(2026, 9, 20, 10, 0, 0),
         "atcud": "SIMUL-1", "invoice_hash": "SIMUL-abc", "subtotal": 1000.0 * len(lines), "vat_total": 140.0 * len(lines),
         "total": 1140.0 * len(lines), "customer_id": None, "lines": lines,

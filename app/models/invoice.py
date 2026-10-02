@@ -81,8 +81,6 @@ class Invoice(Base):
     document_type_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("document_types.id"), nullable=True)
     series: Mapped[str] = mapped_column(String(30), nullable=False)
     number: Mapped[int] = mapped_column(nullable=False)
-    # Snapshotted from Activity.number_digits at creation time - see Activity model docstring.
-    number_digits: Mapped[int] = mapped_column(nullable=False, default=3)
     business_date: Mapped[date] = mapped_column(Date, nullable=False)  # TEMPORARY: today's date until POS session exists
     subtotal: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
     vat_total: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)

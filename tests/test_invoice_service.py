@@ -74,7 +74,7 @@ async def test_create_invoice_deducts_stock_from_activity_warehouse_not_central(
     assert float(stock.quantity) == 7  # 10 - 3
 
 
-async def test_create_invoice_uses_document_series_and_number_digits(db, company_with_essentials):
+async def test_create_invoice_uses_document_series(db, company_with_essentials):
     """Series now comes from DocumentSeries (Company default: MANUAL + auto_series_year on),
     not Activity.series_code - see the integration decision. Format is {DocType}{Year}
     (SAF-T requires the code stay unique per document type - a bare year is not enough)."""
@@ -94,8 +94,6 @@ async def test_create_invoice_uses_document_series_and_number_digits(db, company
     from datetime import date as _date
     assert invoice.series == f"FT{_date.today().year}"
     assert invoice.number == 1
-    assert invoice.number_digits == 3  # padding preference still comes from Activity
-    assert invoice.number_digits == 3  # snapshotted from Activity.number_digits at creation
 
 
 async def test_create_credit_note_full_marks_original_anulado(db, company_with_essentials):

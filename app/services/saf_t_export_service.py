@@ -112,7 +112,6 @@ async def export_saf_t_for_period(db: AsyncSession, company_id: uuid.UUID, year:
             "invoice_type": inv.invoice_type.value,
             "series": inv.series,
             "number": inv.number,
-            "number_digits": inv.number_digits,
             "business_date": inv.business_date,
             "created_at": inv.created_at.replace(tzinfo=None),
             "atcud": inv.atcud,

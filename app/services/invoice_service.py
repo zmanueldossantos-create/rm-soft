@@ -264,7 +264,6 @@ async def create_invoice(
 
     series = series_row.series_code
     document_type_id = doc_type.id
-    number_digits = activity.number_digits
 
     # Next sequential number for this series (never reused) - see DocumentSeries.current_number.
     next_number = await get_next_number(db, series_row)
@@ -471,7 +470,6 @@ async def create_invoice(
         issuance_mode=company.issuance_mode,
         series=series,
         number=next_number,
-        number_digits=number_digits,
         business_date=business_date,
         subtotal=subtotal_total,
         vat_total=vat_total,
@@ -1013,7 +1011,6 @@ async def create_credit_note(
         raise SeriesNotConfiguredError(f"A serie {series_row.series_code} para NC esta inativa")
 
     next_number = await get_next_number(db, series_row)
-    number_digits = activity.number_digits
 
     invoice_reference = f"NC {series_row.series_code}/{next_number}"
     atcud = _simulate_atcud(company_id, series_row.series_code, next_number)
@@ -1029,7 +1026,6 @@ async def create_credit_note(
         document_type_id=doc_type.id,
         series=series_row.series_code,
         number=next_number,
-        number_digits=number_digits,
         business_date=business_date,
         subtotal=subtotal_total,
         vat_total=vat_total,
@@ -1262,7 +1258,6 @@ async def create_debit_note(
     grand_total = round(subtotal_total + vat_total, 2)
 
     next_number = await get_next_number(db, series_row)
-    number_digits = activity.number_digits
 
     atcud = _simulate_atcud(company_id, series_row.series_code, next_number)
     invoice_hash = _simulate_hash(company_id, series_row.series_code, next_number, grand_total, business_date)
@@ -1277,7 +1272,6 @@ async def create_debit_note(
         document_type_id=doc_type.id,
         series=series_row.series_code,
         number=next_number,
-        number_digits=number_digits,
         business_date=business_date,
         subtotal=subtotal_total,
         vat_total=vat_total,
@@ -1396,7 +1390,6 @@ async def create_receipt(
         raise SeriesNotConfiguredError(f"A serie {series_row.series_code} para RC esta inativa")
 
     next_number = await get_next_number(db, series_row)
-    number_digits = activity.number_digits
     amount = round(amount, 2)
 
     atcud = _simulate_atcud(company_id, series_row.series_code, next_number)
@@ -1445,7 +1438,6 @@ async def create_receipt(
         document_type_id=doc_type.id,
         series=series_row.series_code,
         number=next_number,
-        number_digits=number_digits,
         business_date=business_date,
         subtotal=receipt_net,
         vat_total=receipt_vat,
@@ -1636,7 +1628,6 @@ async def create_pro_forma(
     grand_total = round(gross_total - global_discount_amount, 2)
 
     next_number = await get_next_number(db, series_row)
-    number_digits = activity.number_digits
 
     # Simulated only - a Pro-forma has no real ATCUD/hash, it is never submitted to AGT.
     atcud = _simulate_atcud(company_id, series_row.series_code, next_number)
@@ -1651,7 +1642,6 @@ async def create_pro_forma(
         document_type_id=doc_type.id,
         series=series_row.series_code,
         number=next_number,
-        number_digits=number_digits,
         business_date=business_date,
         subtotal=subtotal_total,
         vat_total=vat_total,

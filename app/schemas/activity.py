@@ -42,7 +42,6 @@ class ActivityResponse(BaseModel):
     module_id: uuid.UUID
     name: str
     series_code: str
-    number_digits: int
     is_active: bool
     created_at: datetime
 

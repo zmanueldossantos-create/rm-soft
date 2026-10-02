@@ -59,7 +59,7 @@ async def list_activities(db: AsyncSession, company_id: uuid.UUID) -> list[Activ
 async def create_activity(
     db: AsyncSession, company_id: uuid.UUID, module_id: uuid.UUID, name: str,
 ) -> Activity:
-    """series_code/number_digits are legacy columns kept only for backward DB
+    """series_code is a legacy column kept only for backward DB
     compatibility - they have NO effect on real invoice numbering (see
     document_series_service.get_or_create_current_series, which is company+doctype+
     year(+establishment) scoped, never per-activity). Auto-derived here so the caller
@@ -68,7 +68,6 @@ async def create_activity(
         raise ModuleNotGrantedError("A empresa nao tem acesso a este modulo - contacte o administrador da plataforma")
 
     series_code = await _generate_unique_legacy_series_code(db, company_id, name)
-    number_digits = 3
 
     # Stock is received centrally (Armazem Principal) and internally
     # transferred to this activity's own point-of-sale warehouse before
@@ -83,7 +82,6 @@ async def create_activity(
         warehouse_id=warehouse.id,
         name=name,
         series_code=series_code,
-        number_digits=number_digits,
     )
     db.add(activity)
     await db.commit()
@@ -113,7 +111,7 @@ async def get_activity_or_raise(db: AsyncSession, company_id: uuid.UUID, activit
 async def update_activity(
     db: AsyncSession, company_id: uuid.UUID, activity_id: uuid.UUID, name: str,
 ) -> Activity:
-    """series_code/number_digits are legacy, unused for real invoice numbering - see
+    """series_code is legacy, unused for real invoice numbering - see
     create_activity docstring. Only the name is actually editable here now."""
     activity = await get_activity_or_raise(db, company_id, activity_id)
     activity.name = name

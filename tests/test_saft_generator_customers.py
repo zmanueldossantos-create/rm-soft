@@ -18,7 +18,7 @@ def _customer(cid, nif, name):
 
 def _invoice(customer_id):
     return {
-        "invoice_type": "FACTURA", "series": "FT1S1N", "number": 1, "number_digits": 3,
+        "invoice_type": "FACTURA", "series": "FT1S1N", "number": 1, 
         "business_date": date(2026, 9, 20), "created_at": datetime(2026, 9, 20, 10, 0, 0),
         "atcud": "SIMUL-1", "invoice_hash": "SIMUL-abc",
         "subtotal": 1000.0, "vat_total": 140.0, "total": 1140.0,

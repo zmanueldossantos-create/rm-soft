@@ -14,7 +14,7 @@ NS = {"s": "urn:OECD:StandardAuditFile-Tax:AO_1.01_01"}
 
 def _receipt(number, methods=None, withholding=None, reference="FT S1/1"):
     return {
-        "invoice_type": "RECIBO", "series": "RC1", "number": number, "number_digits": 3,
+        "invoice_type": "RECIBO", "series": "RC1", "number": number, 
         "business_date": date(2026, 9, 20), "created_at": datetime(2026, 9, 20, 10, 0, 0),
         "atcud": "SIMUL-1", "invoice_hash": "SIMUL-abc",
         "subtotal": 2000.0, "vat_total": 280.0, "total": 2280.0, "customer_id": None, "lines": [],
