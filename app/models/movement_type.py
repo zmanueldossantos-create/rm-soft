@@ -35,3 +35,9 @@ class MovementType(Base):
 
     def __repr__(self) -> str:
         return f"<MovementType {self.code}>"
+
+# Case-insensitive uniqueness (migration h1k8l3m72x04): no duplicate whatever the case. Declared here too, so a
+# database built from the models (tests, new installs) has the same protection as a migrated one.
+from sqlalchemy import Index as _Index, func as _func  # noqa: E402
+
+_Index("uq_movement_types_code_ci", _func.lower(MovementType.code), unique=True)

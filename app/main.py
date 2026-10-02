@@ -245,3 +245,16 @@ from app.services.invoice_service import PaymentMethodNotAllowedError as _Paymen
 @app.exception_handler(_PaymentMethodNotAllowedError)
 async def _payment_method_direction_handler(request: _Request, exc: _PaymentMethodNotAllowedError):
     return _JSONResponse(status_code=422, content={"detail": str(exc)})
+
+
+# A refusal of the database no route caught: a duplicate (unique index, case-insensitive on catalogs) or a missing /
+# still-used related record - a clear 409 instead of a 500.
+from sqlalchemy.exc import IntegrityError as _IntegrityError  # noqa: E402
+
+
+@app.exception_handler(_IntegrityError)
+async def _integrity_handler(request: _Request, exc: _IntegrityError):
+    text = str(exc.orig)
+    if 'UniqueViolation' in repr(exc.orig) or 'duplicate key' in text or 'unique constraint' in text:
+        return _JSONResponse(status_code=409, content={"detail": "Ja existe um registo com este codigo ou nome."})
+    return _JSONResponse(status_code=409, content={"detail": "Operacao recusada: dados relacionados em falta ou ainda em uso."})

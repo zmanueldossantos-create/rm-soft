@@ -43,3 +43,9 @@ class PaymentMethodCatalog(Base):
 
     def __repr__(self) -> str:
         return f"<PaymentMethodCatalog {self.code} - {self.name}>"
+
+# Case-insensitive uniqueness (migration h1k8l3m72x04): no duplicate whatever the case. Declared here too, so a
+# database built from the models (tests, new installs) has the same protection as a migrated one.
+from sqlalchemy import Index as _Index, func as _func  # noqa: E402
+
+_Index("uq_payment_methods_code_ci", _func.lower(PaymentMethodCatalog.code), unique=True)

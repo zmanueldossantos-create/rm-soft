@@ -26,3 +26,9 @@ class PaymentTerm(Base):
 
     def __repr__(self) -> str:
         return f"<PaymentTerm {self.name}>"
+
+# Case-insensitive uniqueness (migration h1k8l3m72x04): no duplicate whatever the case. Declared here too, so a
+# database built from the models (tests, new installs) has the same protection as a migrated one.
+from sqlalchemy import Index as _Index, func as _func  # noqa: E402
+
+_Index("uq_payment_terms_name_ci", _func.lower(PaymentTerm.name), unique=True)
