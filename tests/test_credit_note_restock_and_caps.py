@@ -597,8 +597,7 @@ async def test_a_fatura_from_invoicing_needs_its_mandatory_payment_term(db, comp
     ids = _ids(company_with_essentials)
     product_id = await _product_in_stock(db, ids, "PRD-PT2")
     from app.services.document_rules import get_document_rules
-    if not (await get_document_rules(db, "FT")).code:
-        pytest.skip("no FT rules")
+    assert (await get_document_rules(db, "FT")).code, "the FT document rules are missing from the test database"
     from app.models.document_type import DocumentType
     ft = (await db.execute(select(DocumentType).where(DocumentType.code == "FT"))).scalar_one()
     ft.requires_payment_term = True
