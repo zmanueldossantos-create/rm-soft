@@ -5,7 +5,7 @@ import Select from '../components/Select';
 import { getMyCompany, updateMyCompanyContact, uploadMyCompanyLogo, removeMyCompanyLogo, getMyCompanyBankAccounts, addMyCompanyBankAccount, updateMyCompanyBankAccount, toggleMyCompanyBankAccountStatus } from '../api/company';
 import { listEstablishments, createEstablishment, updateEstablishment, toggleEstablishmentStatus } from '../api/establishments';
 import { countriesApi, provincesApi, municipalitiesApi, currenciesApi, banksApi, documentTypesApi } from '../api/catalogs';
-import { listDocumentSeries, createDocumentSeries, updateDocumentSeries, toggleDocumentSeriesStatus } from '../api/documentSeries';
+import { listDocumentSeries, createDocumentSeries, updateDocumentSeries, toggleDocumentSeriesStatus, getAllowedSeriesYears } from '../api/documentSeries';
 import { listActivities, createActivity, updateActivity, toggleActivityStatus, listPointsOfSale, createPointOfSale, updatePointOfSale, togglePosStatus } from '../api/activity';
 import apiClient from '../api/client';
 import { extractErrorMessage } from '../utils/errors';
@@ -64,6 +64,10 @@ export default function CompanySettings() {
   const [secondaryCurrencyId, setSecondaryCurrencyId] = useState('');
   const [usesInvoicing, setUsesInvoicing] = useState(true);
   const [autoSeriesYear, setAutoSeriesYear] = useState(true);
+  const [allowedSeriesYears, setAllowedSeriesYears] = useState([]); // AGT: the next year too after 15 December
+  useEffect(() => {
+    getAllowedSeriesYears().then((d) => setAllowedSeriesYears(d.years || [])).catch(() => setAllowedSeriesYears([]));
+  }, []);
   const [allowsFutureSaleDate, setAllowsFutureSaleDate] = useState(false);
   const [saleUnitChecks, setSaleUnitChecks] = useState({ sale_unit_check_above_base: 'warn', sale_unit_check_below_cost: 'warn', sale_unit_check_same_factor: 'warn' });
   const [suggestsLastDocumentDate, setSuggestsLastDocumentDate] = useState(false);
@@ -121,7 +125,7 @@ export default function CompanySettings() {
   const [seriesTogglingId, setSeriesTogglingId] = useState(null);
   const [seriesFormOpen, setSeriesFormOpen] = useState(false);
   const [editingSeriesId, setEditingSeriesId] = useState(null);
-  const emptySeriesForm = { documentTypeId: '', establishmentId: '', seriesCode: '', description: '', contingencyIndicator: 'NORMAL', isPredefined: true, todosFacturacao: false, todosTesouraria: false, todosCompras: false };
+  const emptySeriesForm = { year: '', documentTypeId: '', establishmentId: '', seriesCode: '', description: '', contingencyIndicator: 'NORMAL', isPredefined: true, todosFacturacao: false, todosTesouraria: false, todosCompras: false };
   const [seriesForm, setSeriesForm] = useState(emptySeriesForm);
   const [seriesSaving, setSeriesSaving] = useState(false);
   const [seriesFormError, setSeriesFormError] = useState('');
@@ -416,6 +420,7 @@ export default function CompanySettings() {
       } else {
         const isTodos = seriesForm.documentTypeId === '__TODOS__';
         await createDocumentSeries({
+          year: seriesForm.year ? Number(seriesForm.year) : null,
           document_type_id: isTodos ? null : seriesForm.documentTypeId,
           establishment_id: issuanceMode === 'ELETRONICA' ? (seriesForm.establishmentId || null) : null,
           series_code: issuanceMode === 'MANUAL' && !autoSeriesYear ? seriesForm.seriesCode : null,
@@ -1143,6 +1148,12 @@ export default function CompanySettings() {
 
       <Modal open={seriesFormOpen} onClose={() => setSeriesFormOpen(false)} title={editingSeriesId ? "Editar série de facturação" : "Nova série de facturação"}>
         <form onSubmit={handleSeriesSubmit} className="flex flex-col gap-4">
+          {allowedSeriesYears.length > 1 && !editingSeriesId && (
+            <div>
+              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Ano da serie *</label>
+              <Select value={seriesForm.year || ''} onChange={(v) => setSeriesForm((p) => ({ ...p, year: v }))} options={allowedSeriesYears.map((y) => ({ value: String(y), label: String(y) }))} placeholder="Selecionar" />
+            </div>
+          )}
           {(() => {
             const currentYear = new Date().getFullYear();
             const isTodos = seriesForm.documentTypeId === '__TODOS__';
@@ -1231,7 +1242,7 @@ export default function CompanySettings() {
                 )}
                 <button
                   type="submit"
-                  disabled={seriesSaving || (!editingSeriesId && !seriesForm.documentTypeId) || (!editingSeriesId && issuanceMode === 'MANUAL' && !autoSeriesYear && !isTodos && !seriesForm.seriesCode) || (!editingSeriesId && issuanceMode === 'ELETRONICA' && !seriesForm.establishmentId)}
+                  disabled={seriesSaving || (allowedSeriesYears.length > 1 && !editingSeriesId && !seriesForm.year) || (!editingSeriesId && !seriesForm.documentTypeId) || (!editingSeriesId && issuanceMode === 'MANUAL' && !autoSeriesYear && !isTodos && !seriesForm.seriesCode) || (!editingSeriesId && issuanceMode === 'ELETRONICA' && !seriesForm.establishmentId)}
                   className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer"
                 >
                   {seriesSaving ? <Loader2 size={17} className="animate-spin" /> : <Plus size={17} />}

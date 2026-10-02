@@ -91,3 +91,13 @@ async def patch_series(
         return await update_series(db, current_user.company_id, series_id, payload.description, payload.contingency_indicator, payload.is_predefined)
     except SeriesNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+
+@router.get("/allowed-years")
+async def get_allowed_series_years(
+    current_user: User = Depends(require_permission("document_series:manage")),
+):
+    """The years a series can be created for (the AGT rule: the next year too after 15 December)."""
+    from app.services.document_series_service import allowed_series_years
+    return {"years": allowed_series_years()}

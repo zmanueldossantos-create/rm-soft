@@ -58,6 +58,23 @@ class TodosNotAllowedInElectronicError(Exception):
     pass
 
 
+class SeriesYearNotAllowedError(Exception):
+    """A series asked for a year the AGT does not allow yet (or any more)."""
+
+
+def allowed_series_years(today: date | None = None) -> list[int]:
+    """
+    THE AGT rule (field seriesYear of solicitarSerie): from 1 January to 15 December a series can only be created for
+    the current year; after 15 December, also for the next one. Applied in both issuance modes, so a manual series
+    is never prepared for a year the AGT would refuse.
+    """
+    today = today or date.today()
+    years = [today.year]
+    if (today.month, today.day) > (12, 15):
+        years.append(today.year + 1)
+    return years
+
+
 def _current_year() -> int:
     return date.today().year
 
@@ -165,7 +182,10 @@ async def create_series(
     active document type matching the todos_* area toggles, all sharing the same
     series_code/description/dates. Returns the list of series rows created.
     """
-    year = year or _current_year()
+    year = year or _current_year()
+    allowed = allowed_series_years()
+    if year not in allowed:
+        raise SeriesYearNotAllowedError("So e possivel criar series para " + " ou ".join(str(y) for y in allowed))
 
     if document_type_id is None:
         if company.issuance_mode == "ELETRONICA":

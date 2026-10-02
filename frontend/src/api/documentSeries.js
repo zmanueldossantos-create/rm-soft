@@ -20,3 +20,9 @@ export async function updateDocumentSeries(seriesId, payload) {
   const res = await apiClient.patch('/document-series/' + seriesId, payload);
   return res.data;
 }
+
+// The years a series can be created for (AGT: the next year too after 15 December).
+export async function getAllowedSeriesYears() {
+  const res = await apiClient.get('/document-series/allowed-years');
+  return res.data;
+}

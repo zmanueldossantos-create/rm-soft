@@ -267,3 +267,12 @@ from app.services.point_of_sale_service import PosStateError as _PosStateError  
 @app.exception_handler(_PosStateError)
 async def _pos_state_handler(request: _Request, exc: _PosStateError):
     return _JSONResponse(status_code=409, content={"detail": str(exc)})
+
+
+# A series asked for a year the AGT does not allow: a clear 422.
+from app.services.document_series_service import SeriesYearNotAllowedError as _SeriesYearNotAllowedError  # noqa: E402
+
+
+@app.exception_handler(_SeriesYearNotAllowedError)
+async def _series_year_handler(request: _Request, exc: _SeriesYearNotAllowedError):
+    return _JSONResponse(status_code=422, content={"detail": str(exc)})
