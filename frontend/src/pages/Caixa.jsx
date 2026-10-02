@@ -2130,8 +2130,9 @@ export default function Caixa() {
                     <tr className="border-b border-border text-[10px] font-semibold text-text-muted uppercase tracking-wide">
                       <th className="text-left px-2.5 py-2">Documento</th>
                       <th className="text-left px-2.5 py-2">Data</th>
-                      <th className="text-right px-2.5 py-2">Total</th>
+                      <th className="text-right px-2.5 py-2">Sem IVA</th>
                       <th className="text-right px-2.5 py-2">IVA</th>
+                      <th className="text-right px-2.5 py-2">Total</th>
                       <th className="text-right px-2.5 py-2">Retencao</th>
                       <th className="text-right px-2.5 py-2">Recebido</th>
                       <th className="text-right px-2.5 py-2">A pagar</th>
@@ -2143,8 +2144,9 @@ export default function Caixa() {
                       <tr key={inv.id} className="border-b border-border last:border-0 hover:bg-bg-inset">
                         <td className="px-2.5 py-2 font-mono text-text-primary whitespace-nowrap">{DOC_CODE_BY_TYPE[inv.invoice_type] || inv.invoice_type} {inv.series}/{inv.number}</td>
                         <td className="px-2.5 py-2 text-text-muted whitespace-nowrap">{new Date(inv.business_date).toLocaleDateString('pt-PT')}</td>
-                        <td className="px-2.5 py-2 text-right font-mono text-text-primary whitespace-nowrap">{formatKz(inv.total)} Kz</td>
+                        <td className="px-2.5 py-2 text-right font-mono text-text-muted whitespace-nowrap">{formatKz(Number(inv.total) - Number(inv.vat_total))} Kz</td>
                         <td className="px-2.5 py-2 text-right font-mono text-text-muted whitespace-nowrap">{formatKz(inv.vat_total)} Kz</td>
+                        <td className="px-2.5 py-2 text-right font-mono text-text-primary whitespace-nowrap">{formatKz(inv.total)} Kz</td>
                         <td className="px-2.5 py-2 text-right font-mono text-text-muted whitespace-nowrap">{Number(inv.retention_total) > 0 ? formatKz(inv.retention_total) + ' Kz' : '-'}</td>
                         <td className={'px-2.5 py-2 text-right font-mono whitespace-nowrap ' + (Number(inv.amount_paid) < 0 ? 'text-danger' : 'text-text-muted')} title={Number(inv.amount_paid) < 0 ? 'Reembolsado' : undefined}>{Number(inv.amount_paid) > 0 ? formatKz(inv.amount_paid) + ' Kz' : Number(inv.amount_paid) < 0 ? '-' + formatKz(-Number(inv.amount_paid)) + ' Kz' : '-'}</td>
                         <td className="px-2.5 py-2 text-right font-mono whitespace-nowrap">
