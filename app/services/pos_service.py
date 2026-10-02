@@ -143,3 +143,44 @@ async def liquidate_pending_invoice(
         payments=payments,
     )
     return invoice
+
+
+
+async def get_pos_stock(db: AsyncSession, company_id: uuid.UUID, pos_id: uuid.UUID) -> dict:
+    """
+    The stock a point of sale sells from - its activity's warehouse: the quantity of every product managed by stock
+    (0 when it has no stock row yet), whether the warehouse allows a negative stock, and whether its exits are blocked.
+    Products not managed by stock are absent: the till never checks them. The till warns with it before checkout;
+    the server's own stock rule still decides at checkout.
+    """
+    from sqlalchemy import select
+    from app.models.activity import Activity
+    from app.models.point_of_sale import PointOfSale
+    from app.models.product import Product
+    from app.models.stock import Stock
+    from app.models.warehouse import Warehouse
+
+    empty = {"warehouse_id": None, "allow_negative_stock": True, "exits_blocked": False, "stock": {}}
+    pos = (await db.execute(
+        select(PointOfSale).where(PointOfSale.id == pos_id, PointOfSale.company_id == company_id)
+    )).scalar_one_or_none()
+    if pos is None:
+        return empty
+    activity = (await db.execute(select(Activity).where(Activity.id == pos.activity_id))).scalar_one_or_none()
+    if activity is None or activity.warehouse_id is None:
+        return empty
+    warehouse = (await db.execute(select(Warehouse).where(Warehouse.id == activity.warehouse_id))).scalar_one()
+    managed = (await db.execute(
+        select(Product.id).where(
+            Product.company_id == company_id, Product.is_active.is_(True), Product.managed_by_stock.is_(True),
+        )
+    )).scalars().all()
+    quantities = dict((await db.execute(
+        select(Stock.product_id, Stock.quantity).where(Stock.warehouse_id == warehouse.id)
+    )).all())
+    return {
+        "warehouse_id": str(warehouse.id),
+        "allow_negative_stock": bool(warehouse.allow_negative_stock),
+        "exits_blocked": bool(getattr(warehouse, "saidas_bloqueadas", False)),
+        "stock": {str(pid): float(quantities.get(pid, 0) or 0) for pid in managed},
+    }

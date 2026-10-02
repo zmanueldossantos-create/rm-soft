@@ -266,3 +266,15 @@ async def get_pos_documents(
 ):
     """Documents shown by the Caixa: those of this cash point's sessions, plus the invoices still awaiting a payment."""
     return await list_pos_documents(db, current_user.company_id, pos_id, min(max(limit, 1), 100))
+
+
+
+@router.get("/stock")
+async def get_stock_of_point_of_sale(
+    pos_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("pos:view")),
+):
+    """The stock the point of sale sells from (its activity's warehouse), for the till to warn before checkout."""
+    from app.services.pos_service import get_pos_stock
+    return await get_pos_stock(db, current_user.company_id, pos_id)

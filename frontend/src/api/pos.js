@@ -85,3 +85,9 @@ export async function liquidatePendingInvoice(posId, proFormaId, targetInvoiceTy
   });
   return res.data;
 }
+
+// The stock the point of sale sells from (its activity's warehouse), for the till to warn before checkout.
+export async function getPosStock(posId) {
+  const res = await apiClient.get('/pos/stock', { params: { pos_id: posId } });
+  return res.data;
+}

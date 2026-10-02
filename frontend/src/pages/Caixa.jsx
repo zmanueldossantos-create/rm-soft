@@ -8,7 +8,7 @@ import { listVatRates } from '../api/vat';
 import { withholdingTaxesApi, paymentTermsApi } from '../api/catalogs';
 import useDocumentRules, { DOC_CODE_BY_TYPE } from '../utils/documentRules';
 import { getMyCompanyBankAccounts } from '../api/company';
-import { createProFormaFromPos } from '../api/pos';
+import { createProFormaFromPos, getPosStock } from '../api/pos';
 import { listPaymentMethodPreferences } from '../api/tesouraria';
 import { Wallet, Plus, Minus, Trash2, Loader2, Search, X, ShoppingCart, LogOut, CheckCircle2, FileSearch, ArrowLeftRight, Coins, Receipt, Printer, FileText } from 'lucide-react';
 import Modal from '../components/Modal';
@@ -612,7 +612,35 @@ export default function Caixa() {
 
   // saleUnit: one of the product's sale units (a box of 30) - the line sells that unit at its price, the server takes
   // quantity x factor out of stock. The same product in two units makes two cart lines.
+  // The stock the till sells from (its activity's warehouse), reloaded after each sale: an addition beyond it is
+  // refused at once when the warehouse allows no negative stock (the server's rule still decides at checkout).
+  const [posStock, setPosStock] = useState(null);
+  useEffect(() => {
+    if (!session?.pos_id) {
+      setPosStock(null);
+      return;
+    }
+    getPosStock(session.pos_id).then(setPosStock).catch(() => setPosStock(null));
+  }, [session?.pos_id, lastInvoice]);
+
+  function stockRefusal(item, saleUnit) {
+    const available = posStock?.stock?.[item.id];
+    if (available === undefined || (posStock.allow_negative_stock && !posStock.exits_blocked)) return '';
+    const factorOf = (line) => Number((line.saleUnits || []).find((u) => u.id === line.saleUnitId)?.factor || 1);
+    const inCart = cart.filter((l) => l.productId === item.id).reduce((sum, l) => sum + l.quantity * factorOf(l), 0);
+    const requested = inCart + (saleUnit ? Number(saleUnit.factor) : 1);
+    if (requested <= available + 1e-9) return '';
+    return 'Stock insuficiente: ' + Math.max(available, 0).toLocaleString('pt-PT', { maximumFractionDigits: 3 }) + ' ' + (item.unit_of_measure_code || 'UN') + ' disponiveis';
+  }
+
   function addToCart(item, isService = false, saleUnit = null) {
+    if (!isService) {
+      const refusal = stockRefusal(item, saleUnit);
+      if (refusal) {
+        setError(refusal);
+        return;
+      }
+    }
     if (isService && (item.price === null || item.price === undefined)) {
       setError('Este servico nao tem preco definido - configure um preco antes de o vender');
       return;
