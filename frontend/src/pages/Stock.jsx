@@ -5,7 +5,7 @@ import MovementForm from '../components/MovementForm';
 import PostingPeriodSelect from '../components/PostingPeriodSelect';
 import UnitBreakdown from '../components/UnitBreakdown';
 import Select from '../components/Select';
-import { listStockLevels, receiveStock, adjustStock, transferStock, recordStockLoss, listWarehouses, createWarehouse, updateWarehouseFull, toggleWarehouseStatus } from '../api/stock';
+import { listStockLevels, adjustStock, transferStock, recordStockLoss, listWarehouses, createWarehouse, updateWarehouseFull, toggleWarehouseStatus } from '../api/stock';
 import { provincesApi, municipalitiesApi } from '../api/catalogs';
 import { listProducts } from '../api/products';
 import { extractErrorMessage } from '../utils/errors';
@@ -313,24 +313,6 @@ export default function Stock() {
     setFormError('');
     setFormSuccess('');
     setAdjustModalOpen(true);
-  }
-
-  async function handleReceiveSubmit(e) {
-    e.preventDefault();
-    setFormError('');
-    setSaving(true);
-    try {
-      await receiveStock(selectedProductId, parseFloat(quantity), reason || null);
-      setSelectedProductId('');
-      setQuantity(''); setCountLines(EMPTY_COUNT);
-      setReason('');
-      setFormSuccess('Receção registada com sucesso.');
-      await loadLevels(selectedWarehouseId);
-    } catch (err) {
-      setFormError(extractErrorMessage(err, 'Erro ao registar receção'));
-    } finally {
-      setSaving(false);
-    }
   }
 
   async function handleTransferSubmit(e) {

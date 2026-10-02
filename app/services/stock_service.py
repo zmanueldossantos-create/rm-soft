@@ -201,6 +201,8 @@ async def _get_or_create_stock_row(db: AsyncSession, company_id: uuid.UUID, prod
     return stock
 
 
+# Used by the tests only, to seed a company's central warehouse: the application receives stock through
+# movement documents (Registar Rececao), the old /stock/receive route is gone.
 async def receive_stock(
     db: AsyncSession,
     company_id: uuid.UUID,

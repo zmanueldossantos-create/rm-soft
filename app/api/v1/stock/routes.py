@@ -17,7 +17,6 @@ from app.api.deps import require_permission
 from app.models.user import User
 from app.schemas.stock import (
     StockLevelResponse,
-    StockReceiveRequest,
     StockAdjustRequest,
     StockTransferRequest,
     StockLossRequest,
@@ -35,7 +34,6 @@ from app.services.stock_service import (
     update_warehouse,
     toggle_warehouse_status,
     CentralWarehouseNotEditableError,
-    receive_stock,
     adjust_stock,
     transfer_stock,
     record_stock_loss,
@@ -110,25 +108,6 @@ async def get_movements_available_periods(
 ):
     """Returns the distinct (year, month) pairs that have stock movements - populates the Ano/Mes filters."""
     return await get_movement_periods(db, current_user.company_id)
-
-
-@router.post("/receive", response_model=StockLevelResponse)
-async def post_receive_stock(
-    payload: StockReceiveRequest,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("stock:receive")),
-):
-    """Records incoming stock (purchase/production) into the CENTRAL warehouse."""
-    try:
-        await receive_stock(db, current_user.company_id, payload.product_id, payload.quantity, payload.reason, fiscal_period_id=payload.fiscal_period_id)
-        central = await get_default_warehouse(db, current_user.company_id)
-    except PeriodClosedError as e:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
-    except WarehouseNotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-
-    levels = await list_stock_levels(db, current_user.company_id, central.id)
-    return next(l for l in levels if l["product_id"] == payload.product_id)
 
 
 @router.post("/transfer", status_code=status.HTTP_204_NO_CONTENT)

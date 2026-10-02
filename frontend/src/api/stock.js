@@ -46,11 +46,6 @@ export async function getMovementPeriods() {
   return res.data;
 }
 
-export async function receiveStock(productId, quantity, reason) {
-  const res = await apiClient.post('/stock/receive', { product_id: productId, quantity, reason: reason || null });
-  return res.data;
-}
-
 export async function transferStock(fromWarehouseId, toWarehouseId, productId, quantity, reason, fiscalPeriodId = null, saleUnitId = null) {
   const res = await apiClient.post('/stock/transfer', {
     sale_unit_id: saleUnitId || null,

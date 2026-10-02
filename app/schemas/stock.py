@@ -3,8 +3,8 @@ Pydantic schemas for stock management.
 See specification v6/v7, section 5.1.
 Multi-warehouse (see stock_service module docstring): every request that
 touches a specific warehouse (adjust, transfer, loss, levels, movements)
-carries a warehouse_id - receive_stock always targets the CENTRAL
-warehouse implicitly (goods are always received centrally).
+carries a warehouse_id, receptions included: they go through movement documents,
+which name their warehouse explicitly.
 """
 import uuid
 from datetime import datetime
@@ -19,20 +19,6 @@ class StockLevelResponse(BaseModel):
     quantity: float
     min_stock_threshold: float
     is_low: bool
-
-
-class StockReceiveRequest(BaseModel):
-    fiscal_period_id: uuid.UUID | None = None  # internal entry: the active or the soft-closed period; empty = the active one
-    product_id: uuid.UUID
-    quantity: float
-    reason: str | None = None
-
-    @field_validator("quantity")
-    @classmethod
-    def validate_quantity(cls, v: float) -> float:
-        if v <= 0:
-            raise ValueError("Quantidade deve ser maior que zero")
-        return v
 
 
 class StockAdjustRequest(BaseModel):
