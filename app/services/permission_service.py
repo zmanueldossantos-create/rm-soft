@@ -46,8 +46,6 @@ PERMISSION_CATALOG: list[tuple[str, str, str, list[str]]] = [
     ("production:view", "Ver estimativa e historico de producao", "Producao", ["ARMAZENISTA"]),
     ("production:produce", "Registar producao", "Producao", ["ARMAZENISTA"]),
     ("movements:view", "Ver documentos de movimento de stock", "Movimentos de Stock", ["CAIXA"]),
-    ("movements:create", "Criar documentos de movimento de stock", "Movimentos de Stock", ["CAIXA"]),
-    ("movements:import", "Importar movimentos por Excel", "Movimentos de Stock", ["CAIXA"]),
     ("suppliers:view", "Ver fornecedores", "Fornecedores", ["ARMAZENISTA", "CONTABILISTA"]),
     ("suppliers:manage", "Criar e editar fornecedores", "Fornecedores", []),
     ("products:view", "Ver produtos", "Produtos", ["CAIXA", "ARMAZENISTA"]),

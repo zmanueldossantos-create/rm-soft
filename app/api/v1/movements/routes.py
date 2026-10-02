@@ -34,7 +34,7 @@ router = APIRouter(prefix="/api/v1/movements", tags=["movements"])
 async def create_movement_document(
     payload: MovementDocumentCreateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("movements:create")),
+    current_user: User = Depends(require_permission("stock:receive")),
 ):
     try:
         document = await create_stock_movement_document(
@@ -73,7 +73,7 @@ async def get_movement_documents(
 
 @router.get("/excel-template")
 async def download_movement_excel_template(
-    current_user: User = Depends(require_permission("movements:import")),
+    current_user: User = Depends(require_permission("stock:receive")),
 ):
     """Downloads a blank Excel template for automatic Entrada/Saida import."""
     content = generate_movement_excel_template()
