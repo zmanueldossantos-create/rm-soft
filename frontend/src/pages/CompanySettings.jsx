@@ -925,7 +925,7 @@ export default function CompanySettings() {
                                     <button onClick={() => openEditPos(p)} aria-label="Editar ponto de venda" className="inline-flex items-center justify-center w-7 h-7 rounded-md border border-border text-text-muted hover:text-text-primary hover:border-accent transition-colors cursor-pointer">
                                       <Pencil size={14} />
                                     </button>
-                                    <ToggleSwitch checked={p.is_active} disabled={posTogglingId === p.id || !!p.is_default} onChange={() => handleTogglePos(p.id, a.id)} />
+                                    <span title={p.is_default ? 'A caixa por defeito da atividade nao pode ser desativada' : undefined}><ToggleSwitch checked={p.is_active} disabled={posTogglingId === p.id || !!p.is_default} onChange={() => handleTogglePos(p.id, a.id)} /></span>
                                   </div>
                                 </div>
                               ))}

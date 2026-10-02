@@ -258,3 +258,12 @@ async def _integrity_handler(request: _Request, exc: _IntegrityError):
     if 'UniqueViolation' in repr(exc.orig) or 'duplicate key' in text or 'unique constraint' in text:
         return _JSONResponse(status_code=409, content={"detail": "Ja existe um registo com este codigo ou nome."})
     return _JSONResponse(status_code=409, content={"detail": "Operacao recusada: dados relacionados em falta ou ainda em uso."})
+
+
+# A point of sale used against its state (inactive, or deactivated with an open session): a clear 409.
+from app.services.point_of_sale_service import PosStateError as _PosStateError  # noqa: E402
+
+
+@app.exception_handler(_PosStateError)
+async def _pos_state_handler(request: _Request, exc: _PosStateError):
+    return _JSONResponse(status_code=409, content={"detail": str(exc)})

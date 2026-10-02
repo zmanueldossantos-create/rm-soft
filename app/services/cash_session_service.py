@@ -99,6 +99,9 @@ async def open_session(
     await ensure_period_open(db, company_id, date.today())
     await require_cash_point_access(db, company_id, opened_by_user, pos_id)
     pos = await get_pos_or_raise(db, company_id, pos_id)
+    if not pos.is_active:
+        from app.services.point_of_sale_service import PosStateError
+        raise PosStateError(f"O ponto de venda {pos.name} esta inativo")
     opened_by_user_id = opened_by_user.id
 
     existing = await get_open_session(db, company_id, pos_id)

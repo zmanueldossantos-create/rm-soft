@@ -93,10 +93,23 @@ async def update_point_of_sale(
     return pos
 
 
+class PosStateError(Exception):
+    """A point of sale used against its state: inactive for a new session, or deactivated with a session still open."""
+
+
 async def toggle_pos_status(db: AsyncSession, company_id: uuid.UUID, pos_id: uuid.UUID) -> PointOfSale:
     pos = await get_pos_or_raise(db, company_id, pos_id)
     if pos.is_default:
         raise DefaultPosNotModifiableError("A caixa por defeito da atividade nao pode ser desativada")
+    if pos.is_active:
+        # An inactive point of sale cannot open a session: deactivating one with an open session would leave the drawer
+        # uncounted - close it first.
+        from app.models.cash_session import CashSession, CashSessionStatus
+        open_session = (await db.execute(
+            select(CashSession.id).where(CashSession.pos_id == pos.id, CashSession.status == CashSessionStatus.ABERTA)
+        )).first()
+        if open_session is not None:
+            raise PosStateError("Feche a sessao de caixa antes de desativar o ponto de venda")
     pos.is_active = not pos.is_active
     await db.commit()
     await db.refresh(pos)
