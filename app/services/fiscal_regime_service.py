@@ -13,6 +13,16 @@ class FiscalRegimeNotFoundError(Exception):
     pass
 
 
+class FiscalRegimeInvalidError(Exception):
+    """A regime whose settings contradict each other."""
+
+
+def _check_required_exemption(allows_ise: bool, required_exemption_id) -> None:
+    """A regime that imposes an exemption motive must allow exempt (ISE) rates - the motive goes on exempt lines only."""
+    if required_exemption_id is not None and not allows_ise:
+        raise FiscalRegimeInvalidError("Um regime com motivo de isencao obrigatorio tem de permitir a taxa ISE (isenta)")
+
+
 async def list_fiscal_regimes(db: AsyncSession) -> list[FiscalRegime]:
     result = await db.execute(select(FiscalRegime).order_by(FiscalRegime.name))
     return list(result.scalars().all())
@@ -27,7 +37,9 @@ async def create_fiscal_regime(
     allows_ise: bool,
     allows_int: bool,
     allows_out: bool,
+    required_exemption_id: uuid.UUID | None = None,
 ) -> FiscalRegime:
+    _check_required_exemption(allows_ise, required_exemption_id)
     regime = FiscalRegime(
         name=name,
         description=description,
@@ -36,6 +48,7 @@ async def create_fiscal_regime(
         allows_ise=allows_ise,
         allows_int=allows_int,
         allows_out=allows_out,
+        required_exemption_id=required_exemption_id,
     )
     db.add(regime)
     await db.commit()
@@ -61,7 +74,9 @@ async def update_fiscal_regime(
     allows_ise: bool,
     allows_int: bool,
     allows_out: bool,
+    required_exemption_id: uuid.UUID | None = None,
 ) -> FiscalRegime:
+    _check_required_exemption(allows_ise, required_exemption_id)
     regime = await get_fiscal_regime_or_raise(db, regime_id)
     regime.name = name
     regime.description = description
@@ -70,6 +85,7 @@ async def update_fiscal_regime(
     regime.allows_ise = allows_ise
     regime.allows_int = allows_int
     regime.allows_out = allows_out
+    regime.required_exemption_id = required_exemption_id
     await db.commit()
     await db.refresh(regime)
     return regime

@@ -11,6 +11,7 @@ Rather than hardcoding these categories and their allowed rates in code
 manages the list of regimes and which rates each one allows here - fully
 editable, and new regimes can be added without a code change.
 """
+from sqlalchemy import ForeignKey
 import uuid
 from datetime import datetime
 
@@ -41,6 +42,9 @@ class FiscalRegime(Base):
     # the category is permitted for that regime, not its percentage.
     allows_int: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     allows_out: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Exemption motive every exempt article must carry under this regime (M00 Simplificado, M04 Exclusao) - set
+    # by the SUPER_ADMIN, never written in the code; None = each article chooses its own motive.
+    required_exemption_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("vat_codes.id"), nullable=True)
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

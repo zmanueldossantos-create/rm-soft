@@ -6,7 +6,7 @@ export async function listFiscalRegimes() {
   return res.data;
 }
 
-export async function createFiscalRegime(name, description, allowsNor, allowsRed, allowsIse, allowsInt, allowsOut) {
+export async function createFiscalRegime(name, description, allowsNor, allowsRed, allowsIse, allowsInt, allowsOut, requiredExemptionId) {
   const res = await apiClient.post('/admin/fiscal-regimes', {
     name,
     description: description || null,
@@ -15,11 +15,12 @@ export async function createFiscalRegime(name, description, allowsNor, allowsRed
     allows_ise: allowsIse,
     allows_int: allowsInt,
     allows_out: allowsOut,
+    required_exemption_id: requiredExemptionId || null,
   });
   return res.data;
 }
 
-export async function updateFiscalRegime(regimeId, name, description, allowsNor, allowsRed, allowsIse, allowsInt, allowsOut) {
+export async function updateFiscalRegime(regimeId, name, description, allowsNor, allowsRed, allowsIse, allowsInt, allowsOut, requiredExemptionId) {
   const res = await apiClient.patch('/admin/fiscal-regimes/' + regimeId, {
     name,
     description: description || null,
@@ -28,6 +29,7 @@ export async function updateFiscalRegime(regimeId, name, description, allowsNor,
     allows_ise: allowsIse,
     allows_int: allowsInt,
     allows_out: allowsOut,
+    required_exemption_id: requiredExemptionId || null,
   });
   return res.data;
 }

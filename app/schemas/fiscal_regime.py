@@ -15,6 +15,7 @@ class FiscalRegimeCreateRequest(BaseModel):
     allows_ise: bool = True
     allows_int: bool = False
     allows_out: bool = False
+    required_exemption_id: uuid.UUID | None = None
 
     @field_validator("name")
     @classmethod
@@ -33,6 +34,7 @@ class FiscalRegimeUpdateRequest(BaseModel):
     allows_ise: bool
     allows_int: bool
     allows_out: bool
+    required_exemption_id: uuid.UUID | None = None
 
     @field_validator("name")
     @classmethod
@@ -52,6 +54,7 @@ class FiscalRegimeResponse(BaseModel):
     allows_ise: bool
     allows_int: bool
     allows_out: bool
+    required_exemption_id: uuid.UUID | None = None
     is_active: bool
     created_at: datetime
 

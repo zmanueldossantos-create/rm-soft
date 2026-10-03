@@ -244,7 +244,8 @@ async def create_new_fiscal_regime(
     """Creates a new fiscal regime with its allowed VAT rates."""
     return await create_fiscal_regime(
         db, payload.name, payload.description, payload.allows_nor, payload.allows_red, payload.allows_ise,
-        payload.allows_int, payload.allows_out,
+        payload.allows_int, payload.allows_out,
+        required_exemption_id=payload.required_exemption_id,
     )
 
 
@@ -259,7 +260,8 @@ async def edit_fiscal_regime(
     try:
         return await update_fiscal_regime(
             db, regime_id, payload.name, payload.description, payload.allows_nor, payload.allows_red, payload.allows_ise,
-            payload.allows_int, payload.allows_out,
+            payload.allows_int, payload.allows_out,
+            required_exemption_id=payload.required_exemption_id,
         )
     except FiscalRegimeNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))

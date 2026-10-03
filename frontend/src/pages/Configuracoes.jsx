@@ -13,8 +13,8 @@ import { listModules, createModule, updateModule, toggleModuleStatus } from '../
 
 const fiscalRegimesApi = {
   list: () => listFiscalRegimes(),
-  create: (p) => createFiscalRegime(p.name, p.description, p.allows_nor, p.allows_red, p.allows_ise, p.allows_int, p.allows_out),
-  update: (id, p) => updateFiscalRegime(id, p.name, p.description, p.allows_nor, p.allows_red, p.allows_ise, p.allows_int, p.allows_out),
+  create: (p) => createFiscalRegime(p.name, p.description, p.allows_nor, p.allows_red, p.allows_ise, p.allows_int, p.allows_out, p.required_exemption_id),
+  update: (id, p) => updateFiscalRegime(id, p.name, p.description, p.allows_nor, p.allows_red, p.allows_ise, p.allows_int, p.allows_out, p.required_exemption_id),
   toggle: (id) => toggleFiscalRegimeStatus(id),
 };
 
@@ -200,7 +200,13 @@ export default function Configuracoes() {
   const [provinces, setProvinces] = useState([]);
   const [currencies, setCurrencies] = useState([]);
 
-  const [activeCatalog, setActiveCatalog] = useState(null);
+  const [activeCatalog, setActiveCatalog] = useState(null);
+  // Active exemption motives, for the regime form's imposed motive (loaded when the regimes catalog is open).
+  const [exemptionMotives, setExemptionMotives] = useState([]);
+  useEffect(() => {
+    if (activeCatalog?.key !== 'fiscal_regimes') return;
+    vatCodesApi.list().then((data) => setExemptionMotives(Array.isArray(data) ? data : [])).catch(() => setExemptionMotives([]));
+  }, [activeCatalog]);
   const [items, setItems] = useState([]);
   const [itemsLoading, setItemsLoading] = useState(false);
   const [togglingId, setTogglingId] = useState(null);
@@ -287,7 +293,7 @@ export default function Configuracoes() {
       case 'movement_types': return { code: '', name: '', direction: 'ENTRADA', is_auto: false, description: '' };
       case 'units': return { code: '', name: '', fixed_factor: '', is_fractional: false };
       case 'withholding_taxes': return { name: '', rate: 0, tax_type: '' };
-      case 'fiscal_regimes': return { name: '', description: '', allows_nor: true, allows_red: true, allows_ise: true, allows_int: false, allows_out: false };
+      case 'fiscal_regimes': return { name: '', description: '', allows_nor: true, allows_red: true, allows_ise: true, allows_int: false, allows_out: false, required_exemption_id: '' };
       case 'modules': return { name: '', description: '' };
       case 'denominations': return { currency_id: '', value: '', denomination_type: 'NOTA' };
       default: return {};
@@ -565,6 +571,12 @@ export default function Configuracoes() {
               </label>
             ))}
           </div>
+          <Field label={'Motivo de isen\u00e7\u00e3o obrigat\u00f3rio'}>
+            <select value={form.required_exemption_id || ''} onChange={(e) => updateField('required_exemption_id', e.target.value)} className={inputClass}>
+              <option value="">{'Nenhum (cada artigo escolhe o seu motivo)'}</option>
+              {exemptionMotives.filter((x) => x.is_active).map((x) => <option key={x.id} value={x.id}>{x.code + ' - ' + x.name}</option>)}
+            </select>
+          </Field>
         </>
       );
     }

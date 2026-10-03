@@ -294,3 +294,12 @@ from app.services.catalog_service import ExemptionMotiveInvalidError as _Exempti
 @app.exception_handler(_ExemptionMotiveInvalidError)
 async def _exemption_motive_handler(request: _Request, exc: _ExemptionMotiveInvalidError):
     return _JSONResponse(status_code=422, content={"detail": str(exc)})
+
+
+# A regime whose settings contradict each other: a clear 422.
+from app.services.fiscal_regime_service import FiscalRegimeInvalidError as _FiscalRegimeInvalidError  # noqa: E402
+
+
+@app.exception_handler(_FiscalRegimeInvalidError)
+async def _fiscal_regime_handler(request: _Request, exc: _FiscalRegimeInvalidError):
+    return _JSONResponse(status_code=422, content={"detail": str(exc)})
