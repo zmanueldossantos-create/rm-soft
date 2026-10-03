@@ -61,6 +61,9 @@ class InvoiceLine(Base):
     # Code of the exemption motive (M04, M11...) of a 0% line, copied when the document is issued - the SAF-T
     # needs it (with its official reason) on every exempt line. Empty on a taxed line.
     exemption_code: Mapped[str | None] = mapped_column(String(3), nullable=True)
+    # Official reason of that motive (catalog vat_codes), copied with the code: a later edit of the catalog
+    # never changes an issued document.
+    exemption_reason_snapshot: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

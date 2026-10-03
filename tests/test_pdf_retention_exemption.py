@@ -7,7 +7,8 @@ from unittest.mock import patch
 
 from reportlab.pdfgen import canvas as rl_canvas
 
-from app.core.tax_exemptions import TAX_EXEMPTION_REASONS
+# Official reason of M11 (AGT exemption table), as the catalog gives it and the line records it when issued.
+M11_REASON = "Isento nos termos da al\u00ednea b) do n\u00ba1 do artigo 12.\u00ba do CIVA"
 from app.utils.pdf_generator import generate_invoice_pdf_a4, generate_invoice_pdf_thermal
 
 COMPANY = {
@@ -18,7 +19,7 @@ LINES = [
     {"code": "SRV-1", "unit": "UN", "product_name_snapshot": "Servico taxado", "quantity": 1.0, "unit_price": 100.0,
      "discount_percent": 0.0, "vat_rate_snapshot": 14.0, "line_subtotal": 100.0, "line_total": 114.0, "exemption_code": None},
     {"code": "SRV-2", "unit": "UN", "product_name_snapshot": "Servico isento", "quantity": 1.0, "unit_price": 100.0,
-     "discount_percent": 0.0, "vat_rate_snapshot": 0.0, "line_subtotal": 100.0, "line_total": 100.0, "exemption_code": "M11"},
+     "discount_percent": 0.0, "vat_rate_snapshot": 0.0, "line_subtotal": 100.0, "line_total": 100.0, "exemption_code": "M11", "exemption_reason": M11_REASON},
 ]
 
 
@@ -55,7 +56,7 @@ def test_a4_prints_the_withholding_and_the_official_exemption_reason():
     assert "Retencao na fonte" in seen and "Liquido a pagar" in seen
     assert "204.00" in seen  # 214 - 10
     assert "M11" in seen
-    assert "M11 - " + TAX_EXEMPTION_REASONS["M11"] in seen
+    assert "M11 - " + M11_REASON in seen
 
 
 def test_a4_without_withholding_prints_no_withholding_rows():
@@ -66,4 +67,4 @@ def test_a4_without_withholding_prints_no_withholding_rows():
 def test_ticket_prints_the_withholding_and_wraps_the_official_reason():
     seen = _texts(generate_invoice_pdf_thermal, _invoice(10.0))
     assert "Retencao:" in seen and "Liquido a pagar:" in seen
-    assert textwrap.wrap(TAX_EXEMPTION_REASONS["M11"], 28)[0] in seen
+    assert textwrap.wrap(M11_REASON, 28)[0] in seen

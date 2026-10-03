@@ -1,17 +1,21 @@
-"""The official exemption table respects the SAF-T XSD limits (code M + 2 digits, reason 6 to 60 characters)."""
-import re
+"""The SAF-T rule of an exemption motive (XSD: code M + 2 digits, reason of 6 to 60 characters) guards the catalog,
+the only source of the motives copied on exempt lines."""
+import pytest
 
-from app.core.tax_exemptions import TAX_EXEMPTION_REASONS, is_official_exemption_code
-
-
-def test_official_table_respects_the_xsd_limits():
-    assert len(TAX_EXEMPTION_REASONS) == 39
-    for code, reason in TAX_EXEMPTION_REASONS.items():
-        assert re.fullmatch(r"M[0-9]{2}", code), code
-        assert 6 <= len(reason) <= 60, (code, len(reason))
+from app.services.catalog_service import ExemptionMotiveInvalidError, check_exemption_motive
 
 
-def test_known_official_texts_and_the_invalid_na_code():
-    assert TAX_EXEMPTION_REASONS["M04"] == "IVA \u2013 Regime de Exclus\u00e3o"
-    assert TAX_EXEMPTION_REASONS["M02"] == "Transmiss\u00e3o de bens e servi\u00e7os n\u00e3o sujeita"
-    assert is_official_exemption_code("M11") and not is_official_exemption_code("NA") and not is_official_exemption_code(None)
+def test_a_valid_official_motive_passes():
+    check_exemption_motive("M11", "Isento nos termos da al\u00ednea b) do n\u00ba1 do artigo 12.\u00ba do CIVA")
+
+
+@pytest.mark.parametrize("code", ["NA", "11", "M1", "M111", "", None])
+def test_a_code_out_of_the_format_is_refused(code):
+    with pytest.raises(ExemptionMotiveInvalidError, match="formato"):
+        check_exemption_motive(code, "Isento nos termos da lei")
+
+
+@pytest.mark.parametrize("name", ["Isen", "x" * 61])
+def test_a_reason_out_of_the_xsd_length_is_refused(name):
+    with pytest.raises(ExemptionMotiveInvalidError, match="entre 6 e 60"):
+        check_exemption_motive("M11", name)

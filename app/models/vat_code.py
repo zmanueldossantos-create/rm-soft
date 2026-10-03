@@ -37,3 +37,10 @@ class VatCode(Base):
 from sqlalchemy import Index as _Index, func as _func  # noqa: E402
 
 _Index("uq_vat_codes_code_ci", _func.lower(VatCode.code), unique=True)
+
+
+# The SAF-T rule (XSD) of an exemption motive, also in the database: code M + 2 digits, reason of 6 to 60 characters.
+from sqlalchemy import CheckConstraint as _CheckConstraint  # noqa: E402
+
+VatCode.__table__.append_constraint(_CheckConstraint("code ~ '^M[0-9]{2}$'", name="ck_vat_codes_code_format"))
+VatCode.__table__.append_constraint(_CheckConstraint("char_length(name) BETWEEN 6 AND 60", name="ck_vat_codes_name_length"))

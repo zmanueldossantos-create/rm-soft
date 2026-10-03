@@ -32,7 +32,6 @@ from sqlalchemy import select, func, extract, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.document_rules import DocumentRulesNotFoundError, get_document_rules, rules_from_row
-from app.core.tax_exemptions import TAX_EXEMPTION_REASONS
 from app.models.vat_code import VatCode
 from app.models.invoice import Invoice, InvoiceStatus, InvoiceType, DocumentLifecycleStatus, CreditNoteReason
 from app.models.cash_session import CashSession
@@ -171,16 +170,28 @@ async def _ensure_methods_allowed(db: AsyncSession, method_ids, direction: str) 
             raise PaymentMethodNotAllowedError(f"O metodo {method.name} nao pode ser usado para pagamentos ou devolucoes")
 
 
-async def _exemption_code_for(db: AsyncSession, article, vat_rate: float) -> str | None:
-    """Code of the exemption motive of a 0% article (M04, M11...), copied on the line like vat_rate_snapshot - the
-    SAF-T needs it on every exempt line. Only official codes are kept: anything else (e.g. the catalog's "NA")
-    cannot be exported."""
-    if vat_rate != 0 or article.exemption_reason_id is None:
-        return None
-    vat_code = (await db.execute(select(VatCode).where(VatCode.id == article.exemption_reason_id))).scalar_one_or_none()
-    if vat_code is None or vat_code.code not in TAX_EXEMPTION_REASONS:
-        return None
-    return vat_code.code
+class MissingExemptionReasonError(Exception):
+    """An exempt (ISE) article without a valid, active exemption motive: the document cannot be issued."""
+
+
+async def _exemption_for(db: AsyncSession, article, tax_code: str) -> tuple[str | None, str | None]:
+    """
+    Code and official reason of the exemption motive of an exempt (ISE) article, read in the catalog (vat_codes,
+    active motives only) and copied on the line like the rate - the SAF-T and the printed document need both on
+    every exempt line. An exempt article without a valid motive cannot be issued: nothing is guessed later.
+    """
+    if tax_code != "ISE":
+        return None, None
+    vat_code = None
+    if article.exemption_reason_id is not None:
+        vat_code = (await db.execute(
+            select(VatCode).where(VatCode.id == article.exemption_reason_id, VatCode.is_active.is_(True))
+        )).scalar_one_or_none()
+    if vat_code is None:
+        raise MissingExemptionReasonError(
+            f"O artigo {article.name} esta isento de IVA mas nao tem um motivo de isencao valido - escolha-o na ficha do artigo"
+        )
+    return vat_code.code, vat_code.name
 
 
 async def _sale_unit_for_line(
@@ -317,7 +328,7 @@ async def create_invoice(
             line_retention_pct = 0.0
             line_retention_name = None
             line_retention_type = None
-            line_exemption_code = await _exemption_code_for(db, service, vat_rate)
+            line_exemption_code, line_exemption_reason = await _exemption_for(db, service, tax_code)
             # AGT rule (Ulemo 8.8): withholding is exclusive to Service lines, requires the
             # article's own withholding_tax_id to be set ("Sujeito"), and only applies when
             # the customer is pessoa coletiva - never computed for Products or for a
@@ -353,7 +364,7 @@ async def create_invoice(
             line_retention_pct = 0.0
             line_retention_name = None
             line_retention_type = None
-            line_exemption_code = await _exemption_code_for(db, product, vat_rate)
+            line_exemption_code, line_exemption_reason = await _exemption_for(db, product, tax_code)
 
         discount_percent = float(line_input.get("discount_percent", 0) or 0)
         gross_subtotal = round(quantity * unit_price, 2)
@@ -383,7 +394,8 @@ async def create_invoice(
             retention_rate=line_retention_pct if line_retention > 0 else None,
             retention_amount=line_retention if line_retention > 0 else None,
             retention_type=line_retention_type if line_retention > 0 else None,
-            exemption_code=line_exemption_code,
+            exemption_code=line_exemption_code,
+            exemption_reason_snapshot=line_exemption_reason,
             sale_unit_id=line_sale_unit_id,
             unit_code_snapshot=line_unit_code,
             unit_factor=line_unit_factor,
@@ -910,7 +922,8 @@ async def create_credit_note(
             retention_rate=ref_line.retention_rate if line_retention > 0 else None,
             retention_amount=line_retention if line_retention > 0 else None,
             retention_type=ref_line.retention_type if line_retention > 0 else None,
-            exemption_code=ref_line.exemption_code,
+            exemption_code=ref_line.exemption_code,
+            exemption_reason_snapshot=ref_line.exemption_reason_snapshot,
             sale_unit_id=ref_line.sale_unit_id,
             unit_code_snapshot=ref_line.unit_code_snapshot,
             unit_factor=ref_line.unit_factor,
@@ -1217,7 +1230,7 @@ async def create_debit_note(
             item_name = service.name
             line_product_id = None
             line_service_id = service.id
-            line_exemption_code = await _exemption_code_for(db, service, vat_rate)
+            line_exemption_code, line_exemption_reason = await _exemption_for(db, service, tax_code)
             if service.withholding_tax_id and customer_is_juridica:
                 wh_result = await db.execute(select(WithholdingTax).where(WithholdingTax.id == service.withholding_tax_id))
                 wh = wh_result.scalar_one_or_none()
@@ -1246,7 +1259,7 @@ async def create_debit_note(
             item_name = product.name
             line_product_id = product.id
             line_service_id = None
-            line_exemption_code = await _exemption_code_for(db, product, vat_rate)
+            line_exemption_code, line_exemption_reason = await _exemption_for(db, product, tax_code)
 
         discount_percent = float(line_input.get("discount_percent", 0) or 0)
         gross_subtotal = round(quantity * unit_price, 2)
@@ -1276,7 +1289,8 @@ async def create_debit_note(
             retention_rate=line_retention_pct if line_retention > 0 else None,
             retention_amount=line_retention if line_retention > 0 else None,
             retention_type=line_retention_type if line_retention > 0 else None,
-            exemption_code=line_exemption_code,
+            exemption_code=line_exemption_code,
+            exemption_reason_snapshot=line_exemption_reason,
             sale_unit_id=line_sale_unit_id,
             unit_code_snapshot=line_unit_code,
             unit_factor=line_unit_factor,
@@ -1589,7 +1603,7 @@ async def create_pro_forma(
             item_name = service.name
             line_product_id = None
             line_service_id = service.id
-            line_exemption_code = await _exemption_code_for(db, service, vat_rate)
+            line_exemption_code, line_exemption_reason = await _exemption_for(db, service, tax_code)
             line_retention_pct, line_retention_name, line_retention_type = 0.0, None, None
             # same rule as the invoice: a service with a withholding, sold to a pessoa coletiva
             if service.withholding_tax_id and customer_is_juridica:
@@ -1617,7 +1631,7 @@ async def create_pro_forma(
             item_name = product.name
             line_product_id = product.id
             line_service_id = None
-            line_exemption_code = await _exemption_code_for(db, product, vat_rate)
+            line_exemption_code, line_exemption_reason = await _exemption_for(db, product, tax_code)
             line_retention_pct, line_retention_name, line_retention_type = 0.0, None, None
 
         discount_percent = float(line_input.get("discount_percent", 0) or 0)
@@ -1648,7 +1662,8 @@ async def create_pro_forma(
             retention_rate=line_retention_pct if line_retention > 0 else None,
             retention_amount=line_retention if line_retention > 0 else None,
             retention_type=line_retention_type if line_retention > 0 else None,
-            exemption_code=line_exemption_code,
+            exemption_code=line_exemption_code,
+            exemption_reason_snapshot=line_exemption_reason,
             sale_unit_id=line_sale_unit_id,
             unit_code_snapshot=line_unit_code,
             unit_factor=line_unit_factor,

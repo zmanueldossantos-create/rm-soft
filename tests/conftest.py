@@ -31,6 +31,8 @@ from app.models.company_module import CompanyModule
 from app.models.activity import Activity
 from app.models.warehouse import Warehouse
 from app.models.vat import VAT
+from app.models.country import Country
+from app.models.vat_code import VatCode
 from app.models.payment_method_catalog import PaymentMethodCatalog
 from app.models.company_payment_method_preference import CompanyPaymentMethodPreference
 from app.models.product import Product, ProductType
@@ -142,6 +144,14 @@ async def company_with_essentials(db):
     db.add(company)
     await db.flush()
 
+    # The official exemption motive of the exempt test articles: an exempt article cannot be sold without one.
+    country = Country(code="AO", name="Angola")
+    db.add(country)
+    await db.flush()
+    exemption_m11 = VatCode(code="M11", name="Isento nos termos da al\u00ednea b) do n\u00ba1 do artigo 12.\u00ba do CIVA",
+                            rate=0, country_id=country.id, valid_from=date(2021, 1, 1))
+    db.add(exemption_m11)
+    await db.flush()
     vat_ise = VAT(company_id=company.id, name="Isento", rate=0, tax_category="ISE")
     vat_red = VAT(company_id=company.id, name="Taxa reduzida", rate=5, tax_category="RED")
     vat_nor = VAT(company_id=company.id, name="Taxa normal", rate=14, tax_category="NOR")
@@ -236,7 +246,8 @@ async def company_with_essentials(db):
         "pos": default_pos,
         "vat_nor": vat_nor,
         "vat_red": vat_red,
-        "vat_ise": vat_ise,
+        "vat_ise": vat_ise,
+        "exemption_m11": exemption_m11,
         "gestor": gestor,
         "pm_numerario": pm_numerario,
         "pm_mb": pm_mb,

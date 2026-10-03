@@ -18,10 +18,10 @@ from app.services.stock_service import receive_stock
 from sqlalchemy import select
 
 
-async def _make_product(db, company, vat, price=1000.0, code="PROD-001"):
+async def _make_product(db, company, vat, price=1000.0, code="PROD-001", exemption_reason_id=None):
     product = Product(
         company_id=company.id, code=code, name="Produto Teste",
-        vat_id=vat.id, price=price, min_stock_threshold=0,
+        vat_id=vat.id, exemption_reason_id=exemption_reason_id, price=price, min_stock_threshold=0,
         product_type=ProductType.BEM,
     )
     db.add(product)
@@ -53,7 +53,7 @@ async def test_create_invoice_calculates_vat_correctly(db, company_with_essentia
 async def test_create_invoice_deducts_stock_from_activity_warehouse_not_central(db, company_with_essentials):
     setup = company_with_essentials
     company = setup["company"]
-    product = await _make_product(db, company, setup["vat_ise"])
+    product = await _make_product(db, company, setup["vat_ise"], exemption_reason_id=setup["exemption_m11"].id)
 
     # Stock only exists in the ACTIVITY's warehouse (simulating a completed transfer) -
     # the central warehouse has none. If create_invoice mistakenly deducted from
@@ -80,7 +80,7 @@ async def test_create_invoice_uses_document_series(db, company_with_essentials):
     (SAF-T requires the code stay unique per document type - a bare year is not enough)."""
     setup = company_with_essentials
     company = setup["company"]
-    product = await _make_product(db, company, setup["vat_ise"])
+    product = await _make_product(db, company, setup["vat_ise"], exemption_reason_id=setup["exemption_m11"].id)
     await receive_stock(db, company.id, product.id, 5)
     activity_stock = Stock(company_id=company.id, product_id=product.id, warehouse_id=setup["activity_warehouse"].id, quantity=5)
     db.add(activity_stock)
@@ -210,7 +210,7 @@ async def test_create_invoice_rejects_future_date_when_not_allowed(db, company_w
     """Company.allows_future_sale_date defaults to False - a future business_date must be rejected."""
     setup = company_with_essentials
     company = setup["company"]
-    product = await _make_product(db, company, setup["vat_ise"])
+    product = await _make_product(db, company, setup["vat_ise"], exemption_reason_id=setup["exemption_m11"].id)
     activity_stock = Stock(company_id=company.id, product_id=product.id, warehouse_id=setup["activity_warehouse"].id, quantity=10)
     db.add(activity_stock)
     await db.commit()
@@ -293,7 +293,7 @@ async def test_create_debit_note_references_original_and_has_free_lines(db, comp
         invoice_type="FACTURA", lines_input=[{"product_id": product.id, "quantity": 1}],
     )
 
-    another_product = await _make_product(db, company, setup["vat_ise"], price=500.0, code="PROD-002")
+    another_product = await _make_product(db, company, setup["vat_ise"], exemption_reason_id=setup["exemption_m11"].id, price=500.0, code="PROD-002")
 
     debit_note = await create_debit_note(
         db, company.id, setup["activity"].id, reference_invoice_id=invoice.id, customer_id=None,
@@ -341,7 +341,7 @@ async def test_create_receipt_accumulates_payment_on_reference_invoice(db, compa
 async def test_create_receipt_rejects_amount_exceeding_pending(db, company_with_essentials):
     setup = company_with_essentials
     company = setup["company"]
-    product = await _make_product(db, company, setup["vat_ise"], price=1000.0)
+    product = await _make_product(db, company, setup["vat_ise"], exemption_reason_id=setup["exemption_m11"].id, price=1000.0)
     activity_stock = Stock(company_id=company.id, product_id=product.id, warehouse_id=setup["activity_warehouse"].id, quantity=10)
     db.add(activity_stock)
     await db.commit()

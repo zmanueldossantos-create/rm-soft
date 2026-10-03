@@ -4,6 +4,7 @@ Provincias, Municipios, Bancos, Metodos de Pagamento, Condicoes de
 Pagamento, Codigos IVA) - all SUPER_ADMIN managed, all company-agnostic.
 See discussion on the "Configuracoes" admin screen (cards per category).
 """
+import re
 import uuid
 from datetime import date
 
@@ -357,6 +358,18 @@ async def toggle_payment_term(db: AsyncSession, term_id: uuid.UUID) -> PaymentTe
 
 # ---------- VatCode ----------
 
+class ExemptionMotiveInvalidError(Exception):
+    """An exemption motive the SAF-T would reject (XSD: code M + 2 digits, official reason of 6 to 60 characters)."""
+
+
+def check_exemption_motive(code: str | None, name: str | None) -> None:
+    """THE SAF-T rule of an exemption motive - the catalog is its only source, copied on each exempt line when issued."""
+    if not re.fullmatch(r"M[0-9]{2}", code or ""):
+        raise ExemptionMotiveInvalidError("O codigo do motivo de isencao deve ter o formato M seguido de 2 algarismos (ex.: M11)")
+    if not 6 <= len((name or "").strip()) <= 60:
+        raise ExemptionMotiveInvalidError("A mencao legal do motivo de isencao deve ter entre 6 e 60 caracteres (limite do SAF-T)")
+
+
 async def list_vat_codes(db: AsyncSession) -> list[VatCode]:
     result = await db.execute(select(VatCode).order_by(VatCode.code))
     return list(result.scalars().all())
@@ -366,6 +379,7 @@ async def create_vat_code(
     db: AsyncSession, code: str, name: str, rate: float, country_id: uuid.UUID,
     valid_from: date, valid_until: date | None, observations: str | None,
 ) -> VatCode:
+    check_exemption_motive(code, name)
     vat_code = VatCode(
         code=code, name=name, rate=rate, country_id=country_id,
         valid_from=valid_from, valid_until=valid_until, observations=observations,
@@ -380,6 +394,7 @@ async def update_vat_code(
     db: AsyncSession, vat_code_id: uuid.UUID, code: str, name: str, rate: float, country_id: uuid.UUID,
     valid_from: date, valid_until: date | None, observations: str | None,
 ) -> VatCode:
+    check_exemption_motive(code, name)
     result = await db.execute(select(VatCode).where(VatCode.id == vat_code_id))
     vat_code = result.scalar_one_or_none()
     if vat_code is None:

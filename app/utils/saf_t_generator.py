@@ -23,7 +23,6 @@ from decimal import Decimal
 
 from lxml import etree
 
-from app.core.tax_exemptions import TAX_EXEMPTION_REASONS
 
 NSMAP = {None: "urn:OECD:StandardAuditFile-Tax:AO_1.01_01"}
 NS = "urn:OECD:StandardAuditFile-Tax:AO_1.01_01"
@@ -96,12 +95,12 @@ def _write_lines(parent_el, inv: dict, saft_type: str) -> None:
         _el(tax, "TaxPercentage", _money(line["vat_rate"]))
 
         if tax_code == "ISE":
-            # The motive chosen on the article (copied on the line), with its official reason; a line without a
-            # valid official code falls back to M04 (as before) so the file stays valid.
-            exemption_code = line.get("exemption_code")
-            if exemption_code not in TAX_EXEMPTION_REASONS:
-                exemption_code = "M04"
-            _el(line_el, "TaxExemptionReason", TAX_EXEMPTION_REASONS[exemption_code])
+            # The motive copied on the line when issued (code and official reason, from the catalog). Issuing refuses an
+            # exempt line without one, so a missing motive here is an error - never a guessed M04.
+            exemption_code, exemption_reason = line.get("exemption_code"), line.get("exemption_reason")
+            if not exemption_code or not exemption_reason:
+                raise ValueError(f"Linha isenta sem motivo de isencao: {line.get('product_code')}")
+            _el(line_el, "TaxExemptionReason", exemption_reason)
             _el(line_el, "TaxExemptionCode", exemption_code)
 
         _el(line_el, "SettlementAmount", "0.00")

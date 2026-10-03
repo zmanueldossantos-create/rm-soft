@@ -538,7 +538,7 @@ async def download_invoice_pdf(
             "vat_rate_snapshot": float(l.vat_rate_snapshot),
             "line_subtotal": float(l.line_subtotal),
             "line_total": float(l.line_total),
-            "exemption_code": l.exemption_code,
+            "exemption_code": l.exemption_code, "exemption_reason": l.exemption_reason_snapshot,
             "iec_amount": float(l.iec_amount or 0),
             "iselo_amount": float(l.iselo_amount or 0),
         })

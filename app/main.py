@@ -276,3 +276,21 @@ from app.services.document_series_service import SeriesYearNotAllowedError as _S
 @app.exception_handler(_SeriesYearNotAllowedError)
 async def _series_year_handler(request: _Request, exc: _SeriesYearNotAllowedError):
     return _JSONResponse(status_code=422, content={"detail": str(exc)})
+
+
+# An exempt article without a valid exemption motive cannot be issued: a clear 422.
+from app.services.invoice_service import MissingExemptionReasonError as _MissingExemptionReasonError  # noqa: E402
+
+
+@app.exception_handler(_MissingExemptionReasonError)
+async def _missing_exemption_handler(request: _Request, exc: _MissingExemptionReasonError):
+    return _JSONResponse(status_code=422, content={"detail": str(exc)})
+
+
+# An exemption motive the SAF-T would reject: a clear 422 in the catalog screen.
+from app.services.catalog_service import ExemptionMotiveInvalidError as _ExemptionMotiveInvalidError  # noqa: E402
+
+
+@app.exception_handler(_ExemptionMotiveInvalidError)
+async def _exemption_motive_handler(request: _Request, exc: _ExemptionMotiveInvalidError):
+    return _JSONResponse(status_code=422, content={"detail": str(exc)})

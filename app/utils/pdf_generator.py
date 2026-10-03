@@ -20,7 +20,6 @@ from reportlab.lib.colors import HexColor
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas
 
-from app.core.tax_exemptions import TAX_EXEMPTION_REASONS
 
 ACCENT = HexColor("#8B3A3A")
 ACCENT_SOFT = HexColor("#F3E7E7")
@@ -100,7 +99,8 @@ def generate_invoice_pdf_thermal(invoice: dict, lines: list[dict], company: dict
         line_discount_amount = gross * (l.get("discount_percent", 0) / 100)
         total_discount_amount += line_discount_amount
         rate = l["vat_rate_snapshot"]
-        grp = vat_groups.setdefault((rate, l.get("exemption_code") if rate == 0 else None), {"incidencia": 0.0, "montante": 0.0})
+        grp = vat_groups.setdefault((rate, l.get("exemption_code") if rate == 0 else None), {"incidencia": 0.0, "montante": 0.0})
+        grp.setdefault("motivo", l.get("exemption_reason") or "")
         grp["incidencia"] += l["line_subtotal"]
         grp["montante"] += l["line_subtotal"] * (rate / 100)
 
@@ -245,8 +245,8 @@ def generate_invoice_pdf_thermal(invoice: dict, lines: list[dict], company: dict
         y -= 3.5 * mm
         for rate, code in sorted(vat_groups.keys(), key=lambda k: (k[0], k[1] or "")):
             grp = vat_groups[(rate, code)]
-            # Official reason of the exemption motive chosen on the article (M04 when none is recorded).
-            motivo = TAX_EXEMPTION_REASONS.get(code or "M04", TAX_EXEMPTION_REASONS["M04"]) if rate == 0 else "IVA"
+            # Official reason of the exemption motive, as recorded on the line when issued.
+            motivo = grp.get("motivo", "") if rate == 0 else "IVA"
             c.setFillColor(TEXT_PRIMARY)
             c.setFont("Helvetica", 6.5)
             c.drawString(margin, y, f"{rate:.2f}")
@@ -533,7 +533,8 @@ def generate_factura_style_a4(invoice, lines, company, customer):
         total_iliquido += l["line_subtotal"]
         total_discount_amount += line_discount_amount
         rate = l["vat_rate_snapshot"]
-        grp = vat_groups.setdefault((rate, l.get("exemption_code") if rate == 0 else None), {"incidencia": 0.0, "montante": 0.0})
+        grp = vat_groups.setdefault((rate, l.get("exemption_code") if rate == 0 else None), {"incidencia": 0.0, "montante": 0.0})
+        grp.setdefault("motivo", l.get("exemption_reason") or "")
         grp["incidencia"] += l["line_subtotal"]
         grp["montante"] += l["line_subtotal"] * (rate / 100)
 
@@ -569,7 +570,7 @@ def generate_factura_style_a4(invoice, lines, company, customer):
         c.setFillColor(TEXT_MUTED)
         c.setFont("Helvetica", 6.5)
         for code in exemption_codes:
-            c.drawString(margin, y, f"{code} - {TAX_EXEMPTION_REASONS.get(code, '')}"[:120])
+            c.drawString(margin, y, f"{code} - {next((g.get('motivo', '') for (r, c), g in vat_groups.items() if c == code), '')}"[:120])
             y -= 3.4 * mm
         y -= 2 * mm
 

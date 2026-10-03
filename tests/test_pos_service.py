@@ -14,10 +14,10 @@ from app.services.invoice_service import PaymentAmountMismatchError
 from sqlalchemy import select
 
 
-async def _make_product(db, company, vat, price=10000.0):
+async def _make_product(db, company, vat, price=10000.0, exemption_reason_id=None):
     product = Product(
         company_id=company.id, code="POS-001", name="Produto POS",
-        vat_id=vat.id, price=price, min_stock_threshold=0, product_type=ProductType.BEM,
+        vat_id=vat.id, exemption_reason_id=exemption_reason_id, price=price, min_stock_threshold=0, product_type=ProductType.BEM,
     )
     db.add(product)
     await db.commit()
@@ -28,7 +28,7 @@ async def _make_product(db, company, vat, price=10000.0):
 async def test_checkout_records_split_payment_correctly(db, company_with_essentials):
     setup = company_with_essentials
     company = setup["company"]
-    product = await _make_product(db, company, setup["vat_ise"], price=10000.0)
+    product = await _make_product(db, company, setup["vat_ise"], exemption_reason_id=setup["exemption_m11"].id, price=10000.0)
     db.add(Stock(company_id=company.id, product_id=product.id, warehouse_id=setup["activity_warehouse"].id, quantity=5))
     await db.commit()
 
@@ -53,7 +53,7 @@ async def test_checkout_records_split_payment_correctly(db, company_with_essenti
 async def test_checkout_rejects_mismatched_payment_total(db, company_with_essentials):
     setup = company_with_essentials
     company = setup["company"]
-    product = await _make_product(db, company, setup["vat_ise"], price=10000.0)
+    product = await _make_product(db, company, setup["vat_ise"], exemption_reason_id=setup["exemption_m11"].id, price=10000.0)
     db.add(Stock(company_id=company.id, product_id=product.id, warehouse_id=setup["activity_warehouse"].id, quantity=5))
     await db.commit()
 
@@ -70,7 +70,7 @@ async def test_checkout_rejects_mismatched_payment_total(db, company_with_essent
 async def test_checkout_blocks_sale_without_open_session(db, company_with_essentials):
     setup = company_with_essentials
     company = setup["company"]
-    product = await _make_product(db, company, setup["vat_ise"], price=10000.0)
+    product = await _make_product(db, company, setup["vat_ise"], exemption_reason_id=setup["exemption_m11"].id, price=10000.0)
     db.add(Stock(company_id=company.id, product_id=product.id, warehouse_id=setup["activity_warehouse"].id, quantity=5))
     await db.commit()
 
@@ -86,7 +86,7 @@ async def test_checkout_blocks_sale_without_open_session(db, company_with_essent
 async def test_checkout_links_invoice_to_session(db, company_with_essentials):
     setup = company_with_essentials
     company = setup["company"]
-    product = await _make_product(db, company, setup["vat_ise"], price=10000.0)
+    product = await _make_product(db, company, setup["vat_ise"], exemption_reason_id=setup["exemption_m11"].id, price=10000.0)
     db.add(Stock(company_id=company.id, product_id=product.id, warehouse_id=setup["activity_warehouse"].id, quantity=5))
     await db.commit()
 
