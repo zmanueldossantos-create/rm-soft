@@ -97,7 +97,7 @@ async def _make_second_company(db):
     db.add(company_b)
     await db.flush()
 
-    vat_b = VAT(company_id=company_b.id, name="Taxa normal B", rate=14)
+    vat_b = VAT(company_id=company_b.id, name="Taxa normal B", rate=14, tax_category="NOR")
     db.add(vat_b)
 
     warehouse_b = Warehouse(company_id=company_b.id, name="Armazem B")

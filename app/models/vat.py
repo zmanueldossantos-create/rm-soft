@@ -29,7 +29,7 @@ class VAT(Base):
     # product/service VAT dropdown can be filtered to only what the company's CURRENT regime
     # permits, without ever touching already-issued invoices or existing product/service
     # assignments (those keep referencing their own vat_id regardless of later regime changes).
-    tax_category: Mapped[str] = mapped_column(String(10), nullable=False, default="NOR")
+    tax_category: Mapped[str] = mapped_column(String(10), nullable=False)  # NOR, RED, INT, ISE, OUT - always given, no default
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

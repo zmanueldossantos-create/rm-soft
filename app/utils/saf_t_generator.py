@@ -67,16 +67,6 @@ def _money(value) -> str:
     return f"{Decimal(str(value)):.2f}"
 
 
-def _map_tax_code(rate: float) -> str:
-    """Maps a VAT percentage to its SAF-T TaxCode - NOR (14%), RED (5%), ISE (0%)."""
-    rate = float(rate)
-    if rate <= 0:
-        return "ISE"
-    if rate < 10:
-        return "RED"
-    return "NOR"
-
-
 def _write_lines(parent_el, inv: dict, saft_type: str) -> None:
     """Writes the Line elements of a document - shared by SalesInvoices and WorkingDocuments (same structure)."""
     for idx, line in enumerate(inv["lines"], start=1):
@@ -101,7 +91,7 @@ def _write_lines(parent_el, inv: dict, saft_type: str) -> None:
         tax = _el(line_el, "Tax")
         _el(tax, "TaxType", "IVA")
         _el(tax, "TaxCountryRegion", "AO")
-        tax_code = _map_tax_code(line["vat_rate"])
+        tax_code = line["tax_code"]
         _el(tax, "TaxCode", tax_code)
         _el(tax, "TaxPercentage", _money(line["vat_rate"]))
 
@@ -148,7 +138,7 @@ def generate_saf_t_xml(
         "subtotal": float, "vat_total": float, "total": float,
         "customer_id": str | None, "customer_nif": str | None,
         "lines": [{"product_code": str, "product_name": str, "quantity": float,
-                    "unit_price": float, "vat_rate": float, "line_subtotal": float,
+                    "unit_price": float, "vat_rate": float, "tax_code": str, "line_subtotal": float,
                     "line_vat": float, "line_total": float}],
     }
     """
@@ -261,7 +251,7 @@ def generate_saf_t_xml(
         entry = _el(tax_table, "TaxTableEntry")
         _el(entry, "TaxType", "IVA")
         _el(entry, "TaxCountryRegion", "AO")
-        _el(entry, "TaxCode", _map_tax_code(v["rate"]))
+        _el(entry, "TaxCode", v["tax_code"])
         _el(entry, "Description", v["name"])
         _el(entry, "TaxPercentage", _money(v["rate"]))
 

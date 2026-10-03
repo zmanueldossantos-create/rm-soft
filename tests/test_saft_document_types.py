@@ -21,7 +21,7 @@ def _invoice(invoice_type, number, subtotal, vat):
         "subtotal": subtotal, "vat_total": vat, "total": total, "customer_id": None,
         "lines": [{
             "product_code": "SRV-1", "product_name": "Servico", "quantity": 1.0, "unit_price": subtotal,
-            "vat_rate": 14.0, "line_subtotal": subtotal, "line_vat": vat, "line_total": total,
+            "vat_rate": 14.0, "tax_code": "NOR", "line_subtotal": subtotal, "line_vat": vat, "line_total": total,
         }],
     }
 
@@ -32,7 +32,7 @@ def _generate(invoices):
                  "commercial_registration_number": None},
         platform_settings={"software_validation_number": None, "vendor_tax_id": None, "product_id": None, "product_version": None},
         customers=[], products=[{"code": "SRV-1", "name": "Servico", "product_type": "SERVICO"}],
-        vat_rates=[{"name": "Taxa normal", "rate": 14.0}],
+        vat_rates=[{"name": "Taxa normal", "rate": 14.0, "tax_code": "NOR"}],
         invoices=invoices, fiscal_year=2026, start_date=date(2026, 9, 1), end_date=date(2026, 9, 30),
     ))
 

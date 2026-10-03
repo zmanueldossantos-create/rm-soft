@@ -29,7 +29,7 @@ def _generate(docs):
         company={"name": "Empresa", "nif": "5000000001", "address": None, "phone_number": None, "email": None,
                  "commercial_registration_number": None},
         platform_settings={"software_validation_number": None, "vendor_tax_id": None, "product_id": None, "product_version": None},
-        customers=[], products=[], vat_rates=[{"name": "Taxa normal", "rate": 14.0}],
+        customers=[], products=[], vat_rates=[{"name": "Taxa normal", "rate": 14.0, "tax_code": "NOR"}],
         invoices=docs, fiscal_year=2026, start_date=date(2026, 9, 1), end_date=date(2026, 9, 30),
     ))
 

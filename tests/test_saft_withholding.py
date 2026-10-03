@@ -15,7 +15,7 @@ II_NAME = "Reten\u00e7\u00e3o na fonte(6,5)"
 
 def _line(retention_type=None, retention_amount=None, name=None):
     return {
-        "product_code": "SRV-1", "product_name": "Servico", "quantity": 1.0, "unit_price": 1000.0, "vat_rate": 14.0,
+        "product_code": "SRV-1", "product_name": "Servico", "quantity": 1.0, "unit_price": 1000.0, "vat_rate": 14.0, "tax_code": "NOR",
         "line_subtotal": 1000.0, "line_vat": 140.0, "line_total": 1140.0,
         "retention_type": retention_type, "retention_name": name, "retention_amount": retention_amount,
     }
@@ -33,7 +33,7 @@ def _generate(lines):
                  "commercial_registration_number": None},
         platform_settings={"software_validation_number": None, "vendor_tax_id": None, "product_id": None, "product_version": None},
         customers=[], products=[{"code": "SRV-1", "name": "Servico", "product_type": "SERVICO"}],
-        vat_rates=[{"name": "Taxa normal", "rate": 14.0}],
+        vat_rates=[{"name": "Taxa normal", "rate": 14.0, "tax_code": "NOR"}],
         invoices=[doc], fiscal_year=2026, start_date=date(2026, 9, 1), end_date=date(2026, 9, 30),
     ))
 

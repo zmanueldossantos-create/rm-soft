@@ -15,7 +15,7 @@ M11 = "Isento nos termos da al\u00ednea b) do n\u00ba1 do artigo 12.\u00ba do CI
 
 def _line(code):
     return {
-        "product_code": "SRV-1", "product_name": "Servico", "quantity": 1.0, "unit_price": 100.0, "vat_rate": 0.0,
+        "product_code": "SRV-1", "product_name": "Servico", "quantity": 1.0, "unit_price": 100.0, "vat_rate": 0.0, "tax_code": "ISE",
         "line_subtotal": 100.0, "line_vat": 0.0, "line_total": 100.0, "exemption_code": code,
     }
 
@@ -32,7 +32,7 @@ def test_exempt_lines_carry_their_code_and_official_reason():
                  "commercial_registration_number": None},
         platform_settings={"software_validation_number": None, "vendor_tax_id": None, "product_id": None, "product_version": None},
         customers=[], products=[{"code": "SRV-1", "name": "Servico", "product_type": "SERVICO"}],
-        vat_rates=[{"name": "Isento", "rate": 0.0}],
+        vat_rates=[{"name": "Isento", "rate": 0.0, "tax_code": "ISE"}],
         invoices=[doc], fiscal_year=2026, start_date=date(2026, 9, 1), end_date=date(2026, 9, 30),
     ))
     lines = root.findall(".//s:SalesInvoices/s:Invoice/s:Line", NS)

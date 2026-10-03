@@ -142,9 +142,9 @@ async def company_with_essentials(db):
     db.add(company)
     await db.flush()
 
-    vat_ise = VAT(company_id=company.id, name="Isento", rate=0)
-    vat_red = VAT(company_id=company.id, name="Taxa reduzida", rate=5)
-    vat_nor = VAT(company_id=company.id, name="Taxa normal", rate=14)
+    vat_ise = VAT(company_id=company.id, name="Isento", rate=0, tax_category="ISE")
+    vat_red = VAT(company_id=company.id, name="Taxa reduzida", rate=5, tax_category="RED")
+    vat_nor = VAT(company_id=company.id, name="Taxa normal", rate=14, tax_category="NOR")
     db.add_all([vat_ise, vat_red, vat_nor])
 
     pm_numerario = PaymentMethodCatalog(code="NU", name="Numerario", is_cash=True)

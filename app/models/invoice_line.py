@@ -36,6 +36,9 @@ class InvoiceLine(Base):
     unit_price: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
     discount_percent: Mapped[float] = mapped_column(Numeric(5, 2), nullable=False, default=0)
     vat_rate_snapshot: Mapped[float] = mapped_column(Numeric(5, 2), nullable=False)  # % at time of sale
+    # SAF-T / AGT tax code of the line (NOR, RED, INT, ISE, OUT): the category of the VAT rate, copied when the
+    # document is issued like the rate itself - never guessed from the percentage.
+    tax_code_snapshot: Mapped[str | None] = mapped_column(String(3), nullable=True)
 
     line_subtotal: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
     line_vat: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)

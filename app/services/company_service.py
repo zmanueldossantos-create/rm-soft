@@ -30,20 +30,14 @@ from app.core.security import hash_password
 # Fallback VAT rates used only when no fiscal regime is specified at creation
 # (kept for backward compatibility) - normally superseded by the selected
 # FiscalRegime's allowed rates, see create_company.
-DEFAULT_VAT_RATES = [
-    {"name": "Isento", "rate": 0.00},
-    {"name": "Taxa reduzida", "rate": 5.00},
-    {"name": "Taxa normal", "rate": 14.00},
-]
-
 # Maps a seeded VAT rate's name to the FiscalRegime flag that must allow it - used both at
 # creation (existing logic below) and when a company's regime changes later (see update_company):
 # a rate the new regime does not allow gets deactivated, one it allows gets (re)activated/created.
 # Existing invoice lines keep their own vat_rate_snapshot - never affected by this.
 REGIME_RATE_NAMES = [
-    ("allows_ise", "Isento", 0.00),
-    ("allows_red", "Taxa reduzida", 5.00),
-    ("allows_nor", "Taxa normal", 14.00),
+    ("allows_ise", "Isento", 0.00, "ISE"),
+    ("allows_red", "Taxa reduzida", 5.00, "RED"),
+    ("allows_nor", "Taxa normal", 14.00, "NOR"),
 ]
 
 
@@ -207,21 +201,20 @@ async def create_company(
         raise CompanyAlreadyExistsError(_duplicate_field_message(e))
 
     # Seed VAT rates - only those the fiscal regime allows, if one was chosen.
-    vat_rates_to_seed = DEFAULT_VAT_RATES
+    # Without a regime, every rate of the one list (REGIME_RATE_NAMES), each with its SAF-T category.
+    vat_rates_to_seed = [{"name": n, "rate": r, "tax_category": c} for _, n, r, c in REGIME_RATE_NAMES]
     if fiscal_regime_id is not None:
         regime_result = await db.execute(select(FiscalRegime).where(FiscalRegime.id == fiscal_regime_id))
         regime = regime_result.scalar_one_or_none()
         if regime is not None:
             vat_rates_to_seed = []
-            if regime.allows_ise:
-                vat_rates_to_seed.append({"name": "Isento", "rate": 0.00})
-            if regime.allows_red:
-                vat_rates_to_seed.append({"name": "Taxa reduzida", "rate": 5.00})
-            if regime.allows_nor:
-                vat_rates_to_seed.append({"name": "Taxa normal", "rate": 14.00})
+            # One list for creation and regime change: each rate the regime allows, with its SAF-T category.
+            for flag, rate_name, rate_value, rate_category in REGIME_RATE_NAMES:
+                if getattr(regime, flag):
+                    vat_rates_to_seed.append({"name": rate_name, "rate": rate_value, "tax_category": rate_category})
 
     for vat_data in vat_rates_to_seed:
-        db.add(VAT(company_id=company.id, name=vat_data["name"], rate=vat_data["rate"]))
+        db.add(VAT(company_id=company.id, name=vat_data["name"], rate=vat_data["rate"], tax_category=vat_data["tax_category"]))
 
     # Default warehouse - Phase 1 keeps a single warehouse per company (section 5.2/2.8).
     db.add(Warehouse(company_id=company.id, name="Armazem Principal"))
@@ -351,13 +344,13 @@ async def update_company(
         regime = (await db.execute(select(FiscalRegime).where(FiscalRegime.id == fiscal_regime_id))).scalar_one()
         existing_rates = (await db.execute(select(VAT).where(VAT.company_id == company_id))).scalars().all()
         existing_by_name = {v.name: v for v in existing_rates}
-        for flag_name, rate_name, rate_value in REGIME_RATE_NAMES:
+        for flag_name, rate_name, rate_value, rate_category in REGIME_RATE_NAMES:
             allowed = getattr(regime, flag_name)
             existing = existing_by_name.get(rate_name)
             if existing is not None:
                 existing.is_active = allowed
             elif allowed:
-                db.add(VAT(company_id=company_id, name=rate_name, rate=rate_value, is_active=True))
+                db.add(VAT(company_id=company_id, name=rate_name, rate=rate_value, tax_category=rate_category, is_active=True))
     elif fiscal_regime_id is not None:
         company.fiscal_regime_id = fiscal_regime_id
 

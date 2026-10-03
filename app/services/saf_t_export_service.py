@@ -131,7 +131,7 @@ async def export_saf_t_for_period(db: AsyncSession, company_id: uuid.UUID, year:
                     "product_name": l.product_name_snapshot,
                     "quantity": float(l.quantity),
                     "unit_price": float(l.unit_price),
-                    "vat_rate": float(l.vat_rate_snapshot),
+                    "vat_rate": float(l.vat_rate_snapshot), "tax_code": l.tax_code_snapshot,
                     "line_subtotal": float(l.line_subtotal),
                     "line_vat": float(l.line_vat),
                     "line_total": float(l.line_total),
@@ -165,7 +165,7 @@ async def export_saf_t_for_period(db: AsyncSession, company_id: uuid.UUID, year:
     products_data = [{"code": p.code, "name": p.name, "product_type": p.product_type.value} for p in products]
     known_codes = {d["code"] for d in products_data}
     products_data += [{"code": s.code, "name": s.name, "product_type": "SERVICO"} for s in services if s.code not in known_codes]
-    vat_data = [{"name": v.name, "rate": float(v.rate)} for v in vat_rates]
+    vat_data = [{"name": v.name, "rate": float(v.rate), "tax_code": v.tax_category} for v in vat_rates]
 
     return generate_saf_t_xml(
         company=company_dict,
