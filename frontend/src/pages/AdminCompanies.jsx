@@ -5,8 +5,7 @@ import Select from '../components/Select';
 import {
   listCompanies, createCompany, updateCompany, toggleCompanyStatus,
   getCompanyGestor,
-  listBankAccounts, addBankAccount, updateBankAccount, toggleBankAccountStatus,
-} from '../api/admin';
+  listBankAccounts, addBankAccount, updateBankAccount, toggleBankAccountStatus, getCompanyRegimeHistory } from '../api/admin';
 import { extractErrorMessage } from '../utils/errors';
 import { listFiscalRegimes } from '../api/fiscalRegime';
 import { listModules, getCompanyModules, setCompanyModules, getAdminOverview } from '../api/module';
@@ -71,7 +70,16 @@ export default function AdminCompanies() {
   const [vatSaving, setVatSaving] = useState(false);
   const [vatFormError, setVatFormError] = useState('');
   const [vatTogglingId, setVatTogglingId] = useState(null);
-  const [editingId, setEditingId] = useState(null);
+  // Fiscal regime history of the company being edited (most recent first).
+  const [regimeHistory, setRegimeHistory] = useState([]);
+  const [editingId, setEditingId] = useState(null);
+  useEffect(() => {
+    if (!editingId) {
+      setRegimeHistory([]);
+      return;
+    }
+    getCompanyRegimeHistory(editingId).then((h) => setRegimeHistory(Array.isArray(h) ? h : [])).catch(() => setRegimeHistory([]));
+  }, [editingId]);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
@@ -651,7 +659,14 @@ export default function AdminCompanies() {
               <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
                 <div className="sm:col-span-6">
                   <Field label="Regime fiscal">
-                    <Select value={form.fiscalRegimeId} onChange={(v) => updateField('fiscalRegimeId', v)} options={regimes.map((r) => ({ value: r.id, label: r.name }))} placeholder="Selecionar regime fiscal" />
+                    <Select value={form.fiscalRegimeId} onChange={(v) => updateField('fiscalRegimeId', v)} options={regimes.map((r) => ({ value: r.id, label: r.name }))} placeholder="Selecionar regime fiscal" />
+                    {regimeHistory.length > 0 && (
+                      <ul className="mt-1.5 flex flex-col gap-0.5 text-[11px] text-text-muted">
+                        {regimeHistory.map((h, idx) => (
+                          <li key={idx}>{(idx === 0 ? 'Desde ' : 'De ') + new Date(h.valid_from).toLocaleDateString('pt-PT') + ' - ' + h.regime}</li>
+                        ))}
+                      </ul>
+                    )}
                   </Field>
                 </div>
                 <div className="sm:col-span-6">

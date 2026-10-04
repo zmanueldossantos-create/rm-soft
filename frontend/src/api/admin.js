@@ -61,3 +61,9 @@ export async function getCompanyGestor(companyId) {
   const res = await apiClient.get('/admin/companies/' + companyId + '/gestor');
   return res.data;
 }
+
+// The company's fiscal regimes, most recent first, each with the day it took effect.
+export async function getCompanyRegimeHistory(companyId) {
+  const res = await apiClient.get(`/admin/companies/${companyId}/regime-history`);
+  return res.data;
+}
