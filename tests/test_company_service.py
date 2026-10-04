@@ -9,7 +9,7 @@ from app.services.company_service import create_company
 from sqlalchemy import select
 
 
-async def test_regime_exclusao_seeds_only_ise_vat(db):
+async def test_regime_exclusao_seeds_only_ise_vat(db, legal_vat_rates):
     regime = FiscalRegime(name="Regime de Exclusao (teste)", allows_nor=False, allows_red=False, allows_ise=True)
     db.add(regime)
     await db.flush()
@@ -28,7 +28,7 @@ async def test_regime_exclusao_seeds_only_ise_vat(db):
     assert float(vat_rates[0].rate) == 0
 
 
-async def test_regime_geral_seeds_all_three_vat_rates(db):
+async def test_regime_geral_seeds_all_three_vat_rates(db, legal_vat_rates):
     regime = FiscalRegime(name="Regime Geral (teste)", allows_nor=True, allows_red=True, allows_ise=True)
     db.add(regime)
     await db.flush()

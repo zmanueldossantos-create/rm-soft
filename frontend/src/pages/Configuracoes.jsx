@@ -5,7 +5,7 @@ import Select from '../components/Select';
 import {
   countriesApi, currenciesApi, provincesApi, municipalitiesApi,
   banksApi, paymentMethodsApi, paymentTermsApi, vatCodesApi,
-  documentTypesApi, unitsApi, withholdingTaxesApi, movementTypesApi,
+  documentTypesApi, unitsApi, withholdingTaxesApi, legalVatRatesApi, movementTypesApi,
   denominationsApi,
 } from '../api/catalogs';
 import { listFiscalRegimes, createFiscalRegime, updateFiscalRegime, toggleFiscalRegimeStatus } from '../api/fiscalRegime';
@@ -168,7 +168,8 @@ const CATALOGS = [
   { key: 'document_types', label: 'Tipos de Documento', icon: FileText, api: documentTypesApi },
   { key: 'units', label: 'Unidades', icon: Ruler, api: unitsApi },
   { key: 'withholding_taxes', label: 'Retenções', icon: ShieldMinus, api: withholdingTaxesApi },
-  { key: 'fiscal_regimes', label: 'Regimes Fiscais', icon: Landmark, api: fiscalRegimesApi },
+  { key: 'fiscal_regimes', label: 'Regimes Fiscais', icon: Landmark, api: fiscalRegimesApi },
+  { key: 'legal_vat_rates', label: 'Taxas legais de IVA', icon: Percent, api: legalVatRatesApi },
   { key: 'movement_types', label: 'Tipos de Movimento', icon: ArrowLeftRight, api: movementTypesApi },
   { key: 'modules', label: 'Módulos', icon: LayoutGrid, api: modulesApi },
 ];
@@ -292,7 +293,8 @@ export default function Configuracoes() {
       case 'document_types': return { code: '', name: '', description: '', area: '', electronic_eligible: false, is_fiscal: true, rules_locked: false, saft_section: 'NONE', revenue_sign: 0, requires_origin: false, has_lines: true, paid_on_issue: false, sent_to_agt: false, deducts_stock: false, accepts_credit_note: false, accepts_debit_note: false, accepts_receipt: false, convertible: false, issuable_in_invoices: false, issuable_at_pos: false, requires_payment_term: false, requires_customer: false };
       case 'movement_types': return { code: '', name: '', direction: 'ENTRADA', is_auto: false, description: '' };
       case 'units': return { code: '', name: '', fixed_factor: '', is_fractional: false };
-      case 'withholding_taxes': return { name: '', rate: 0, tax_type: '' };
+      case 'withholding_taxes': return { name: '', rate: 0, tax_type: '' };
+      case 'legal_vat_rates': return { tax_category: '', name: '', rate: 0 };
       case 'fiscal_regimes': return { name: '', description: '', allows_nor: true, allows_red: true, allows_ise: true, allows_int: false, allows_out: false, required_exemption_id: '' };
       case 'modules': return { name: '', description: '' };
       case 'denominations': return { currency_id: '', value: '', denomination_type: 'NOTA' };
@@ -335,6 +337,9 @@ export default function Configuracoes() {
         payload.days = parseInt(payload.days, 10);
         payload.months_fixed_day = parseInt(payload.months_fixed_day, 10);
         payload.discount = parseFloat(payload.discount);
+      }
+      if (activeCatalog.key === 'legal_vat_rates') {
+        payload.rate = parseFloat(payload.rate);
       }
       if (activeCatalog.key === 'withholding_taxes') {
         payload.rate = parseFloat(payload.rate);
@@ -535,6 +540,24 @@ export default function Configuracoes() {
           <Field label="Código *"><input value={form.code} onChange={(e) => updateField('code', e.target.value)} required className={inputClass} /></Field>
           <Field label="Nome *"><input value={form.name} onChange={(e) => updateField('name', e.target.value)} required className={inputClass} /></Field>
           <Field label="Fator fixo (opcional)"><input type="number" step="0.001" min="0" value={form.fixed_factor ?? ''} onChange={(e) => updateField('fixed_factor', e.target.value)} placeholder="Ex: 12 para duzia" className={inputClass} /></Field><label className="flex items-center gap-2.5 cursor-pointer select-none"><input type="checkbox" checked={!!form.is_fractional} onChange={(e) => updateField('is_fractional', e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" /><span className="text-sm text-text-primary">Fracionavel (aceita quantidades decimais, ex: 1,250 kg)</span></label>
+        </>
+      );
+    }
+    if (key === 'legal_vat_rates') {
+      return (
+        <>
+          <Field label="Categoria (SAF-T) *">
+            <select value={form.tax_category || ''} onChange={(e) => updateField('tax_category', e.target.value)} required className={inputClass}>
+              <option value="">Selecionar</option>
+              <option value="NOR">NOR - Taxa normal</option>
+              <option value="RED">RED - Taxa reduzida</option>
+              <option value="INT">{'INT - Taxa interm\u00e9dia'}</option>
+              <option value="ISE">ISE - Isento</option>
+              <option value="OUT">OUT - Outra</option>
+            </select>
+          </Field>
+          <Field label="Nome *"><input value={form.name} onChange={(e) => updateField('name', e.target.value)} required className={inputClass} /></Field>
+          <Field label="Taxa (%) *"><input type="number" step="0.01" value={form.rate} onChange={(e) => updateField('rate', e.target.value)} required className={inputClass} /></Field>
         </>
       );
     }

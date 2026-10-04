@@ -314,3 +314,21 @@ class WithholdingTaxResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class LegalVatRateRequest(BaseModel):
+    # SAF-T / AGT tax code of the category (the AGT's own vocabulary, not a rate).
+    tax_category: Literal["NOR", "RED", "INT", "ISE", "OUT"]
+    name: str
+    rate: float
+
+
+class LegalVatRateResponse(BaseModel):
+    id: uuid.UUID
+    tax_category: str
+    name: str
+    rate: float
+    is_active: bool
+
+    class Config:
+        from_attributes = True

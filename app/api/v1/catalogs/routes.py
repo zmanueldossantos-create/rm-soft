@@ -25,6 +25,7 @@ from app.schemas.catalog import (
     UnitOfMeasureCatalogRequest, UnitOfMeasureCatalogResponse,
     WithholdingTaxRequest, WithholdingTaxResponse,
     DenominationRequest, DenominationResponse,
+    LegalVatRateRequest, LegalVatRateResponse,
 )
 from app.services import catalog_service
 from app.services.catalog_service import CatalogItemNotFoundError
@@ -416,5 +417,33 @@ async def patch_denomination(item_id: uuid.UUID, payload: DenominationRequest, d
 async def toggle_denomination(item_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_role("SUPER_ADMIN"))):
     try:
         return await catalog_service.toggle_denomination(db, item_id)
+    except CatalogItemNotFoundError as e:
+        _not_found(e)
+
+
+# ---------- LegalVatRate ----------
+
+@router.get("/legal-vat-rates", response_model=list[LegalVatRateResponse])
+async def get_legal_vat_rates(db: AsyncSession = Depends(get_db), current_user: User = Depends(require_permission("catalogs:view_billing", also_allow_roles=("SUPER_ADMIN",)))):
+    return await catalog_service.list_legal_vat_rates(db)
+
+
+@router.post("/legal-vat-rates", response_model=LegalVatRateResponse, status_code=status.HTTP_201_CREATED)
+async def post_legal_vat_rate(payload: LegalVatRateRequest, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_role("SUPER_ADMIN"))):
+    return await catalog_service.create_legal_vat_rate(db, payload.tax_category, payload.name, payload.rate)
+
+
+@router.patch("/legal-vat-rates/{item_id}", response_model=LegalVatRateResponse)
+async def patch_legal_vat_rate(item_id: uuid.UUID, payload: LegalVatRateRequest, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_role("SUPER_ADMIN"))):
+    try:
+        return await catalog_service.update_legal_vat_rate(db, item_id, payload.tax_category, payload.name, payload.rate)
+    except CatalogItemNotFoundError as e:
+        _not_found(e)
+
+
+@router.patch("/legal-vat-rates/{item_id}/toggle-status", response_model=LegalVatRateResponse)
+async def toggle_legal_vat_rate(item_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_role("SUPER_ADMIN"))):
+    try:
+        return await catalog_service.toggle_legal_vat_rate(db, item_id)
     except CatalogItemNotFoundError as e:
         _not_found(e)

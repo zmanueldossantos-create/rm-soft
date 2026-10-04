@@ -27,18 +27,6 @@ from app.models.fiscal_regime import FiscalRegime
 from app.models.company_module import CompanyModule
 from app.core.security import hash_password
 
-# Fallback VAT rates used only when no fiscal regime is specified at creation
-# (kept for backward compatibility) - normally superseded by the selected
-# FiscalRegime's allowed rates, see create_company.
-# Maps a seeded VAT rate's name to the FiscalRegime flag that must allow it - used both at
-# creation (existing logic below) and when a company's regime changes later (see update_company):
-# a rate the new regime does not allow gets deactivated, one it allows gets (re)activated/created.
-# Existing invoice lines keep their own vat_rate_snapshot - never affected by this.
-REGIME_RATE_NAMES = [
-    ("allows_ise", "Isento", 0.00, "ISE"),
-    ("allows_red", "Taxa reduzida", 5.00, "RED"),
-    ("allows_nor", "Taxa normal", 14.00, "NOR"),
-]
 
 
 class CompanyAlreadyExistsError(Exception):
@@ -76,6 +64,20 @@ def _duplicate_field_message(error: IntegrityError) -> str:
     if "ix_companies_phone_number" in detail:
         return "Ja existe uma empresa registada com este numero de telefone"
     return "Ja existe uma empresa registada com estes dados"
+
+
+async def _legal_rates_for(db: AsyncSession, regime) -> list:
+    """
+    The legal VAT rates a company receives (catalog legal_vat_rates, SUPER_ADMIN): every active one whose category its
+    regime allows (allows_nor for NOR, allows_red for RED...); all of them when the company has no regime.
+    """
+    from app.models.legal_vat_rate import LegalVatRate
+    rates = (await db.execute(
+        select(LegalVatRate).where(LegalVatRate.is_active.is_(True)).order_by(LegalVatRate.rate)
+    )).scalars().all()
+    if regime is None:
+        return list(rates)
+    return [r for r in rates if getattr(regime, "allows_" + r.tax_category.lower(), False)]
 
 
 async def _check_field_available(
@@ -201,20 +203,12 @@ async def create_company(
         raise CompanyAlreadyExistsError(_duplicate_field_message(e))
 
     # Seed VAT rates - only those the fiscal regime allows, if one was chosen.
-    # Without a regime, every rate of the one list (REGIME_RATE_NAMES), each with its SAF-T category.
-    vat_rates_to_seed = [{"name": n, "rate": r, "tax_category": c} for _, n, r, c in REGIME_RATE_NAMES]
+    # The legal rates (catalog legal_vat_rates) the regime allows - all of them without a regime.
+    regime = None
     if fiscal_regime_id is not None:
-        regime_result = await db.execute(select(FiscalRegime).where(FiscalRegime.id == fiscal_regime_id))
-        regime = regime_result.scalar_one_or_none()
-        if regime is not None:
-            vat_rates_to_seed = []
-            # One list for creation and regime change: each rate the regime allows, with its SAF-T category.
-            for flag, rate_name, rate_value, rate_category in REGIME_RATE_NAMES:
-                if getattr(regime, flag):
-                    vat_rates_to_seed.append({"name": rate_name, "rate": rate_value, "tax_category": rate_category})
-
-    for vat_data in vat_rates_to_seed:
-        db.add(VAT(company_id=company.id, name=vat_data["name"], rate=vat_data["rate"], tax_category=vat_data["tax_category"]))
+        regime = (await db.execute(select(FiscalRegime).where(FiscalRegime.id == fiscal_regime_id))).scalar_one_or_none()
+    for legal in await _legal_rates_for(db, regime):
+        db.add(VAT(company_id=company.id, name=legal.name, rate=legal.rate, tax_category=legal.tax_category))
 
     # Default warehouse - Phase 1 keeps a single warehouse per company (section 5.2/2.8).
     db.add(Warehouse(company_id=company.id, name="Armazem Principal"))
@@ -304,7 +298,7 @@ async def update_company(
     """
     Updates a company's editable fields, including NIF, email and phone (all unique).
     fiscal_regime_id CAN be changed here (SUPER_ADMIN only, see routes). When it actually changes,
-    the company's existing VAT rates (matched by name against REGIME_RATE_NAMES) are resynced:
+    the company's existing VAT rates (matched by category against the legal rates catalog, legal_vat_rates) are resynced:
     a rate the new regime does not allow is deactivated, one it allows is (re)activated, created
     if missing. Existing invoice lines keep their own vat_rate_snapshot - never affected by this.
     """
@@ -343,14 +337,16 @@ async def update_company(
         company.fiscal_regime_id = fiscal_regime_id
         regime = (await db.execute(select(FiscalRegime).where(FiscalRegime.id == fiscal_regime_id))).scalar_one()
         existing_rates = (await db.execute(select(VAT).where(VAT.company_id == company_id))).scalars().all()
-        existing_by_name = {v.name: v for v in existing_rates}
-        for flag_name, rate_name, rate_value, rate_category in REGIME_RATE_NAMES:
-            allowed = getattr(regime, flag_name)
-            existing = existing_by_name.get(rate_name)
-            if existing is not None:
-                existing.is_active = allowed
-            elif allowed:
-                db.add(VAT(company_id=company_id, name=rate_name, rate=rate_value, tax_category=rate_category, is_active=True))
+        # Matched by category - never by name, which the GESTOR may change: a category the new regime does not allow
+        # is deactivated, one it allows is reactivated, or created from its legal rate when the company has none.
+        allowed_legal = {r.tax_category: r for r in await _legal_rates_for(db, regime)}
+        held = set()
+        for v in existing_rates:
+            v.is_active = v.tax_category in allowed_legal
+            held.add(v.tax_category)
+        for category, legal in allowed_legal.items():
+            if category not in held:
+                db.add(VAT(company_id=company_id, name=legal.name, rate=legal.rate, tax_category=category, is_active=True))
     elif fiscal_regime_id is not None:
         company.fiscal_regime_id = fiscal_regime_id
 

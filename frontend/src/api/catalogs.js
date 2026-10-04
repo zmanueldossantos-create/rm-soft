@@ -18,6 +18,7 @@ export const banksApi = makeCatalogApi('banks');
 export const paymentMethodsApi = makeCatalogApi('payment-methods');
 export const paymentTermsApi = makeCatalogApi('payment-terms');
 export const vatCodesApi = makeCatalogApi('vat-codes');
+export const legalVatRatesApi = makeCatalogApi('legal-vat-rates');
 
 export const documentTypesApi = makeCatalogApi('document-types');
 

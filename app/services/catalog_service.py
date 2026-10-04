@@ -614,3 +614,45 @@ async def toggle_withholding_tax(db: AsyncSession, item_id: uuid.UUID) -> Withho
     await db.commit()
     await db.refresh(item)
     return item
+
+
+# ---------- Legal VAT rates (one per SAF-T category - the rates companies receive for what their regime allows)
+
+async def list_legal_vat_rates(db: AsyncSession):
+    from app.models.legal_vat_rate import LegalVatRate
+    return list((await db.execute(select(LegalVatRate).order_by(LegalVatRate.rate))).scalars().all())
+
+
+async def create_legal_vat_rate(db: AsyncSession, tax_category: str, name: str, rate: float):
+    from app.models.legal_vat_rate import LegalVatRate
+    item = LegalVatRate(tax_category=tax_category, name=name, rate=rate)
+    db.add(item)
+    await db.commit()
+    await db.refresh(item)
+    return item
+
+
+async def _legal_vat_rate_or_raise(db: AsyncSession, item_id: uuid.UUID):
+    from app.models.legal_vat_rate import LegalVatRate
+    item = (await db.execute(select(LegalVatRate).where(LegalVatRate.id == item_id))).scalar_one_or_none()
+    if item is None:
+        raise CatalogItemNotFoundError("Taxa legal nao encontrada")
+    return item
+
+
+async def update_legal_vat_rate(db: AsyncSession, item_id: uuid.UUID, tax_category: str, name: str, rate: float):
+    item = await _legal_vat_rate_or_raise(db, item_id)
+    item.tax_category = tax_category
+    item.name = name
+    item.rate = rate
+    await db.commit()
+    await db.refresh(item)
+    return item
+
+
+async def toggle_legal_vat_rate(db: AsyncSession, item_id: uuid.UUID):
+    item = await _legal_vat_rate_or_raise(db, item_id)
+    item.is_active = not item.is_active
+    await db.commit()
+    await db.refresh(item)
+    return item

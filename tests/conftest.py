@@ -33,6 +33,7 @@ from app.models.warehouse import Warehouse
 from app.models.vat import VAT
 from app.models.country import Country
 from app.models.vat_code import VatCode
+from app.models.legal_vat_rate import LegalVatRate
 from app.models.payment_method_catalog import PaymentMethodCatalog
 from app.models.company_payment_method_preference import CompanyPaymentMethodPreference
 from app.models.product import Product, ProductType
@@ -264,3 +265,16 @@ def _capability_enforcement_off_by_default(monkeypatch):
     is the subject)."""
     from app.core.config import get_settings
     monkeypatch.setattr(get_settings(), "ENFORCE_CAPABILITIES", False)
+
+
+@pytest_asyncio.fixture
+async def legal_vat_rates(db):
+    """The legal VAT rates catalog as migration o8r5s0t49e71 seeds it: companies receive their rates from it."""
+    rates = [
+        LegalVatRate(tax_category="ISE", name="Isento", rate=0),
+        LegalVatRate(tax_category="RED", name="Taxa reduzida", rate=5),
+        LegalVatRate(tax_category="NOR", name="Taxa normal", rate=14),
+    ]
+    db.add_all(rates)
+    await db.commit()
+    return rates
