@@ -3,6 +3,7 @@ Tests for pos_service.checkout - covers the split-payment scenario
 (e.g. 4000 Kz numerario + 6000 Kz Multicaixa Express for a 10000 Kz sale)
 and the requirement that a sale is blocked without an open cash session.
 """
+from datetime import date
 import pytest
 
 from app.models.product import Product, ProductType
@@ -99,4 +100,4 @@ async def test_checkout_links_invoice_to_session(db, company_with_essentials):
     )
 
     assert invoice.cash_session_id == session.id
-    assert invoice.business_date == session.business_date
+    assert invoice.business_date == date.today()  # the real day of the sale, not the session's

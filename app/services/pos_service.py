@@ -3,6 +3,7 @@ Business logic for the POS/Caixa checkout flow - combines invoice
 creation (via invoice_service.create_invoice) with split payments and the
 active CashSession's business_date, as ONE atomic sale.
 """
+from datetime import date
 import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -73,7 +74,7 @@ async def checkout(
     invoice = await create_invoice(
         db, company_id, session.activity_id, customer_id, invoice_type=invoice_type,
         lines_input=lines_input,
-        business_date=session.business_date,
+        business_date=date.today(),  # the real day of the sale, never the session's (it may be days old)
         cash_session_id=session.id,
         payments=payments if payments else None,
         discount_global_percent=discount_global_percent,
@@ -110,7 +111,7 @@ async def create_pro_forma_from_pos(
     pro_forma = await create_pro_forma(
         db, company_id, session.activity_id, customer_id,
         lines_input=lines_input,
-        business_date=session.business_date,
+        business_date=date.today(),  # the real day of the sale, never the session's (it may be days old)
         discount_global_percent=discount_global_percent,
     )
     return pro_forma
@@ -138,7 +139,7 @@ async def liquidate_pending_invoice(
 
     invoice = await convert_pro_forma_to_invoice(
         db, company_id, pro_forma_id, target_invoice_type,
-        business_date=session.business_date,
+        business_date=date.today(),  # the real day of the sale, never the session's (it may be days old)
         cash_session_id=session.id,
         payments=payments,
     )
