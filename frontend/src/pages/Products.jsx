@@ -1,3 +1,4 @@
+import VatReclassify from '../components/VatReclassify';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { Package, Plus, Loader2, Search, Pencil, Barcode, Scale, Upload, X } from 'lucide-react';
 import Modal from '../components/Modal';
@@ -52,6 +53,7 @@ const emptyForm = {
 export default function Products() {
   const [products, setProducts] = useState([]);
   const [vatRates, setVatRates] = useState([]);
+  const [selectedIds, setSelectedIds] = useState([]); // grouped actions (VAT reclassification)
   // What the company's regime imposes on an exempt article (M00, M04...): shown locked instead of asked.
   const [articleVatRule, setArticleVatRule] = useState({ regime: null, exemption: null });
   useEffect(() => {
@@ -319,11 +321,13 @@ export default function Products() {
             <span className="flex flex-col items-center gap-3">{search ? 'Nenhum produto encontrado' : 'Nenhum produto registado ainda'}<Search size={22} className="text-text-muted/40 mt-1" /></span>
           </div>
         )}
+        <VatReclassify kind="products" selectedIds={selectedIds} setSelectedIds={setSelectedIds} vatRates={vatRates} vatCodes={vatCodes} articleVatRule={articleVatRule} onDone={loadData} />
         {!loading && !error && filteredProducts.length > 0 && (
           <div className="overflow-x-auto">
             <table className="w-full text-sm min-w-[820px]">
               <thead>
                 <tr className="border-b border-border">
+                  <th className="px-3 py-3 w-8"><input type="checkbox" checked={filteredProducts.length > 0 && filteredProducts.every((x) => selectedIds.includes(x.id))} onChange={(e) => setSelectedIds(e.target.checked ? filteredProducts.map((x) => x.id) : [])} /></th>
                   <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Imagem</th>
                   <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Código</th>
                   <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Nome</th>
@@ -338,6 +342,7 @@ export default function Products() {
               <tbody>
                 {filteredProducts.map((p) => (
                   <tr key={p.id} className="border-b border-border last:border-0 hover:bg-bg-inset/40 transition-colors">
+                    <td className="px-3 py-4"><input type="checkbox" checked={selectedIds.includes(p.id)} onChange={(e) => setSelectedIds((prev) => (e.target.checked ? [...prev, p.id] : prev.filter((x) => x !== p.id)))} /></td>
                     <td className="px-6 py-4">
                       {p.image_path ? (
                         <img src={'http://127.0.0.1:8001' + p.image_path} alt={p.name} className="w-9 h-9 rounded object-cover border border-border" />

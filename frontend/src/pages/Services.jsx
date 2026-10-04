@@ -1,3 +1,4 @@
+import VatReclassify from '../components/VatReclassify';
 import { useState, useEffect, useMemo } from 'react';
 import { Wrench, Plus, Loader2, Search, Pencil } from 'lucide-react';
 import Modal from '../components/Modal';
@@ -46,6 +47,7 @@ export default function Services() {
   const [serviceTypes, setServiceTypes] = useState([]);
   const [resourceTypes, setResourceTypes] = useState([]);
   const [vatRates, setVatRates] = useState([]);
+  const [selectedIds, setSelectedIds] = useState([]); // grouped actions (VAT reclassification)
   // What the company's regime imposes on an exempt article (M00, M04...): shown locked instead of asked.
   const [articleVatRule, setArticleVatRule] = useState({ regime: null, exemption: null });
   useEffect(() => {
@@ -274,11 +276,13 @@ export default function Services() {
             <span className="flex flex-col items-center gap-3">{search ? 'Nenhum serviço encontrado' : 'Nenhum serviço registado ainda'}<Search size={22} className="text-text-muted/40 mt-1" /></span>
           </div>
         )}
+        <VatReclassify kind="services" selectedIds={selectedIds} setSelectedIds={setSelectedIds} vatRates={vatRates} vatCodes={vatCodes} articleVatRule={articleVatRule} onDone={loadData} />
         {!loading && !error && filteredServices.length > 0 && (
           <div className="overflow-x-auto">
             <table className="w-full text-sm min-w-[760px]">
               <thead>
                 <tr className="border-b border-border">
+                  <th className="px-3 py-3 w-8"><input type="checkbox" checked={filteredServices.length > 0 && filteredServices.every((x) => selectedIds.includes(x.id))} onChange={(e) => setSelectedIds(e.target.checked ? filteredServices.map((x) => x.id) : [])} /></th>
                   <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Código</th>
                   <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Designação</th>
                   <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Tipo</th>
@@ -293,6 +297,7 @@ export default function Services() {
                   const type = serviceTypes.find((t) => t.id === s.service_type_id);
                   return (
                     <tr key={s.id} className="border-b border-border last:border-0 hover:bg-bg-inset/40 transition-colors">
+                      <td className="px-3 py-4"><input type="checkbox" checked={selectedIds.includes(s.id)} onChange={(e) => setSelectedIds((prev) => (e.target.checked ? [...prev, s.id] : prev.filter((x) => x !== s.id)))} /></td>
                       <td className="px-6 py-4 font-mono text-text-muted">{s.code}</td>
                       <td className="px-6 py-4 font-display font-medium text-text-primary">{s.name}</td>
                       <td className="px-6 py-4 font-mono text-text-muted">{type?.name || '-'}</td>

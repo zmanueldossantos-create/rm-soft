@@ -32,3 +32,15 @@ export async function toggleCompanyVatRate(companyId, vatId) {
   const res = await apiClient.patch(`/vat/companies/${companyId}/${vatId}/toggle-status`);
   return res.data;
 }
+
+// Products and services to reclassify after a regime change (they cannot be sold until then).
+export async function getReclassification() {
+  const res = await apiClient.get('/vat/reclassification');
+  return res.data;
+}
+
+// Gives several products and services one VAT rate (and motive).
+export async function reclassifyArticles(payload) {
+  const res = await apiClient.post('/vat/reclassify', payload);
+  return res.data;
+}
