@@ -5,7 +5,7 @@ import Select from '../components/Select';
 import { listServices, createService, updateService, toggleServiceStatus } from '../api/services';
 import { listServiceTypes, createServiceType } from '../api/serviceTypes';
 import { listResourceTypes } from '../api/booking';
-import { listVatRates } from '../api/vat';
+import { listVatRates, getArticleVatRule } from '../api/vat';
 import { unitsApi, withholdingTaxesApi, vatCodesApi } from '../api/catalogs';
 import { extractErrorMessage } from '../utils/errors';
 import { useCan } from '../utils/permissions';
@@ -46,6 +46,11 @@ export default function Services() {
   const [serviceTypes, setServiceTypes] = useState([]);
   const [resourceTypes, setResourceTypes] = useState([]);
   const [vatRates, setVatRates] = useState([]);
+  // What the company's regime imposes on an exempt article (M00, M04...): shown locked instead of asked.
+  const [articleVatRule, setArticleVatRule] = useState({ regime: null, exemption: null });
+  useEffect(() => {
+    getArticleVatRule().then(setArticleVatRule).catch(() => setArticleVatRule({ regime: null, exemption: null }));
+  }, []);
   const [units, setUnits] = useState([]);
   const [withholdingTaxes, setWithholdingTaxes] = useState([]);
   const [vatCodes, setVatCodes] = useState([]);
@@ -216,9 +221,10 @@ export default function Services() {
   }
 
   const selectedVat = vatRates.find((v) => v.id === form.vatId);
-  const isExemptVat = selectedVat && Number(selectedVat.rate) === 0;
+  const isExemptVat = selectedVat && selectedVat.tax_category === 'ISE';
+  const imposedExemption = isExemptVat ? articleVatRule.exemption : null;
 
-  const isFormValid = form.code && form.name && form.vatId && (!isExemptVat || form.exemptionReasonId);
+  const isFormValid = form.code && form.name && form.vatId && (!isExemptVat || imposedExemption || form.exemptionReasonId);
 
   return (
     <main className="max-w-[1600px] mx-auto px-4 sm:px-6 md:px-8 py-6 sm:py-9">
@@ -347,7 +353,7 @@ export default function Services() {
               <Select value={form.unitOfMeasureId} onChange={(v) => updateField('unitOfMeasureId', v)} options={units.map((u) => ({ value: u.id, label: u.code + ' - ' + u.name }))} placeholder="Selecionar" />
             </Field>
             <Field label="IVA *">
-              <Select value={form.vatId} onChange={(v) => updateField('vatId', v)} options={vatRates.map((v) => ({ value: v.id, label: v.name + ' (' + v.rate + '%)' }))} placeholder="Selecionar IVA" />
+              <Select value={form.vatId} onChange={(v) => updateField('vatId', v)} options={vatRates.filter((v) => v.is_active !== false || v.id === form.vatId).map((v) => ({ value: v.id, label: v.name + ' (' + v.rate + '%)' }))} placeholder="Selecionar IVA" />
             </Field>
           </div>
 
@@ -371,7 +377,14 @@ export default function Services() {
             </Field>
             {isExemptVat && (
               <Field label="Motivo de isenção *">
-                <Select value={form.exemptionReasonId} onChange={(v) => updateField('exemptionReasonId', v)} options={vatCodes.filter((c) => Number(c.rate) === 0).map((c) => ({ value: c.id, label: c.code + ' - ' + c.name }))} placeholder="Selecionar motivo" />
+                {imposedExemption ? (
+                  <>
+                    <div className={inputClass + ' opacity-80 cursor-not-allowed truncate'}>{imposedExemption.code + ' - ' + imposedExemption.name}</div>
+                    <p className="text-[11px] text-text-muted mt-1">{'Imposto pelo ' + (articleVatRule.regime || 'regime da empresa')}</p>
+                  </>
+                ) : (
+                  <Select value={form.exemptionReasonId} onChange={(v) => updateField('exemptionReasonId', v)} options={vatCodes.map((c) => ({ value: c.id, label: c.code + ' - ' + c.name }))} placeholder="Selecionar motivo" />
+                )}
               </Field>
             )}
             {editingId && (

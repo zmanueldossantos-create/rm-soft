@@ -4,7 +4,7 @@ import Modal from '../components/Modal';
 import ProductSaleUnits from '../components/ProductSaleUnits';
 import Select from '../components/Select';
 import { listProducts, createProduct, updateProduct, toggleProductStatus, uploadProductImage, deleteProductImage } from '../api/products';
-import { listVatRates } from '../api/vat';
+import { listVatRates, getArticleVatRule } from '../api/vat';
 import { listProductCategories, createProductCategory } from '../api/productCategories';
 import { unitsApi, withholdingTaxesApi, vatCodesApi } from '../api/catalogs';
 import { extractErrorMessage } from '../utils/errors';
@@ -52,6 +52,11 @@ const emptyForm = {
 export default function Products() {
   const [products, setProducts] = useState([]);
   const [vatRates, setVatRates] = useState([]);
+  // What the company's regime imposes on an exempt article (M00, M04...): shown locked instead of asked.
+  const [articleVatRule, setArticleVatRule] = useState({ regime: null, exemption: null });
+  useEffect(() => {
+    getArticleVatRule().then(setArticleVatRule).catch(() => setArticleVatRule({ regime: null, exemption: null }));
+  }, []);
   const [categories, setCategories] = useState([]);
   const [units, setUnits] = useState([]);
   const [vatCodes, setVatCodes] = useState([]);
@@ -261,9 +266,10 @@ export default function Products() {
   }
 
   const selectedVat = vatRates.find((v) => v.id === form.vat_id);
-  const isExemptVat = selectedVat && Number(selectedVat.rate) === 0;
+  const isExemptVat = selectedVat && selectedVat.tax_category === 'ISE';
+  const imposedExemption = isExemptVat ? articleVatRule.exemption : null;
 
-  const isFormValid = form.code && form.name && form.vat_id && form.price !== '' && (!isExemptVat || form.exemptionReasonId);
+  const isFormValid = form.code && form.name && form.vat_id && form.price !== '' && (!isExemptVat || imposedExemption || form.exemptionReasonId);
 
   return (
     <main className="max-w-[1600px] mx-auto px-4 sm:px-6 md:px-8 py-6 sm:py-9">
@@ -454,7 +460,7 @@ export default function Products() {
 
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
             <Field label="IVA *">
-              <Select value={form.vat_id} onChange={(v) => updateField('vat_id', v)} options={vatRates.map((v) => ({ value: v.id, label: v.name + ' (' + v.rate + '%)' }))} placeholder="Selecionar IVA" />
+              <Select value={form.vat_id} onChange={(v) => updateField('vat_id', v)} options={vatRates.filter((v) => v.is_active !== false || v.id === form.vat_id).map((v) => ({ value: v.id, label: v.name + ' (' + v.rate + '%)' }))} placeholder="Selecionar IVA" />
             </Field>
             <Field label="Limite mínimo stock">
               <input type="number" step="0.001" min="0" value={form.minStockThreshold} onChange={(e) => updateField('minStockThreshold', e.target.value)} className={inputClass} />
@@ -464,7 +470,14 @@ export default function Products() {
             </Field>
             {isExemptVat && (
               <Field label="Motivo de isenção *">
-                <Select value={form.exemptionReasonId} onChange={(v) => updateField('exemptionReasonId', v)} options={vatCodes.filter((c) => Number(c.rate) === 0).map((c) => ({ value: c.id, label: c.code + ' - ' + c.name }))} placeholder="Selecionar motivo" />
+                {imposedExemption ? (
+                  <>
+                    <div className={inputClass + ' opacity-80 cursor-not-allowed truncate'}>{imposedExemption.code + ' - ' + imposedExemption.name}</div>
+                    <p className="text-[11px] text-text-muted mt-1">{'Imposto pelo ' + (articleVatRule.regime || 'regime da empresa')}</p>
+                  </>
+                ) : (
+                  <Select value={form.exemptionReasonId} onChange={(v) => updateField('exemptionReasonId', v)} options={vatCodes.map((c) => ({ value: c.id, label: c.code + ' - ' + c.name }))} placeholder="Selecionar motivo" />
+                )}
               </Field>
             )}
             {editingId && (

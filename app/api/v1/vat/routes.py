@@ -99,3 +99,13 @@ async def toggle_company_vat_rate_route(
         return await toggle_company_vat_rate(db, company_id, vat_id)
     except VatRateNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.get("/article-rule")
+async def get_article_vat_rule(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("vat:view")),
+):
+    """What the company's regime imposes on a sold article's VAT: the exemption motive of its exempt articles."""
+    from app.services.vat_rule_service import imposed_exemption
+    return await imposed_exemption(db, current_user.company_id)

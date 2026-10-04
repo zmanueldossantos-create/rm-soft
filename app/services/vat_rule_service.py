@@ -50,3 +50,20 @@ async def resolve_article_vat(
     if motive is None:
         raise ArticleVatError("Motivo de isencao invalido ou inativo")
     return exemption_reason_id
+
+
+async def imposed_exemption(db: AsyncSession, company_id: uuid.UUID) -> dict:
+    """
+    What the company's regime imposes on its exempt articles, for the article forms: the regime's name and the
+    exemption motive it imposes (id, code, legal mention) - None when each article chooses its own.
+    """
+    company = (await db.execute(select(Company).where(Company.id == company_id))).scalar_one_or_none()
+    regime = None
+    if company is not None and company.fiscal_regime_id is not None:
+        regime = (await db.execute(select(FiscalRegime).where(FiscalRegime.id == company.fiscal_regime_id))).scalar_one_or_none()
+    exemption = None
+    if regime is not None and regime.required_exemption_id is not None:
+        motive = (await db.execute(select(VatCode).where(VatCode.id == regime.required_exemption_id))).scalar_one_or_none()
+        if motive is not None:
+            exemption = {"id": str(motive.id), "code": motive.code, "name": motive.name}
+    return {"regime": regime.name if regime is not None else None, "exemption": exemption}
