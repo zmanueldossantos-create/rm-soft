@@ -170,7 +170,6 @@ class ProductResponse(BaseModel):
     unit_of_measure_code: str | None = None  # attached by the list: the unit's code (UN, CX...)
     sale_units: list[dict] = []  # attached by the list: active sale units (id, code, factor, price, barcode, is_fractional)
     unit_is_fractional: bool = False  # attached by the list: the base unit takes decimal quantities
-    unit_of_measure_legacy: str | None
     batch_yield: float
     is_raw_material: bool
     is_active: bool

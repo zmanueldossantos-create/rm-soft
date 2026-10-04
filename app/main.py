@@ -310,3 +310,12 @@ from app.services.vat_rule_service import ArticleVatError as _ArticleVatError  #
 @app.exception_handler(_ArticleVatError)
 async def _article_vat_handler(request: _Request, exc: _ArticleVatError):
     return _JSONResponse(status_code=422, content={"detail": str(exc)})
+
+
+# A product or service saved without a base unit: a clear 422.
+from app.services.product_service import ArticleUnitRequiredError as _ArticleUnitRequiredError  # noqa: E402
+
+
+@app.exception_handler(_ArticleUnitRequiredError)
+async def _article_unit_handler(request: _Request, exc: _ArticleUnitRequiredError):
+    return _JSONResponse(status_code=422, content={"detail": str(exc)})

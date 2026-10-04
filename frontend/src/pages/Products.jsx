@@ -272,7 +272,7 @@ export default function Products() {
   const isExemptVat = selectedVat && selectedVat.tax_category === 'ISE';
   const imposedExemption = isExemptVat ? articleVatRule.exemption : null;
 
-  const isFormValid = form.code && form.name && form.vat_id && form.price !== '' && (!isExemptVat || imposedExemption || form.exemptionReasonId);
+  const isFormValid = form.code && form.name && form.unitOfMeasureId && form.vat_id && form.price !== '' && (!isExemptVat || imposedExemption || form.exemptionReasonId);
 
   return (
     <main className="max-w-[1600px] mx-auto px-4 sm:px-6 md:px-8 py-6 sm:py-9">
@@ -445,7 +445,7 @@ export default function Products() {
             <Field label="Código de barras">
               <input value={form.barcode} onChange={(e) => updateField('barcode', e.target.value)} className={inputClass} />
             </Field>
-            <Field label="Unidade base">
+            <Field label="Unidade base *">
               <Select value={form.unitOfMeasureId} onChange={(v) => updateField('unitOfMeasureId', v)} options={units.map((u) => ({ value: u.id, label: u.code + ' - ' + u.name }))} placeholder="Selecionar" />
             </Field>
           </div>

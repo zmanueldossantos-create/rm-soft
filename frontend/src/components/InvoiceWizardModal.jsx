@@ -300,7 +300,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
     const unitPrice = saleUnit ? Number(saleUnit.price) : (item ? Number(item.price || 0) : 0);
     const vatRate = item ? Number(vatById[item.vat_id]?.rate || 0) : 0;
     const unitLabel = saleUnit ? saleUnit.unit_of_measure_code
-      : (item?.unit_of_measure_id ? (unitById[item.unit_of_measure_id]?.code || item.unit_of_measure_code || '') : (item?.unit_of_measure_legacy || ''));
+      : (item?.unit_of_measure_id ? (unitById[item.unit_of_measure_id]?.code || item.unit_of_measure_code || '') : '');
     const qty = parseFloat(line.quantity) || 0;
     const discPct = parseFloat(line.discount_percent) || 0;
     const gross = qty * unitPrice;

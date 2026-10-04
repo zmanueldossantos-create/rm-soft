@@ -226,7 +226,7 @@ export default function Services() {
   const isExemptVat = selectedVat && selectedVat.tax_category === 'ISE';
   const imposedExemption = isExemptVat ? articleVatRule.exemption : null;
 
-  const isFormValid = form.code && form.name && form.vatId && (!isExemptVat || imposedExemption || form.exemptionReasonId);
+  const isFormValid = form.code && form.name && form.unitOfMeasureId && form.vatId && (!isExemptVat || imposedExemption || form.exemptionReasonId);
 
   return (
     <main className="max-w-[1600px] mx-auto px-4 sm:px-6 md:px-8 py-6 sm:py-9">
@@ -354,7 +354,7 @@ export default function Services() {
                 </button>
               </div>
             </Field>
-            <Field label="Unidade de medida">
+            <Field label="Unidade de medida *">
               <Select value={form.unitOfMeasureId} onChange={(v) => updateField('unitOfMeasureId', v)} options={units.map((u) => ({ value: u.id, label: u.code + ' - ' + u.name }))} placeholder="Selecionar" />
             </Field>
             <Field label="IVA *">

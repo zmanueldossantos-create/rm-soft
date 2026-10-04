@@ -11,7 +11,7 @@ from app.services.product_sale_unit_service import (
 
 async def _setup(db, ctx):
     company_id = ctx["company"].id
-    egg = UnitOfMeasureCatalog(code="UN", name="Unidade")
+    egg = (await db.execute(select(UnitOfMeasureCatalog).where(UnitOfMeasureCatalog.code == "UN"))).scalar_one_or_none() or UnitOfMeasureCatalog(code="UN", name="Unidade")  # the fixture may already have it
     pallet = UnitOfMeasureCatalog(code="PAL", name="Palete")
     box = UnitOfMeasureCatalog(code="CX", name="Caixa")
     db.add_all([egg, pallet, box])

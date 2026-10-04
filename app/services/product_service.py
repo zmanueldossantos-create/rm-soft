@@ -26,6 +26,10 @@ class ProductNotFoundError(Exception):
     pass
 
 
+class ArticleUnitRequiredError(Exception):
+    """A product or service saved without a base unit."""
+
+
 class ExemptionReasonRequiredError(Exception):
     """Raised when the chosen VAT rate is 0% (isento) but no AGT exemption reason code was given."""
     pass
@@ -104,6 +108,8 @@ async def create_product(
 ) -> Product:
     """Creates a product within the caller's company."""
     await _check_all_fields_available(db, company_id, code, name, barcode)
+    if unit_of_measure_id is None:  # every article has a base unit: the SAF-T and the documents show it
+        raise ArticleUnitRequiredError("A unidade base e obrigatoria")
     _check_vat_rule(vat_id, is_raw_material)
     if is_raw_material:
         exemption_reason_id = None  # a raw material is never sold: no exemption to justify
@@ -252,6 +258,8 @@ async def update_product(
     """Updates a product's editable fields, scoped to the caller's company."""
     product = await get_product_or_raise(db, company_id, product_id)
     await _check_all_fields_available(db, company_id, code, name, barcode, exclude_id=product_id)
+    if unit_of_measure_id is None:  # every article has a base unit: the SAF-T and the documents show it
+        raise ArticleUnitRequiredError("A unidade base e obrigatoria")
     _check_vat_rule(vat_id, is_raw_material)
     if is_raw_material:
         exemption_reason_id = None  # a raw material is never sold: no exemption to justify

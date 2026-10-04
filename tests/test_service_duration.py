@@ -11,7 +11,7 @@ from app.services.service_service import create_service, update_service
 
 async def _create(db, ctx, code, name, **extra):
     return await create_service(
-        db, company_id=ctx["company"].id, code=code, name=name, vat_id=ctx["vat_nor"].id, price=1000, **extra,
+        db, company_id=ctx["company"].id, unit_of_measure_id=ctx["unit_un"].id, code=code, name=name, vat_id=ctx["vat_nor"].id, price=1000, **extra,
     )
 
 
@@ -33,7 +33,7 @@ async def test_update_changes_and_clears_the_duration(db, company_with_essential
     ctx = company_with_essentials
     service = await _create(db, ctx, "COR-30", "Corte", duration_minutes=30)
     service_id = service.id
-    common = dict(company_id=ctx["company"].id, service_id=service_id, code="COR-30", name="Corte", vat_id=ctx["vat_nor"].id, price=1000)
+    common = dict(unit_of_measure_id=ctx["unit_un"].id, company_id=ctx["company"].id, service_id=service_id, code="COR-30", name="Corte", vat_id=ctx["vat_nor"].id, price=1000)
 
     changed = await update_service(db, duration_minutes=45, **common)
     assert changed.duration_minutes == 45

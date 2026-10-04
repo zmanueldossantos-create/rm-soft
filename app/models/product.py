@@ -73,11 +73,8 @@ class Product(Base):
     min_stock_threshold: Mapped[float] = mapped_column(Numeric(12, 3), nullable=False, default=0)
     expiry_date: Mapped[date | None] = mapped_column(Date, nullable=True)  # DLC
     product_type: Mapped[ProductType] = mapped_column(Enum(ProductType), nullable=False, default=ProductType.BEM)
-    # Platform catalog reference (Configuracoes > Unidades) - replaces the
-    # old free-text field; existing rows keep their raw text separately
-    # (unit_of_measure_legacy) until re-assigned through the UI.
+    # Base unit, from the platform catalog (Configuracoes > Unidades) - required: the SAF-T and the documents show it.
     unit_of_measure_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("unit_of_measure_catalog.id"), nullable=True)
-    unit_of_measure_legacy: Mapped[str | None] = mapped_column(String(30), nullable=True)
     # How many units of THIS product one full recipe batch yields (see
     # RecipeIngredient.quantity_per_batch). Irrelevant unless this product
     # has a recipe; default 1 keeps it harmless for every other product.

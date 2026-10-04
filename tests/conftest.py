@@ -33,6 +33,7 @@ from app.models.warehouse import Warehouse
 from app.models.vat import VAT
 from app.models.country import Country
 from app.models.vat_code import VatCode
+from app.models.unit_of_measure_catalog import UnitOfMeasureCatalog
 from app.models.legal_vat_rate import LegalVatRate
 from app.models.payment_method_catalog import PaymentMethodCatalog
 from app.models.company_payment_method_preference import CompanyPaymentMethodPreference
@@ -153,6 +154,12 @@ async def company_with_essentials(db):
                             rate=0, country_id=country.id, valid_from=date(2021, 1, 1))
     db.add(exemption_m11)
     await db.flush()
+    # The base unit of the test articles: every article has one.
+    unit_un = (await db.execute(select(UnitOfMeasureCatalog).where(UnitOfMeasureCatalog.code == "UN"))).scalar_one_or_none()
+    if unit_un is None:
+        unit_un = UnitOfMeasureCatalog(code="UN", name="Unidade")
+        db.add(unit_un)
+        await db.flush()
     vat_ise = VAT(company_id=company.id, name="Isento", rate=0, tax_category="ISE")
     vat_red = VAT(company_id=company.id, name="Taxa reduzida", rate=5, tax_category="RED")
     vat_nor = VAT(company_id=company.id, name="Taxa normal", rate=14, tax_category="NOR")
@@ -249,6 +256,7 @@ async def company_with_essentials(db):
         "vat_red": vat_red,
         "vat_ise": vat_ise,
         "exemption_m11": exemption_m11,
+        "unit_un": unit_un,
         "gestor": gestor,
         "pm_numerario": pm_numerario,
         "pm_mb": pm_mb,
