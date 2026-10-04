@@ -1,4 +1,5 @@
 ﻿import { useState, useEffect } from 'react';
+import DateInput from '../components/DateInput';
 import { History, Loader2 } from 'lucide-react';
 import { listActivities } from '../api/activity';
 import { getOccupancyHistory } from '../api/hotel';
@@ -103,11 +104,11 @@ export default function Ocupacao() {
       <div className="flex items-end gap-2.5 mb-5 flex-wrap">
         <div>
           <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">De</label>
-          <input type="date" value={dateFrom} onChange={(e) => handleDateFromChange(e.target.value)} className="bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
+          <DateInput value={dateFrom} onChange={(e) => handleDateFromChange(e.target.value)} className="bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
         </div>
         <div>
           <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Até</label>
-          <input type="date" value={dateTo} min={dateFrom || undefined} onChange={(e) => setDateTo(e.target.value)} className="bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
+          <DateInput value={dateTo} min={dateFrom || undefined} onChange={(e) => setDateTo(e.target.value)} className="bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
         </div>
         {entries.length > 0 && (
           <div className="ml-auto bg-bg-elevated border border-border rounded-md px-4 py-2.5">

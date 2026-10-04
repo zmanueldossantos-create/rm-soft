@@ -1,3 +1,4 @@
+import DateInput from './DateInput';
 import { useState, useEffect, useMemo } from 'react';
 import { Plus, Trash2, Loader2, Copy, Eye, ArrowLeft, ArrowRight, Check, FileText } from 'lucide-react';
 import Select from './Select';
@@ -815,7 +816,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Data do documento *</label>
-                        <input type="date" value={businessDate} max={maxBusinessDate || undefined} onChange={(e) => handleBusinessDateChange(e.target.value)} required className={inputClass} />
+                        <DateInput value={businessDate} max={maxBusinessDate || undefined} onChange={(e) => handleBusinessDateChange(e.target.value)} required className={inputClass} />
                       </div>
                       <div>
                         <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Documento (No)</label>
@@ -840,7 +841,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                       </div>
                       <div>
                         <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Data de vencimento</label>
-                        <input type="date" value={dueDate} min={businessDate} readOnly={paidOnIssue || !!paymentTermId} onChange={(e) => setDueDate(e.target.value)} className={inputClass + (paidOnIssue || paymentTermId ? ' opacity-60 cursor-not-allowed' : '')} />
+                        <DateInput value={dueDate} min={businessDate} readOnly={paidOnIssue || !!paymentTermId} onChange={(e) => setDueDate(e.target.value)} className={inputClass + (paidOnIssue || paymentTermId ? ' opacity-60 cursor-not-allowed' : '')} />
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
@@ -850,7 +851,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                       </div>
                       <div>
                         <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Data de pagamento</label>
-                        <input type="date" value={paidOnIssue ? businessDate : paymentDate} min={todayStr()} readOnly={paidOnIssue || !collectsPayment} onChange={(e) => handlePaymentDateChange(e.target.value)} className={inputClass + (paidOnIssue || !collectsPayment ? ' opacity-60 cursor-not-allowed' : '')} />
+                        <DateInput value={paidOnIssue ? businessDate : paymentDate} min={todayStr()} readOnly={paidOnIssue || !collectsPayment} onChange={(e) => handlePaymentDateChange(e.target.value)} className={inputClass + (paidOnIssue || !collectsPayment ? ' opacity-60 cursor-not-allowed' : '')} />
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">

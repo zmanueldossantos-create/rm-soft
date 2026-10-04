@@ -1,3 +1,4 @@
+import DateInput from './DateInput';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { Plus, Loader2, Trash2, Upload, Download } from 'lucide-react';
 import Select from './Select';
@@ -302,7 +303,7 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection }) {
         </div>
         <div className="sm:col-span-2">
           <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Data do movimento *</label>
-          <input type="date" value={movementDate} min={movementDateMin} max={todayIso} onChange={(e) => setMovementDate(e.target.value)} required className={inputClass} />
+          <DateInput value={movementDate} min={movementDateMin} max={todayIso} onChange={(e) => setMovementDate(e.target.value)} required className={inputClass} />
         </div>
         <PostingPeriodSelect className="sm:col-span-2" value={fiscalPeriodId} onChange={setFiscalPeriodId} onChoice={setPeriodChoice} onPeriods={setPostingPeriods} />
         {filterDirection === 'ENTRADA' && (

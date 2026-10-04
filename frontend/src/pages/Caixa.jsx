@@ -1,3 +1,4 @@
+import DateInput from '../components/DateInput';
 import { useState, useEffect, useRef, Fragment } from 'react';
 import usePosDocumentTypes from '../utils/posDocumentTypes';
 import { useCan } from '../utils/permissions';
@@ -1567,8 +1568,8 @@ export default function Caixa() {
           <div className="flex items-end gap-2.5">
             <div className="flex-1">
               <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">De</label>
-              <input
-                type="date" value={dailyReportDateFrom}
+              <DateInput
+                value={dailyReportDateFrom}
                 max={new Date().toISOString().slice(0, 10)}
                 onChange={(e) => {
                   const newFrom = e.target.value;
@@ -1580,8 +1581,8 @@ export default function Caixa() {
             </div>
             <div className="flex-1">
               <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Ate</label>
-              <input
-                type="date" value={dailyReportDateTo}
+              <DateInput
+                value={dailyReportDateTo}
                 min={dailyReportDateFrom || undefined}
                 max={new Date().toISOString().slice(0, 10)}
                 onChange={(e) => setDailyReportDateTo(e.target.value)}

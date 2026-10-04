@@ -1,3 +1,4 @@
+import DateInput from '../components/DateInput';
 import { useState, useEffect } from 'react';
 import { Settings, Globe, DollarSign, MapPin, Building2, Landmark, CreditCard, Calendar, Percent, Plus, Pencil, Loader2, X, FileText, Ruler, ShieldMinus, LayoutGrid, ShieldCheck, Save, Check, ArrowLeftRight, PiggyBank } from 'lucide-react';
 import Modal from '../components/Modal';
@@ -468,8 +469,8 @@ export default function Configuracoes() {
           <Field label="Designação *"><input value={form.name} onChange={(e) => updateField('name', e.target.value)} required className={inputClass} /></Field>
           <Field label="Taxa (%) *"><input type="number" step="0.01" value={form.rate} onChange={(e) => updateField('rate', e.target.value)} required className={inputClass} /></Field>
           <Field label="País *"><Select value={form.country_id} onChange={(v) => updateField('country_id', v)} options={countries.map((c) => ({ value: c.id, label: c.name }))} /></Field>
-          <Field label="Válido desde *"><input type="date" value={form.valid_from} onChange={(e) => updateField('valid_from', e.target.value)} required className={inputClass} /></Field>
-          <Field label="Válido até (vazio = sem fim)"><input type="date" value={form.valid_until || ''} onChange={(e) => updateField('valid_until', e.target.value)} className={inputClass} /></Field>
+          <Field label="Válido desde *"><DateInput value={form.valid_from} onChange={(e) => updateField('valid_from', e.target.value)} required className={inputClass} /></Field>
+          <Field label="Válido até (vazio = sem fim)"><DateInput value={form.valid_until || ''} onChange={(e) => updateField('valid_until', e.target.value)} className={inputClass} /></Field>
           <Field label="Observações"><textarea value={form.observations || ''} onChange={(e) => updateField('observations', e.target.value)} rows={2} className={inputClass} /></Field>
         </>
       );

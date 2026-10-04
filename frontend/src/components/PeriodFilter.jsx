@@ -1,3 +1,4 @@
+import DateInput from './DateInput';
 import { useState, useMemo, useEffect } from 'react';
 import { Calendar, X } from 'lucide-react';
 import Select from './Select';
@@ -139,8 +140,7 @@ export default function PeriodFilter({ periods, onChange }) {
         <>
           <div className="flex items-center gap-1.5">
             <Calendar size={14} className="text-text-muted" />
-            <input
-              type="date"
+            <DateInput
               value={dateFrom}
               max={dateTo || todayStr}
               onChange={(e) => handleDateFromChange(e.target.value)}
@@ -148,8 +148,7 @@ export default function PeriodFilter({ periods, onChange }) {
             />
           </div>
           <span className="text-text-muted text-[12px]">até</span>
-          <input
-            type="date"
+          <DateInput
             value={dateTo}
             min={dateFrom || undefined}
             max={todayStr}

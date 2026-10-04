@@ -1,3 +1,4 @@
+import DateInput from '../components/DateInput';
 import VatReclassify from '../components/VatReclassify';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { Package, Plus, Loader2, Search, Pencil, Barcode, Scale, Upload, X } from 'lucide-react';
@@ -471,7 +472,7 @@ export default function Products() {
               <input type="number" step="0.001" min="0" value={form.minStockThreshold} onChange={(e) => updateField('minStockThreshold', e.target.value)} className={inputClass} />
             </Field>
             <Field label="Data limite de consumo">
-              <input type="date" value={form.expiryDate} onChange={(e) => updateField('expiryDate', e.target.value)} className={inputClass} />
+              <DateInput value={form.expiryDate} onChange={(e) => updateField('expiryDate', e.target.value)} className={inputClass} />
             </Field>
             {isExemptVat && (
               <Field label="Motivo de isenção *">

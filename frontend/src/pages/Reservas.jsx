@@ -1,4 +1,5 @@
 ﻿import { useState, useEffect } from 'react';
+import DateInput from '../components/DateInput';
 import { CalendarClock, Plus, Loader2, X, CheckCircle2, Pencil, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useCan } from '../utils/permissions';
 import { listActivities } from '../api/activity';
@@ -532,8 +533,7 @@ export default function Reservas() {
           >
             <ChevronLeft size={16} />
           </button>
-          <input
-            type="date"
+          <DateInput
             value={agendaDate}
             onChange={(ev) => { if (ev.target.value) setAgendaDate(ev.target.value); }}
             className="bg-bg-inset border border-border rounded-md px-3.5 py-2 text-sm text-text-primary outline-none focus:border-accent transition-colors"
@@ -706,11 +706,11 @@ export default function Reservas() {
           <>
         <div>
           <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">De</label>
-          <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
+          <DateInput value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
         </div>
         <div>
           <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Ate</label>
-          <input type="date" value={dateTo} min={dateFrom || undefined} onChange={(e) => setDateTo(e.target.value)} className="bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
+          <DateInput value={dateTo} min={dateFrom || undefined} onChange={(e) => setDateTo(e.target.value)} className="bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
         </div>
           </>
         )}
@@ -818,8 +818,8 @@ export default function Reservas() {
           <div className="flex gap-3">
             <div className="flex-1">
               <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Data inicio *</label>
-              <input
-                type="date" value={form.date}
+              <DateInput
+                value={form.date}
                 min={editingBookingId ? undefined : todayIso()}
                 onChange={(e) => {
                   const newDate = e.target.value;
@@ -830,7 +830,7 @@ export default function Reservas() {
             </div>
             <div className="flex-1">
               <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Data fim *</label>
-              <input type="date" value={form.endDate} min={form.date || undefined} onChange={(e) => setForm((p) => ({ ...p, endDate: e.target.value, endTouched: true }))} required className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
+              <DateInput value={form.endDate} min={form.date || undefined} onChange={(e) => setForm((p) => ({ ...p, endDate: e.target.value, endTouched: true }))} required className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
             </div>
           </div>
           <div className="flex gap-3">

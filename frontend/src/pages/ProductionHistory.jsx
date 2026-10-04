@@ -1,3 +1,4 @@
+import DateInput from '../components/DateInput';
 import { useState, useEffect } from 'react';
 import { ClipboardList, Loader2 } from 'lucide-react';
 import Select from '../components/Select';
@@ -99,11 +100,11 @@ export default function ProductionHistory() {
         </div>
         <div>
           <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Intervalo - de</label>
-          <input type="date" value={dateFrom} max={dateTo || TODAY} onChange={(e) => setDateFrom(e.target.value)} className="bg-bg-inset border border-border rounded-md px-3 py-2 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors" />
+          <DateInput value={dateFrom} max={dateTo || TODAY} onChange={(e) => setDateFrom(e.target.value)} className="bg-bg-inset border border-border rounded-md px-3 py-2 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors" />
         </div>
         <div>
           <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">até</label>
-          <input type="date" value={dateTo} min={dateFrom || undefined} max={TODAY} onChange={(e) => setDateTo(e.target.value)} className="bg-bg-inset border border-border rounded-md px-3 py-2 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors" />
+          <DateInput value={dateTo} min={dateFrom || undefined} max={TODAY} onChange={(e) => setDateTo(e.target.value)} className="bg-bg-inset border border-border rounded-md px-3 py-2 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors" />
         </div>
         <button type="button" onClick={clearFilters} className="text-[13px] text-text-muted hover:text-text-primary underline transition-colors cursor-pointer">
           Limpar filtros

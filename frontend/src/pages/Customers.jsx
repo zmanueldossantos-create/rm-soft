@@ -1,3 +1,4 @@
+import DateInput from '../components/DateInput';
 import { useState, useEffect, useMemo } from 'react';
 import { Users, Plus, Loader2, Search, Mail, Phone, Pencil, X } from 'lucide-react';
 import Modal from '../components/Modal';
@@ -516,7 +517,7 @@ export default function Customers() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Field label="Data de registo">
-                  <input type="date" value={form.registrationDate} onChange={(e) => updateField('registrationDate', e.target.value)} className={inputClass} />
+                  <DateInput value={form.registrationDate} onChange={(e) => updateField('registrationDate', e.target.value)} className={inputClass} />
                 </Field>
                 {editingId && (
                   <Field label="Estado">
