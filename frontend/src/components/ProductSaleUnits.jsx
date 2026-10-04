@@ -27,7 +27,7 @@ export default function ProductSaleUnits({ productId, baseUnitId, units }) {
     try {
       setRows(await listSaleUnits(productId));
     } catch (err) {
-      setError(extractErrorMessage(err, 'Erro ao carregar as unidades de venda'));
+      setError(extractErrorMessage(err, 'Erro ao carregar as unidades e embalagens'));
     } finally {
       setLoading(false);
     }
@@ -79,7 +79,7 @@ export default function ProductSaleUnits({ productId, baseUnitId, units }) {
     } catch (err) {
       const detail = err?.response?.data?.detail;
       if (err?.response?.status === 409 && Array.isArray(detail?.warnings)) setWarnings(detail.warnings);
-      else setError(extractErrorMessage(err, 'Erro ao guardar a unidade de venda'));
+      else setError(extractErrorMessage(err, 'Erro ao guardar a unidade ou embalagem'));
     } finally {
       setSaving(false);
     }
@@ -110,7 +110,7 @@ export default function ProductSaleUnits({ productId, baseUnitId, units }) {
   return (
     <div className="flex flex-col gap-3 pt-3 border-t border-border">
       <div>
-        <p className="text-[13px] font-medium text-text-primary">Unidades de venda</p>
+        <p className="text-[13px] font-medium text-text-primary">Unidades e embalagens</p>
         <p className="text-[12px] text-text-muted">Outras formas de vender este produto. O stock e sempre contado em {baseCode}.</p>
       </div>
 

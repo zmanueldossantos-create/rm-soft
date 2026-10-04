@@ -818,8 +818,8 @@ export default function CompanySettings() {
               </label>
             </div>
             <div className="mt-6">
-              <p className="text-[13px] font-medium text-text-primary mb-1">Controlos das unidades de venda</p>
-              <p className="text-[12px] text-text-muted mb-3">O que o sistema faz quando uma unidade de venda de um produto parece incoerente.</p>
+              <p className="text-[13px] font-medium text-text-primary mb-1">Controlos das unidades e embalagens</p>
+              <p className="text-[12px] text-text-muted mb-3">O que o sistema faz quando uma unidade ou embalagem de um produto parece incoerente.</p>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {[['sale_unit_check_above_base', 'Mais cara que a unidade base'], ['sale_unit_check_below_cost', 'Abaixo do preco de compra'], ['sale_unit_check_same_factor', 'Mesmo conteudo que outra unidade']].map(([field, label]) => (
                   <div key={field}>

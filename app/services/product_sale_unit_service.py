@@ -73,7 +73,7 @@ async def _check(
     if exclude_id is not None:
         same_unit = same_unit.where(ProductSaleUnit.id != exclude_id)
     if (await db.execute(same_unit)).first() is not None:
-        raise SaleUnitInvalidError("Este produto ja tem esta unidade de venda")
+        raise SaleUnitInvalidError("Este produto ja tem esta unidade ou embalagem")
     if barcode:
         # One barcode, one thing to sell, company wide: a product or a sale unit.
         on_product = (await db.execute(
@@ -113,7 +113,7 @@ async def _consistency(
                        f"Venda abaixo do custo: cada {base_code} sai a {per_base:.2f}, preco de compra {purchase:.2f}"))
     if same_factor:
         issues.append((company.sale_unit_check_same_factor,
-                       f"Outra unidade de venda deste produto ja contem {factor:g} {base_code}"))
+                       f"Outra unidade ou embalagem deste produto ja contem {factor:g} {base_code}"))
     for mode, message in issues:
         if mode == "block":
             raise SaleUnitInvalidError(message)
@@ -154,7 +154,7 @@ async def _sale_unit(db: AsyncSession, company_id: uuid.UUID, product_id: uuid.U
         )
     )).scalar_one_or_none()
     if unit is None:
-        raise SaleUnitNotFoundError("Unidade de venda nao encontrada")
+        raise SaleUnitNotFoundError("Unidade ou embalagem nao encontrada")
     return unit
 
 
@@ -198,7 +198,7 @@ async def resolve_line_unit(
             )
         )).scalar_one_or_none()
         if sale_unit is None:
-            raise SaleUnitInvalidError(f"Unidade de venda invalida ou inativa para {product.name}")
+            raise SaleUnitInvalidError(f"Unidade ou embalagem invalida ou inativa para {product.name}")
         unit_id, price, factor, line_sale_unit_id = sale_unit.unit_of_measure_id, float(sale_unit.price), float(sale_unit.factor), sale_unit.id
     else:
         unit_id, price, factor, line_sale_unit_id = product.unit_of_measure_id, float(product.price), 1.0, None

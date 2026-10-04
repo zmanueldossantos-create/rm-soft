@@ -212,7 +212,7 @@ async def ensure_base_unit_can_change(db: AsyncSession, product: Product, new_un
     checks = (
         (StockMovement, StockMovement.product_id, 'movimentos de stock'),
         (InvoiceLine, InvoiceLine.product_id, 'documentos de venda'),
-        (ProductSaleUnit, ProductSaleUnit.product_id, 'unidades de venda'),
+        (ProductSaleUnit, ProductSaleUnit.product_id, 'unidades e embalagens'),
     )
     for model, column, label in checks:
         if (await db.execute(select(model.id).where(column == product.id).limit(1))).first() is not None:

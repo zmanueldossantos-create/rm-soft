@@ -390,7 +390,7 @@ export default function Products() {
       <Modal open={modalOpen} onClose={closeModal} title={editingId ? 'Editar produto' : 'Novo produto'} maxWidthClass="max-w-4xl">
         <form onSubmit={handleSubmit} className="flex flex-col gap-4 h-[70vh] overflow-y-auto scrollbar-thin pr-1">
           <div className="flex gap-1 border-b border-border -mt-1">
-            {[['geral', 'Geral'], ['unidades', 'Unidades de venda']].map(([key, label]) => (
+            {[['geral', 'Geral'], ['unidades', 'Unidades e embalagens']].map(([key, label]) => (
               <button key={key} type="button" disabled={key === 'unidades' && !editingId} title={key === 'unidades' && !editingId ? 'Guarde o produto primeiro' : undefined} onClick={() => setProductTab(key)} className={'px-3.5 py-2 text-[13px] font-medium border-b-2 -mb-px transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ' + (productTab === key ? 'border-accent text-text-primary' : 'border-transparent text-text-muted hover:text-text-primary')}>
                 {label}
               </button>
