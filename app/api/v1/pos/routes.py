@@ -109,28 +109,6 @@ async def get_carry_forward(
     return {"amount": amount}
 
 
-@router.get("/stock-levels")
-async def get_pos_stock_levels(
-    pos_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("pos:view")),
-):
-    """Current on-hand quantity per product, in the warehouse tied to this POS's
-    Activity (Activity.warehouse_id) - shown on the Caixa product grid so the cashier
-    can see availability at a glance. Returns {product_id: quantity}; a product with
-    no Stock row for this warehouse (never received) is simply absent from the map -
-    the frontend treats that as 0."""
-    pos = await get_pos_or_raise(db, current_user.company_id, pos_id)
-    activity_result = await db.execute(select(Activity).where(Activity.id == pos.activity_id))
-    activity = activity_result.scalar_one_or_none()
-    if activity is None or activity.warehouse_id is None:
-        return {}
-    stock_result = await db.execute(
-        select(Stock.product_id, Stock.quantity).where(Stock.warehouse_id == activity.warehouse_id)
-    )
-    return {str(product_id): float(quantity) for product_id, quantity in stock_result.all()}
-
-
 @router.post("/sessions/{session_id}/close", response_model=CashSessionResponse)
 async def post_close_session(
     session_id: uuid.UUID,

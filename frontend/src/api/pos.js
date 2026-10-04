@@ -21,9 +21,10 @@ export async function getCarryForwardAmount(posId) {
   return res.data.amount;
 }
 
+// The quantity of each product the till sells from - read from THE till stock route (getPosStock), which also
+// carries the warehouse's rules (negative stock, blocked exits).
 export async function getPosStockLevels(posId) {
-  const res = await apiClient.get('/pos/stock-levels', { params: { pos_id: posId } });
-  return res.data;
+  return ((await getPosStock(posId)) || {}).stock || {};
 }
 
 export async function closeCashSession(sessionId, closingAmountCounted, closingNotes) {

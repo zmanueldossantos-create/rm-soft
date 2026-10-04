@@ -17,7 +17,7 @@ import { listActivities, listPointsOfSale } from '../api/activity';
 import { createCustomer } from '../api/customers';
 import { listProducts } from '../api/products';
 import { listCustomers } from '../api/customers';
-import { openCashSession, getOpenCashSession, closeCashSession, checkout, liquidatePendingInvoice, getCurrentCashBalance, getCarryForwardAmount, getPosStockLevels } from '../api/pos';
+import { openCashSession, getOpenCashSession, closeCashSession, checkout, liquidatePendingInvoice, getCurrentCashBalance, getCarryForwardAmount } from '../api/pos';
 import { listPendingProFormas, listRecentIssuedInvoices, fetchInvoicePdfBlob } from '../api/invoices';
 import { listPendingReceptions, receiveCashMovement, listPendingEmissions, cancelCashMovement, getDailyReport } from '../api/tesouraria';
 import DocumentActionModals from '../components/DocumentActionModals';
@@ -117,7 +117,6 @@ export default function Caixa() {
   const [currentBalance, setCurrentBalance] = useState(null);
   const [carryForwardAmount, setCarryForwardAmount] = useState(0);
   const [carryForwardLoading, setCarryForwardLoading] = useState(false);
-  const [stockLevels, setStockLevels] = useState({});
   const [dailyReportModalOpen, setDailyReportModalOpen] = useState(false);
   const [dailyReportEntries, setDailyReportEntries] = useState([]);
   const [dailyReportLoading, setDailyReportLoading] = useState(false);
@@ -246,7 +245,7 @@ export default function Caixa() {
         const openSession = await getOpenCashSession(initialPosId);
         setSession(openSession);
         if (openSession) await refreshBalance(initialPosId);
-        getPosStockLevels(initialPosId).then(setStockLevels).catch(() => setStockLevels({}));
+        refreshPosStock(initialPosId);
       }
     } catch (err) {
       setError(extractErrorMessage(err, 'Erro ao carregar caixa'));
@@ -377,7 +376,7 @@ export default function Caixa() {
       await receiveCashMovement(movementId, selectedPosId);
       await loadPendingReceptionsList();
       refreshBalance(selectedPosId);
-      getPosStockLevels(selectedPosId).then(setStockLevels).catch(() => {});
+      refreshPosStock(selectedPosId);
     } catch (err) {
       setMovementFormError(extractErrorMessage(err, 'Erro ao confirmar recepcao'));
     } finally {
@@ -391,7 +390,7 @@ export default function Caixa() {
       await cancelCashMovement(movementId, selectedPosId);
       await loadPendingEmissionsList();
       refreshBalance(selectedPosId);
-      getPosStockLevels(selectedPosId).then(setStockLevels).catch(() => {});
+      refreshPosStock(selectedPosId);
     } catch (err) {
       setMovementFormError(extractErrorMessage(err, 'Erro ao cancelar transferencia'));
     } finally {
@@ -433,7 +432,7 @@ export default function Caixa() {
       }
       await createCashMovement(payload);
       refreshBalance(selectedPosId);
-      getPosStockLevels(selectedPosId).then(setStockLevels).catch(() => {});
+      refreshPosStock(selectedPosId);
       loadPendingEmissionsList();
       loadPendingReceptionsList();
       setMovementForm({ movementType: 'TRANSFERENCIA', amount: '', sourcePosId: selectedPosId, otherPosId: '', reasonId: '', description: '' });
@@ -495,7 +494,7 @@ export default function Caixa() {
       setSession(openSession);
       if (openSession) await refreshBalance(posId);
       else setCurrentBalance(null);
-      getPosStockLevels(posId).then(setStockLevels).catch(() => setStockLevels({}));
+      refreshPosStock(posId);
     } catch (err) {
       setError(extractErrorMessage(err, 'Erro ao carregar sessão de caixa'));
     } finally {
@@ -525,7 +524,7 @@ export default function Caixa() {
       setSession(newSession);
       setOpenModalOpen(false);
       refreshBalance(selectedPosId);
-      getPosStockLevels(selectedPosId).then(setStockLevels).catch(() => {});
+      refreshPosStock(selectedPosId);
     } catch (err) {
       setOpenError(extractErrorMessage(err, 'Erro ao abrir caixa'));
     } finally {
@@ -615,22 +614,32 @@ export default function Caixa() {
   // The stock the till sells from (its activity's warehouse), reloaded after each sale: an addition beyond it is
   // refused at once when the warehouse allows no negative stock (the server's rule still decides at checkout).
   const [posStock, setPosStock] = useState(null);
-  useEffect(() => {
-    if (!session?.pos_id) {
+  const stockLevels = posStock?.stock || {}; // shown on the product cards
+  function refreshPosStock(posId) {
+    if (!posId) {
       setPosStock(null);
       return;
     }
-    getPosStock(session.pos_id).then(setPosStock).catch(() => setPosStock(null));
-  }, [session?.pos_id, lastInvoice]);
+    getPosStock(posId).then(setPosStock).catch(() => setPosStock(null));
+  }
+
+  // THE stock check of the cart: the cart as it would become, product by product, in base units (sale units
+  // included), against the stock of the till's warehouse - unless it allows a negative stock. The server still decides.
+  function cartStockRefusal(nextCart, productId) {
+    const available = posStock?.stock?.[productId];
+    if (!productId || available === undefined || (posStock.allow_negative_stock && !posStock.exits_blocked)) return '';
+    const factorOf = (line) => Number((line.saleUnits || []).find((u) => u.id === line.saleUnitId)?.factor || 1);
+    const lines = nextCart.filter((l) => l.productId === productId);
+    const requested = lines.reduce((sum, l) => sum + l.quantity * factorOf(l), 0);
+    if (requested <= available + 1e-9) return '';
+    return 'Stock insuficiente: ' + Math.max(available, 0).toLocaleString('pt-PT', { maximumFractionDigits: 3 }) + ' ' + (lines[0]?.baseUnit || 'UN') + ' disponiveis';
+  }
 
   function stockRefusal(item, saleUnit) {
-    const available = posStock?.stock?.[item.id];
-    if (available === undefined || (posStock.allow_negative_stock && !posStock.exits_blocked)) return '';
-    const factorOf = (line) => Number((line.saleUnits || []).find((u) => u.id === line.saleUnitId)?.factor || 1);
-    const inCart = cart.filter((l) => l.productId === item.id).reduce((sum, l) => sum + l.quantity * factorOf(l), 0);
-    const requested = inCart + (saleUnit ? Number(saleUnit.factor) : 1);
-    if (requested <= available + 1e-9) return '';
-    return 'Stock insuficiente: ' + Math.max(available, 0).toLocaleString('pt-PT', { maximumFractionDigits: 3 }) + ' ' + (item.unit_of_measure_code || 'UN') + ' disponiveis';
+    return cartStockRefusal([...cart, {
+      productId: item.id, quantity: 1, saleUnitId: saleUnit ? saleUnit.id : null,
+      saleUnits: saleUnit ? [saleUnit] : [], baseUnit: item.unit_of_measure_code || 'UN',
+    }], item.id);
   }
 
   function addToCart(item, isService = false, saleUnit = null) {
@@ -676,21 +685,24 @@ export default function Caixa() {
   // Switches a cart line to another unit of the same product ('base' or one of its sale units): price and unit follow;
   // if the product already has a line in that unit, the quantities merge.
   function changeCartUnit(key, unitValue) {
-    setCart((prev) => {
-      const line = prev.find((l) => l.key === key);
-      if (!line || !line.productId) return prev;
-      const saleUnit = (line.saleUnits || []).find((u) => u.id === unitValue) || null;
-      const newKey = 'product:' + line.productId + (saleUnit ? ':' + saleUnit.id : '');
-      if (newKey === key) return prev;
-      if (prev.some((l) => l.key === newKey)) {
-        return prev.filter((l) => l.key !== key).map((l) => (l.key === newKey ? { ...l, quantity: l.quantity + line.quantity } : l));
-      }
-      return prev.map((l) => (l.key === key ? {
+    const line = cart.find((l) => l.key === key);
+    if (!line || !line.productId) return;
+    const saleUnit = (line.saleUnits || []).find((u) => u.id === unitValue) || null;
+    const newKey = 'product:' + line.productId + (saleUnit ? ':' + saleUnit.id : '');
+    if (newKey === key) return;
+    const next = cart.some((l) => l.key === newKey)
+      ? cart.filter((l) => l.key !== key).map((l) => (l.key === newKey ? { ...l, quantity: l.quantity + line.quantity } : l))
+      : cart.map((l) => (l.key === key ? {
         ...l, key: newKey, saleUnitId: saleUnit ? saleUnit.id : null,
         price: saleUnit ? saleUnit.price : l.basePrice, unit: saleUnit ? saleUnit.unit_of_measure_code : l.baseUnit,
         fractional: saleUnit ? !!saleUnit.is_fractional : !!l.baseFractional,
       } : l));
-    });
+    const refusal = cartStockRefusal(next, line.productId);
+    if (refusal) {
+      setError(refusal);
+      return;
+    }
+    setCart(next);
   }
 
   // Barcode scan (search field + Enter, as a scanner types it): a product's own barcode adds its base unit, a sale
@@ -718,7 +730,20 @@ export default function Caixa() {
       setCart((prev) => prev.filter((line) => line.key !== key));
       return;
     }
-    setCart((prev) => prev.map((line) => (line.key === key ? { ...line, quantity } : line)));
+    applyCartQuantity(key, quantity);
+  }
+
+  // A higher quantity must stay within the stock (cartStockRefusal); a lower one always passes.
+  function applyCartQuantity(key, quantity) {
+    const line = cart.find((l) => l.key === key);
+    if (!line) return;
+    const next = cart.map((l) => (l.key === key ? { ...l, quantity } : l));
+    const refusal = quantity > line.quantity ? cartStockRefusal(next, line.productId) : '';
+    if (refusal) {
+      setError(refusal);
+      return;
+    }
+    setCart(next);
   }
 
   // A fractional line (1.250 kg) takes its quantity typed in, committed on blur / Enter; an empty or zero entry never
@@ -726,7 +751,7 @@ export default function Caixa() {
   function setCartQuantityExact(key, value) {
     const quantity = parseFloat(String(value).replace(',', '.'));
     if (!(quantity > 0)) return;
-    setCart((prev) => prev.map((line) => (line.key === key ? { ...line, quantity } : line)));
+    applyCartQuantity(key, quantity);
   }
 
   function updateCartDiscount(key, discountPercent) {
@@ -813,7 +838,7 @@ export default function Caixa() {
       setLastInvoice(invoice);
       setSuccessModalOpen(true);
       refreshBalance(selectedPosId);
-      getPosStockLevels(selectedPosId).then(setStockLevels).catch(() => {});
+      refreshPosStock(selectedPosId);
       setCart([]);
       setSelectedCustomerId('');
       setGlobalDiscountPercent(0);
@@ -833,7 +858,7 @@ export default function Caixa() {
       setLastInvoice(proForma);
       setSuccessModalOpen(true);
       refreshBalance(selectedPosId);
-      getPosStockLevels(selectedPosId).then(setStockLevels).catch(() => {});
+      refreshPosStock(selectedPosId);
       setCart([]);
       setSelectedCustomerId('');
       setGlobalDiscountPercent(0);
@@ -929,7 +954,7 @@ export default function Caixa() {
         setPaymentModalOpen(false);
         setSuccessModalOpen(true);
       refreshBalance(selectedPosId);
-      getPosStockLevels(selectedPosId).then(setStockLevels).catch(() => {});
+      refreshPosStock(selectedPosId);
       listPendingProFormas().then(setPendingProFormas).catch(() => {});
       } else {
         const invoice = await checkout(
@@ -942,7 +967,7 @@ export default function Caixa() {
         setLastInvoice(invoice);
         setSuccessModalOpen(true);
       refreshBalance(selectedPosId);
-      getPosStockLevels(selectedPosId).then(setStockLevels).catch(() => {});
+      refreshPosStock(selectedPosId);
         setCart([]);
         setSelectedCustomerId('');
         setGlobalDiscountPercent(0);
