@@ -705,25 +705,62 @@ export default function Caixa() {
     setCart(next);
   }
 
-  // Barcode scan (search field + Enter, as a scanner types it): a product's own barcode adds its base unit, a sale
-  // unit's barcode adds that unit directly.
-  function scanBarcode() {
-    const code = productSearch.trim();
-    if (!code) return;
+  // THE barcode scan: a product's own barcode adds its base unit, the barcode of one of its units or packages adds
+  // that unit (through the cart's stock check). An unknown code says so. Returns whether the code was found.
+  function scanCode(rawCode) {
+    const code = String(rawCode || '').trim();
+    if (!code) return false;
     for (const p of products) {
       if (p.barcode && p.barcode === code) {
         addToCart(p);
-        setProductSearch('');
-        return;
+        return true;
       }
       const saleUnit = (p.sale_units || []).find((u) => u.barcode === code);
       if (saleUnit) {
         addToCart(p, false, saleUnit);
-        setProductSearch('');
-        return;
+        return true;
       }
     }
+    setError('C\u00f3digo n\u00e3o encontrado: ' + code);
+    return false;
   }
+
+  // Enter in the search field: a barcode is added; a name search that finds nothing says so; otherwise nothing.
+  function scanBarcode() {
+    const code = productSearch.trim();
+    if (!code) return;
+    const isBarcode = products.some((p) => p.barcode === code || (p.sale_units || []).some((u) => u.barcode === code));
+    if (isBarcode || filteredProducts.length === 0) {
+      if (scanCode(code)) setProductSearch('');
+    }
+  }
+
+  // A barcode scanner types very fast and ends with Enter: caught anywhere in the till, unless the cursor is in a
+  // field (quantity, discount, search...). Under 60 ms between keys, at least 4 characters.
+  const scanCodeRef = useRef(scanCode);
+  scanCodeRef.current = scanCode;
+  const scanBuffer = useRef({ chars: '', last: 0 });
+  useEffect(() => {
+    function onKey(e) {
+      const el = e.target;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)) return;
+      const now = Date.now();
+      const buf = scanBuffer.current;
+      if (now - buf.last > 60) buf.chars = '';
+      buf.last = now;
+      if (e.key === 'Enter') {
+        if (buf.chars.length >= 4) {
+          e.preventDefault();
+          scanCodeRef.current(buf.chars);
+        }
+        buf.chars = '';
+        return;
+      }
+      if (e.key.length === 1) buf.chars += e.key;
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   function updateCartQuantity(key, quantity) {
     if (quantity <= 0) {
