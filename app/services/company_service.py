@@ -336,17 +336,7 @@ async def update_company(
     if fiscal_regime_id is not None and fiscal_regime_id != company.fiscal_regime_id:
         company.fiscal_regime_id = fiscal_regime_id
         regime = (await db.execute(select(FiscalRegime).where(FiscalRegime.id == fiscal_regime_id))).scalar_one()
-        existing_rates = (await db.execute(select(VAT).where(VAT.company_id == company_id))).scalars().all()
-        # Matched by category - never by name, which the GESTOR may change: a category the new regime does not allow
-        # is deactivated, one it allows is reactivated, or created from its legal rate when the company has none.
-        allowed_legal = {r.tax_category: r for r in await _legal_rates_for(db, regime)}
-        held = set()
-        for v in existing_rates:
-            v.is_active = v.tax_category in allowed_legal
-            held.add(v.tax_category)
-        for category, legal in allowed_legal.items():
-            if category not in held:
-                db.add(VAT(company_id=company_id, name=legal.name, rate=legal.rate, tax_category=category, is_active=True))
+        await sync_company_rates(db, company_id, regime)
     elif fiscal_regime_id is not None:
         company.fiscal_regime_id = fiscal_regime_id
 
@@ -428,3 +418,43 @@ async def toggle_bank_account(db: AsyncSession, account_id: uuid.UUID) -> Compan
     await db.commit()
     await db.refresh(account)
     return account
+
+
+async def sync_company_rates(db: AsyncSession, company_id: uuid.UUID, regime) -> None:
+    """
+    THE resync of a company's VAT rates with the legal rates its regime allows (catalog legal_vat_rates), matched by
+    category - never by name: a category the regime does not allow is deactivated, one it allows is (re)activated,
+    or created from its legal rate when the company has none. The regime decides which categories are active - the
+    company rates are SUPER_ADMIN managed. Invoice lines keep their own snapshot. No commit.
+    """
+    existing = (await db.execute(select(VAT).where(VAT.company_id == company_id))).scalars().all()
+    allowed_legal = {r.tax_category: r for r in await _legal_rates_for(db, regime)}
+    held = set()
+    for v in existing:
+        v.is_active = v.tax_category in allowed_legal
+        held.add(v.tax_category)
+    for category, legal in allowed_legal.items():
+        if category not in held:
+            db.add(VAT(company_id=company_id, name=legal.name, rate=legal.rate, tax_category=category, is_active=True))
+
+
+async def propagate_regime_rates(db: AsyncSession, regime_id: uuid.UUID | None = None) -> int:
+    """
+    Applies an edited regime (regime_id: its companies) or an edited legal rate (None: every company) to the rates of
+    the companies it concerns. Returns how many companies were resynced. No commit.
+    """
+    query = select(Company)
+    if regime_id is not None:
+        query = query.where(Company.fiscal_regime_id == regime_id)
+    companies = (await db.execute(query)).scalars().all()
+    regimes: dict = {}
+    for company in companies:
+        regime = None
+        if company.fiscal_regime_id is not None:
+            if company.fiscal_regime_id not in regimes:
+                regimes[company.fiscal_regime_id] = (await db.execute(
+                    select(FiscalRegime).where(FiscalRegime.id == company.fiscal_regime_id)
+                )).scalar_one_or_none()
+            regime = regimes[company.fiscal_regime_id]
+        await sync_company_rates(db, company.id, regime)
+    return len(companies)

@@ -627,6 +627,8 @@ async def create_legal_vat_rate(db: AsyncSession, tax_category: str, name: str, 
     from app.models.legal_vat_rate import LegalVatRate
     item = LegalVatRate(tax_category=tax_category, name=name, rate=rate)
     db.add(item)
+    from app.services.company_service import propagate_regime_rates
+    await propagate_regime_rates(db)  # every company follows a legal rate added, edited or switched
     await db.commit()
     await db.refresh(item)
     return item
@@ -645,6 +647,8 @@ async def update_legal_vat_rate(db: AsyncSession, item_id: uuid.UUID, tax_catego
     item.tax_category = tax_category
     item.name = name
     item.rate = rate
+    from app.services.company_service import propagate_regime_rates
+    await propagate_regime_rates(db)  # every company follows a legal rate added, edited or switched
     await db.commit()
     await db.refresh(item)
     return item
@@ -653,6 +657,8 @@ async def update_legal_vat_rate(db: AsyncSession, item_id: uuid.UUID, tax_catego
 async def toggle_legal_vat_rate(db: AsyncSession, item_id: uuid.UUID):
     item = await _legal_vat_rate_or_raise(db, item_id)
     item.is_active = not item.is_active
+    from app.services.company_service import propagate_regime_rates
+    await propagate_regime_rates(db)  # every company follows a legal rate added, edited or switched
     await db.commit()
     await db.refresh(item)
     return item

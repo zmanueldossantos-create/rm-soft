@@ -86,6 +86,9 @@ async def update_fiscal_regime(
     regime.allows_int = allows_int
     regime.allows_out = allows_out
     regime.required_exemption_id = required_exemption_id
+    # Its companies follow at once: rates of the categories it now allows or forbids.
+    from app.services.company_service import propagate_regime_rates
+    await propagate_regime_rates(db, regime.id)
     await db.commit()
     await db.refresh(regime)
     return regime
