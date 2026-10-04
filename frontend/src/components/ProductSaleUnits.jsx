@@ -12,7 +12,8 @@ const money = (v) => Number(v || 0).toLocaleString('pt-PT', { minimumFractionDig
 // The other units a product is sold in (a pallet of 30 eggs, a box of 3 blisters). The product itself stays the base
 // unit: stock is always counted in it. Each change is saved at once, independently of the product form; a sale unit is
 // deactivated, never deleted.
-export default function ProductSaleUnits({ productId, baseUnitId, units }) {
+// noPrice: a raw material's packages (never sold) - no price column, no price field, saved at 0.
+export default function ProductSaleUnits({ productId, baseUnitId, units, noPrice = false }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState(EMPTY);
@@ -58,7 +59,7 @@ export default function ProductSaleUnits({ productId, baseUnitId, units }) {
     setWarnings([]);
   }
 
-  const canSave = !!form.unit_of_measure_id && parseFloat(form.factor) > 0 && form.price !== '' && parseFloat(form.price) >= 0;
+  const canSave = !!form.unit_of_measure_id && parseFloat(form.factor) > 0 && (noPrice || (form.price !== '' && parseFloat(form.price) >= 0));
 
   async function save(confirm = false) {
     if (!canSave || saving) return;
@@ -67,7 +68,7 @@ export default function ProductSaleUnits({ productId, baseUnitId, units }) {
     const payload = {
       unit_of_measure_id: form.unit_of_measure_id,
       factor: parseFloat(form.factor),
-      price: parseFloat(form.price),
+      price: noPrice ? 0 : parseFloat(form.price),
       barcode: form.barcode.trim() || null,
       confirm,
     };
@@ -123,8 +124,8 @@ export default function ProductSaleUnits({ productId, baseUnitId, units }) {
               <tr className="text-[10.5px] uppercase tracking-wide text-text-muted">
                 <th className="text-left font-medium px-3 py-2">Unidade</th>
                 <th className="text-right font-medium px-3 py-2">Contem</th>
-                <th className="text-right font-medium px-3 py-2">Preco</th>
-                <th className="text-right font-medium px-3 py-2">Preco por {baseCode}</th>
+                {!noPrice && <th className="text-right font-medium px-3 py-2">Preco</th>}
+                {!noPrice && <th className="text-right font-medium px-3 py-2">Preco por {baseCode}</th>}
                 <th className="text-left font-medium px-3 py-2">Codigo de barras</th>
                 <th className="text-left font-medium px-3 py-2">Estado</th>
                 <th className="px-3 py-2"></th>
@@ -135,8 +136,8 @@ export default function ProductSaleUnits({ productId, baseUnitId, units }) {
                 <tr key={row.id} className={'border-t border-border ' + (row.is_active ? '' : 'opacity-50')}>
                   <td className="px-3 py-2 font-mono text-text-primary">{row.unit_of_measure_code}</td>
                   <td className="px-3 py-2 text-right font-mono">{Number(row.factor)} {baseCode}</td>
-                  <td className="px-3 py-2 text-right font-mono text-text-primary">{money(row.price)}</td>
-                  <td className="px-3 py-2 text-right font-mono text-text-muted">{money(Number(row.price) / Number(row.factor))}</td>
+                  {!noPrice && <td className="px-3 py-2 text-right font-mono text-text-primary">{money(row.price)}</td>}
+                  {!noPrice && <td className="px-3 py-2 text-right font-mono text-text-muted">{money(Number(row.price) / Number(row.factor))}</td>}
                   <td className="px-3 py-2 font-mono text-text-muted">{row.barcode || '-'}</td>
                   <td className="px-3 py-2">{row.is_active ? 'Activo' : 'Inactivo'}</td>
                   <td className="px-3 py-2">
@@ -161,10 +162,12 @@ export default function ProductSaleUnits({ productId, baseUnitId, units }) {
           <label className={labelClass}>Contem ({baseCode})</label>
           <input type="number" step="0.001" min="0" value={form.factor} onChange={(e) => update('factor', e.target.value)} onKeyDown={onEnter} placeholder="Ex: 30" readOnly={!!fixedFactor} className={inputClass + ' font-mono' + (fixedFactor ? ' opacity-60 cursor-not-allowed' : '')} />
         </div>
+        {!noPrice && (
         <div>
           <label className={labelClass}>Preco (Kz)</label>
           <input type="number" step="0.01" min="0" value={form.price} onChange={(e) => update('price', e.target.value)} onKeyDown={onEnter} className={inputClass + ' font-mono'} />
         </div>
+        )}
         <div>
           <label className={labelClass}>Codigo de barras</label>
           <input value={form.barcode} onChange={(e) => update('barcode', e.target.value)} onKeyDown={onEnter} className={inputClass + ' font-mono'} />

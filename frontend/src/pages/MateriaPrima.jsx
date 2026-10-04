@@ -1,3 +1,4 @@
+import ProductSaleUnits from '../components/ProductSaleUnits';
 import { useState, useEffect } from 'react';
 import { Wheat, Plus, Loader2, Search, Pencil } from 'lucide-react';
 import Modal from '../components/Modal';
@@ -36,6 +37,8 @@ export default function MateriaPrima() {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
+  const [sheetTab, setSheetTab] = useState('geral'); // 'geral' | 'embalagens'
+  const [editingMaterial, setEditingMaterial] = useState(null); // its last purchase price and average cost
 
   async function loadData() {
     setLoading(true);
@@ -63,6 +66,8 @@ export default function MateriaPrima() {
 
   function openCreateModal() {
     setEditingId(null);
+    setEditingMaterial(null);
+    setSheetTab('geral');
     setForm(emptyForm);
     setFormError('');
     setModalOpen(true);
@@ -70,6 +75,8 @@ export default function MateriaPrima() {
 
   function openEditModal(material) {
     setEditingId(material.id);
+    setEditingMaterial(material);
+    setSheetTab('geral');
     setForm({
       code: material.code,
       name: material.name,
@@ -104,6 +111,8 @@ export default function MateriaPrima() {
       // for is_raw_material) and no exemption reason.
       vat_id: null,
       price: 0,
+      // Kept as it is: only receptions set the last purchase price (an edit must never erase it).
+      purchase_price: editingMaterial ? editingMaterial.purchase_price ?? null : null,
       min_stock_threshold: parseFloat(form.min_stock_threshold || '0'),
       expiry_date: null,
       product_type: 'BEM',
@@ -236,8 +245,20 @@ export default function MateriaPrima() {
         )}
       </div>
 
-      <Modal open={modalOpen} onClose={closeModal} title={editingId ? 'Editar matéria-prima' : 'Nova matéria-prima'}>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <Modal open={modalOpen} onClose={closeModal} title={editingId ? 'Editar matéria-prima' : 'Nova matéria-prima'} maxWidthClass="max-w-3xl">
+        <div className="flex gap-1 mb-4 border-b border-border">
+          {[['geral', 'Geral'], ['embalagens', 'Embalagens']].map(([key, label]) => (
+            <button key={key} type="button" disabled={key === 'embalagens' && !editingId}
+              title={key === 'embalagens' && !editingId ? 'Crie primeiro a mat\u00e9ria-prima' : undefined}
+              onClick={() => setSheetTab(key)}
+              className={'px-3 py-2 text-[13px] -mb-px border-b-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ' + (sheetTab === key ? 'border-accent text-text-primary font-medium' : 'border-transparent text-text-muted hover:text-text-primary')}>
+              {label}
+            </button>
+          ))}
+        </div>
+        {/* Same height for both tabs, the content scrolls inside. */}
+        <div className="h-[60vh] overflow-y-auto scrollbar-thin pr-1">
+        <form onSubmit={handleSubmit} className={(sheetTab === 'geral' ? '' : 'hidden ') + 'grid grid-cols-1 sm:grid-cols-2 gap-4'}>
           <div>
             <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Código *</label>
             <input
@@ -258,7 +279,7 @@ export default function MateriaPrima() {
             />
           </div>
           <div>
-            <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Unidade de medida</label>
+            <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Unidade base *</label>
             <Select
               value={form.unit_of_measure_id}
               onChange={(v) => updateField('unit_of_measure_id', v)}
@@ -278,21 +299,36 @@ export default function MateriaPrima() {
             />
           </div>
 
+          {editingMaterial && (() => {
+            const base = units.find((u) => u.id === form.unit_of_measure_id)?.code || '';
+            const kz = (v) => (v == null ? '\u2013' : Number(v).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' Kz' + (base ? ' / ' + base : ''));
+            return (
+              <div className="sm:col-span-2 grid grid-cols-2 gap-3 rounded-md border border-border bg-bg-inset/40 px-3.5 py-2.5 text-[12px]">
+                <div><p className="text-text-muted">{'\u00daltimo pre\u00e7o de compra'}</p><p className="font-mono text-text-primary">{kz(editingMaterial.purchase_price)}</p></div>
+                <div><p className="text-text-muted">{'Custo m\u00e9dio'}</p><p className="font-mono text-text-primary">{kz(editingMaterial.average_cost)}</p></div>
+                <p className="col-span-2 text-[11px] text-text-muted">{'Atualizados pelas rece\u00e7\u00f5es de stock.'}</p>
+              </div>
+            );
+          })()}
           {formError && (
-            <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">
+            <div className="sm:col-span-2 bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">
               {formError}
             </div>
           )}
 
           <button
             type="submit"
-            disabled={saving || !form.code || !form.name}
-            className="mt-1 bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors"
+            disabled={saving || !form.code || !form.name || !form.unit_of_measure_id}
+            className="sm:col-span-2 mt-1 bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors"
           >
             {saving ? <Loader2 size={17} className="animate-spin" /> : <Plus size={17} />}
             {saving ? 'A guardar...' : editingId ? 'Guardar alterações' : 'Criar matéria-prima'}
           </button>
         </form>
+              {editingId && sheetTab === 'embalagens' && (
+          <ProductSaleUnits productId={editingId} baseUnitId={form.unit_of_measure_id} units={units} noPrice />
+        )}
+        </div>
       </Modal>
     </main>
   );
