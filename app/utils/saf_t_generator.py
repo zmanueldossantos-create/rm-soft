@@ -74,7 +74,7 @@ def _write_lines(parent_el, inv: dict, saft_type: str) -> None:
         _el(line_el, "ProductCode", line["product_code"])
         _el(line_el, "ProductDescription", line["product_name"])
         _el(line_el, "Quantity", f"{Decimal(str(line['quantity'])):.3f}")
-        _el(line_el, "UnitOfMeasure", "UN")
+        _el(line_el, "UnitOfMeasure", line["unit_code"])  # the unit recorded on the line (KG, SC, DZ...)
         _el(line_el, "UnitPrice", _money(line["unit_price"]))
         _el(line_el, "TaxPointDate", inv["business_date"].isoformat())
         # XSD: References is mandatory on the lines of a credit note (the credited document, in the

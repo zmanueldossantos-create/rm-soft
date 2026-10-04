@@ -129,7 +129,7 @@ async def export_saf_t_for_period(db: AsyncSession, company_id: uuid.UUID, year:
                 {
                     "product_code": product_code_by_id.get(l.product_id) or service_code_by_id.get(l.service_id) or "N/A",
                     "product_name": l.product_name_snapshot,
-                    "quantity": float(l.quantity),
+                    "quantity": float(l.quantity), "unit_code": l.unit_code_snapshot,
                     "unit_price": float(l.unit_price),
                     "vat_rate": float(l.vat_rate_snapshot), "tax_code": l.tax_code_snapshot,
                     "line_subtotal": float(l.line_subtotal),

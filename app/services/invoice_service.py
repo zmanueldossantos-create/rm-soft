@@ -196,6 +196,17 @@ async def _exemption_for(db: AsyncSession, article, tax_code: str) -> tuple[str 
     return vat_code.code, vat_code.name
 
 
+async def _base_unit_code(db: AsyncSession, article) -> str | None:
+    """Code of the article's base unit (unit catalog), copied on a line sold in that unit - the SAF-T and the printed
+    document show the unit of every line; a line sold in a unit or package already carries that one."""
+    from app.models.unit_of_measure_catalog import UnitOfMeasureCatalog
+    if getattr(article, "unit_of_measure_id", None) is None:
+        return None
+    return (await db.execute(
+        select(UnitOfMeasureCatalog.code).where(UnitOfMeasureCatalog.id == article.unit_of_measure_id)
+    )).scalar_one_or_none()
+
+
 async def _sale_unit_for_line(
     db: AsyncSession, company_id: uuid.UUID, product: Product, sale_unit_id, quantity: float | None = None,
 ) -> tuple[float, float, uuid.UUID | None, str | None]:
@@ -323,7 +334,8 @@ async def create_invoice(
             vat_rate = float(vat.rate) if vat else 0.0
             tax_code = vat.tax_category if vat else "ISE"
             unit_price = float(service.price or 0)
-            line_unit_factor, line_sale_unit_id, line_unit_code = 1.0, None, None
+            line_unit_factor, line_sale_unit_id, line_unit_code = 1.0, None, None
+            line_unit_code = await _base_unit_code(db, service)
             item_name = service.name
             line_product_id = None
             line_service_id = service.id
@@ -359,6 +371,8 @@ async def create_invoice(
             unit_price, line_unit_factor, line_sale_unit_id, line_unit_code = await _sale_unit_for_line(
                 db, company_id, product, line_input.get("sale_unit_id"), quantity=float(line_input["quantity"]),
             )
+            if line_unit_code is None:  # sold in its base unit
+                line_unit_code = await _base_unit_code(db, product)
             line_input["_unit_factor"] = line_unit_factor  # stock moves quantity x factor (base units)
             item_name = product.name
             line_product_id = product.id
@@ -1228,7 +1242,8 @@ async def create_debit_note(
             vat_rate = float(vat.rate) if vat else 0.0
             tax_code = vat.tax_category if vat else "ISE"
             unit_price = float(service.price or 0)
-            line_unit_factor, line_sale_unit_id, line_unit_code = 1.0, None, None
+            line_unit_factor, line_sale_unit_id, line_unit_code = 1.0, None, None
+            line_unit_code = await _base_unit_code(db, service)
             item_name = service.name
             line_product_id = None
             line_service_id = service.id
@@ -1257,6 +1272,8 @@ async def create_debit_note(
             unit_price, line_unit_factor, line_sale_unit_id, line_unit_code = await _sale_unit_for_line(
                 db, company_id, product, line_input.get("sale_unit_id"), quantity=float(line_input["quantity"]),
             )
+            if line_unit_code is None:  # sold in its base unit
+                line_unit_code = await _base_unit_code(db, product)
             line_input["_unit_factor"] = line_unit_factor  # stock moves quantity x factor (base units)
             item_name = product.name
             line_product_id = product.id
@@ -1601,7 +1618,8 @@ async def create_pro_forma(
             vat_rate = float(vat.rate) if vat else 0.0
             tax_code = vat.tax_category if vat else "ISE"
             unit_price = float(service.price or 0)
-            line_unit_factor, line_sale_unit_id, line_unit_code = 1.0, None, None
+            line_unit_factor, line_sale_unit_id, line_unit_code = 1.0, None, None
+            line_unit_code = await _base_unit_code(db, service)
             item_name = service.name
             line_product_id = None
             line_service_id = service.id
@@ -1629,6 +1647,8 @@ async def create_pro_forma(
             unit_price, line_unit_factor, line_sale_unit_id, line_unit_code = await _sale_unit_for_line(
                 db, company_id, product, line_input.get("sale_unit_id"), quantity=float(line_input["quantity"]),
             )
+            if line_unit_code is None:  # sold in its base unit
+                line_unit_code = await _base_unit_code(db, product)
             line_input["_unit_factor"] = line_unit_factor  # stock moves quantity x factor (base units)
             item_name = product.name
             line_product_id = product.id

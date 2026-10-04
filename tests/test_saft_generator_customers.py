@@ -25,7 +25,7 @@ def _invoice(customer_id):
         "customer_id": customer_id,
         "lines": [{
             "product_code": "SRV-1", "product_name": "Servico", "quantity": 1.0, "unit_price": 1000.0,
-            "vat_rate": 14.0, "tax_code": "NOR", "line_subtotal": 1000.0, "line_vat": 140.0, "line_total": 1140.0,
+            "vat_rate": 14.0, "tax_code": "NOR", "unit_code": "UN", "line_subtotal": 1000.0, "line_vat": 140.0, "line_total": 1140.0,
         }],
     }
 

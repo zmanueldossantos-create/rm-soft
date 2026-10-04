@@ -16,7 +16,7 @@ M11 = "Isento nos termos da al\u00ednea b) do n\u00ba1 do artigo 12.\u00ba do CI
 
 def _line(code, reason):
     return {
-        "product_code": "SRV-1", "product_name": "Servico", "quantity": 1.0, "unit_price": 100.0, "vat_rate": 0.0, "tax_code": "ISE",
+        "product_code": "SRV-1", "product_name": "Servico", "quantity": 1.0, "unit_price": 100.0, "vat_rate": 0.0, "tax_code": "ISE", "unit_code": "UN",
         "line_subtotal": 100.0, "line_vat": 0.0, "line_total": 100.0, "exemption_code": code, "exemption_reason": reason,
     }
 
