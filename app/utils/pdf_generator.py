@@ -217,7 +217,7 @@ def generate_invoice_pdf_thermal(invoice: dict, lines: list[dict], company: dict
         name_line = l["product_name_snapshot"]
         c.drawString(margin, y, name_line[:44])
         y -= 3.2 * mm
-        c.drawString(col_qty, y, f"{l['quantity']:.2f}")
+        c.drawString(col_qty, y, f"{l['quantity']:.2f} {l.get('unit_code') or ''}".strip())  # the unit sold: 1.00 SC, 2.00 DZ...
         c.drawString(col_price, y, fmt(l["unit_price"]))
         c.drawString(col_vat, y, f"{l['vat_rate_snapshot']:.0f}")
         c.drawRightString(col_total, y, fmt(l["line_total"]))
@@ -544,7 +544,7 @@ def generate_factura_style_a4(invoice, lines, company, customer):
         c.drawString(col_tipo + 1 * mm, ty, "S" if l.get("service_line") else "P")
         c.drawString(col_cod + 1 * mm, ty, str(l.get("code", "-"))[:10])
         c.drawString(col_desc + 1 * mm, ty, l["product_name_snapshot"][:32])
-        c.drawString(col_qt, ty, f"{l['quantity']:.2f}")
+        c.drawString(col_qt, ty, f"{l['quantity']:.2f} {l.get('unit_code') or ''}".strip())  # the unit sold: 1.00 SC, 2.00 DZ...
         c.drawString(col_preco, ty, fmt(l["unit_price"]))
         c.drawString(col_desc_pct, ty, f"{l.get('discount_percent', 0):.0f}%")
         c.drawString(col_valor, ty, fmt(l["line_subtotal"]))

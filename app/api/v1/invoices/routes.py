@@ -532,7 +532,7 @@ async def download_invoice_pdf(
             "code": code,
             "unit": unit,
             "product_name_snapshot": l.product_name_snapshot,
-            "quantity": float(l.quantity),
+            "quantity": float(l.quantity), "unit_code": l.unit_code_snapshot,
             "unit_price": float(l.unit_price),
             "discount_percent": float(l.discount_percent or 0),
             "vat_rate_snapshot": float(l.vat_rate_snapshot),
