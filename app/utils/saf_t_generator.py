@@ -70,16 +70,22 @@ def _write_lines(parent_el, inv: dict, saft_type: str) -> None:
     """Writes the Line elements of a document - shared by SalesInvoices and WorkingDocuments (same structure)."""
     for idx, line in enumerate(inv["lines"], start=1):
         line_el = _el(parent_el, "Line")
-        _el(line_el, "LineNumber", idx)
+        _el(line_el, "LineNumber", idx)
+        # A document issued from another one (an invoice from a pro-forma) names its origin - right after LineNumber (XSD).
+        if inv.get("order_reference"):
+            order_refs = _el(line_el, "OrderReferences")
+            _el(order_refs, "OriginatingON", inv["order_reference"][:60])
+            if inv.get("order_date"):
+                _el(order_refs, "OrderDate", inv["order_date"].isoformat())
         _el(line_el, "ProductCode", line["product_code"])
         _el(line_el, "ProductDescription", line["product_name"])
         _el(line_el, "Quantity", f"{Decimal(str(line['quantity'])):.3f}")
         _el(line_el, "UnitOfMeasure", line["unit_code"])  # the unit recorded on the line (KG, SC, DZ...)
         _el(line_el, "UnitPrice", _money(line["unit_price"]))
         _el(line_el, "TaxPointDate", inv["business_date"].isoformat())
-        # XSD: References is mandatory on the lines of a credit note (the credited document, in the
+        # XSD: References is mandatory on the lines of a credit (and debit) note (the credited document, in the
         # numbering of its own InvoiceNo) with the reason - Reason is limited to 50 characters here.
-        if saft_type == "NC" and inv.get("document_reference"):
+        if saft_type in ("NC", "ND") and inv.get("document_reference"):  # credit and debit notes reference their invoice
             references = _el(line_el, "References")
             _el(references, "Reference", inv["document_reference"][:60])
             if inv.get("credit_note_cause"):

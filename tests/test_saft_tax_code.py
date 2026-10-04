@@ -55,3 +55,38 @@ def test_the_unit_of_a_line_is_the_one_recorded_on_it():
         invoices=[doc], fiscal_year=2026, start_date=date(2026, 9, 1), end_date=date(2026, 9, 30),
     ))
     assert root.find(".//s:SalesInvoices/s:Invoice/s:Line/s:UnitOfMeasure", NS).text == "SC"
+
+
+def _export_one(doc):
+    return etree.fromstring(generate_saf_t_xml(
+        company={"name": "Empresa", "nif": "5000000001", "address": None, "phone_number": None, "email": None,
+                 "commercial_registration_number": None},
+        platform_settings={"software_validation_number": None, "vendor_tax_id": None, "product_id": None, "product_version": None},
+        customers=[], products=[{"code": "PRD-1", "name": "Produto", "product_type": "BEM"}],
+        vat_rates=[{"name": "Taxa normal", "rate": 14.0, "tax_code": "NOR"}],
+        invoices=[doc], fiscal_year=2026, start_date=date(2026, 9, 1), end_date=date(2026, 9, 30),
+    ))
+
+
+def _doc(invoice_type, **extra):
+    line = {"product_code": "PRD-1", "product_name": "Produto", "quantity": 1.0, "unit_price": 100.0, "vat_rate": 14.0,
+            "tax_code": "NOR", "unit_code": "UN", "line_subtotal": 100.0, "line_vat": 14.0, "line_total": 114.0,
+            "exemption_code": None}
+    doc = {"invoice_type": invoice_type, "series": "S1", "number": 3, "business_date": date(2026, 9, 20),
+           "created_at": datetime(2026, 9, 20, 12, 0, 0), "atcud": "SIMUL-3", "invoice_hash": "SIMUL-ghi",
+           "subtotal": 100.0, "vat_total": 14.0, "total": 114.0, "customer_id": None, "lines": [line]}
+    doc.update(extra)
+    return doc
+
+
+def test_a_debit_note_references_its_invoice():
+    root = _export_one(_doc("NOTA_DEBITO", document_reference="FT FT2026/7"))
+    assert root.find(".//s:SalesInvoices/s:Invoice/s:Line/s:References/s:Reference", NS).text == "FT FT2026/7"
+
+
+def test_an_invoice_from_a_pro_forma_names_its_origin():
+    root = _export_one(_doc("FACTURA", order_reference="PP FP2026/1", order_date=date(2026, 9, 19)))
+    line = root.find(".//s:SalesInvoices/s:Invoice/s:Line", NS)
+    assert line.find("s:OrderReferences/s:OriginatingON", NS).text == "PP FP2026/1"
+    assert line.find("s:OrderReferences/s:OrderDate", NS).text == "2026-09-19"
+    assert [c.tag.split("}")[1] for c in line][:2] == ["LineNumber", "OrderReferences"]  # XSD order

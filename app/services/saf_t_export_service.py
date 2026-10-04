@@ -167,6 +167,19 @@ async def export_saf_t_for_period(db: AsyncSession, company_id: uuid.UUID, year:
     products_data += [{"code": s.code, "name": s.name, "product_type": "SERVICO"} for s in services if s.code not in known_codes]
     vat_data = [{"name": v.name, "rate": float(v.rate), "tax_code": v.tax_category} for v in vat_rates]
 
+    # An invoice issued from a pro-forma names it (OrderReferences): the pro-forma keeps the link (converted_to_invoice_id).
+    from sqlalchemy.orm import aliased as _aliased
+    _fp, _ft = _aliased(Invoice), _aliased(Invoice)
+    _origins = (await db.execute(
+        select(_fp.series, _fp.number, _fp.business_date, _ft.series, _ft.number)
+        .join(_ft, _ft.id == _fp.converted_to_invoice_id)
+        .where(_fp.company_id == company_id)
+    )).all()
+    _origin_by_doc = {(fs, fn): (f"{INVOICE_TYPE_MAP.get('PRO_FORMA', 'PP')} {ps}/{pn}", pd) for ps, pn, pd, fs, fn in _origins}
+    for _doc in invoices_data:
+        _origin = _origin_by_doc.get((_doc.get("series"), _doc.get("number")))
+        if _origin:
+            _doc["order_reference"], _doc["order_date"] = _origin
     return generate_saf_t_xml(
         company=company_dict,
         platform_settings=platform_dict,
