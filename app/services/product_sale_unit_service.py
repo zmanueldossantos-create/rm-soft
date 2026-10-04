@@ -105,10 +105,11 @@ async def _consistency(
     same_factor = (await db.execute(others)).first() is not None
 
     issues = []
-    if per_base > base_price + 0.005:
+    # A raw material is never sold: its packages carry no price, so price checks do not apply to it.
+    if not product.is_raw_material and per_base > base_price + 0.005:
         issues.append((company.sale_unit_check_above_base,
                        f"Cada {base_code} sai a {per_base:.2f} na unidade {unit_code}, mais caro que a unidade base ({base_price:.2f})"))
-    if purchase is not None and per_base < purchase - 0.005:
+    if not product.is_raw_material and purchase is not None and per_base < purchase - 0.005:
         issues.append((company.sale_unit_check_below_cost,
                        f"Venda abaixo do custo: cada {base_code} sai a {per_base:.2f}, preco de compra {purchase:.2f}"))
     if same_factor:
@@ -136,6 +137,8 @@ async def create_sale_unit(
     price: float, barcode: str | None = None, confirm: bool = False,
 ) -> ProductSaleUnit:
     product = await _product(db, company_id, product_id)
+    if product.is_raw_material:
+        price = 0.0  # a raw material is never sold: its packages carry no price
     await _check(db, company_id, product, unit_of_measure_id, factor, barcode, price=price, confirm=confirm)
     unit = ProductSaleUnit(
         company_id=company_id, product_id=product.id, unit_of_measure_id=unit_of_measure_id,
@@ -164,6 +167,8 @@ async def update_sale_unit(
 ) -> ProductSaleUnit:
     product = await _product(db, company_id, product_id)
     unit = await _sale_unit(db, company_id, product_id, unit_id)
+    if product.is_raw_material:
+        price = 0.0  # a raw material is never sold: its packages carry no price
     await _check(db, company_id, product, unit_of_measure_id, factor, barcode, exclude_id=unit.id, price=price, confirm=confirm)
     unit.unit_of_measure_id = unit_of_measure_id
     unit.factor = factor
