@@ -442,6 +442,9 @@ async def sync_company_rates(db: AsyncSession, company_id: uuid.UUID, regime) ->
     for category, legal in allowed_legal.items():
         if category not in held:
             db.add(VAT(company_id=company_id, name=legal.name, rate=legal.rate, tax_category=category, is_active=True))
+    # A regime that imposes a motive leaves no choice: its articles follow at once.
+    from app.services.vat_rule_service import auto_reclassify
+    await auto_reclassify(db, company_id, regime)
 
 
 async def propagate_regime_rates(db: AsyncSession, regime_id: uuid.UUID | None = None) -> int:

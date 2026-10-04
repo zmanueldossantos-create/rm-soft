@@ -9,6 +9,7 @@ to their products, but cannot change the percentage values - a company changing
 exposed via API) should ever adjust the legal rate values, if the law changes.
 No update/create/delete route exists here on purpose.
 """
+from pydantic import BaseModel as _BaseModel
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -99,6 +100,36 @@ async def toggle_company_vat_rate_route(
         return await toggle_company_vat_rate(db, company_id, vat_id)
     except VatRateNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+class ReclassifyRequest(_BaseModel):
+    product_ids: list[uuid.UUID] = []
+    service_ids: list[uuid.UUID] = []
+    vat_id: uuid.UUID
+    exemption_reason_id: uuid.UUID | None = None
+
+
+@router.get("/reclassification")
+async def get_articles_to_reclassify(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("vat:view")),
+):
+    """The products and services to reclassify after a regime change (they cannot be sold until then)."""
+    from app.services.vat_rule_service import articles_to_reclassify
+    return await articles_to_reclassify(db, current_user.company_id)
+
+
+@router.post("/reclassify")
+async def post_reclassify(
+    payload: ReclassifyRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("products:manage")),
+):
+    """Gives several products and services one VAT rate (and motive), through THE article VAT rule."""
+    from app.services.vat_rule_service import reclassify_articles
+    count = await reclassify_articles(db, current_user.company_id, payload.product_ids, payload.service_ids,
+                                      payload.vat_id, payload.exemption_reason_id)
+    return {"reclassified": count}
 
 
 @router.get("/article-rule")

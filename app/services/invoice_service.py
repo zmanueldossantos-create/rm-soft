@@ -180,6 +180,8 @@ async def _exemption_for(db: AsyncSession, article, tax_code: str) -> tuple[str 
     active motives only) and copied on the line like the rate - the SAF-T and the printed document need both on
     every exempt line. An exempt article without a valid motive cannot be issued: nothing is guessed later.
     """
+    from app.services.vat_rule_service import ensure_article_sellable
+    await ensure_article_sellable(db, article)  # left behind by a regime change: reclassify first
     if tax_code != "ISE":
         return None, None
     vat_code = None
