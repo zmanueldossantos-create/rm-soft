@@ -391,7 +391,10 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection }) {
                     <input type="number" step={((product?.sale_units || []).find((u) => u.id === line.sale_unit_id)?.is_fractional ?? (!line.sale_unit_id && product?.unit_is_fractional)) ? '0.001' : '1'} min="0" value={line.quantity} onChange={(e) => handleManualLineEdit(idx, 'quantity', e.target.value)} className="w-full bg-bg-inset border border-border rounded-md px-2.5 py-1.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors text-right" />{(() => { const su = (product?.sale_units || []).find((u) => u.id === line.sale_unit_id); return su && qty > 0 ? <p className="text-[10.5px] text-text-muted mt-0.5 text-right">= {(qty * Number(su.factor)).toLocaleString('pt-PT', { maximumFractionDigits: 3 })} {product.unit_of_measure_code}</p> : null; })()}
                   </td>
                   <td className="px-4 py-2.5 w-36">
-                    <input type="number" step="0.01" min="0" value={line.purchase_price} onChange={(e) => handleManualLineEdit(idx, 'purchase_price', e.target.value)} className="w-full bg-bg-inset border border-border rounded-md px-2.5 py-1.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors text-right" />
+                    <input type="number" step="0.01" min="0" value={line.purchase_price} onChange={(e) => handleManualLineEdit(idx, 'purchase_price', e.target.value)} className="w-full bg-bg-inset border border-border rounded-md px-2.5 py-1.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors text-right" />
+                    {isEntrada && parseFloat(line.sale_price) > 0 && parseFloat(line.purchase_price) > parseFloat(line.sale_price) && (
+                      <p className="text-[10.5px] text-amber-500 mt-1">{'Pre\u00e7o de compra acima do pre\u00e7o de venda'}</p>
+                    )}
                   </td>
                   <td className="px-4 py-2.5 w-36">
                     <input type="number" step="0.01" min="0" value={line.sale_price} onChange={(e) => handleManualLineEdit(idx, 'sale_price', e.target.value)} className="w-full bg-bg-inset border border-border rounded-md px-2.5 py-1.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors text-right" />
