@@ -697,7 +697,7 @@ async def test_the_sale_unit_of_another_product_is_refused(db, company_with_esse
     product_id = await _product_in_stock(db, ids, "PRD-SU3")
     other_id = await _product_in_stock(db, ids, "PRD-SU4")
     other_box = await _box_of(db, ids, other_id, "CX7")
-    with pytest.raises(ProductNotFoundError, match="Unidade de venda invalida"):
+    with pytest.raises(ProductNotFoundError, match="Unidade ou embalagem invalida"):
         await _ft_in_box(db, ids, product_id, other_box.id)
 
 
