@@ -5,6 +5,7 @@ a GESTOR/ADMIN only ever sees and manages their own company's products.
 Extended (Video 3) with category, brand, image, purchase price, the
 managed-by-lote/stock/validade toggles, and richer status.
 """
+from app.services.vat_rule_service import resolve_article_vat
 import uuid
 from datetime import date
 
@@ -40,16 +41,6 @@ def _check_vat_rule(vat_id: uuid.UUID | None, is_raw_material: bool) -> None:
     rate. Every other product must have one."""
     if vat_id is None and not is_raw_material:
         raise VatRequiredError("Taxa de IVA obrigatoria para este produto")
-
-
-async def _check_exemption_reason(db: AsyncSession, vat_id: uuid.UUID | None, exemption_reason_id: uuid.UUID | None) -> None:
-    """AGT/SAF-T requires a justification code for every exempt (0%) line - see VatCode/Configuracoes."""
-    if vat_id is None:
-        return
-    result = await db.execute(select(VAT).where(VAT.id == vat_id))
-    vat = result.scalar_one_or_none()
-    if vat is not None and float(vat.rate) == 0 and exemption_reason_id is None:
-        raise ExemptionReasonRequiredError("Motivo de isencao obrigatorio quando o IVA e 0% (isento)")
 
 
 async def _check_all_fields_available(
@@ -117,7 +108,7 @@ async def create_product(
     if is_raw_material:
         exemption_reason_id = None  # a raw material is never sold: no exemption to justify
     else:
-        await _check_exemption_reason(db, vat_id, exemption_reason_id)
+        exemption_reason_id = await resolve_article_vat(db, company_id, vat_id, exemption_reason_id)
 
     product = Product(
         company_id=company_id,
@@ -265,7 +256,7 @@ async def update_product(
     if is_raw_material:
         exemption_reason_id = None  # a raw material is never sold: no exemption to justify
     else:
-        await _check_exemption_reason(db, vat_id, exemption_reason_id)
+        exemption_reason_id = await resolve_article_vat(db, company_id, vat_id, exemption_reason_id)
 
     product.code = code
     product.name = name

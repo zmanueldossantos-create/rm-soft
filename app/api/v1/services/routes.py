@@ -18,7 +18,6 @@ from app.services.service_service import (
     toggle_service_status,
     ServiceAlreadyExistsError,
     ServiceNotFoundError,
-    ExemptionReasonRequiredError,
 )
 
 router = APIRouter(prefix="/api/v1/services", tags=["services"])
@@ -52,8 +51,6 @@ async def create_new_service(
         )
     except ServiceAlreadyExistsError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
-    except ExemptionReasonRequiredError as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     return service
 
 

@@ -43,7 +43,6 @@ from app.models.company import Company
 from app.services.permission_service import seed_permission_catalog, seed_default_role_permissions
 from app.services.sector_service import seed_sector_catalog, ModuleNotAvailableError
 from app.services.product_service import ExemptionReasonRequiredError as ProductExemptionReasonRequiredError
-from app.services.service_service import ExemptionReasonRequiredError as ServiceExemptionReasonRequiredError
 from sqlalchemy import select as sa_select
 
 settings = get_settings()
@@ -70,7 +69,6 @@ async def _unprocessable_handler(request, exc):
 
 
 app.add_exception_handler(ProductExemptionReasonRequiredError, _unprocessable_handler)
-app.add_exception_handler(ServiceExemptionReasonRequiredError, _unprocessable_handler)
 
 
 @app.on_event("startup")
@@ -302,4 +300,13 @@ from app.services.fiscal_regime_service import FiscalRegimeInvalidError as _Fisc
 
 @app.exception_handler(_FiscalRegimeInvalidError)
 async def _fiscal_regime_handler(request: _Request, exc: _FiscalRegimeInvalidError):
+    return _JSONResponse(status_code=422, content={"detail": str(exc)})
+
+
+# A VAT rate or exemption motive an article cannot carry under its company's regime: a clear 422.
+from app.services.vat_rule_service import ArticleVatError as _ArticleVatError  # noqa: E402
+
+
+@app.exception_handler(_ArticleVatError)
+async def _article_vat_handler(request: _Request, exc: _ArticleVatError):
     return _JSONResponse(status_code=422, content={"detail": str(exc)})

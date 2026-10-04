@@ -5,6 +5,7 @@ validade/barcode - a distinct table avoids polluting Product with
 irrelevant fields).
 Every query is scoped to the caller's company_id (multi-tenant isolation).
 """
+from app.services.vat_rule_service import resolve_article_vat
 import uuid
 
 from sqlalchemy import select, func
@@ -21,18 +22,6 @@ class ServiceAlreadyExistsError(Exception):
 
 class ServiceNotFoundError(Exception):
     pass
-
-
-class ExemptionReasonRequiredError(Exception):
-    """Raised when the chosen VAT rate is 0% (isento) but no AGT exemption reason code was given."""
-    pass
-
-
-async def _check_exemption_reason(db: AsyncSession, vat_id: uuid.UUID, exemption_reason_id: uuid.UUID | None) -> None:
-    result = await db.execute(select(VAT).where(VAT.id == vat_id))
-    vat = result.scalar_one_or_none()
-    if vat is not None and float(vat.rate) == 0 and exemption_reason_id is None:
-        raise ExemptionReasonRequiredError("Motivo de isencao obrigatorio quando o IVA e 0% (isento)")
 
 
 async def _check_fields_available(
@@ -70,7 +59,7 @@ async def create_service(
     duration_minutes: int | None = None,
 ) -> Service:
     await _check_fields_available(db, company_id, code, name)
-    await _check_exemption_reason(db, vat_id, exemption_reason_id)
+    exemption_reason_id = await resolve_article_vat(db, company_id, vat_id, exemption_reason_id)
 
     service = Service(
         company_id=company_id, code=code, name=name, vat_id=vat_id,
@@ -132,7 +121,7 @@ async def update_service(
 ) -> Service:
     service = await get_service_or_raise(db, company_id, service_id)
     await _check_fields_available(db, company_id, code, name, exclude_id=service_id)
-    await _check_exemption_reason(db, vat_id, exemption_reason_id)
+    exemption_reason_id = await resolve_article_vat(db, company_id, vat_id, exemption_reason_id)
 
     service.code = code
     service.name = name

@@ -13,7 +13,7 @@ from app.services.pos_service import checkout
 from app.services.product_service import (
     ExemptionReasonRequiredError, create_product, update_product,
 )
-from app.services.service_service import ExemptionReasonRequiredError as ServiceExemptionReasonRequiredError
+from app.services.vat_rule_service import ArticleVatError
 
 
 async def _create(db, ctx, code, vat_id, raw=False):
@@ -39,8 +39,8 @@ async def test_a_normal_product_still_needs_a_vat_and_an_exemption_reason_at_zer
     with pytest.raises(ExemptionReasonRequiredError) as exc_info:
         await _create(db, ctx, "P-1", None)
     assert "Taxa de IVA" in str(exc_info.value)
-    with pytest.raises(ExemptionReasonRequiredError):
-        await _create(db, ctx, "P-2", ctx["vat_ise"].id)  # 0% without a reason: refused as before
+    with pytest.raises(ArticleVatError, match="obrigatorio"):
+        await _create(db, ctx, "P-2", ctx["vat_ise"].id)  # exempt without a motive: refused by THE article VAT rule
     assert (await _create(db, ctx, "P-3", ctx["vat_nor"].id)).vat_id == ctx["vat_nor"].id
 
 
@@ -98,4 +98,4 @@ def test_update_routes_answer_422_for_a_missing_vat_or_exemption_reason():
     """Only the create routes translated these errors: an update ended as a 500."""
     handlers = fastapi_app.exception_handlers
     assert ExemptionReasonRequiredError in handlers
-    assert ServiceExemptionReasonRequiredError in handlers
+    assert ArticleVatError in handlers
