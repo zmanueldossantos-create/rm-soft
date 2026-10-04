@@ -443,13 +443,15 @@ export default function Caixa() {
     }
   }
 
+  // Today's date in local time (toISOString gives the UTC day, which in Luanda is still yesterday until 1 am).
+  function localToday() {
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+
   function openDailyReportModal() {
-    // Default to the OPEN SESSION's business_date (the accounting day), not the
-    // real calendar date - a session opened yesterday and never closed still
-    // records today's sales under yesterday's business_date (see discussion on
-    // the "sale made today doesn't show in the report" confusion). Falls back to
-    // the real calendar date when there's no open session.
-    const defaultDate = session ? session.business_date : new Date().toISOString().slice(0, 10);
+    // Sales are dated with the real day (never the session's), so the report opens on today.
+    const defaultDate = localToday();
     setDailyReportDateFrom(defaultDate);
     setDailyReportDateTo(defaultDate);
     setDailyReportModalOpen(true);
@@ -1144,9 +1146,18 @@ export default function Caixa() {
 
       {!sessionLoading && session && (
         <>
-          <p className="text-[12px] text-text-muted font-mono mb-5">
-            Sessão aberta às {new Date(session.opened_at).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}
-          </p>
+          {(() => {
+            const time = new Date(session.opened_at).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
+            // A session of a previous day still sells (closing is a user's choice), but a daily count is advised.
+            const old = session.business_date && session.business_date < localToday();
+            return (
+              <p className={'text-[12px] font-mono mb-5 ' + (old ? 'text-amber-500' : 'text-text-muted')}>
+                {old
+                  ? 'Sess\u00e3o aberta desde ' + new Date(session.business_date + 'T00:00:00').toLocaleDateString('pt-PT') + ' \u00e0s ' + time + ' \u2013 recomenda-se fechar e contar a caixa'
+                  : 'Sess\u00e3o aberta \u00e0s ' + time}
+              </p>
+            );
+          })()}
 
           <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_440px] gap-5">
             <div className="min-w-0">
