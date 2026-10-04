@@ -6,6 +6,8 @@ Extended (Video 1) with the 3-tab fields observed in the reference
 legalized software: dados da empresa, informacoes fiscais, coordenadas
 bancarias (see CompanyBankAccount).
 """
+from datetime import date
+from app.models.company_fiscal_regime import CompanyFiscalRegime
 import uuid
 
 from sqlalchemy import select, func
@@ -207,6 +209,8 @@ async def create_company(
     regime = None
     if fiscal_regime_id is not None:
         regime = (await db.execute(select(FiscalRegime).where(FiscalRegime.id == fiscal_regime_id))).scalar_one_or_none()
+    if regime is not None:
+        db.add(CompanyFiscalRegime(company_id=company.id, fiscal_regime_id=regime.id, valid_from=date.today()))
     for legal in await _legal_rates_for(db, regime):
         db.add(VAT(company_id=company.id, name=legal.name, rate=legal.rate, tax_category=legal.tax_category))
 
@@ -335,6 +339,8 @@ async def update_company(
     company.electronic_signature_key = electronic_signature_key if issuance_mode == "ELETRONICA" else None
     if fiscal_regime_id is not None and fiscal_regime_id != company.fiscal_regime_id:
         company.fiscal_regime_id = fiscal_regime_id
+        # The new regime takes effect at once, and stays in the company's regime history.
+        db.add(CompanyFiscalRegime(company_id=company_id, fiscal_regime_id=fiscal_regime_id, valid_from=date.today()))
         regime = (await db.execute(select(FiscalRegime).where(FiscalRegime.id == fiscal_regime_id))).scalar_one()
         await sync_company_rates(db, company_id, regime)
     elif fiscal_regime_id is not None:
@@ -458,3 +464,27 @@ async def propagate_regime_rates(db: AsyncSession, regime_id: uuid.UUID | None =
             regime = regimes[company.fiscal_regime_id]
         await sync_company_rates(db, company.id, regime)
     return len(companies)
+
+
+async def regime_on(db: AsyncSession, company_id: uuid.UUID, day: date):
+    """The fiscal regime in force for the company on that day (its history), or None before any regime."""
+    row = (await db.execute(
+        select(CompanyFiscalRegime)
+        .where(CompanyFiscalRegime.company_id == company_id, CompanyFiscalRegime.valid_from <= day)
+        .order_by(CompanyFiscalRegime.valid_from.desc(), CompanyFiscalRegime.created_at.desc())
+        .limit(1)
+    )).scalar_one_or_none()
+    if row is None:
+        return None
+    return (await db.execute(select(FiscalRegime).where(FiscalRegime.id == row.fiscal_regime_id))).scalar_one_or_none()
+
+
+async def list_regime_history(db: AsyncSession, company_id: uuid.UUID) -> list[dict]:
+    """The company's regimes, most recent first, each with the day it took effect."""
+    rows = (await db.execute(
+        select(CompanyFiscalRegime, FiscalRegime.name)
+        .join(FiscalRegime, FiscalRegime.id == CompanyFiscalRegime.fiscal_regime_id)
+        .where(CompanyFiscalRegime.company_id == company_id)
+        .order_by(CompanyFiscalRegime.valid_from.desc(), CompanyFiscalRegime.created_at.desc())
+    )).all()
+    return [{"regime": name, "valid_from": row.valid_from.isoformat()} for row, name in rows]

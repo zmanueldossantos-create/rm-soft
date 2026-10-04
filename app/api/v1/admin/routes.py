@@ -451,3 +451,14 @@ async def post_reset_module_capabilities(
     except NoSectorDefaultsError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     return ModuleCapabilitiesResponse(module_id=module_id, capabilities=codes)
+
+
+@router.get("/companies/{company_id}/regime-history")
+async def get_company_regime_history(
+    company_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role("SUPER_ADMIN")),
+):
+    """The company's fiscal regimes, most recent first, each with the day it took effect."""
+    from app.services.company_service import list_regime_history
+    return await list_regime_history(db, company_id)
