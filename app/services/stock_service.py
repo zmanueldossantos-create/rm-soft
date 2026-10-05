@@ -800,7 +800,7 @@ async def get_stock_dashboard(db: AsyncSession, company_id: uuid.UUID, fiscal_pe
         average_cost = float(product.average_cost) if product.average_cost is not None else None
         sale_price = float(product.price or 0)
         cost_value = round(quantity * average_cost, 2) if average_cost is not None else 0.0
-        sale_value = round(quantity * sale_price, 2)
+        sale_value = None if product.is_raw_material else round(quantity * sale_price, 2)  # a raw material is never sold
         threshold = float(product.min_stock_threshold or 0)
         items.append({
             "product_id": product.id,
@@ -817,7 +817,7 @@ async def get_stock_dashboard(db: AsyncSession, company_id: uuid.UUID, fiscal_pe
             "cost_value": cost_value,
             "sale_value": sale_value,
             # Potential margin if the whole stock were sold at the base unit's price - only when the cost is known.
-            "margin_value": round(sale_value - cost_value, 2) if average_cost is not None else None,
+            "margin_value": round(sale_value - cost_value, 2) if average_cost is not None and sale_value is not None else None,
             "is_low": quantity <= threshold,
             "is_zero": quantity <= 0,
         })
@@ -831,7 +831,7 @@ async def get_stock_dashboard(db: AsyncSession, company_id: uuid.UUID, fiscal_pe
         )).all()
     ]
 
-    known = [i for i in items if not i["cost_unknown"]]
+    known = [i for i in items if not i["cost_unknown"] and i["sale_value"] is not None]  # sellable, with a known cost
     known_sales = sum(i["sale_value"] for i in known)
     return {
         "items": items,
@@ -839,7 +839,7 @@ async def get_stock_dashboard(db: AsyncSession, company_id: uuid.UUID, fiscal_pe
         "low_stock_count": sum(1 for i in items if i["is_low"]),
         "zero_stock_count": sum(1 for i in items if i["is_zero"]),
         "total_cost_value": round(sum(i["cost_value"] for i in items), 2),
-        "total_sale_value": round(sum(i["sale_value"] for i in items), 2),
+        "total_sale_value": round(sum(i["sale_value"] for i in items if i["sale_value"] is not None), 2),
         "total_margin_value": round(sum(i["margin_value"] for i in known), 2),
         "margin_rate": round(100 * sum(i["margin_value"] for i in known) / known_sales, 1) if known_sales else None,
         "unknown_cost_count": sum(1 for i in items if i["cost_unknown"] and i["total_quantity"] > 0),
