@@ -633,20 +633,35 @@ async def produce_stock(
             )
         ingredient_stocks.append((stock, needed, ing.ingredient_product_id))
 
+    # The cost of what is consumed (each ingredient at its average cost) becomes the cost of what is made. An
+    # ingredient without a known cost never blocks the production: its cost stays incomplete (no CMP update).
+    ingredient_costs = {}
+    for _stock, _needed, ingredient_product_id in ingredient_stocks:
+        ingredient = (await db.execute(select(Product).where(Product.id == ingredient_product_id))).scalar_one()
+        ingredient_costs[ingredient_product_id] = float(ingredient.average_cost) if ingredient.average_cost is not None else None
+    cost_complete = bool(ingredient_stocks) and all(c is not None for c in ingredient_costs.values())
+    produced_unit_cost = (
+        round(sum(needed * ingredient_costs[ing_id] for _s, needed, ing_id in ingredient_stocks) / quantity_to_produce, 4)
+        if cost_complete else None
+    )
+
     for stock, needed, ingredient_product_id in ingredient_stocks:
         stock.quantity = float(stock.quantity) - needed
         db.add(StockMovement(
             company_id=company_id, fiscal_period_id=posting_period.id, product_id=ingredient_product_id, warehouse_id=warehouse_id,
             movement_type=MovementType.PRODUCAO, quantity=needed, reason=reason,
-            is_production_output=False,
+            is_production_output=False, unit_cost=ingredient_costs.get(ingredient_product_id),
         ))
 
+    if produced_unit_cost is not None:  # THE average cost rule, before the quantity made is added (as a reception)
+        finished = (await db.execute(select(Product).where(Product.id == finished_product_id))).scalar_one()
+        await update_average_cost(db, company_id, finished, quantity_to_produce, produced_unit_cost)
     finished_stock = await _get_or_create_stock_row(db, company_id, finished_product_id, warehouse_id)
     finished_stock.quantity = float(finished_stock.quantity) + quantity_to_produce
     db.add(StockMovement(
         company_id=company_id, fiscal_period_id=posting_period.id, product_id=finished_product_id, warehouse_id=warehouse_id,
         movement_type=MovementType.PRODUCAO, quantity=quantity_to_produce, reason=reason,
-        is_production_output=True,
+        is_production_output=True, unit_cost=produced_unit_cost,
     ))
 
     await db.commit()

@@ -56,7 +56,10 @@ class StockMovement(Base):
     loss_category: Mapped[LossCategory | None] = mapped_column(Enum(LossCategory), nullable=True)
 
     # PRODUCAO only - True for the finished-goods row, False for each consumed ingredient row.
-    is_production_output: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    is_production_output: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    # Cost per base unit at the time: an ingredient consumed by a production carries its average cost, the
+    # product made carries the cost of what was consumed / the quantity made - None there = cost incomplete.
+    unit_cost: Mapped[float | None] = mapped_column(Numeric(14, 4), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
