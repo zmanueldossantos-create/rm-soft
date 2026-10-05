@@ -112,7 +112,7 @@ export default function ProductSaleUnits({ productId, baseUnitId, units, noPrice
     <div className="flex flex-col gap-3 pt-3 border-t border-border">
       <div>
         <p className="text-[13px] font-medium text-text-primary">Unidades e embalagens</p>
-        <p className="text-[12px] text-text-muted">Outras formas de vender este produto. O stock e sempre contado em {baseCode}.</p>
+        <p className="text-[12px] text-text-muted">{noPrice ? 'Outras formas de receber e usar esta mat\u00e9ria-prima.' : 'Outras formas de vender este produto.'} O stock e sempre contado em {baseCode}.</p>
       </div>
 
       {loading ? (
