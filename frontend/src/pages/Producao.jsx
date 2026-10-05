@@ -366,7 +366,7 @@ export default function Producao() {
       </div>
 
       
-      <Modal open={recipeModalOpen} onClose={closeRecipeModal} title="Configurar receita" maxWidthClass="max-w-2xl">
+      <Modal open={recipeModalOpen} onClose={closeRecipeModal} title="Configurar receita" maxWidthClass="max-w-3xl">
         <div className="flex flex-col gap-4">
           <div>
             <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Produto a configurar *</label>
@@ -388,7 +388,7 @@ export default function Producao() {
                 onChange={(e) => setRecipeForm((prev) => ({ ...prev, batchYield: e.target.value }))}
                 className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors"
               />
-              <div className="w-32 shrink-0">
+              <div className="w-44 shrink-0">
                 <Select
                   value={recipeForm.batchYieldSaleUnitId}
                   onChange={(v) => setRecipeForm((prev) => ({ ...prev, batchYieldSaleUnitId: v }))}
@@ -409,10 +409,15 @@ export default function Producao() {
               ) : (
                 <>
                   <div className="flex flex-col gap-2.5">
-                    <p className="text-[11px] font-medium uppercase tracking-wide text-text-muted">Ingredientes por lote</p>
+                    <div className="flex items-center justify-between">
+                      <p className="text-[11px] font-medium uppercase tracking-wide text-text-muted">Ingredientes por lote</p>
+                      <button type="button" onClick={addRecipeRow} className="flex items-center gap-1.5 text-[12px] font-medium text-accent hover:text-accent-hover cursor-pointer">
+                        <Plus size={14} /> Adicionar ingrediente
+                      </button>
+                    </div>
                     {recipeForm.rows.map((row, idx) => (
                       <div key={idx} className="flex items-center gap-2">
-                        <div className="flex-1">
+                        <div className="flex-1 min-w-0">
                           <Select
                             value={row.ingredientProductId}
                             onChange={(v) => { updateRecipeRow(idx, 'ingredientProductId', v); updateRecipeRow(idx, 'saleUnitId', 'base'); }}
@@ -454,14 +459,6 @@ export default function Producao() {
                     ))}
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={addRecipeRow}
-                    className="flex items-center justify-center gap-2 border border-dashed border-border hover:border-accent text-text-muted hover:text-accent text-sm font-medium rounded-md py-2.5 transition-colors cursor-pointer"
-                  >
-                    <Plus size={15} />
-                    Adicionar ingrediente
-                  </button>
 
                   {recipeIsEditing && recipeForm.rows.some((r) => r.ingredientProductId && r.quantityPerBatch) && (
                     <div className="bg-bg-inset border border-border rounded-md p-3">
