@@ -17,13 +17,3 @@ class VatResponse(BaseModel):
         from_attributes = True
 
 
-class VatRateCreateRequest(BaseModel):
-    name: str
-    rate: float
-    tax_category: str
-
-
-class VatRateUpdateRequest(BaseModel):
-    name: str
-    rate: float
-    tax_category: str

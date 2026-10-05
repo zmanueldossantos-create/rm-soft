@@ -10,7 +10,7 @@ import { extractErrorMessage } from '../utils/errors';
 import { listFiscalRegimes } from '../api/fiscalRegime';
 import { listModules, getCompanyModules, setCompanyModules, getAdminOverview } from '../api/module';
 import { resetUserPassword } from '../api/users';
-import { listCompanyVatRates, createCompanyVatRate, updateCompanyVatRate, toggleCompanyVatRate } from '../api/vat';
+import { listCompanyVatRates } from '../api/vat';
 import { countriesApi, provincesApi, municipalitiesApi, currenciesApi, banksApi } from '../api/catalogs';
 
 function ToggleSwitch({ checked, onChange, disabled }) {
@@ -62,14 +62,6 @@ export default function AdminCompanies() {
 
   const [companyVatRates, setCompanyVatRates] = useState([]);
   const [vatLoading, setVatLoading] = useState(false);
-  const [vatFormOpen, setVatFormOpen] = useState(false);
-  const [vatEditingId, setVatEditingId] = useState(null);
-  const [vatName, setVatName] = useState('');
-  const [vatRate, setVatRate] = useState('');
-  const [vatCategory, setVatCategory] = useState('NOR');
-  const [vatSaving, setVatSaving] = useState(false);
-  const [vatFormError, setVatFormError] = useState('');
-  const [vatTogglingId, setVatTogglingId] = useState(null);
   // Fiscal regime history of the company being edited (most recent first).
   const [regimeHistory, setRegimeHistory] = useState([]);
   const [editingId, setEditingId] = useState(null);
@@ -244,55 +236,6 @@ export default function AdminCompanies() {
       setCompanyVatRates([]);
     } finally {
       setVatLoading(false);
-    }
-  }
-
-  function openVatCreateForm() {
-    setVatEditingId(null);
-    setVatName('');
-    setVatRate('');
-    setVatCategory('NOR');
-    setVatFormError('');
-    setVatFormOpen(true);
-  }
-
-  function openVatEditForm(vat) {
-    setVatEditingId(vat.id);
-    setVatName(vat.name);
-    setVatRate(String(vat.rate));
-    setVatCategory(vat.tax_category);
-    setVatFormError('');
-    setVatFormOpen(true);
-  }
-
-  async function handleVatSubmit(e) {
-    e.preventDefault();
-    setVatFormError('');
-    setVatSaving(true);
-    try {
-      if (vatEditingId) {
-        await updateCompanyVatRate(editingId, vatEditingId, vatName, parseFloat(vatRate), vatCategory);
-      } else {
-        await createCompanyVatRate(editingId, vatName, parseFloat(vatRate), vatCategory);
-      }
-      setVatFormOpen(false);
-      await loadCompanyVatRates(editingId);
-    } catch (err) {
-      setVatFormError(extractErrorMessage(err, 'Erro ao guardar taxa de IVA'));
-    } finally {
-      setVatSaving(false);
-    }
-  }
-
-  async function handleVatToggle(vatId) {
-    setVatTogglingId(vatId);
-    try {
-      await toggleCompanyVatRate(editingId, vatId);
-      await loadCompanyVatRates(editingId);
-    } catch {
-      // silently ignore - the row's own state stays unchanged, user can retry
-    } finally {
-      setVatTogglingId(null);
     }
   }
 
@@ -731,32 +674,8 @@ export default function AdminCompanies() {
             <div className="flex flex-col gap-4 min-h-[420px]">
               <div className="flex items-center justify-between">
                 <p className="text-[12px] text-text-muted">Alterar ou desativar uma taxa nao afeta faturas ou produtos ja associados a ela.</p>
-                <button type="button" onClick={openVatCreateForm} className="flex items-center gap-1.5 text-accent hover:text-accent-hover text-[13px] font-medium transition-colors cursor-pointer">
-                  <Plus size={14} /> Nova taxa
-                </button>
+                <span className="text-[11px] text-text-muted">Definidas pelo regime fiscal e pelas taxas legais</span>
               </div>
-
-              {vatFormOpen && (
-                <div className="border border-border rounded-md p-3.5 flex flex-col gap-3 bg-bg-inset/40">
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <Field label="Nome *"><input value={vatName} onChange={(e) => setVatName(e.target.value)} required className={inputClass} /></Field>
-                    <Field label="Taxa (%) *"><input type="number" step="0.01" min="0" value={vatRate} onChange={(e) => setVatRate(e.target.value)} required className={inputClass} /></Field>
-                    <Field label="Categoria *">
-                      <Select value={vatCategory} onChange={setVatCategory} options={[{ value: 'NOR', label: 'NOR (normal)' }, { value: 'RED', label: 'RED (reduzida)' }, { value: 'ISE', label: 'ISE (isenta)' }, { value: 'INT', label: 'INT' }, { value: 'OUT', label: 'OUT' }]} />
-                    </Field>
-                  </div>
-                  {vatFormError && (
-                    <div className="bg-danger/10 border-l-2 border-danger text-danger px-3 py-2 text-[12px] rounded-r">{vatFormError}</div>
-                  )}
-                  <div className="flex justify-end gap-2">
-                    <button type="button" onClick={() => setVatFormOpen(false)} className="text-[12px] text-text-muted hover:text-text-primary px-3 py-1.5 transition-colors cursor-pointer">Cancelar</button>
-                    <button type="button" onClick={handleVatSubmit} disabled={vatSaving || !vatName || !vatRate} className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white text-[12px] font-medium rounded-md px-4 py-1.5 flex items-center gap-1.5 transition-colors cursor-pointer">
-                      {vatSaving && <Loader2 size={12} className="animate-spin" />}
-                      {vatEditingId ? 'Guardar' : 'Criar'}
-                    </button>
-                  </div>
-                </div>
-              )}
 
               {vatLoading ? (
                 <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin text-accent" /></div>
@@ -773,20 +692,6 @@ export default function AdminCompanies() {
                         {!vat.is_active && <span className="text-[10px] font-semibold uppercase tracking-wide text-danger">Inativa</span>}
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <button type="button" onClick={() => openVatEditForm(vat)} className="text-text-muted hover:text-accent transition-colors cursor-pointer" title="Editar">
-                          <Pencil size={14} />
-                        </button>
-                        <button
-                          type="button"
-                          role="switch"
-                          aria-checked={vat.is_active}
-                          onClick={() => handleVatToggle(vat.id)}
-                          disabled={vatTogglingId === vat.id}
-                          title={vat.is_active ? 'Desativar' : 'Ativar'}
-                          className={'relative inline-flex items-center h-5 w-9 rounded-full transition-colors cursor-pointer disabled:opacity-50 ' + (vat.is_active ? 'bg-accent' : 'bg-bg-inset border border-border')}
-                        >
-                          <span className={'inline-block w-3.5 h-3.5 rounded-full bg-white shadow transform transition-transform ' + (vat.is_active ? 'translate-x-[18px]' : 'translate-x-[3px]')} />
-                        </button>
                       </div>
                     </div>
                   ))}

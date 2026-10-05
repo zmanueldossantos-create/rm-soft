@@ -18,21 +18,6 @@ export async function listCompanyVatRates(companyId) {
   return res.data;
 }
 
-export async function createCompanyVatRate(companyId, name, rate, taxCategory) {
-  const res = await apiClient.post(`/vat/companies/${companyId}`, { name, rate, tax_category: taxCategory });
-  return res.data;
-}
-
-export async function updateCompanyVatRate(companyId, vatId, name, rate, taxCategory) {
-  const res = await apiClient.patch(`/vat/companies/${companyId}/${vatId}`, { name, rate, tax_category: taxCategory });
-  return res.data;
-}
-
-export async function toggleCompanyVatRate(companyId, vatId) {
-  const res = await apiClient.patch(`/vat/companies/${companyId}/${vatId}/toggle-status`);
-  return res.data;
-}
-
 // Products and services to reclassify after a regime change (they cannot be sold until then).
 export async function getReclassification() {
   const res = await apiClient.get('/vat/reclassification');

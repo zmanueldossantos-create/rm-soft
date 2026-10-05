@@ -6,7 +6,7 @@ see specification v6/v7, section 4.5.
 import uuid
 from datetime import datetime
 
-from sqlalchemy import String, Numeric, Boolean, DateTime, ForeignKey, func
+from sqlalchemy import String, Numeric, Boolean, DateTime, ForeignKey, func, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import UUID
 
@@ -18,7 +18,9 @@ class VAT(Base):
     VAT rate, scoped to a Company (tenant).
     Rate stored as a percentage (ex. 14.00 for 14%).
     """
-    __tablename__ = "vat_rates"
+    __tablename__ = "vat_rates"
+    # One rate per tax code per company: rates come from the legal catalog through the company's regime only.
+    __table_args__ = (UniqueConstraint("company_id", "tax_category", name="uq_vat_rates_company_category"),)
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     company_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("companies.id"), nullable=False, index=True)
