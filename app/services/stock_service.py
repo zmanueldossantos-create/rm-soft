@@ -710,7 +710,8 @@ async def list_production_history(
             "output": None,
             "ingredients": [],
         })
-        entry = {"product_code": product.code, "product_name": product.name, "quantity": float(movement.quantity)}
+        entry = {"product_code": product.code, "product_name": product.name, "quantity": float(movement.quantity),
+                 "unit_cost": float(movement.unit_cost) if movement.unit_cost is not None else None}
         if movement.is_production_output:
             batch["output"] = entry
         else:

@@ -521,8 +521,8 @@ export default function Producao() {
           )}
 
           {produceEstimate && !produceEstimateLoading && (
-            <div className="bg-accent/10 border-l-2 border-accent text-accent px-3.5 py-2.5 text-[13px] rounded-r">
-              Com o stock atual de ingredientes neste armazém, pode produzir até <strong>{produceEstimate.max_units}</strong> unidades
+            <div className={produceEstimate.max_units > 0 ? 'bg-bg-inset border-l-2 border-border text-text-primary px-3.5 py-2.5 text-[13px] rounded-r' : 'bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r'}>
+              Com o stock atual de ingredientes neste armazém, pode produzir até <strong>{Math.floor(produceEstimate.max_units / produceFactor())}</strong> {choiceCode(allProducts.find((p) => p.id === produceForm.productId), produceForm.saleUnitId)}
             </div>
           )}
 
@@ -534,7 +534,7 @@ export default function Producao() {
               min="0.01"
               value={produceForm.numBatches}
               onChange={(e) => handleBatchesChange(e.target.value)}
-              placeholder={'Ex: 2 (1 lote = ' + (produceForm.batchYield || 1) + ' unidades)'}
+              placeholder={'Ex: 2 (1 lote = ' + (produceForm.batchYield || 1) + ' ' + choiceCode(allProducts.find((p) => p.id === produceForm.productId), 'base') + ')'}
               className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors"
             />
           </div>
