@@ -95,12 +95,12 @@ export async function getProductionEstimate(warehouseId, productId) {
   return res.data;
 }
 
-export async function produceStock(warehouseId, finishedProductId, quantityToProduce, reason, fiscalPeriodId = null) {
+export async function produceStock(warehouseId, finishedProductId, quantityToProduce, reason, fiscalPeriodId = null, saleUnitId = null) {
   const res = await apiClient.post('/stock/produce', {
     fiscal_period_id: fiscalPeriodId || null,
     warehouse_id: warehouseId,
     finished_product_id: finishedProductId,
-    quantity_to_produce: quantityToProduce,
+    quantity_to_produce: quantityToProduce, sale_unit_id: saleUnitId,
     reason: reason || null,
   });
   return res.data;

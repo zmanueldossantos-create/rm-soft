@@ -15,7 +15,7 @@ async function getProductsWithRecipe() {
   return res.data;
 }
 
-const emptyRecipeForm = { productId: '', batchYield: '1', rows: [] };
+const emptyRecipeForm = { productId: '', batchYield: '1', batchYieldSaleUnitId: 'base', rows: [] };
 const emptyProduceForm = { productId: '', warehouseId: '', quantity: '', reason: '', fiscalPeriodId: '' };
 
 export default function Producao() {
@@ -84,15 +84,33 @@ export default function Producao() {
     return allProducts.filter((p) => p.id !== excludeProductId && p.product_type === 'BEM');
   }
 
+  // The units an article can be typed in: its base unit ('base'), then its active packages with their factor.
+  function unitChoices(product) {
+    if (!product) return [];
+    const base = units.find((u) => u.id === product.unit_of_measure_id)?.code || 'UN';
+    return [{ value: 'base', code: base, label: base, factor: 1 }, ...(product.sale_units || [])
+      .filter((s) => s.is_active !== false)
+      .map((s) => ({ value: s.id, code: s.unit_of_measure_code, label: s.unit_of_measure_code + ' (' + Number(s.factor) + ' ' + base + ')', factor: Number(s.factor) }))];
+  }
+
+  function choiceCode(product, value) {
+    return unitChoices(product).find((c) => c.value === (value || 'base'))?.code || '';
+  }
+
+  // How many base units one unit of the production form holds (5 CX of 30 -> 150).
+  function produceFactor() {
+    return unitChoices(allProducts.find((p) => p.id === produceForm.productId)).find((c) => c.value === (produceForm.saleUnitId || 'base'))?.factor || 1;
+  }
+
   function openNewRecipeModal() {
-    setRecipeForm({ productId: '', batchYield: '1', batchYieldUnitId: '', rows: [] });
+    setRecipeForm({ productId: '', batchYield: '1', batchYieldSaleUnitId: 'base', rows: [] });
     setRecipeError('');
     setRecipeIsEditing(false);
     setRecipeModalOpen(true);
   }
 
   async function openEditRecipeModal(product) {
-    setRecipeForm({ productId: product.id, batchYield: String(product.batch_yield), batchYieldUnitId: product.unit_of_measure_id || '', rows: [] });
+    setRecipeForm({ productId: product.id, batchYield: String(product.batch_yield_entry ?? product.batch_yield), batchYieldSaleUnitId: product.batch_yield_sale_unit_id || 'base', rows: [] });
     setRecipeError('');
     setRecipeIsEditing(true);
     setRecipeModalOpen(true);
@@ -101,7 +119,7 @@ export default function Producao() {
       const data = await getRecipe(product.id);
       setRecipeForm((prev) => ({
         ...prev,
-        rows: data.map((r) => ({ ingredientProductId: r.ingredient_product_id, quantityPerBatch: String(r.quantity_per_batch) })),
+        rows: data.map((r) => ({ ingredientProductId: r.ingredient_product_id, quantityPerBatch: String(r.entry_quantity ?? r.quantity_per_batch), saleUnitId: r.entry_sale_unit_id || 'base' })),
       }));
     } catch (err) {
       setRecipeError(extractErrorMessage(err, 'Erro ao carregar receita'));
@@ -112,7 +130,7 @@ export default function Producao() {
 
   async function handleRecipeProductChange(productId) {
     const chosen = producibleCandidates.find((p) => p.id === productId);
-    setRecipeForm((prev) => ({ ...prev, productId, batchYieldUnitId: chosen?.unit_of_measure_id || '', rows: [] }));
+    setRecipeForm((prev) => ({ ...prev, productId, batchYieldSaleUnitId: 'base', rows: [] }));
     const existing = configuredProducts.find((p) => p.id === productId);
     if (existing) {
       setRecipeLoading(true);
@@ -120,8 +138,8 @@ export default function Producao() {
         const data = await getRecipe(productId);
         setRecipeForm((prev) => ({
           ...prev,
-          batchYield: String(existing.batch_yield),
-          rows: data.map((r) => ({ ingredientProductId: r.ingredient_product_id, quantityPerBatch: String(r.quantity_per_batch) })),
+          batchYield: String(existing.batch_yield_entry ?? existing.batch_yield), batchYieldSaleUnitId: existing.batch_yield_sale_unit_id || 'base',
+          rows: data.map((r) => ({ ingredientProductId: r.ingredient_product_id, quantityPerBatch: String(r.entry_quantity ?? r.quantity_per_batch), saleUnitId: r.entry_sale_unit_id || 'base' })),
         }));
       } catch (err) {
         setRecipeError(extractErrorMessage(err, 'Erro ao carregar receita'));
@@ -138,7 +156,7 @@ export default function Producao() {
   }
 
   function addRecipeRow() {
-    setRecipeForm((prev) => ({ ...prev, rows: [...prev.rows, { ingredientProductId: '', quantityPerBatch: '' }] }));
+    setRecipeForm((prev) => ({ ...prev, rows: [...prev.rows, { ingredientProductId: '', quantityPerBatch: '', saleUnitId: 'base' }] }));
   }
 
   function updateRecipeRow(index, field, value) {
@@ -160,7 +178,8 @@ export default function Producao() {
       await setRecipe(recipeForm.productId, parseFloat(recipeForm.batchYield || '1'), validRows.map((r) => ({
         ingredientProductId: r.ingredientProductId,
         quantityPerBatch: parseFloat(r.quantityPerBatch),
-      })));
+        saleUnitId: r.saleUnitId === 'base' ? null : r.saleUnitId,
+      })), recipeForm.batchYieldSaleUnitId === 'base' ? null : recipeForm.batchYieldSaleUnitId);
       closeRecipeModal();
       await loadData();
     } catch (err) {
@@ -187,7 +206,7 @@ export default function Producao() {
   }
 
   function openProduceModal(product) {
-    setProduceForm({ productId: product.id, warehouseId: '', fiscalPeriodId: '', quantity: '', numBatches: '', batchYield: product.batch_yield, reason: '' });
+    setProduceForm({ productId: product.id, saleUnitId: 'base', warehouseId: '', fiscalPeriodId: '', quantity: '', numBatches: '', batchYield: product.batch_yield, reason: '' });
     setProduceEstimate(null);
     setProduceEstimateError('');
     setProduceError('');
@@ -213,13 +232,13 @@ export default function Producao() {
 
   function handleQuantityChange(value) {
     const yieldPerBatch = produceForm.batchYield || 1;
-    const numBatches = value ? String(parseFloat(value) / yieldPerBatch) : '';
+    const numBatches = value ? String(parseFloat(value) * produceFactor() / yieldPerBatch) : '';
     setProduceForm((prev) => ({ ...prev, quantity: value, numBatches }));
   }
 
   function handleBatchesChange(value) {
     const yieldPerBatch = produceForm.batchYield || 1;
-    const quantity = value ? String(parseFloat(value) * yieldPerBatch) : '';
+    const quantity = value ? String(parseFloat(value) * yieldPerBatch / produceFactor()) : '';
     setProduceForm((prev) => ({ ...prev, numBatches: value, quantity }));
   }
 
@@ -235,14 +254,14 @@ export default function Producao() {
     setProduceEstimate(null);
   }
 
-  const produceExceedsCapacity = produceEstimate && produceForm.quantity && parseFloat(produceForm.quantity) > produceEstimate.max_units;
+  const produceExceedsCapacity = produceEstimate && produceForm.quantity && parseFloat(produceForm.quantity) * produceFactor() > produceEstimate.max_units;
 
   async function handleProduceSubmit(e) {
     e.preventDefault();
     setProduceError('');
     setProduceSaving(true);
     try {
-      await produceStock(produceForm.warehouseId, produceForm.productId, parseFloat(produceForm.quantity), produceForm.reason || null, produceForm.fiscalPeriodId);
+      await produceStock(produceForm.warehouseId, produceForm.productId, parseFloat(produceForm.quantity), produceForm.reason || null, produceForm.fiscalPeriodId, produceForm.saleUnitId === 'base' ? null : produceForm.saleUnitId);
       closeProduceModal();
     } catch (err) {
       setProduceError(extractErrorMessage(err, 'Erro ao produzir'));
@@ -371,9 +390,9 @@ export default function Producao() {
               />
               <div className="w-32 shrink-0">
                 <Select
-                  value={recipeForm.batchYieldUnitId}
-                  onChange={(v) => setRecipeForm((prev) => ({ ...prev, batchYieldUnitId: v }))}
-                  options={units.map((u) => ({ value: u.id, label: u.code }))}
+                  value={recipeForm.batchYieldSaleUnitId}
+                  onChange={(v) => setRecipeForm((prev) => ({ ...prev, batchYieldSaleUnitId: v }))}
+                  options={unitChoices(allProducts.find((p) => p.id === recipeForm.productId)).map((c) => ({ value: c.value, label: c.label }))}
                   placeholder="Unidade"
                 />
               </div>
@@ -396,12 +415,12 @@ export default function Producao() {
                         <div className="flex-1">
                           <Select
                             value={row.ingredientProductId}
-                            onChange={(v) => updateRecipeRow(idx, 'ingredientProductId', v)}
+                            onChange={(v) => { updateRecipeRow(idx, 'ingredientProductId', v); updateRecipeRow(idx, 'saleUnitId', 'base'); }}
                             options={ingredientOptions(recipeForm.productId).map((p) => ({ value: p.id, label: p.code + ' - ' + p.name + (p.is_raw_material ? ' (matéria-prima)' : '') }))}
                             placeholder="Ingrediente"
                           />
                         </div>
-                        <div className="w-36 shrink-0 flex items-center gap-1.5">
+                        <div className="w-56 shrink-0 flex items-center gap-1.5">
                           <input
                             type="number"
                             step="0.0001"
@@ -412,9 +431,15 @@ export default function Producao() {
                             className="w-full bg-bg-inset border border-border rounded-md px-2.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors"
                           />
                           {(() => {
-                            const ingredientProduct = allProducts.find((p) => p.id === row.ingredientProductId);
-                            const unitCode = units.find((u) => u.id === ingredientProduct?.unit_of_measure_id)?.code;
-                            return unitCode ? <span className="text-[12px] text-text-muted font-mono shrink-0">{unitCode}</span> : null;
+                            const ing = allProducts.find((p) => p.id === row.ingredientProductId);
+                            if (!ing) return null;
+                            const choices = unitChoices(ing);
+                            return choices.length > 1 ? (
+                              <select value={row.saleUnitId || 'base'} onChange={(e) => updateRecipeRow(idx, 'saleUnitId', e.target.value)}
+                                className="bg-bg-inset border border-border rounded-md px-1.5 py-2 text-[12px] font-mono text-text-primary shrink-0">
+                                {choices.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                              </select>
+                            ) : <span className="text-[12px] text-text-muted font-mono shrink-0">{choices[0]?.code}</span>;
                           })()}
                         </div>
                         <button
@@ -443,12 +468,12 @@ export default function Producao() {
                       <p className="text-[11px] text-text-muted leading-snug">
                         {recipeForm.rows.filter((r) => r.ingredientProductId && r.quantityPerBatch).map((r, i) => {
                           const ing = allProducts.find((p) => p.id === r.ingredientProductId);
-                          const unitCode = units.find((u) => u.id === ing?.unit_of_measure_id)?.code || '';
+                          const unitCode = choiceCode(ing, r.saleUnitId);
                           const hint = fractionHint(r.quantityPerBatch);
                           return (i > 0 ? ' + ' : '') + (hint || r.quantityPerBatch) + ' ' + unitCode + ' ' + (ing?.name || '?');
                         })}
                         {' \u2192 '}
-                        {recipeForm.batchYield || '?'} {units.find((u) => u.id === recipeForm.batchYieldUnitId)?.code || ''} {producibleCandidates.find((p) => p.id === recipeForm.productId)?.name || 'produto'}
+                        {recipeForm.batchYield || '?'} {choiceCode(allProducts.find((p) => p.id === recipeForm.productId), recipeForm.batchYieldSaleUnitId)} {producibleCandidates.find((p) => p.id === recipeForm.productId)?.name || 'produto'}
                       </p>
                     </div>
                   )}
@@ -464,7 +489,7 @@ export default function Producao() {
               <button
                 type="button"
                 onClick={handleSaveRecipe}
-                disabled={recipeSaving || recipeForm.rows.length === 0 || !recipeForm.batchYieldUnitId}
+                disabled={recipeSaving || recipeForm.rows.length === 0}
                 className="bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors"
               >
                 {recipeSaving ? <Loader2 size={17} className="animate-spin" /> : <ChefHat size={17} />}
@@ -518,7 +543,7 @@ export default function Producao() {
           </div>
 
           <div>
-            <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Quantidade a produzir (unidades) *</label>
+            <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Quantidade a produzir *</label>
             <input
               type="number"
               step="1"
@@ -527,7 +552,15 @@ export default function Producao() {
               onChange={(e) => handleQuantityChange(e.target.value)}
               required
               className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors"
-            />
+            />
+            <div className="mt-2 flex items-center gap-2 text-[12px] text-text-muted">
+              <span>Unidade</span>
+              <select value={produceForm.saleUnitId || 'base'}
+                onChange={(e) => setProduceForm((prev) => ({ ...prev, saleUnitId: e.target.value, quantity: '', numBatches: '' }))}
+                className="bg-bg-inset border border-border rounded-md px-2 py-1.5 font-mono text-text-primary">
+                {unitChoices(allProducts.find((p) => p.id === produceForm.productId)).map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+              </select>
+            </div>
             {produceExceedsCapacity && (
               <p className="text-[11px] text-danger mt-1">Excede a capacidade estimada com o stock atual de ingredientes</p>
             )}
