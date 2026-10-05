@@ -17,7 +17,7 @@ async def test_editing_the_default_pos_answers_409(monkeypatch):
     monkeypatch.setattr(routes, "update_point_of_sale", refuse)
     with pytest.raises(HTTPException) as refused:
         await routes.edit_pos(
-            pos_id=uuid.uuid4(), payload=SimpleNamespace(name="x", billetage_enabled=False),
+            pos_id=uuid.uuid4(), payload=SimpleNamespace(name="x", billetage_enabled=False, print_after_sale=False, print_ticket=True, print_a4=False),
             db=None, current_user=SimpleNamespace(company_id=uuid.uuid4()),
         )
     assert refused.value.status_code == 409

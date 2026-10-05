@@ -953,26 +953,9 @@ export default function Caixa() {
     printDocument(invoice, cfg.ticket ? 'thermal' : 'a4');
   }
 
-  // Sends a document straight to the print dialog, through a hidden frame (no preview window).
-  async function printDocument(invoice, format) {
-    try {
-      const url = await fetchInvoicePdfBlob(invoice.id, format);
-      const frame = document.createElement('iframe');
-      frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0';
-      frame.onload = () => {
-        try {
-          frame.contentWindow.focus();
-          frame.contentWindow.print();
-        } catch {
-          window.open(url);
-        }
-        setTimeout(() => { frame.remove(); URL.revokeObjectURL(url); }, 60000);
-      };
-      frame.src = url;
-      document.body.appendChild(frame);
-    } catch (e) {
-      setCheckoutError(extractErrorMessage(e, 'Erro ao imprimir'));
-    }
+  // Opens the document in THE document viewer (the same one as 'Consultar documentos'), ready to print.
+  function printDocument(invoice, format) {
+    openPdfViewer(invoice.id, format, invoice.series + '-' + invoice.number + (format === 'thermal' ? ' (Ticket)' : ' (A4)'));
   }
 
   async function openPdfViewer(invoiceId, format, filename) {
