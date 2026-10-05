@@ -52,6 +52,7 @@ async def set_recipe(
     finished_product_id: uuid.UUID,
     batch_yield: float,
     ingredients: list[dict],  # [{"ingredient_product_id": UUID, "quantity_per_batch": float}, ...]
+    batch_yield_sale_unit_id: uuid.UUID | None = None,  # the yield typed in a package (2 CX)
 ) -> list[RecipeIngredient]:
     """
     Replaces the finished product's entire recipe (ingredients per batch,
@@ -71,7 +72,19 @@ async def set_recipe(
 
     product_result = await db.execute(select(Product).where(Product.id == finished_product_id))
     product = product_result.scalar_one()
-    product.batch_yield = batch_yield
+    # Typed in any unit or package of the article (2 CX, 1 SC), kept in base units - THE stock conversion.
+    from app.services.stock_service import StockQuantityError, _to_base_quantity
+    try:
+        base_yield = await _to_base_quantity(db, company_id, finished_product_id, batch_yield, batch_yield_sale_unit_id)
+        base_quantities = [
+            await _to_base_quantity(db, company_id, ing["ingredient_product_id"], ing["quantity_per_batch"], ing.get("sale_unit_id"))
+            for ing in ingredients
+        ]
+    except StockQuantityError as e:
+        raise InvalidRecipeError(str(e))
+    product.batch_yield = base_yield
+    product.batch_yield_entry = batch_yield
+    product.batch_yield_sale_unit_id = batch_yield_sale_unit_id
 
     await db.execute(
         delete(RecipeIngredient).where(
@@ -81,12 +94,13 @@ async def set_recipe(
     )
 
     rows = []
-    for ing in ingredients:
+    for ing, base_quantity in zip(ingredients, base_quantities):
         row = RecipeIngredient(
             company_id=company_id,
             finished_product_id=finished_product_id,
             ingredient_product_id=ing["ingredient_product_id"],
-            quantity_per_batch=ing["quantity_per_batch"],
+            quantity_per_batch=base_quantity,
+            entry_quantity=ing["quantity_per_batch"], entry_sale_unit_id=ing.get("sale_unit_id"),
         )
         db.add(row)
         rows.append(row)

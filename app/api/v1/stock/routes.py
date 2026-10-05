@@ -6,6 +6,7 @@ into the CENTRAL warehouse, then internally transferred between any of
 the company's warehouses (central <-> activity, or activity <-> activity)
 before being sold or written off (PERDA) at a specific point of sale.
 """
+from app.services.stock_service import StockQuantityError
 import uuid
 from datetime import datetime
 
@@ -223,6 +224,8 @@ async def get_production_estimate(
     try:
         return await estimate_production_capacity(db, current_user.company_id, warehouse_id, product_id)
     except NoRecipeError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    except StockQuantityError as e:  # a unit the product does not have, or a decimal in a whole unit
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     except PeriodClosedError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
@@ -265,9 +268,11 @@ async def post_produce_stock(
     try:
         await produce_stock(
             db, current_user.company_id, payload.warehouse_id, payload.finished_product_id,
-            payload.quantity_to_produce, payload.reason, fiscal_period_id=payload.fiscal_period_id,
+            payload.quantity_to_produce, payload.reason, fiscal_period_id=payload.fiscal_period_id, sale_unit_id=payload.sale_unit_id,
         )
     except NoRecipeError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    except StockQuantityError as e:  # a unit the product does not have, or a decimal in a whole unit
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     except PeriodClosedError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))

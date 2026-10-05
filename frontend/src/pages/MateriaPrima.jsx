@@ -117,7 +117,6 @@ export default function MateriaPrima() {
       expiry_date: null,
       product_type: 'BEM',
       unit_of_measure_id: form.unit_of_measure_id || null,
-      batch_yield: 1,
       is_raw_material: true,
       not_available_pos: true,
     };

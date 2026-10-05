@@ -12,6 +12,7 @@ from pydantic import BaseModel, field_validator
 class RecipeIngredientInput(BaseModel):
     ingredient_product_id: uuid.UUID
     quantity_per_batch: float
+    sale_unit_id: uuid.UUID | None = None  # the unit or package typed in (1 SC); None = the base unit
 
     @field_validator("quantity_per_batch")
     @classmethod
@@ -23,6 +24,7 @@ class RecipeIngredientInput(BaseModel):
 
 class RecipeSetRequest(BaseModel):
     batch_yield: float
+    batch_yield_sale_unit_id: uuid.UUID | None = None  # the yield's unit or package (2 CX); None = the base unit
     ingredients: list[RecipeIngredientInput]
 
     @field_validator("batch_yield")
@@ -37,6 +39,8 @@ class RecipeIngredientResponse(BaseModel):
     id: uuid.UUID
     ingredient_product_id: uuid.UUID
     quantity_per_batch: float
+    entry_quantity: float | None = None
+    entry_sale_unit_id: uuid.UUID | None = None
 
     class Config:
         from_attributes = True
@@ -59,6 +63,7 @@ class ProduceStockRequest(BaseModel):
     warehouse_id: uuid.UUID
     finished_product_id: uuid.UUID
     quantity_to_produce: float
+    sale_unit_id: uuid.UUID | None = None  # produce in a package (5 CX); None = the base unit
     reason: str | None = None
 
     @field_validator("quantity_to_produce")

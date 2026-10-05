@@ -32,7 +32,11 @@ class RecipeIngredient(Base):
     # (see Product.batch_yield - a batch yields several units of the
     # finished product, not just one) - matches how production actually
     # gets measured (e.g. "1 saco de farinha per batch"), not tiny decimals.
-    quantity_per_batch: Mapped[float] = mapped_column(Numeric(14, 4), nullable=False)
+    quantity_per_batch: Mapped[float] = mapped_column(Numeric(14, 4), nullable=False)
+    # What the user typed (1 SC): quantity_per_batch above is that in base units (20 KG), the only reference
+    # for stock and cost; these two only show the recipe the way it was thought.
+    entry_quantity: Mapped[float | None] = mapped_column(Numeric(14, 4), nullable=True)
+    entry_sale_unit_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("product_sale_units.id"), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

@@ -594,6 +594,7 @@ async def produce_stock(
     quantity_to_produce: float,
     reason: str | None = None,
     fiscal_period_id: uuid.UUID | None = None,
+    sale_unit_id: uuid.UUID | None = None,  # produce in a package (5 CX)
 ) -> Stock:
     """
     Transforms ingredients into a finished product, within ONE warehouse
@@ -603,6 +604,7 @@ async def produce_stock(
     InsufficientStockError before touching any row).
     """
     posting_period = await resolve_posting_period(db, company_id, fiscal_period_id)
+    quantity_to_produce = await _to_base_quantity(db, company_id, finished_product_id, quantity_to_produce, sale_unit_id)  # 5 CX -> 150 UN
     recipe = await _get_recipe_rows(db, company_id, finished_product_id)
     if not recipe:
         raise NoRecipeError("Este produto nao tem receita definida")

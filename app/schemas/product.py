@@ -35,7 +35,6 @@ class ProductCreateRequest(BaseModel):
     expiry_date: date | None = None
     product_type: str = "BEM"
     unit_of_measure_id: uuid.UUID | None = None
-    batch_yield: float = 1
     is_raw_material: bool = False
 
     category_id: uuid.UUID | None = None
@@ -79,13 +78,6 @@ class ProductCreateRequest(BaseModel):
     def validate_threshold(cls, v: float) -> float:
         if v < 0:
             raise ValueError("Limite minimo de stock nao pode ser negativo")
-        return v
-
-    @field_validator("batch_yield")
-    @classmethod
-    def validate_batch_yield(cls, v: float) -> float:
-        if v <= 0:
-            raise ValueError("Rendimento do lote deve ser maior que zero")
         return v
 
 
@@ -100,7 +92,6 @@ class ProductUpdateRequest(BaseModel):
     expiry_date: date | None = None
     product_type: str = "BEM"
     unit_of_measure_id: uuid.UUID | None = None
-    batch_yield: float = 1
     is_raw_material: bool = False
 
     category_id: uuid.UUID | None = None
@@ -144,13 +135,6 @@ class ProductUpdateRequest(BaseModel):
     def validate_threshold(cls, v: float) -> float:
         if v < 0:
             raise ValueError("Limite minimo de stock nao pode ser negativo")
-        return v
-
-    @field_validator("batch_yield")
-    @classmethod
-    def validate_batch_yield(cls, v: float) -> float:
-        if v <= 0:
-            raise ValueError("Rendimento do lote deve ser maior que zero")
         return v
 
 
@@ -170,7 +154,9 @@ class ProductResponse(BaseModel):
     unit_of_measure_code: str | None = None  # attached by the list: the unit's code (UN, CX...)
     sale_units: list[dict] = []  # attached by the list: active sale units (id, code, factor, price, barcode, is_fractional)
     unit_is_fractional: bool = False  # attached by the list: the base unit takes decimal quantities
-    batch_yield: float
+    batch_yield: float
+    batch_yield_entry: float | None = None
+    batch_yield_sale_unit_id: uuid.UUID | None = None
     is_raw_material: bool
     is_active: bool
     created_at: datetime

@@ -62,7 +62,6 @@ async def create_new_product(
             expiry_date=payload.expiry_date,
             product_type=payload.product_type,
             unit_of_measure_id=payload.unit_of_measure_id,
-            batch_yield=payload.batch_yield,
             is_raw_material=payload.is_raw_material,
             category_id=payload.category_id,
             brand=payload.brand,
@@ -117,7 +116,6 @@ async def edit_product(
             expiry_date=payload.expiry_date,
             product_type=payload.product_type,
             unit_of_measure_id=payload.unit_of_measure_id,
-            batch_yield=payload.batch_yield,
             is_raw_material=payload.is_raw_material,
             category_id=payload.category_id,
             brand=payload.brand,
@@ -173,7 +171,9 @@ async def put_product_recipe(
     try:
         return await set_recipe(
             db, current_user.company_id, product_id, payload.batch_yield,
-            [{"ingredient_product_id": i.ingredient_product_id, "quantity_per_batch": i.quantity_per_batch} for i in payload.ingredients],
+            [{"ingredient_product_id": i.ingredient_product_id, "quantity_per_batch": i.quantity_per_batch, "sale_unit_id": i.sale_unit_id}
+             for i in payload.ingredients],
+            batch_yield_sale_unit_id=payload.batch_yield_sale_unit_id,
         )
     except RecipeProductNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))

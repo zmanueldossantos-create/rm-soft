@@ -78,7 +78,10 @@ class Product(Base):
     # How many units of THIS product one full recipe batch yields (see
     # RecipeIngredient.quantity_per_batch). Irrelevant unless this product
     # has a recipe; default 1 keeps it harmless for every other product.
-    batch_yield: Mapped[float] = mapped_column(Numeric(12, 3), nullable=False, default=1)
+    batch_yield: Mapped[float] = mapped_column(Numeric(12, 3), nullable=False, default=1)
+    # The yield as typed (2 CX): batch_yield above is in base units (60 UN), the only reference for production.
+    batch_yield_entry: Mapped[float | None] = mapped_column(Numeric(14, 4), nullable=True)
+    batch_yield_sale_unit_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("product_sale_units.id", use_alter=True, name="products_batch_yield_sale_unit_id_fkey", ondelete="SET NULL"), nullable=True)  # use_alter: products <-> product_sale_units point at each other
     # Raw material / production input (e.g. flour, yeast) - never sold
     # directly, never shown in the sellable Produtos catalog or invoice
     # product pickers; managed in its own "Materia-prima" screen and used

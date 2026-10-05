@@ -92,7 +92,6 @@ async def create_product(
     expiry_date: date | None,
     product_type: str = "BEM",
     unit_of_measure_id: uuid.UUID | None = None,
-    batch_yield: float = 1,
     is_raw_material: bool = False,
     category_id: uuid.UUID | None = None,
     brand: str | None = None,
@@ -127,7 +126,6 @@ async def create_product(
         expiry_date=expiry_date,
         product_type=product_type,
         unit_of_measure_id=unit_of_measure_id,
-        batch_yield=batch_yield,
         is_raw_material=is_raw_material,
         category_id=category_id,
         brand=brand,
@@ -241,7 +239,6 @@ async def update_product(
     expiry_date: date | None,
     product_type: str = "BEM",
     unit_of_measure_id: uuid.UUID | None = None,
-    batch_yield: float = 1,
     is_raw_material: bool = False,
     category_id: uuid.UUID | None = None,
     brand: str | None = None,
@@ -276,7 +273,6 @@ async def update_product(
     product.product_type = product_type
     await ensure_base_unit_can_change(db, product, unit_of_measure_id)
     product.unit_of_measure_id = unit_of_measure_id
-    product.batch_yield = batch_yield
     product.is_raw_material = is_raw_material
     product.category_id = category_id
     product.brand = brand
