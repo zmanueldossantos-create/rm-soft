@@ -99,7 +99,7 @@ export default function CompanySettings() {
   const [posLoadingActivityId, setPosLoadingActivityId] = useState(null);
   const [posModalOpen, setPosModalOpen] = useState(false);
   const [editingPosId, setEditingPosId] = useState(null);
-  const [posForm, setPosForm] = useState({ activityId: '', name: '', billetageEnabled: false });
+  const [posForm, setPosForm] = useState({ activityId: '', name: '', billetageEnabled: false, printAfterSale: false, printTicket: true, printA4: false });
   const [posSaving, setPosSaving] = useState(false);
   const [posFormError, setPosFormError] = useState('');
   const [assocByPos, setAssocByPos] = useState({});
@@ -311,14 +311,14 @@ export default function CompanySettings() {
 
   function openCreatePos(activityId) {
     setEditingPosId(null);
-    setPosForm({ activityId, name: '', billetageEnabled: false, isDefault: false });
+    setPosForm({ activityId, name: '', billetageEnabled: false, isDefault: false, printAfterSale: false, printTicket: true, printA4: false });
     setPosFormError('');
     setPosModalOpen(true);
   }
 
   function openEditPos(pos) {
     setEditingPosId(pos.id);
-    setPosForm({ activityId: pos.activity_id, name: pos.name, billetageEnabled: pos.billetage_enabled || false, isDefault: !!pos.is_default });
+    setPosForm({ activityId: pos.activity_id, name: pos.name, billetageEnabled: pos.billetage_enabled || false, printAfterSale: !!pos.print_after_sale, printTicket: pos.print_ticket !== false, printA4: !!pos.print_a4, isDefault: !!pos.is_default });
     setPosFormError('');
     setPosModalOpen(true);
   }
@@ -329,9 +329,9 @@ export default function CompanySettings() {
     setPosSaving(true);
     try {
       if (editingPosId) {
-        await updatePointOfSale(editingPosId, posForm.name, posForm.billetageEnabled);
+        await updatePointOfSale(editingPosId, posForm.name, posForm.billetageEnabled, { print_after_sale: posForm.printAfterSale, print_ticket: posForm.printTicket, print_a4: posForm.printA4 });
       } else {
-        await createPointOfSale(posForm.activityId, posForm.name, posForm.billetageEnabled);
+        await createPointOfSale(posForm.activityId, posForm.name, posForm.billetageEnabled, { print_after_sale: posForm.printAfterSale, print_ticket: posForm.printTicket, print_a4: posForm.printA4 });
       }
       setPosModalOpen(false);
       await loadPointsOfSale(posForm.activityId);
@@ -1327,6 +1327,30 @@ export default function CompanySettings() {
             />
             Exigir billetagem no fecho de caixa
           </label>
+          <div className="rounded-md border border-border px-3.5 py-3 flex flex-col gap-2.5">
+            <label className="flex items-center gap-2 text-[13px] text-text-primary cursor-pointer">
+              <input type="checkbox" checked={posForm.printAfterSale} onChange={(e) => setPosForm((p) => ({ ...p, printAfterSale: e.target.checked }))} />
+              {'Imprimir ap\u00f3s a venda'}
+            </label>
+            {posForm.printAfterSale && (
+              <div className="flex items-center gap-5 pl-6 text-[13px] text-text-primary">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={posForm.printTicket} onChange={(e) => setPosForm((p) => ({ ...p, printTicket: e.target.checked }))} />
+                  {'Tal\u00e3o'}
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={posForm.printA4} onChange={(e) => setPosForm((p) => ({ ...p, printA4: e.target.checked }))} />
+                  A4
+                </label>
+              </div>
+            )}
+            <p className="text-[11px] text-text-muted">
+              {!posForm.printAfterSale ? 'Desativado: nada \u00e9 impresso automaticamente.'
+                : posForm.printTicket && posForm.printA4 ? 'Tal\u00e3o e A4: o caixa escolhe ap\u00f3s cada venda.'
+                  : posForm.printTicket || posForm.printA4 ? 'Imprime diretamente ap\u00f3s cada venda.'
+                    : 'Escolha pelo menos um formato.'}
+            </p>
+          </div>
           {posFormError && (
             <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{posFormError}</div>
           )}

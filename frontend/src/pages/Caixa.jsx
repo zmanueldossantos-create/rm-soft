@@ -200,7 +200,12 @@ export default function Caixa() {
         listActivities(), canViewProducts ? listProducts() : Promise.resolve([]), listCustomers(), getMyCashPointAssociation(),
       ]);
       const activeActivities = activitiesData.filter((a) => a.is_active);
-      const posLists = await Promise.all(activeActivities.map((a) => listPointsOfSale(a.id)));
+      const posLists = await Promise.all(activeActivities.map((a) => listPointsOfSale(a.id)));
+      const printMap = {};
+      posLists.forEach((list) => (list || []).forEach((p) => {
+        printMap[p.id] = { on: !!p.print_after_sale, ticket: p.print_ticket !== false, a4: !!p.print_a4 };
+      }));
+      setPrintConfigByPos(printMap);
       const activityNameById = Object.fromEntries(activeActivities.map((a) => [a.id, a.name]));
       const activePos = posLists.flat().filter((p) => p.is_active).map((p) => ({
         ...p, activityName: activityNameById[p.activity_id],
@@ -834,7 +839,9 @@ export default function Caixa() {
   const [ftDueDate, setFtDueDate] = useState('');
   const [proFormaSaving, setProFormaSaving] = useState(false);
   const [ftModalOpen, setFtModalOpen] = useState(false);
-  const [successModalOpen, setSuccessModalOpen] = useState(false);
+  const [successModalOpen, setSuccessModalOpen] = useState(false);
+  const [printConfigByPos, setPrintConfigByPos] = useState({}); // each cash point -> its printing after a sale
+  const [printChoice, setPrintChoice] = useState(false); // ticket and A4 both allowed: the cashier picks one
 
   const isCustomerPessoaColetiva = customers.find((c) => c.id === selectedCustomerId)?.legal_person_type === 'JURIDICA';
 
@@ -876,7 +883,8 @@ export default function Caixa() {
         { paymentTermId: ftPaymentTermId || null, dueDate: ftDueDate || null },
       );
       setLastInvoice(invoice);
-      setSuccessModalOpen(true);
+      setSuccessModalOpen(true);
+      afterSalePrint(invoice);
       refreshBalance(selectedPosId);
       refreshPosStock(selectedPosId);
       setCart([]);
@@ -896,7 +904,8 @@ export default function Caixa() {
     try {
       const proForma = await createProFormaFromPos(selectedPosId, selectedCustomerId || null, cart, globalDiscountPercent);
       setLastInvoice(proForma);
-      setSuccessModalOpen(true);
+      setSuccessModalOpen(true);
+      afterSalePrint(proForma);
       refreshBalance(selectedPosId);
       refreshPosStock(selectedPosId);
       setCart([]);
@@ -929,6 +938,40 @@ export default function Caixa() {
       // silent - the pro-forma section above already reports errors; this is a supplementary list
     } finally {
       setRecentInvoicesLoading(false);
+    }
+  }
+
+  // Printing after a sale, as this cash point asks: off = nothing (as before); one format = it prints at once;
+  // both = the cashier picks one in the success window.
+  function afterSalePrint(invoice) {
+    const cfg = printConfigByPos[selectedPosId];
+    if (!invoice || !cfg || !cfg.on) return;
+    if (cfg.ticket && cfg.a4) {
+      setPrintChoice(true);
+      return;
+    }
+    printDocument(invoice, cfg.ticket ? 'thermal' : 'a4');
+  }
+
+  // Sends a document straight to the print dialog, through a hidden frame (no preview window).
+  async function printDocument(invoice, format) {
+    try {
+      const url = await fetchInvoicePdfBlob(invoice.id, format);
+      const frame = document.createElement('iframe');
+      frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0';
+      frame.onload = () => {
+        try {
+          frame.contentWindow.focus();
+          frame.contentWindow.print();
+        } catch {
+          window.open(url);
+        }
+        setTimeout(() => { frame.remove(); URL.revokeObjectURL(url); }, 60000);
+      };
+      frame.src = url;
+      document.body.appendChild(frame);
+    } catch (e) {
+      setCheckoutError(extractErrorMessage(e, 'Erro ao imprimir'));
     }
   }
 
@@ -992,7 +1035,8 @@ export default function Caixa() {
         const invoice = await liquidatePendingInvoice(selectedPosId, liquidationTarget.id, liquidationTargetType, validPayments);
         setLastInvoice(invoice);
         setPaymentModalOpen(false);
-        setSuccessModalOpen(true);
+        setSuccessModalOpen(true);
+        afterSalePrint(invoice);
       refreshBalance(selectedPosId);
       refreshPosStock(selectedPosId);
       listPendingProFormas().then(setPendingProFormas).catch(() => {});
@@ -1005,7 +1049,8 @@ export default function Caixa() {
           globalDiscountPercent,
         );
         setLastInvoice(invoice);
-        setSuccessModalOpen(true);
+        setSuccessModalOpen(true);
+        afterSalePrint(invoice);
       refreshBalance(selectedPosId);
       refreshPosStock(selectedPosId);
         setCart([]);
@@ -1020,7 +1065,8 @@ export default function Caixa() {
     }
   }
 
-  function closePaymentModal() {
+  function closePaymentModal() {
+    setPrintChoice(false);
     setPaymentModalOpen(false);
     setSuccessModalOpen(false);
     setLastInvoice(null);
@@ -1757,6 +1803,15 @@ export default function Caixa() {
               </>
             )}
           </div>
+          {printChoice && lastInvoice && (
+            <div className="flex items-center gap-2">
+              <span className="text-[12px] text-text-muted">Imprimir:</span>
+              <button type="button" onClick={() => { printDocument(lastInvoice, 'thermal'); setPrintChoice(false); }}
+                className="border border-border hover:border-accent text-text-primary text-sm rounded-md py-2 px-4 cursor-pointer">{'Tal\u00e3o'}</button>
+              <button type="button" onClick={() => { printDocument(lastInvoice, 'a4'); setPrintChoice(false); }}
+                className="border border-border hover:border-accent text-text-primary text-sm rounded-md py-2 px-4 cursor-pointer">A4</button>
+            </div>
+          )}
           <button onClick={closePaymentModal} className="bg-accent hover:bg-accent-hover text-white font-semibold text-sm rounded-md py-3 px-6 transition-colors cursor-pointer">
             Nova venda
           </button>

@@ -23,13 +23,13 @@ export async function listPointsOfSale(activityId) {
   return res.data;
 }
 
-export async function createPointOfSale(activityId, name, billetageEnabled = false) {
-  const res = await apiClient.post('/activities/' + activityId + '/pos', { activity_id: activityId, name, billetage_enabled: billetageEnabled });
+export async function createPointOfSale(activityId, name, billetageEnabled = false, printing = {}) {
+  const res = await apiClient.post('/activities/' + activityId + '/pos', { activity_id: activityId, name, billetage_enabled: billetageEnabled, ...printing });
   return res.data;
 }
 
-export async function updatePointOfSale(posId, name, billetageEnabled = false) {
-  const res = await apiClient.patch('/activities/pos/' + posId, { name, billetage_enabled: billetageEnabled });
+export async function updatePointOfSale(posId, name, billetageEnabled = false, printing = {}) {
+  const res = await apiClient.patch('/activities/pos/' + posId, { name, billetage_enabled: billetageEnabled, ...printing });
   return res.data;
 }
 

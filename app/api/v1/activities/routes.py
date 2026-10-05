@@ -3,7 +3,7 @@ Activity routes - business lines / points of sale within a Company.
 GESTOR configures these (CAIXA needs read access to select one when
 invoicing), but only for Modules the company has been granted by SUPER_ADMIN.
 """
-from app.services.activity_service import ActivityPrintError
+from app.services.point_of_sale_service import PosPrintError
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -66,11 +66,8 @@ async def create_new_activity(
     """Configures a new activity for a Module the company has been granted."""
     try:
         return await create_activity(
-            db, current_user.company_id, payload.module_id, payload.name,
-                payload.print_after_sale, payload.print_ticket, payload.print_a4,
+            db, current_user.company_id, payload.module_id, payload.name
         )
-    except ActivityPrintError as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     except ModuleNotGrantedError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
 
@@ -84,12 +81,9 @@ async def edit_activity(
 ):
     """Updates an activity's name and series code."""
     try:
-        return await update_activity(db, current_user.company_id, activity_id, payload.name,
-                                     payload.print_after_sale, payload.print_ticket, payload.print_a4)
+        return await update_activity(db, current_user.company_id, activity_id, payload.name)
     except ActivityNotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except ActivityPrintError as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
 @router.patch("/{activity_id}/toggle-status", response_model=ActivityResponse)
@@ -102,9 +96,7 @@ async def toggle_activity(
     try:
         return await toggle_activity_status(db, current_user.company_id, activity_id)
     except ActivityNotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except ActivityPrintError as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
 # ---------- Points of Sale (nested under Activity) ----------
@@ -128,11 +120,11 @@ async def create_new_pos(
 ):
     """Creates a new POS under this activity - several POS can share the same activity's stock/warehouse."""
     try:
-        return await create_point_of_sale(db, current_user.company_id, activity_id, payload.name, billetage_enabled=payload.billetage_enabled)
-    except ActivityNotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except ActivityPrintError as e:
+        return await create_point_of_sale(db, current_user.company_id, activity_id, payload.name, billetage_enabled=payload.billetage_enabled, print_after_sale=payload.print_after_sale, print_ticket=payload.print_ticket, print_a4=payload.print_a4)
+    except PosPrintError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    except ActivityNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except PosAlreadyExistsError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
 
@@ -147,7 +139,9 @@ async def edit_pos(
     """Renames a POS."""
     try:
         try:
-            return await update_point_of_sale(db, current_user.company_id, pos_id, payload.name, billetage_enabled=payload.billetage_enabled)
+            return await update_point_of_sale(db, current_user.company_id, pos_id, payload.name, billetage_enabled=payload.billetage_enabled, print_after_sale=payload.print_after_sale, print_ticket=payload.print_ticket, print_a4=payload.print_a4)
+        except PosPrintError as e:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
         except DefaultPosNotModifiableError as e:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except PosNotFoundError as e:

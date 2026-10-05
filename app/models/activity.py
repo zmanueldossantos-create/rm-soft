@@ -32,12 +32,7 @@ class Activity(Base):
     # alongside the Activity - see activity_service.create_activity.
     warehouse_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("warehouses.id"), nullable=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)  # e.g. "Padaria", "Bar Central"
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    # Printing after a sale at the till: off = nothing is printed automatically (as before); on = the ticket, the
-    # A4, or - both chosen - the cashier picks one in the success window.
-    print_after_sale: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
-    print_ticket: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
-    print_a4: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

@@ -9,12 +9,18 @@ from pydantic import BaseModel
 class PosCreateRequest(BaseModel):
     activity_id: uuid.UUID
     name: str
-    billetage_enabled: bool = False
+    billetage_enabled: bool = False
+    print_after_sale: bool = False
+    print_ticket: bool = True
+    print_a4: bool = False
 
 
 class PosUpdateRequest(BaseModel):
     name: str
-    billetage_enabled: bool = False
+    billetage_enabled: bool = False
+    print_after_sale: bool = False
+    print_ticket: bool = True
+    print_a4: bool = False
 
 
 class PointOfSaleResponse(BaseModel):
@@ -23,7 +29,10 @@ class PointOfSaleResponse(BaseModel):
     activity_id: uuid.UUID
     name: str
     is_active: bool
-    billetage_enabled: bool
+    billetage_enabled: bool
+    print_after_sale: bool
+    print_ticket: bool
+    print_a4: bool
     is_default: bool = False
 
     class Config:
