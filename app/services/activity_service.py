@@ -27,11 +27,22 @@ async def list_activities(db: AsyncSession, company_id: uuid.UUID) -> list[Activ
     return list(result.scalars().all())
 
 
+class ActivityPrintError(Exception):
+    """Printing after a sale switched on without any format."""
+
+
+def _check_printing(print_after_sale: bool, print_ticket: bool, print_a4: bool) -> None:
+    if print_after_sale and not (print_ticket or print_a4):
+        raise ActivityPrintError("Escolha pelo menos um formato de impressao: Talao ou A4")
+
+
 async def create_activity(
     db: AsyncSession, company_id: uuid.UUID, module_id: uuid.UUID, name: str,
+    print_after_sale: bool = False, print_ticket: bool = True, print_a4: bool = False,
 ) -> Activity:
     """Creates an activity of a module the company was granted, with its own point-of-sale warehouse and default
     cash point. Invoice numbering never depends on the activity: it goes through document_series."""
+    _check_printing(print_after_sale, print_ticket, print_a4)
     if not await is_module_granted(db, company_id, module_id):
         raise ModuleNotGrantedError("A empresa nao tem acesso a este modulo - contacte o administrador da plataforma")
 
@@ -47,6 +58,7 @@ async def create_activity(
         module_id=module_id,
         warehouse_id=warehouse.id,
         name=name,
+        print_after_sale=print_after_sale, print_ticket=print_ticket, print_a4=print_a4,
     )
     db.add(activity)
     await db.commit()
@@ -75,10 +87,18 @@ async def get_activity_or_raise(db: AsyncSession, company_id: uuid.UUID, activit
 
 async def update_activity(
     db: AsyncSession, company_id: uuid.UUID, activity_id: uuid.UUID, name: str,
+    print_after_sale: bool | None = None, print_ticket: bool | None = None, print_a4: bool | None = None,
 ) -> Activity:
-    """Renames the activity."""
+    """Renames the activity and changes its printing after a sale - each setting only when given."""
     activity = await get_activity_or_raise(db, company_id, activity_id)
     activity.name = name
+    if print_after_sale is not None:
+        activity.print_after_sale = print_after_sale
+    if print_ticket is not None:
+        activity.print_ticket = print_ticket
+    if print_a4 is not None:
+        activity.print_a4 = print_a4
+    _check_printing(activity.print_after_sale, activity.print_ticket, activity.print_a4)
     await db.commit()
     await db.refresh(activity)
     return activity
