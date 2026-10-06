@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { UserCog, Plus, Loader2, Search, KeyRound, Pencil } from 'lucide-react';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
@@ -19,6 +19,7 @@ function ToggleSwitch({ checked, onChange, disabled }) {
 const ROLE_OPTIONS = [
   { value: 'GESTOR', label: 'Gestor' },
   { value: 'CAIXA', label: 'Caixa' },
+  { value: 'ATENDENTE', label: 'Atendente' },
   { value: 'ARMAZENISTA', label: 'Armazenista' },
   { value: 'CONTABILISTA', label: 'Contabilista' },
 ];
@@ -162,7 +163,7 @@ export default function Users() {
         </h2>
       </div>
       <p className="text-text-muted text-sm mb-6">
-        Gerir a equipa com acesso ao sistema - caixas, armazenistas e contabilistas
+        Gerir a equipa com acesso ao sistema - caixas, atendentes, armazenistas e contabilistas
       </p>
 
       <div className="flex items-center justify-between gap-3 flex-wrap mb-5">

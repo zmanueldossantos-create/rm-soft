@@ -1,4 +1,4 @@
-﻿"""
+"""
 User model - phone number authentication (v7).
 See specification v7, section 2.4.
 A phone number is unique PER company_id, except for SUPER_ADMIN accounts
@@ -22,6 +22,7 @@ class UserRole(str, enum.Enum):
     CAIXA = "CAIXA"                # was CAISSIER
     ARMAZENISTA = "ARMAZENISTA"    # was MAGASINIER
     CONTABILISTA = "CONTABILISTA"  # was COMPTABLE
+    ATENDENTE = "ATENDENTE"  # contas abertas sans fecho
 
 
 class User(Base):

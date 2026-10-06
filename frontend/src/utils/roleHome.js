@@ -5,6 +5,7 @@
 export const ROLE_HOME = {
   CAIXA: '/caixa',
   ARMAZENISTA: '/stock/dashboard',
+  ATENDENTE: '/contas-abertas',
 };
 
 export function homeFor(role) {

@@ -27,7 +27,7 @@ from app.models.role_permission import RolePermission
 from app.models.user import UserRole
 
 ALWAYS_ALLOWED_ROLE = "GESTOR"
-EDITABLE_ROLES = ("CAIXA", "ARMAZENISTA", "CONTABILISTA")
+EDITABLE_ROLES = ("CAIXA", "ATENDENTE", "ARMAZENISTA", "CONTABILISTA")
 
 # (code, label, category, default_roles) - GESTOR is implicit, never listed.
 PERMISSION_CATALOG: list[tuple[str, str, str, list[str]]] = [
@@ -48,7 +48,7 @@ PERMISSION_CATALOG: list[tuple[str, str, str, list[str]]] = [
     ("movements:view", "Ver documentos de movimento de stock", "Movimentos de Stock", ["CAIXA"]),
     ("suppliers:view", "Ver fornecedores", "Fornecedores", ["ARMAZENISTA", "CONTABILISTA"]),
     ("suppliers:manage", "Criar e editar fornecedores", "Fornecedores", []),
-    ("products:view", "Ver produtos", "Produtos", ["CAIXA", "ARMAZENISTA"]),
+    ("products:view", "Ver produtos", "Produtos", ["CAIXA", "ARMAZENISTA", "ATENDENTE"]),
     ("products:manage", "Criar e editar produtos e imagens", "Produtos", []),
     ("recipes:list", "Ver produtos com receita (producao)", "Produtos", ["ARMAZENISTA"]),
     ("recipes:view", "Ver a receita de um produto", "Produtos", []),
@@ -68,18 +68,18 @@ PERMISSION_CATALOG: list[tuple[str, str, str, list[str]]] = [
     ("invoices:proforma", "Emitir faturas pro-forma", "Faturacao", ["CAIXA"]),
     ("invoices:proforma_convert", "Converter pro-forma em fatura", "Faturacao", ["CAIXA"]),
     ("invoices:resubmit", "Reenviar fatura (submissao AGT)", "Faturacao", ["CAIXA"]),
-    ("open_accounts:view", "Ver contas abertas e respetivas linhas", "Contas Abertas", ["CAIXA"]),
-    ("open_accounts:open", "Abrir contas", "Contas Abertas", ["CAIXA"]),
-    ("open_accounts:edit_lines", "Adicionar, alterar e remover linhas de conta", "Contas Abertas", ["CAIXA"]),
+    ("open_accounts:view", "Ver contas abertas e respetivas linhas", "Contas Abertas", ["CAIXA", "ATENDENTE"]),
+    ("open_accounts:open", "Abrir contas", "Contas Abertas", ["CAIXA", "ATENDENTE"]),
+    ("open_accounts:edit_lines", "Adicionar, alterar e remover linhas de conta", "Contas Abertas", ["CAIXA", "ATENDENTE"]),
     ("open_accounts:close", "Fechar contas", "Contas Abertas", ["CAIXA"]),
     ("moedeiro:view", "Ver denominacoes e ultima contagem do moedeiro", "Moedeiro", ["CAIXA"]),
     ("moedeiro:record", "Registar contagem do moedeiro", "Moedeiro", ["CAIXA"]),
     ("customers:view", "Ver clientes", "Clientes", ["CAIXA"]),
     ("customers:create", "Criar clientes", "Clientes", ["CAIXA"]),
     ("customers:manage", "Editar clientes, sugerir codigo, ativar/desativar e ligacoes bancarias", "Clientes", []),
-    ("resource_types:view", "Ver tipos de recurso", "Recursos e Reservas", ["CAIXA"]),
+    ("resource_types:view", "Ver tipos de recurso", "Recursos e Reservas", ["CAIXA", "ATENDENTE"]),
     ("resource_types:manage", "Criar, editar e ativar/desativar tipos de recurso", "Recursos e Reservas", []),
-    ("resources:view", "Ver recursos (quartos, mesas, ...)", "Recursos e Reservas", ["CAIXA", "ARMAZENISTA"]),
+    ("resources:view", "Ver recursos (quartos, mesas, ...)", "Recursos e Reservas", ["CAIXA", "ARMAZENISTA", "ATENDENTE"]),
     ("resources:manage", "Criar, editar e ativar/desativar recursos", "Recursos e Reservas", []),
     ("bookings:view", "Ver reservas", "Recursos e Reservas", ["CAIXA"]),
     ("bookings:create", "Criar reservas", "Recursos e Reservas", ["CAIXA"]),
@@ -87,15 +87,15 @@ PERMISSION_CATALOG: list[tuple[str, str, str, list[str]]] = [
     ("hotel:checkin", "Fazer check-in", "Hotel", ["CAIXA"]),
     ("hotel:checkout", "Fazer check-out", "Hotel", ["CAIXA"]),
     ("hotel:occupancy_view", "Ver historico de ocupacao", "Hotel", ["CAIXA"]),
-    ("activities:view", "Ver atividades", "Atividades", ["CAIXA", "ARMAZENISTA"]),
+    ("activities:view", "Ver atividades", "Atividades", ["CAIXA", "ARMAZENISTA", "ATENDENTE"]),
     ("activities:manage", "Criar, editar e ativar/desativar atividades", "Atividades", []),
-    ("pos_terminals:view", "Ver pontos de venda de uma atividade", "Atividades", ["CAIXA"]),
+    ("pos_terminals:view", "Ver pontos de venda de uma atividade", "Atividades", ["CAIXA", "ATENDENTE"]),
     ("pos_terminals:manage", "Criar, editar e ativar/desativar pontos de venda", "Atividades", []),
     ("product_categories:view", "Ver categorias de produtos", "Catalogos da Empresa", ["CAIXA"]),
     ("product_categories:manage", "Criar, editar e ativar/desativar categorias de produtos", "Catalogos da Empresa", []),
     ("service_types:view", "Ver tipos de servico", "Catalogos da Empresa", ["CAIXA"]),
     ("service_types:manage", "Criar, editar e ativar/desativar tipos de servico", "Catalogos da Empresa", []),
-    ("services:view", "Ver servicos", "Catalogos da Empresa", ["CAIXA"]),
+    ("services:view", "Ver servicos", "Catalogos da Empresa", ["CAIXA", "ATENDENTE"]),
     ("services:manage", "Criar, editar e ativar/desativar servicos", "Catalogos da Empresa", []),
     ("tesouraria:reasons_view", "Ver motivos de movimento de caixa", "Tesouraria", ["CAIXA"]),
     ("tesouraria:reasons_manage", "Criar, editar e ativar/desativar motivos de movimento de caixa", "Tesouraria", []),
@@ -104,7 +104,7 @@ PERMISSION_CATALOG: list[tuple[str, str, str, list[str]]] = [
     ("tesouraria:receive", "Receber movimentos de tesouraria pendentes", "Tesouraria", ["CAIXA"]),
     ("tesouraria:cancel_movement", "Cancelar movimentos de tesouraria", "Tesouraria", ["CAIXA"]),
     ("tesouraria:daily_report", "Ver relatorio diario de tesouraria", "Tesouraria", ["CAIXA"]),
-    ("tesouraria:my_association", "Ver a minha associacao a caixa", "Tesouraria", ["CAIXA", "ARMAZENISTA", "CONTABILISTA"]),
+    ("tesouraria:my_association", "Ver a minha associacao a caixa", "Tesouraria", ["CAIXA", "ARMAZENISTA", "CONTABILISTA", "ATENDENTE"]),
     ("tesouraria:associations_manage", "Associar utilizadores as caixas (pontos de venda)", "Atividades", []),
     ("tesouraria:payment_prefs_view", "Ver metodos de pagamento da empresa", "Tesouraria", ["CAIXA"]),
     ("tesouraria:payment_prefs_manage", "Configurar metodos de pagamento da empresa", "Tesouraria", []),
@@ -113,7 +113,7 @@ PERMISSION_CATALOG: list[tuple[str, str, str, list[str]]] = [
     ("fiscal_periods:view", "Ver exercicios e periodos fiscais", "Contabilidade", []),
     ("fiscal_periods:manage", "Abrir exercicios e periodos fiscais", "Contabilidade", []),
     ("fiscal_periods:close", "Fechar exercicios e periodos fiscais", "Contabilidade", []),
-    ("fiscal_periods:current", "Ver o periodo fiscal corrente", "Contabilidade", ["CAIXA", "ARMAZENISTA", "CONTABILISTA"]),
+    ("fiscal_periods:current", "Ver o periodo fiscal corrente", "Contabilidade", ["CAIXA", "ARMAZENISTA", "CONTABILISTA", "ATENDENTE"]),
     ("saf_t:export", "Exportar SAF-T", "Contabilidade", []),
     ("company:view", "Ver dados da empresa", "Empresa", []),
     ("company:manage", "Editar dados e logotipo da empresa", "Empresa", []),
@@ -127,7 +127,7 @@ PERMISSION_CATALOG: list[tuple[str, str, str, list[str]]] = [
     ("establishments:manage", "Criar, editar e ativar/desativar estabelecimentos", "Empresa", []),
     ("catalogs:view_reference", "Ver catalogos de referencia (paises, moedas, bancos, IVA, unidades, tipos de documento...)", "Catalogos de Referencia", []),
     ("catalogs:view_billing", "Ver metodos e condicoes de pagamento, retencoes e denominacoes", "Catalogos de Referencia", ["CAIXA"]),
-    ("open_accounts:transfer", "Transferir e dividir linhas entre contas", "Contas Abertas", ["CAIXA"]),
+    ("open_accounts:transfer", "Transferir e dividir linhas entre contas", "Contas Abertas", ["CAIXA", "ATENDENTE"]),
 ]
 
 
