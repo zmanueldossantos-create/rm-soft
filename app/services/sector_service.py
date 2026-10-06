@@ -31,6 +31,7 @@ DATA_COUNT_SQL = {
     "BOOKINGS": "SELECT company_id, count(*) FROM bookings GROUP BY company_id",
     "OPEN_ACCOUNTS": "SELECT company_id, count(*) FROM open_accounts GROUP BY company_id",
     "HOTEL_STAY": "SELECT company_id, count(*) FROM open_accounts WHERE booking_id IS NOT NULL GROUP BY company_id",
+    "KITCHEN": "SELECT company_id, count(*) FROM kitchen_orders GROUP BY company_id",
 }
 
 

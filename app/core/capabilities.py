@@ -51,7 +51,11 @@ CAPABILITIES: dict[str, Capability] = {
         ),
         Capability(
             "OPEN_ACCOUNTS", "Contas abertas", "Contas em curso, transferencia e divisao, plano de mesas", (),
-            ("open_accounts", "kitchen"), ("/contas-abertas", "/cozinha", "/cozinha/historico"),
+            ("open_accounts",), ("/contas-abertas",),
+        ),
+        Capability(
+            "KITCHEN", "Cozinha", "Envio de pratos para a cozinha, ecra da cozinha e historico", ("OPEN_ACCOUNTS",),
+            ("kitchen",), ("/cozinha", "/cozinha/historico"),
         ),
         Capability(
             "HOTEL_STAY", "Estadia de hotel", "Check-in, check-out e ocupacao", ("BOOKINGS", "OPEN_ACCOUNTS"),
@@ -105,8 +109,8 @@ class Sector:
 
 SECTORS: tuple[Sector, ...] = (
     Sector("HOTEL", "Hotel", "Alojamento: quartos, reservas, estadias e extras", ("STOCK", "RESOURCES", "BOOKINGS", "OPEN_ACCOUNTS", "HOTEL_STAY")),
-    Sector("RESTAURANTE", "Restaurante", "Mesas, contas abertas, divisao e transferencia", ("STOCK", "RESOURCES", "BOOKINGS", "OPEN_ACCOUNTS")),
-    Sector("BAR", "Bar", "Venda ao balcao e contas abertas", ("STOCK", "OPEN_ACCOUNTS")),
+    Sector("RESTAURANTE", "Restaurante", "Mesas, contas abertas, divisao e transferencia, cozinha", ("STOCK", "RESOURCES", "BOOKINGS", "OPEN_ACCOUNTS", "KITCHEN")),
+    Sector("BAR", "Bar", "Venda ao balcao, mesas e contas abertas", ("STOCK", "RESOURCES", "OPEN_ACCOUNTS")),
     Sector("PADARIA", "Padaria", "Venda ao balcao, stock e producao", ("STOCK", "PRODUCTION")),
     Sector("SPA_SALAO", "Spa / Salao / Consultorio", "Marcacoes por praticante, duracao dos servicos e agenda", ("RESOURCES", "BOOKINGS")),
     Sector("COMERCIO", "Comercio geral", "Venda ao balcao e stock", ("STOCK",)),

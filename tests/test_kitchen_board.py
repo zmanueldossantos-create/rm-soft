@@ -18,7 +18,7 @@ def test_the_kitchen_role_moves_dishes_and_never_cashes():
     assert UserRole("COZINHA").value == "COZINHA" and "COZINHA" in EDITABLE_ROLES
     assert {"kitchen:view", "kitchen:update"} <= KITCHEN
     assert not {c for c in KITCHEN if c.startswith(("open_accounts:", "pos:", "invoices:", "moedeiro:"))}
-    assert capability_of_permission("kitchen:view") == "OPEN_ACCOUNTS"
+    assert capability_of_permission("kitchen:view") == "KITCHEN"
 
 
 async def _sent_order(db, ctx, quantity=2):

@@ -1,4 +1,5 @@
 import DateInput from '../components/DateInput';
+import { useCan } from '../utils/permissions';
 import VatReclassify from '../components/VatReclassify';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { Package, Plus, Loader2, Search, Pencil, Barcode, Scale, Upload, X } from 'lucide-react';
@@ -53,6 +54,7 @@ const emptyForm = {
 };
 
 export default function Products() {
+  const can = useCan();
   const [products, setProducts] = useState([]);
   const [vatRates, setVatRates] = useState([]);
   const [selectedIds, setSelectedIds] = useState([]); // grouped actions (VAT reclassification)
@@ -506,10 +508,12 @@ export default function Products() {
               <input type="checkbox" checked={form.notAvailablePos} onChange={(e) => updateField('notAvailablePos', e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
               <span className="text-sm text-text-primary">Não disponível POS</span>
             </label>
-            <label className="flex items-center gap-2.5 cursor-pointer select-none">
+            {can('kitchen:view') && (
+<label className="flex items-center gap-2.5 cursor-pointer select-none">
               <input type="checkbox" checked={form.preparedInKitchen} onChange={(e) => updateField('preparedInKitchen', e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
               <span className="text-sm text-text-primary">Preparado na cozinha</span>
             </label>
+)}
             <label className="flex items-center gap-2.5 cursor-pointer select-none">
               <input type="checkbox" checked={form.internalUseOnly} onChange={(e) => updateField('internalUseOnly', e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
               <span className="text-sm text-text-primary">Uso interno apenas</span>
