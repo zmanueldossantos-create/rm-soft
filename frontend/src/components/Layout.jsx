@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { ChefHat } from 'lucide-react';
+import { ChefHat, History as KitchenHistoryIcon } from 'lucide-react';
 import { Link, useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { Building2, LogOut, LayoutDashboard, Sun, Moon, Package, Users, Calendar, Receipt, Settings, Package2, UserCog, History, FileText, Landmark, LayoutGrid, Store, Wheat, Factory, Wallet, SlidersHorizontal, Tags, Wrench, ChevronDown, Cog, Plus, ArrowLeftRight, Calculator, ClipboardList, Gauge, PiggyBank, CreditCard, Boxes, CalendarClock, Wallet2, PackageMinus, Truck, ShieldCheck } from 'lucide-react';
@@ -162,6 +162,11 @@ export default function Layout() {
     { to: '/producao/historico', icon: ClipboardList, label: 'Resumo de Produção', perm: 'recipes:view' },
   ].filter((item) => (item.perms ? can.any(item.perms) : can(item.perm)));
 
+  const kitchenItems = [
+    { to: '/cozinha', icon: ChefHat, label: 'Pedidos em curso', perm: 'kitchen:view' },
+    { to: '/cozinha/historico', icon: KitchenHistoryIcon, label: 'Historico', perm: 'kitchen:history' },
+  ].filter((item) => (item.perms ? can.any(item.perms) : can(item.perm)));
+
   const stockItems = [
     { to: '/stock/dashboard', icon: Gauge, label: 'Resumo de Stock', perm: 'stock:view' },
     { to: '/stock', icon: Package2, label: 'Armazéns e Stock', perm: 'warehouses:view' },
@@ -273,8 +278,10 @@ export default function Layout() {
             {can('open_accounts:view') && (
               <NavLink to="/contas-abertas" icon={Wallet2} label="Contas Abertas" active={isActive('/contas-abertas')} />
             )}
-            {can('kitchen:view') && (
-              <NavLink to="/cozinha" icon={ChefHat} label="Cozinha" active={isActive('/cozinha')} />
+            {/* Cozinha: a group when both screens are allowed, a plain link otherwise (a cook without the history) */}
+            {kitchenItems.length > 1 && <NavGroup icon={ChefHat} label="Cozinha" isActive={isActive} items={kitchenItems} />}
+            {kitchenItems.length === 1 && (
+              <NavLink to={kitchenItems[0].to} icon={ChefHat} label="Cozinha" active={isActive(kitchenItems[0].to)} />
             )}
             {can('saf_t:export') && (
               <NavLink to="/saf-t" icon={FileText} label="SAF-T" active={isActive('/saf-t')} />

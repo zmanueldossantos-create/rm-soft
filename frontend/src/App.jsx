@@ -29,6 +29,7 @@ import Permissoes from './pages/Permissoes';
 import VisaoGlobal from './pages/VisaoGlobal';
 import ContasAbertas from './pages/ContasAbertas';
 import Cozinha from './pages/Cozinha';
+import KitchenHistory from './pages/KitchenHistory';
 import Layout from './components/Layout';
 import { useAuthStore } from './store/authStore';
 import RequirePermission from './components/RequirePermission';
@@ -90,6 +91,7 @@ export default function App() {
           <Route path="/permissoes" element={<GestorRoute><Permissoes /></GestorRoute>} />
           <Route path="/contas-abertas" element={<RequirePermission perm="open_accounts:view"><ContasAbertas /></RequirePermission>} />
           <Route path="/cozinha" element={<RequirePermission perm="kitchen:view"><Cozinha /></RequirePermission>} />
+          <Route path="/cozinha/historico" element={<RequirePermission perm="kitchen:history"><KitchenHistory /></RequirePermission>} />
           <Route
             path="/admin/companies"
             element={

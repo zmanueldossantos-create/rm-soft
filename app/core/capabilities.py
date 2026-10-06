@@ -51,7 +51,7 @@ CAPABILITIES: dict[str, Capability] = {
         ),
         Capability(
             "OPEN_ACCOUNTS", "Contas abertas", "Contas em curso, transferencia e divisao, plano de mesas", (),
-            ("open_accounts", "kitchen"), ("/contas-abertas", "/cozinha"),
+            ("open_accounts", "kitchen"), ("/contas-abertas", "/cozinha", "/cozinha/historico"),
         ),
         Capability(
             "HOTEL_STAY", "Estadia de hotel", "Check-in, check-out e ocupacao", ("BOOKINGS", "OPEN_ACCOUNTS"),

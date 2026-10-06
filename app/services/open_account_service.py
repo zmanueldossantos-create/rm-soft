@@ -156,6 +156,7 @@ async def add_line(
 
 async def update_line_quantity(
     db: AsyncSession, company_id: uuid.UUID, account_id: uuid.UUID, line_id: uuid.UUID, quantity: float,
+    user_id: uuid.UUID | None = None,
 ) -> OpenAccountLine | None:
     """Sets a line's quantity directly (e.g. +/- buttons on the line). A quantity
     of 0 or less removes the line entirely (matches Caixa's cart UX) and returns
@@ -176,7 +177,7 @@ async def update_line_quantity(
         if float(quantity) - float(line.quantity) > _QTY_EPS:
             raise InvalidLineError("Este prato ja foi enviado para a cozinha - adicione-o de novo, segue no proximo envio")
         if quantity <= 0:
-            _cancel_line(line, "Anulado pela sala")
+            _cancel_line(line, "Anulado pela sala", user_id)
         else:
             line.quantity = quantity
             line.kitchen_modified = True
@@ -202,7 +203,7 @@ async def update_line_quantity(
     return line
 
 
-async def remove_line(db: AsyncSession, company_id: uuid.UUID, account_id: uuid.UUID, line_id: uuid.UUID) -> None:
+async def remove_line(db: AsyncSession, company_id: uuid.UUID, account_id: uuid.UUID, line_id: uuid.UUID, user_id: uuid.UUID | None = None) -> None:
     account = await get_account_or_raise(db, company_id, account_id)
     if account.status == OpenAccountStatus.FECHADA:
         raise AccountAlreadyClosedError("Esta conta ja esta fechada")
@@ -213,7 +214,7 @@ async def remove_line(db: AsyncSession, company_id: uuid.UUID, account_id: uuid.
     if line.kitchen_status in KITCHEN_LOCKED:
         raise InvalidLineError(_LOCKED_MESSAGE[line.kitchen_status])
     if line.kitchen_status == KITCHEN_WAITING:
-        _cancel_line(line, "Anulado pela sala")  # the kitchen sees it struck through
+        _cancel_line(line, "Anulado pela sala", user_id)  # the kitchen sees it struck through
     else:
         await db.delete(line)
     await db.commit()
@@ -622,10 +623,11 @@ _LOCKED_MESSAGE = {
 }
 
 
-def _cancel_line(line: OpenAccountLine, reason: str) -> None:
+def _cancel_line(line: OpenAccountLine, reason: str, user_id: uuid.UUID | None = None) -> None:
     line.kitchen_status = KITCHEN_CANCELLED
     line.cancel_reason = reason
     line.cancelled_at = func.now()
+    line.cancelled_by_user_id = user_id
 
 
 async def _attach_kitchen_orders(db: AsyncSession, lines: list[OpenAccountLine]) -> None:

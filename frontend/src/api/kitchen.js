@@ -17,3 +17,9 @@ export async function kitchenOrderAction(orderId, action) {
   const res = await apiClient.post('/kitchen/orders/' + orderId + '/' + action);
   return res.data;
 }
+
+// The kitchen orders of a period (YYYY-MM-DD, at most 92 days), with the history of every dish.
+export async function getKitchenHistory(dateFrom, dateTo) {
+  const res = await apiClient.get('/kitchen/history', { params: { date_from: dateFrom, date_to: dateTo } });
+  return res.data;
+}

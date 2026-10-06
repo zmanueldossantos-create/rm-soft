@@ -130,6 +130,7 @@ PERMISSION_CATALOG: list[tuple[str, str, str, list[str]]] = [
     ("open_accounts:transfer", "Transferir e dividir linhas entre contas", "Contas Abertas", ["CAIXA", "ATENDENTE"]),
     ("kitchen:view", "Ver os pedidos da cozinha", "Cozinha", ["COZINHA"]),
     ("kitchen:update", "Fazer avancar ou recusar pratos na cozinha", "Cozinha", ["COZINHA"]),
+    ("kitchen:history", "Ver o historico da cozinha", "Cozinha", []),
 ]
 
 

@@ -106,7 +106,7 @@ async def patch_line_quantity(
     current_user: User = Depends(require_permission("open_accounts:edit_lines")),
 ):
     try:
-        return await update_line_quantity(db, current_user.company_id, account_id, line_id, payload.quantity)
+        return await update_line_quantity(db, current_user.company_id, account_id, line_id, payload.quantity, current_user.id)
     except OpenAccountNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except AccountAlreadyClosedError as e:
@@ -146,7 +146,7 @@ async def delete_line(
     current_user: User = Depends(require_permission("open_accounts:edit_lines")),
 ):
     try:
-        await remove_line(db, current_user.company_id, account_id, line_id)
+        await remove_line(db, current_user.company_id, account_id, line_id, current_user.id)
     except OpenAccountNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except AccountAlreadyClosedError as e:
