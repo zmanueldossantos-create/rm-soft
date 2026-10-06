@@ -101,11 +101,11 @@ async def test_revoking_a_module_removes_its_permissions_but_not_the_grant_row(d
 
 @pytest.mark.asyncio
 async def test_my_permissions_and_matrix_follow_the_active_capabilities(db, company_with_essentials, monkeypatch):
-    company_id = await _setup(db, company_with_essentials, "BAR")  # STOCK + OPEN_ACCOUNTS
+    company_id = await _setup(db, company_with_essentials, "BAR")  # STOCK + RESOURCES + OPEN_ACCOUNTS
     _enforce(monkeypatch)
     mine = set(await list_my_permissions(db, company_id, "GESTOR"))
-    assert {"stock:view", "open_accounts:view", "pos:view"} <= mine
-    assert not ({"bookings:view", "production:view", "resources:view", "hotel:checkin"} & mine)
+    assert {"stock:view", "resources:view", "open_accounts:view", "pos:view"} <= mine
+    assert not ({"bookings:view", "production:view", "hotel:checkin", "kitchen:view"} & mine)  # a bar has tables, no kitchen
 
     armazenista = set(await list_my_permissions(db, company_id, "ARMAZENISTA"))
     assert "stock:view" in armazenista and "production:view" not in armazenista
