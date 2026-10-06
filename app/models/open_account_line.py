@@ -10,7 +10,7 @@ normal Caixa sale.
 import uuid
 from datetime import datetime
 
-from sqlalchemy import String, Numeric, DateTime, ForeignKey, func
+from sqlalchemy import Boolean, String, Numeric, DateTime, ForeignKey, func
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import UUID
 
@@ -34,6 +34,13 @@ class OpenAccountLine(Base):
     sale_unit_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("product_sale_units.id"), nullable=True)
     unit_factor: Mapped[float] = mapped_column(Numeric(12, 4), nullable=False, default=1, server_default="1")
     unit_code_snapshot: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    # Kitchen (point 34b) - NULL for what the kitchen never sees (a drink). A dish goes NAO_ENVIADO -> EM_ESPERA
+    # (sent, see kitchen_order_id) -> EM_PREPARACAO -> PRONTO, or ANULADO: struck through, never invoiced.
+    kitchen_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    kitchen_order_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("kitchen_orders.id"), nullable=True)
+    kitchen_modified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    cancel_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     added_by_user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

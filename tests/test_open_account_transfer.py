@@ -159,7 +159,6 @@ async def test_invalid_transfers_change_nothing(db, company_with_essentials):
     await attempt(InvalidTransferError, one + one, target_account_id=dst_id)                              # same line twice
     await attempt(InvalidTransferError, one, target_account_id=src_id)                                    # same account
     await attempt(InvalidTransferError, one)                                                              # no destination at all
-    await attempt(InvalidTransferError, one, target_account_id=bar_id)                                    # other point of sale
     await attempt(ItemNotFoundError, [{"line_id": foreign_id, "quantity": 1}], target_account_id=bar_id)  # line of another account
 
     rows = (await db.execute(select(OpenAccountLine.id, OpenAccountLine.account_id, OpenAccountLine.quantity))).all()
@@ -271,3 +270,21 @@ async def test_add_line_survives_duplicate_lines_left_by_a_transfer(db, company_
     lines = (await db.execute(select(OpenAccountLine).where(OpenAccountLine.account_id == dst_id))).scalars().all()
     assert len(lines) == 2
     assert sum(float(l.quantity) for l in lines) == 4.0
+
+
+@pytest.mark.asyncio
+async def test_two_tills_of_the_same_activity_share_their_accounts(db, company_with_essentials):
+    """An open account belongs to its activity, not to a till: lines move between accounts opened on two tills."""
+    ctx = company_with_essentials
+    company_id, user_id = ctx["company"].id, ctx["gestor"].id
+    src = await _account(db, ctx, "Mesa 1")
+    line = await _line(db, ctx, src, "Cerveja", 2, 500)
+    other_pos = PointOfSale(company_id=company_id, activity_id=ctx["activity"].id, name="Caixa Esplanada", is_default=False)
+    db.add(other_pos)
+    await db.commit()
+    await db.refresh(other_pos)
+    terrace = await _account(db, ctx, "Esplanada 1", pos=other_pos)
+    src_id, terrace_id, line_id = src.id, terrace.id, line.id
+    await transfer_lines(db, company_id, src_id, user_id, [{"line_id": line_id, "quantity": 1}], target_account_id=terrace_id)
+    assert await _total(db, [terrace_id]) == 500
+    assert await _total(db, [src_id]) == 500

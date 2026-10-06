@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { ChefHat } from 'lucide-react';
 import { Wallet2, Plus, Loader2, X, Trash2, CheckCircle2, Search, Minus, ArrowRightLeft, LayoutGrid, RefreshCw } from 'lucide-react';
 import { useCan } from '../utils/permissions';
 import { listActivities } from '../api/activity';
@@ -7,7 +8,7 @@ import { listResources, listResourceStatuses } from '../api/booking';
 import { listProducts } from '../api/products';
 import { listServices } from '../api/services';
 import { listPaymentMethodPreferences } from '../api/tesouraria';
-import { listOpenAccounts, openAccount, getOpenAccount, listAccountLines, addAccountLine, updateAccountLineQuantity, updateAccountLineUnit, removeAccountLine, closeAccount, cancelOpenAccount, transferAccountLines } from '../api/openAccount';
+import { listOpenAccounts, openAccount, getOpenAccount, listAccountLines, addAccountLine, updateAccountLineQuantity, updateAccountLineUnit, removeAccountLine, closeAccount, cancelOpenAccount, sendToKitchen, transferAccountLines } from '../api/openAccount';
 import { getPosStockLevels } from '../api/pos';
 import { extractErrorMessage } from '../utils/errors';
 import Modal from '../components/Modal';
@@ -35,7 +36,8 @@ function formatTime(value) {
 
 // The open accounts, shared by two screens:
 // - the Contas Abertas page (waiters, managers): every point of sale of the activity, chosen in a list;
-// - the till's side panel (cashier): posId + activityId limit it to that till's accounts, and onChange lets the
+// - the till's side panel (cashier): every open account of its activity; posId is the till that cashes the ones it
+//   closes, and onChange lets the
 //   till refresh its own stock whenever an account changes (what sits on a table is no longer on the shelf).
 // onClosed(account): an account was just closed - the till reloads its balance, as after a direct sale.
 export default function OpenAccountsPanel({ posId = null, activityId = null, onChange = null, onClosed = null }) {
@@ -53,7 +55,7 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
   const [error, setError] = useState('');
 
   const [newModalOpen, setNewModalOpen] = useState(false);
-  const [newForm, setNewForm] = useState({ posId: '', label: '', resourceId: '', notes: '' });
+  const [newForm, setNewForm] = useState({ label: '', resourceId: '', notes: '' });
   const [newError, setNewError] = useState('');
   const [newSaving, setNewSaving] = useState(false);
 
@@ -65,6 +67,7 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
   const [itemTab, setItemTab] = useState('products');
   const [itemSearch, setItemSearch] = useState('');
   const [addingItemId, setAddingItemId] = useState(null);
+  const [sendingKitchen, setSendingKitchen] = useState(false);
 
   const [closeModalOpen, setCloseModalOpen] = useState(false);
   const [closePayments, setClosePayments] = useState([]);
@@ -104,7 +107,7 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
 
   useEffect(() => {
     if (!selectedActivityId) return;
-    listPointsOfSale(selectedActivityId).then((data) => setPointsOfSale(data.filter((p) => p.is_active && (!posId || p.id === posId)))).catch(() => {});
+    listPointsOfSale(selectedActivityId).then((data) => setPointsOfSale(data.filter((p) => p.is_active))).catch(() => {});
     listResources(selectedActivityId).then((data) => setResources(data.filter((r) => r.is_active))).catch(() => {});
     loadAccounts();
   }, [selectedActivityId]);
@@ -113,7 +116,7 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
     setLoading(true);
     setError('');
     try {
-      setAccounts((await listOpenAccounts(selectedActivityId)).filter((a) => !posId || a.pos_id === posId));
+      setAccounts(await listOpenAccounts(selectedActivityId));
       if (onChange) onChange();
       await loadStatuses();
     } catch (err) {
@@ -124,7 +127,7 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
   }
 
   function openNewModal() {
-    setNewForm({ posId: pointsOfSale[0]?.id || '', label: '', resourceId: '', notes: '' });
+    setNewForm({ label: '', resourceId: '', notes: '' });
     setNewError('');
     setNewModalOpen(true);
   }
@@ -132,10 +135,6 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
   async function handleNewSubmit(e) {
     e.preventDefault();
     setNewError('');
-    if (!newForm.posId) {
-      setNewError('Preencha todos os campos obrigatorios');
-      return;
-    }
     if (resources.length > 0 && !newForm.resourceId) {
       setNewError('Selecione uma mesa/recurso');
       return;
@@ -149,7 +148,6 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
       const resourceLabel = newForm.resourceId ? resources.find((r) => r.id === newForm.resourceId)?.name : null;
       await openAccount({
         activity_id: selectedActivityId,
-        pos_id: newForm.posId,
         label: resourceLabel || newForm.label.trim(),
         resource_id: newForm.resourceId || null,
         notes: newForm.notes || null,
@@ -184,7 +182,7 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
   async function refreshListsQuietly() {
     if (!selectedActivityId) return;
     try {
-      setAccounts((await listOpenAccounts(selectedActivityId)).filter((a) => !posId || a.pos_id === posId));
+      setAccounts(await listOpenAccounts(selectedActivityId));
       await loadStatuses();
     } catch {
       // the next refresh will try again
@@ -260,12 +258,35 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
     const product = line.product_id ? products.find((p) => p.id === line.product_id) : null;
     const units = (product?.sale_units || []).filter((u) => u.is_active !== false);
     if (units.length === 0) return null;
+    if (line.kitchen_status && line.kitchen_status !== 'NAO_ENVIADO') return null; // sent: its unit no longer changes
     return (
       <select value={line.sale_unit_id || 'base'} onChange={(e) => handleChangeUnit(line, e.target.value)} disabled={!can('open_accounts:edit_lines')} className="mt-1 bg-bg-elevated border border-border rounded px-1.5 py-0.5 text-[11px] font-mono text-text-primary cursor-pointer disabled:opacity-50">
         <option value="base">{product.unit_of_measure_code || 'UN'}</option>
         {units.map((u) => <option key={u.id} value={u.id}>{u.unit_of_measure_code} ({Number(u.factor)})</option>)}
       </select>
     );
+  }
+
+  // ---- Kitchen (point 34b): what was sent, by whom, and what the room may still change ----
+  const KITCHEN_LABEL = { NAO_ENVIADO: 'Nao enviado', EM_ESPERA: 'Em espera', EM_PREPARACAO: 'Em preparacao', PRONTO: 'Pronto', ANULADO: 'Anulado' };
+  const KITCHEN_STYLE = { NAO_ENVIADO: 'text-text-muted', EM_ESPERA: 'text-accent', EM_PREPARACAO: 'text-amber-500', PRONTO: 'text-success', ANULADO: 'text-danger' };
+  const unsentDishes = detailLines.filter((l) => l.kitchen_status === 'NAO_ENVIADO').length;
+  const dishesInKitchen = detailLines.filter((l) => ['NAO_ENVIADO', 'EM_ESPERA', 'EM_PREPARACAO'].includes(l.kitchen_status)).length;
+  const canLower = (l) => !l.kitchen_status || l.kitchen_status === 'NAO_ENVIADO' || l.kitchen_status === 'EM_ESPERA';
+  const canRaise = (l) => !l.kitchen_status || l.kitchen_status === 'NAO_ENVIADO';
+
+  async function handleSendToKitchen() {
+    if (!detailAccount) return;
+    setDetailError('');
+    setSendingKitchen(true);
+    try {
+      await sendToKitchen(detailAccount.id);
+      await refreshDetailLines();
+    } catch (err) {
+      setDetailError(extractErrorMessage(err, 'Erro ao enviar para a cozinha'));
+    } finally {
+      setSendingKitchen(false);
+    }
   }
 
   // Each line's amounts come from the server, computed as the invoice will (VAT per line, same rounding):
@@ -315,6 +336,7 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
     setCloseSaving(true);
     try {
       const closed = await closeAccount(detailAccount.id, {
+        pos_id: posId || null, // cashed by this till
         payments: closePayments.filter((p) => parseFloat(p.amount) > 0).map((p) => ({ payment_method_id: p.payment_method_id, amount: parseFloat(p.amount) })),
       });
       setCloseModalOpen(false);
@@ -345,7 +367,7 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
       setError('Nenhum ponto de venda ativo nesta atividade');
       return;
     }
-    setNewForm({ posId: pointsOfSale[0]?.id || '', label: '', resourceId, notes });
+    setNewForm({ label: '', resourceId, notes });
     setNewError('');
     setNewModalOpen(true);
   }
@@ -589,15 +611,6 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
 
       <Modal open={newModalOpen} onClose={() => setNewModalOpen(false)} title="Nova conta">
         <form onSubmit={handleNewSubmit} className="flex flex-col gap-4">
-          <div>
-            <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Caixa *</label>
-            <Select
-              value={newForm.posId}
-              onChange={(v) => setNewForm((p) => ({ ...p, posId: v }))}
-              options={pointsOfSale.map((p) => ({ value: p.id, label: p.name }))}
-              placeholder="Selecionar"
-            />
-          </div>
           {resources.length > 0 ? (
             <div>
               <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Mesa / Recurso *</label>
@@ -713,21 +726,28 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
                   {detailLines.map((l) => (
                     <div key={l.id} className="flex items-center justify-between bg-bg-inset border border-border rounded-md px-3 py-2">
                       <div>
-                        <p className="text-[12px] text-text-primary">{l.name_snapshot}</p>
+                        <p className={'text-[12px] ' + (l.kitchen_status === 'ANULADO' ? 'text-text-muted line-through' : 'text-text-primary')}>{l.name_snapshot}</p>
+                        {l.kitchen_status && (
+                          <p className="text-[10px] font-mono mt-0.5">
+                            <span className={KITCHEN_STYLE[l.kitchen_status]}>{KITCHEN_LABEL[l.kitchen_status]}{l.kitchen_modified && l.kitchen_status !== 'ANULADO' ? ' - Modificado' : ''}</span>
+                            {l.sent_by_name && <span className="text-text-muted"> - {l.sent_by_name} {formatTime(l.sent_at)} #{l.kitchen_order_number}</span>}
+                            {l.cancel_reason && <span className="text-text-muted"> - {l.cancel_reason}</span>}
+                          </p>
+                        )}
                         <p className="text-[11px] text-text-muted font-mono">{formatKz(l.unit_price)} Kz/{(l.unit_code_snapshot || 'un').toLowerCase()}</p>{unitPicker(l)}
                       </div>
                       <div className="flex items-center gap-2.5">
                         <div className="flex items-center gap-1.5 bg-bg-elevated border border-border rounded-md px-1.5 py-1">
-                          <button onClick={() => handleChangeQuantity(l, -1)} disabled={!can('open_accounts:edit_lines')} className="text-text-muted hover:text-accent cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
+                          <button onClick={() => handleChangeQuantity(l, -1)} disabled={!can('open_accounts:edit_lines') || !canLower(l)} className="text-text-muted hover:text-accent cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
                             <Minus size={12} />
                           </button>
                           <span className="text-[12px] text-text-primary font-mono w-6 text-center">{l.quantity}</span>
-                          <button onClick={() => handleChangeQuantity(l, 1)} disabled={!can('open_accounts:edit_lines')} className="text-text-muted hover:text-accent cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
+                          <button onClick={() => handleChangeQuantity(l, 1)} disabled={!can('open_accounts:edit_lines') || !canRaise(l)} className="text-text-muted hover:text-accent cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
                             <Plus size={12} />
                           </button>
                         </div>
-                        <span className="font-mono text-[13px] text-text-primary font-semibold min-w-20 whitespace-nowrap text-right">{formatKz(l.unit_price * l.quantity)} Kz</span>
-                        <button onClick={() => handleRemoveLine(l.id)} disabled={!can('open_accounts:edit_lines')} className="text-text-muted hover:text-danger cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
+                        <span className="font-mono text-[13px] text-text-primary font-semibold min-w-20 whitespace-nowrap text-right">{formatKz(l.kitchen_status === 'ANULADO' ? 0 : l.unit_price * l.quantity)} Kz</span>
+                        <button onClick={() => handleRemoveLine(l.id)} disabled={!can('open_accounts:edit_lines') || !canLower(l)} className="text-text-muted hover:text-danger cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
                           <Trash2 size={13} />
                         </button>
                       </div>
@@ -772,6 +792,18 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
                   <span className="hidden sm:inline truncate">Transferir / Dividir</span>
                 </button>
               )}
+              {unsentDishes > 0 && can('open_accounts:edit_lines') && (
+                <button
+                  type="button"
+                  onClick={handleSendToKitchen}
+                  disabled={sendingKitchen}
+                  title="Enviar para cozinha"
+                  className="flex-1 min-w-0 border border-accent/60 hover:border-accent text-accent font-medium text-sm rounded-md px-3 py-2.5 flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  <ChefHat size={16} className="shrink-0" />
+                  <span className="hidden sm:inline truncate">Enviar para cozinha ({unsentDishes})</span>
+                </button>
+              )}
               <button
                 onClick={openCloseModal}
                 disabled={detailLines.length === 0 || !can('open_accounts:close')}
@@ -786,6 +818,11 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
       </Modal>
 
       <Modal open={closeModalOpen} onClose={() => setCloseModalOpen(false)} title="Fechar conta">
+        {dishesInKitchen > 0 && (
+          <div className="bg-amber-500/10 border-l-2 border-amber-500 text-amber-500 px-3.5 py-2.5 text-[13px] rounded-r mb-4">
+            {dishesInKitchen} prato(s) ainda nao servido(s) pela cozinha - a conta pode ser fechada na mesma
+          </div>
+        )}
         <div className="flex flex-col gap-4">
           <div className="flex justify-between items-center bg-bg-inset border border-border rounded-md px-4 py-3">
             <span className="text-text-muted text-[13px]">Total a pagar</span>

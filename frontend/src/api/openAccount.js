@@ -56,3 +56,9 @@ export async function cancelOpenAccount(accountId) {
   const res = await apiClient.post('/open-accounts/' + accountId + '/cancel');
   return res.data;
 }
+
+// Sends every unsent dish of the account to the kitchen, in one order numbered for the day.
+export async function sendToKitchen(accountId) {
+  const res = await apiClient.post('/open-accounts/' + accountId + '/kitchen');
+  return res.data;
+}

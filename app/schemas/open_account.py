@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 class OpenAccountCreateRequest(BaseModel):
     activity_id: uuid.UUID
-    pos_id: uuid.UUID
+    pos_id: uuid.UUID | None = None  # never chosen on screen: the activity's default till is recorded
     label: str
     resource_id: uuid.UUID | None = None
     customer_id: uuid.UUID | None = None
@@ -69,6 +69,13 @@ class OpenAccountLineResponse(BaseModel):
     line_subtotal: float = 0
     line_vat: float = 0
     line_total: float = 0
+    # kitchen (point 34b): status, and who sent the dish, when, in which order of the day
+    kitchen_status: str | None = None
+    kitchen_modified: bool = False
+    cancel_reason: str | None = None
+    kitchen_order_number: int | None = None
+    sent_at: datetime | None = None
+    sent_by_name: str | None = None
     added_by_user_id: uuid.UUID
     added_at: datetime
 
@@ -85,6 +92,7 @@ class OpenAccountCloseRequest(BaseModel):
     # None: the document type catalog decides (a type paid on issue - see default_paid_on_issue_type)
     invoice_type: str | None = None
     payments: list[OpenAccountClosePaymentInput] = []
+    pos_id: uuid.UUID | None = None  # the till that cashes the account (any till of its activity)
 
 
 class OpenAccountTransferItem(BaseModel):
@@ -107,3 +115,14 @@ class OpenAccountTransferResponse(BaseModel):
     source_account: OpenAccountResponse
     target_account: OpenAccountResponse
     source_closed: bool
+
+
+class KitchenOrderResponse(BaseModel):
+    id: uuid.UUID
+    account_id: uuid.UUID
+    number: int
+    sent_by_user_id: uuid.UUID
+    sent_at: datetime
+
+    class Config:
+        from_attributes = True

@@ -42,11 +42,16 @@ class ItemNotFoundError(Exception):
 
 
 async def open_account(
-    db: AsyncSession, company_id: uuid.UUID, activity_id: uuid.UUID, pos_id: uuid.UUID, opened_by_user_id: uuid.UUID,
+    db: AsyncSession, company_id: uuid.UUID, activity_id: uuid.UUID, pos_id: uuid.UUID | None, opened_by_user_id: uuid.UUID,
     label: str, resource_id: uuid.UUID | None = None, customer_id: uuid.UUID | None = None,
     notes: str | None = None,
 ) -> OpenAccount:
-    await get_pos_or_raise(db, company_id, pos_id)
+    # No till is chosen to open an account: it belongs to the activity. pos_id only records where it was opened
+    # (the activity's default till when none is given); the till that closes it is the one that cashes it.
+    if pos_id is None:
+        pos_id = await _default_pos_of(db, company_id, activity_id)
+    else:
+        await get_pos_or_raise(db, company_id, pos_id)
     account = OpenAccount(
         company_id=company_id, activity_id=activity_id, pos_id=pos_id, resource_id=resource_id,
         customer_id=customer_id, label=label, notes=notes, opened_by_user_id=opened_by_user_id,
@@ -99,6 +104,7 @@ async def add_line(
         # Sold in its base unit or one of its sale units (a CX of 24 at its own price), exactly as in the till.
         unit_price, unit_factor, line_sale_unit_id, unit_code = await _resolve_unit(db, company_id, item, sale_unit_id, quantity)
         name_snapshot = item.name
+        kitchen_status = KITCHEN_NOT_SENT if item.prepared_in_kitchen else None
     elif service_id is not None:
         result = await db.execute(select(Service).where(Service.id == service_id, Service.company_id == company_id))
         item = result.scalar_one_or_none()
@@ -106,6 +112,7 @@ async def add_line(
             raise ItemNotFoundError("Servico nao encontrado")
         name_snapshot, unit_price = item.name, float(item.price or 0)
         unit_factor, line_sale_unit_id, unit_code = 1.0, None, None
+        kitchen_status = None
     else:
         raise ItemNotFoundError("Indique um produto ou servico")
 
@@ -124,6 +131,8 @@ async def add_line(
             OpenAccountLine.product_id == product_id,
             OpenAccountLine.service_id == service_id,
             OpenAccountLine.sale_unit_id == line_sale_unit_id,
+            # a dish already sent is never added to: the new one leaves with the next sending
+            func.coalesce(OpenAccountLine.kitchen_status, KITCHEN_NOT_SENT) == KITCHEN_NOT_SENT,
         ).order_by(OpenAccountLine.added_at).limit(1)
     )
     existing_line = existing_result.scalars().first()
@@ -137,6 +146,7 @@ async def add_line(
         account_id=account_id, product_id=product_id, service_id=service_id,
         name_snapshot=name_snapshot, quantity=quantity, unit_price=unit_price, added_by_user_id=added_by_user_id,
         sale_unit_id=line_sale_unit_id, unit_factor=unit_factor, unit_code_snapshot=unit_code,
+        kitchen_status=kitchen_status,
     )
     db.add(line)
     await db.commit()
@@ -158,6 +168,21 @@ async def update_line_quantity(
     line = result.scalar_one_or_none()
     if line is None:
         return None
+
+    if line.kitchen_status in KITCHEN_LOCKED:
+        raise InvalidLineError(_LOCKED_MESSAGE[line.kitchen_status])
+    if line.kitchen_status == KITCHEN_WAITING:
+        # sent, not started yet: the room may lower it (the kitchen sees 'Modificado') or cancel it - never raise it
+        if float(quantity) - float(line.quantity) > _QTY_EPS:
+            raise InvalidLineError("Este prato ja foi enviado para a cozinha - adicione-o de novo, segue no proximo envio")
+        if quantity <= 0:
+            _cancel_line(line, "Anulado pela sala")
+        else:
+            line.quantity = quantity
+            line.kitchen_modified = True
+        await db.commit()
+        await db.refresh(line)
+        return line
 
     if quantity <= 0:
         await db.delete(line)
@@ -183,14 +208,20 @@ async def remove_line(db: AsyncSession, company_id: uuid.UUID, account_id: uuid.
         raise AccountAlreadyClosedError("Esta conta ja esta fechada")
     result = await db.execute(select(OpenAccountLine).where(OpenAccountLine.id == line_id, OpenAccountLine.account_id == account_id))
     line = result.scalar_one_or_none()
-    if line is not None:
+    if line is None:
+        return
+    if line.kitchen_status in KITCHEN_LOCKED:
+        raise InvalidLineError(_LOCKED_MESSAGE[line.kitchen_status])
+    if line.kitchen_status == KITCHEN_WAITING:
+        _cancel_line(line, "Anulado pela sala")  # the kitchen sees it struck through
+    else:
         await db.delete(line)
-        await db.commit()
+    await db.commit()
 
 
 async def close_account(
     db: AsyncSession, company_id: uuid.UUID, account_id: uuid.UUID, closing_user: "User",
-    payments: list[dict], invoice_type: str | None = None,
+    payments: list[dict], invoice_type: str | None = None, pos_id: uuid.UUID | None = None,
 ) -> OpenAccount:
     """Converts the account's lines into a real Invoice via pos_service.checkout,
     then marks the account FECHADA and links the resulting invoice."""
@@ -199,6 +230,7 @@ async def close_account(
         raise AccountAlreadyClosedError("Esta conta ja esta fechada")
 
     lines = await list_account_lines(db, account_id)
+    lines = [l for l in lines if l.kitchen_status != KITCHEN_CANCELLED]  # a cancelled dish is never invoiced
     if not lines:
         raise EmptyAccountError("Nao e possivel fechar uma conta sem artigos")
 
@@ -210,13 +242,19 @@ async def close_account(
 
     if invoice_type is None:  # by default the catalog decides: a type paid on issue
         invoice_type = await default_paid_on_issue_type(db)
+    # Cashed by the till that closes it (its session, its balance, its series) - any till of the activity.
+    closing_pos_id = account.pos_id
+    if pos_id is not None and pos_id != account.pos_id:
+        await _ensure_pos_of_activity(db, company_id, pos_id, account.activity_id)
+        closing_pos_id = pos_id
     invoice = await checkout(
-        db, company_id, account.pos_id, closing_user, account.customer_id, lines_input, payments,
+        db, company_id, closing_pos_id, closing_user, account.customer_id, lines_input, payments,
         invoice_type=invoice_type,
     )
 
     account.status = OpenAccountStatus.FECHADA
     account.invoice_id = invoice.id
+    account.pos_id = closing_pos_id  # the till that cashed it
     from sqlalchemy import func as sa_func
     account.closed_at = sa_func.now()
     await db.commit()
@@ -278,6 +316,8 @@ async def transfer_lines(
     for line_id, quantity in wanted.items():
         if quantity - float(lines[line_id].quantity) > _QTY_EPS:
             raise InvalidTransferError("Quantidade a transferir superior a quantidade existente na conta")
+        if lines[line_id].kitchen_status == KITCHEN_CANCELLED:
+            raise InvalidTransferError("Uma linha anulada nao se transfere")
 
     if target_account_id is not None:
         if target_account_id == source.id:
@@ -287,8 +327,8 @@ async def transfer_lines(
             raise AccountAlreadyClosedError("A conta de destino ja esta fechada")
         if target.booking_id is not None:
             raise InvalidTransferError("Contas de estadia de hotel nao permitem transferencia de linhas")
-        if target.pos_id != source.pos_id:
-            raise InvalidTransferError("As contas devem pertencer ao mesmo ponto de venda")
+        if target.activity_id != source.activity_id:
+            raise InvalidTransferError("As contas devem pertencer a mesma atividade")
     else:
         label = (new_label or "").strip()
         resource_id = source.resource_id
@@ -322,6 +362,7 @@ async def transfer_lines(
                 account_id=target.id, product_id=line.product_id, service_id=line.service_id,
                 name_snapshot=line.name_snapshot, quantity=quantity, unit_price=line.unit_price,
                 sale_unit_id=line.sale_unit_id, unit_factor=line.unit_factor, unit_code_snapshot=line.unit_code_snapshot,
+                kitchen_status=line.kitchen_status, kitchen_order_id=line.kitchen_order_id, kitchen_modified=line.kitchen_modified,
                 added_by_user_id=line.added_by_user_id, added_at=line.added_at,
             )
             db.add(target_line)
@@ -401,6 +442,7 @@ async def engaged_on_open_accounts(db: AsyncSession, warehouse_id: uuid.UUID) ->
             OpenAccount.status == OpenAccountStatus.ABERTA,
             Activity.warehouse_id == warehouse_id,
             OpenAccountLine.product_id.is_not(None),
+            OpenAccountLine.kitchen_status.is_distinct_from(KITCHEN_CANCELLED),
         )
         .group_by(OpenAccountLine.product_id)
     )).all()
@@ -446,6 +488,8 @@ async def change_line_unit(
         raise ItemNotFoundError("Linha nao encontrada nesta conta")
     if line.product_id is None:
         raise InvalidLineError("Um servico nao tem outras unidades")
+    if line.kitchen_status not in (None, KITCHEN_NOT_SENT):
+        raise InvalidLineError("Este prato ja foi enviado para a cozinha")
     product = await _product_or_raise(db, company_id, line.product_id)
     price, factor, su_id, code = await _resolve_unit(db, company_id, product, sale_unit_id, float(line.quantity))
     delta = float(line.quantity) * (factor - float(line.unit_factor or 1))
@@ -480,6 +524,7 @@ _LINES_WITH_VAT = """
     LEFT JOIN services s ON s.id = l.service_id
     LEFT JOIN vat_rates sv ON sv.id = s.vat_id
     WHERE l.{column} = ANY(:ids)
+      AND (l.kitchen_status IS NULL OR l.kitchen_status <> 'ANULADO')
 """
 
 
@@ -517,7 +562,11 @@ async def list_account_lines(db: AsyncSession, account_id: uuid.UUID) -> list[Op
     rates = {row[0]: float(row[4]) for row in await _lines_with_vat(db, "id", [l.id for l in lines])}
     for line in lines:
         line.vat_rate = rates.get(line.id, 0.0)
-        line.line_subtotal, line.line_vat, line.line_total = _line_amounts(line.quantity, line.unit_price, line.vat_rate)
+        if line.kitchen_status == KITCHEN_CANCELLED:  # struck through, never invoiced
+            line.line_subtotal, line.line_vat, line.line_total = 0.0, 0.0, 0.0
+        else:
+            line.line_subtotal, line.line_vat, line.line_total = _line_amounts(line.quantity, line.unit_price, line.vat_rate)
+    await _attach_kitchen_orders(db, lines)
     return lines
 
 
@@ -539,7 +588,9 @@ async def cancel_empty_account(db: AsyncSession, company_id: uuid.UUID, account_
     if account.booking_id is not None:
         raise InvalidLineError("Uma conta de estadia fecha-se no check-out")
     lines = (await db.execute(
-        select(func.count()).select_from(OpenAccountLine).where(OpenAccountLine.account_id == account.id)
+        select(func.count()).select_from(OpenAccountLine).where(
+            OpenAccountLine.account_id == account.id, OpenAccountLine.kitchen_status.is_distinct_from(KITCHEN_CANCELLED),
+        )
     )).scalar_one()
     if lines:
         raise InvalidLineError("So uma conta sem artigos pode ser anulada - retire ou transfira os artigos primeiro")
@@ -548,3 +599,104 @@ async def cancel_empty_account(db: AsyncSession, company_id: uuid.UUID, account_
     await db.commit()
     await db.refresh(account)
     return account
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# Kitchen (point 34b). A dish (product.prepared_in_kitchen) is added NAO_ENVIADO; "Enviar para cozinha" sends every
+# unsent dish of the account in one KitchenOrder (who, when, number of the day). Once sent, the room may still lower
+# or cancel it while EM_ESPERA; from EM_PREPARACAO on, only the kitchen changes it. A cancelled line stays, struck
+# through, and is never invoiced.
+
+KITCHEN_NOT_SENT = "NAO_ENVIADO"
+KITCHEN_WAITING = "EM_ESPERA"
+KITCHEN_PREPARING = "EM_PREPARACAO"
+KITCHEN_READY = "PRONTO"
+KITCHEN_CANCELLED = "ANULADO"
+KITCHEN_LOCKED = (KITCHEN_PREPARING, KITCHEN_READY, KITCHEN_CANCELLED)
+_LOCKED_MESSAGE = {
+    KITCHEN_PREPARING: "A cozinha ja esta a preparar este prato",
+    KITCHEN_READY: "Este prato ja esta pronto",
+    KITCHEN_CANCELLED: "Esta linha esta anulada",
+}
+
+
+def _cancel_line(line: OpenAccountLine, reason: str) -> None:
+    line.kitchen_status = KITCHEN_CANCELLED
+    line.cancel_reason = reason
+    line.cancelled_at = func.now()
+
+
+async def _attach_kitchen_orders(db: AsyncSession, lines: list[OpenAccountLine]) -> None:
+    """Who sent each dish, when, and in which order of the day - shown under the dish in the room and the kitchen."""
+    from app.models.kitchen_order import KitchenOrder
+    from app.models.user import User
+    order_ids = {l.kitchen_order_id for l in lines if l.kitchen_order_id}
+    orders = {}
+    if order_ids:
+        rows = (await db.execute(
+            select(KitchenOrder.id, KitchenOrder.number, KitchenOrder.sent_at, User.full_name)
+            .join(User, User.id == KitchenOrder.sent_by_user_id)
+            .where(KitchenOrder.id.in_(order_ids))
+        )).all()
+        orders = {order_id: (number, sent_at, name) for order_id, number, sent_at, name in rows}
+    for line in lines:
+        line.kitchen_order_number, line.sent_at, line.sent_by_name = orders.get(line.kitchen_order_id, (None, None, None))
+
+
+async def send_to_kitchen(
+    db: AsyncSession, company_id: uuid.UUID, account_id: uuid.UUID, sent_by_user_id: uuid.UUID,
+) -> "KitchenOrder":
+    """Sends every unsent dish of the account to the kitchen, in one order numbered for the day (#1, #2...)."""
+    from datetime import date
+    from sqlalchemy import text
+    from app.models.kitchen_order import KitchenOrder
+    account = await get_account_or_raise(db, company_id, account_id)
+    if account.status == OpenAccountStatus.FECHADA:
+        raise AccountAlreadyClosedError("Esta conta ja esta fechada")
+    lines = (await db.execute(
+        select(OpenAccountLine).where(
+            OpenAccountLine.account_id == account.id, OpenAccountLine.kitchen_status == KITCHEN_NOT_SENT,
+        ).with_for_update()
+    )).scalars().all()
+    if not lines:
+        raise InvalidLineError("Nao ha pratos por enviar para a cozinha")
+    today = date.today()
+    # one numbering at a time per company and day: two tables sent at once never get the same number
+    await db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:key))"), {"key": f"kitchen:{company_id}:{today}"})
+    last = (await db.execute(
+        select(func.max(KitchenOrder.number)).where(KitchenOrder.company_id == company_id, KitchenOrder.day == today)
+    )).scalar_one()
+    order = KitchenOrder(company_id=company_id, account_id=account.id, day=today, number=(last or 0) + 1,
+                         sent_by_user_id=sent_by_user_id)
+    db.add(order)
+    await db.flush()
+    for line in lines:
+        line.kitchen_status = KITCHEN_WAITING
+        line.kitchen_order_id = order.id
+    await db.commit()
+    await db.refresh(order)
+    return order
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# Tills. An open account belongs to its activity, like its tables and its stock: no till is chosen to open it,
+# every till of the activity sees it, and the one that closes it cashes it.
+
+async def _default_pos_of(db: AsyncSession, company_id: uuid.UUID, activity_id: uuid.UUID) -> uuid.UUID:
+    """The activity's default till (else its oldest active one) - recorded where an account is opened."""
+    from app.models.point_of_sale import PointOfSale
+    pos_id = (await db.execute(
+        select(PointOfSale.id).where(
+            PointOfSale.company_id == company_id, PointOfSale.activity_id == activity_id, PointOfSale.is_active.is_(True),
+        ).order_by(PointOfSale.is_default.desc(), PointOfSale.created_at)
+    )).scalars().first()
+    if pos_id is None:
+        raise InvalidLineError("Esta atividade nao tem nenhum ponto de venda ativo")
+    return pos_id
+
+
+async def _ensure_pos_of_activity(db: AsyncSession, company_id: uuid.UUID, pos_id: uuid.UUID, activity_id: uuid.UUID) -> None:
+    """A till cashes only the accounts of its own activity."""
+    pos = await get_pos_or_raise(db, company_id, pos_id)
+    if pos.activity_id != activity_id:
+        raise InvalidLineError("Este ponto de venda pertence a outra atividade")

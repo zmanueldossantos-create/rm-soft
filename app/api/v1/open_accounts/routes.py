@@ -5,8 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.api.deps import require_permission
-from app.schemas.open_account import OpenAccountLineUnitRequest
-from app.services.open_account_service import InsufficientStockError, InvalidLineError, cancel_empty_account, change_line_unit
+from app.schemas.open_account import KitchenOrderResponse, OpenAccountLineUnitRequest
+from app.services.open_account_service import InsufficientStockError, InvalidLineError, cancel_empty_account, change_line_unit, send_to_kitchen
 from app.models.user import User
 from app.schemas.open_account import (
     OpenAccountCreateRequest, OpenAccountResponse,
@@ -151,6 +151,8 @@ async def delete_line(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except AccountAlreadyClosedError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except InvalidLineError as e:  # a dish the kitchen is already preparing
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
 
 
 @router.post("/{account_id}/close", response_model=OpenAccountResponse)
@@ -162,7 +164,11 @@ async def post_close_account(
 ):
     try:
         payments = [{"payment_method_id": p.payment_method_id, "amount": p.amount} for p in payload.payments]
-        return await close_account(db, current_user.company_id, account_id, current_user, payments, payload.invoice_type)
+        return await close_account(
+            db, current_user.company_id, account_id, current_user, payments, payload.invoice_type, payload.pos_id,
+        )
+    except InvalidLineError as e:  # a till of another activity
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except OpenAccountNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except AccountAlreadyClosedError as e:
@@ -215,6 +221,21 @@ async def post_cancel_empty_account(
     Whoever may open an account may undo that mistake."""
     try:
         return await cancel_empty_account(db, current_user.company_id, account_id)
+    except OpenAccountNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (AccountAlreadyClosedError, InvalidLineError) as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+
+
+@router.post("/{account_id}/kitchen", response_model=KitchenOrderResponse, status_code=status.HTTP_201_CREATED)
+async def post_send_to_kitchen(
+    account_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("open_accounts:edit_lines")),
+):
+    """Sends every unsent dish of the account to the kitchen - one order, numbered for the day, signed by its sender."""
+    try:
+        return await send_to_kitchen(db, current_user.company_id, account_id, current_user.id)
     except OpenAccountNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except (AccountAlreadyClosedError, InvalidLineError) as e:

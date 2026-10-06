@@ -75,3 +75,4 @@ from app.models.open_account_transfer import OpenAccountTransfer  # noqa: F401
 from app.models.module_capability import ModuleCapability  # noqa: F401
 from app.models.legal_vat_rate import LegalVatRate  # noqa: E402,F401 - legal VAT rates catalog
 from app.models.company_fiscal_regime import CompanyFiscalRegime  # noqa: E402,F401 - regime history
+from app.models.kitchen_order import KitchenOrder  # noqa: E402,F401 - kitchen sendings (point 34b)
