@@ -28,6 +28,11 @@ class OpenAccountResponse(BaseModel):
     opened_at: datetime
     closed_at: datetime | None
     invoice_id: uuid.UUID | None
+    # filled by the listing only (the account cards) - as the invoice will charge, total VAT included
+    line_count: int = 0
+    subtotal: float = 0
+    vat_total: float = 0
+    total: float = 0
 
     class Config:
         from_attributes = True
@@ -59,6 +64,11 @@ class OpenAccountLineResponse(BaseModel):
     sale_unit_id: uuid.UUID | None = None
     unit_factor: float = 1
     unit_code_snapshot: str | None = None
+    # filled when the lines are listed - as the invoice will compute them
+    vat_rate: float = 0
+    line_subtotal: float = 0
+    line_vat: float = 0
+    line_total: float = 0
     added_by_user_id: uuid.UUID
     added_at: datetime
 

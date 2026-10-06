@@ -65,7 +65,7 @@ async def get_account_or_raise(db: AsyncSession, company_id: uuid.UUID, account_
     return account
 
 
-async def list_open_accounts(db: AsyncSession, company_id: uuid.UUID, activity_id: uuid.UUID | None = None) -> list[OpenAccount]:
+async def _list_open_account_rows(db: AsyncSession, company_id: uuid.UUID, activity_id: uuid.UUID | None = None) -> list[OpenAccount]:
     query = select(OpenAccount).where(OpenAccount.company_id == company_id, OpenAccount.status == OpenAccountStatus.ABERTA)
     if activity_id is not None:
         query = query.where(OpenAccount.activity_id == activity_id)
@@ -73,7 +73,7 @@ async def list_open_accounts(db: AsyncSession, company_id: uuid.UUID, activity_i
     return list(result.scalars().all())
 
 
-async def list_account_lines(db: AsyncSession, account_id: uuid.UUID) -> list[OpenAccountLine]:
+async def _list_account_line_rows(db: AsyncSession, account_id: uuid.UUID) -> list[OpenAccountLine]:
     result = await db.execute(select(OpenAccountLine).where(OpenAccountLine.account_id == account_id).order_by(OpenAccountLine.added_at))
     return list(result.scalars().all())
 
@@ -455,3 +455,75 @@ async def change_line_unit(
     await db.commit()
     await db.refresh(line)
     return line
+
+
+async def list_open_accounts(db: AsyncSession, company_id: uuid.UUID, *args: object, **kwargs: object) -> list[OpenAccount]:
+    """The open accounts, each with its number of lines and its total (what the account cards show) - one query
+    for all of them, whatever filters the listing itself takes."""
+    accounts = await _list_open_account_rows(db, company_id, *args, **kwargs)
+    totals = await _account_totals(db, [a.id for a in accounts])
+    for account in accounts:
+        account.line_count, account.subtotal, account.vat_total, account.total = totals.get(account.id, (0, 0.0, 0.0, 0.0))
+    return accounts
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# What an account will cost. A price is before VAT (the invoice adds the rate of each article), so the account
+# computes exactly as invoice_service.create_invoice does: per line, subtotal rounded, VAT rounded, then the sums.
+# The screen only adds up these amounts - the total it asks for at closing is the one the invoice will charge.
+
+_LINES_WITH_VAT = """
+    SELECT l.id, l.account_id, l.quantity, l.unit_price, COALESCE(pv.rate, sv.rate, 0) AS vat_rate
+    FROM open_account_lines l
+    LEFT JOIN products p ON p.id = l.product_id
+    LEFT JOIN vat_rates pv ON pv.id = p.vat_id
+    LEFT JOIN services s ON s.id = l.service_id
+    LEFT JOIN vat_rates sv ON sv.id = s.vat_id
+    WHERE l.{column} = ANY(:ids)
+"""
+
+
+def _line_amounts(quantity: float, unit_price: float, vat_rate: float) -> tuple[float, float, float]:
+    """Subtotal, VAT and total of one line - the invoice's own rounding (create_invoice)."""
+    subtotal = round(float(quantity) * float(unit_price), 2)
+    vat = round(subtotal * (float(vat_rate) / 100), 2)
+    return subtotal, vat, round(subtotal + vat, 2)
+
+
+async def _lines_with_vat(db: AsyncSession, column: str, ids: list[uuid.UUID]) -> list:
+    """(line id, account id, quantity, unit price, VAT rate) of the lines whose `column` (id / account_id) is in ids."""
+    if not ids:
+        return []
+    from sqlalchemy import text
+    return (await db.execute(text(_LINES_WITH_VAT.format(column=column)), {"ids": list(ids)})).all()
+
+
+async def _account_totals(db: AsyncSession, account_ids: list[uuid.UUID]) -> dict[uuid.UUID, tuple[int, float, float, float]]:
+    """account id -> (number of lines, subtotal, VAT, total) - accounts without lines are absent."""
+    sums: dict[uuid.UUID, tuple[int, float, float]] = {}
+    for _, account_id, quantity, unit_price, vat_rate in await _lines_with_vat(db, "account_id", account_ids):
+        subtotal, vat, _ = _line_amounts(quantity, unit_price, vat_rate)
+        count, s, v = sums.get(account_id, (0, 0.0, 0.0))
+        sums[account_id] = (count + 1, s + subtotal, v + vat)
+    return {
+        account_id: (count, round(s, 2), round(v, 2), round(round(s, 2) + round(v, 2), 2))
+        for account_id, (count, s, v) in sums.items()
+    }
+
+
+async def list_account_lines(db: AsyncSession, account_id: uuid.UUID) -> list[OpenAccountLine]:
+    """The lines of an account, each with its VAT rate and its subtotal, VAT and total (as the invoice will)."""
+    lines = await _list_account_line_rows(db, account_id)
+    rates = {row[0]: float(row[4]) for row in await _lines_with_vat(db, "id", [l.id for l in lines])}
+    for line in lines:
+        line.vat_rate = rates.get(line.id, 0.0)
+        line.line_subtotal, line.line_vat, line.line_total = _line_amounts(line.quantity, line.unit_price, line.vat_rate)
+    return lines
+
+
+async def open_total_of_resource(db: AsyncSession, resource_id: uuid.UUID) -> float:
+    """What the open accounts of a table / room will cost, VAT included (the floor plan's cards)."""
+    ids = (await db.execute(
+        select(OpenAccount.id).where(OpenAccount.resource_id == resource_id, OpenAccount.status == OpenAccountStatus.ABERTA)
+    )).scalars().all()
+    return round(sum(total for _, _, _, total in (await _account_totals(db, list(ids))).values()), 2)

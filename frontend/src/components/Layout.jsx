@@ -185,6 +185,12 @@ export default function Layout() {
 
         <div className="relative flex-1 min-w-0 h-full">
           <div ref={navScrollRef} onWheel={handleNavWheel} className="flex items-center gap-1 sm:gap-2 overflow-x-auto scrollbar-hover-thin h-full">
+            {user?.role === 'CAIXA' ? (
+              // The cashier works from the till only: everything else is in its side panels
+              // (documents, articles, moedeiro, operations, daily report, open accounts).
+              <NavLink to="/caixa" icon={Wallet} label="Caixa" active={isActive('/caixa')} />
+            ) : (
+            <>
             {user?.role === 'GESTOR' && (
               <NavLink to="/dashboard" icon={LayoutDashboard} label="Painel" active={isActive('/dashboard')} />
             )}
@@ -268,6 +274,8 @@ export default function Layout() {
             )}
             {can('saf_t:export') && (
               <NavLink to="/saf-t" icon={FileText} label="SAF-T" active={isActive('/saf-t')} />
+            )}
+            </>
             )}
           </div>
           <div className="pointer-events-none absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-bg-elevated to-transparent" />

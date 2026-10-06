@@ -82,6 +82,9 @@ async def list_resource_statuses(
     rows = []
     for resource in resources:
         open_accounts, open_total, opened_at = tabs.get(resource.id, (0, 0.0, None))
+        if open_accounts:  # what the invoice will charge, VAT included - the same rule as the account itself
+            from app.services.open_account_service import open_total_of_resource
+            open_total = await open_total_of_resource(db, resource.id)
         booking = soonest_booking.get(resource.id)
         if open_accounts > 0:
             status = STATUS_OCUPADA
