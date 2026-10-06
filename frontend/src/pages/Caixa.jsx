@@ -2192,6 +2192,7 @@ export default function Caixa() {
             posId={selectedPosId}
             activityId={pointsOfSale.find((p) => p.id === selectedPosId)?.activity_id}
             onChange={() => refreshPosStock(selectedPosId)}
+            onClosed={() => { refreshBalance(selectedPosId); refreshPosStock(selectedPosId); }}
           />
         )}
       </Modal>

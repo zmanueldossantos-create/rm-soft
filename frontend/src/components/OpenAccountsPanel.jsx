@@ -37,7 +37,8 @@ function formatTime(value) {
 // - the Contas Abertas page (waiters, managers): every point of sale of the activity, chosen in a list;
 // - the till's side panel (cashier): posId + activityId limit it to that till's accounts, and onChange lets the
 //   till refresh its own stock whenever an account changes (what sits on a table is no longer on the shelf).
-export default function OpenAccountsPanel({ posId = null, activityId = null, onChange = null }) {
+// onClosed(account): an account was just closed - the till reloads its balance, as after a direct sale.
+export default function OpenAccountsPanel({ posId = null, activityId = null, onChange = null, onClosed = null }) {
   const can = useCan();
   const [activities, setActivities] = useState([]);
   const [selectedActivityId, setSelectedActivityId] = useState(activityId || '');
@@ -287,12 +288,13 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
     setCloseError('');
     setCloseSaving(true);
     try {
-      await closeAccount(detailAccount.id, {
+      const closed = await closeAccount(detailAccount.id, {
         payments: closePayments.filter((p) => parseFloat(p.amount) > 0).map((p) => ({ payment_method_id: p.payment_method_id, amount: parseFloat(p.amount) })),
       });
       setCloseModalOpen(false);
       setDetailAccount(null);
       await loadAccounts();
+      if (onClosed) onClosed(closed);
     } catch (err) {
       setCloseError(extractErrorMessage(err, 'Erro ao fechar conta'));
     } finally {
