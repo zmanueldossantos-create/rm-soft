@@ -2,7 +2,8 @@ import DateInput from '../components/DateInput';
 import VatReclassify from '../components/VatReclassify';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { Package, Plus, Loader2, Search, Pencil, Barcode, Scale, Upload, X } from 'lucide-react';
-import Modal from '../components/Modal';
+import Modal from '../components/Modal';
+
 import ProductSaleUnits from '../components/ProductSaleUnits';
 import Select from '../components/Select';
 import { listProducts, createProduct, updateProduct, toggleProductStatus, uploadProductImage, deleteProductImage } from '../api/products';
@@ -47,7 +48,7 @@ const emptyForm = {
   minStockThreshold: '0', expiryDate: '',
   unitOfMeasureId: '', categoryId: '', brand: '',
   managedByBatch: false, managedByStock: true, managedByExpiry: false,
-  notAvailablePos: false, internalUseOnly: false, status: 'ACTIVO',
+  notAvailablePos: false, preparedInKitchen: false, internalUseOnly: false, status: 'ACTIVO',
   exemptionReasonId: '',
 };
 
@@ -149,6 +150,7 @@ export default function Products() {
       managedByStock: product.managed_by_stock,
       managedByExpiry: product.managed_by_expiry,
       notAvailablePos: product.not_available_pos,
+      preparedInKitchen: !!product.prepared_in_kitchen,
       internalUseOnly: product.internal_use_only,
       status: product.status,
       exemptionReasonId: product.exemption_reason_id || '',
@@ -236,6 +238,7 @@ export default function Products() {
       managed_by_stock: form.managedByStock,
       managed_by_expiry: form.managedByExpiry,
       not_available_pos: form.notAvailablePos,
+      prepared_in_kitchen: form.preparedInKitchen,
       internal_use_only: form.internalUseOnly,
       status: form.status,
       exemption_reason_id: form.exemptionReasonId || null,
@@ -389,7 +392,8 @@ export default function Products() {
       </div>
 
       <Modal open={modalOpen} onClose={closeModal} title={editingId ? 'Editar produto' : 'Novo produto'} maxWidthClass="max-w-4xl">
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4 h-[70vh] overflow-y-auto scrollbar-thin pr-1">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4 h-[70vh] overflow-y-auto scrollbar-thin pr-1">
+
           <div className="flex gap-1 border-b border-border -mt-1">
             {[['geral', 'Geral'], ['unidades', 'Unidades e embalagens']].map(([key, label]) => (
               <button key={key} type="button" disabled={key === 'unidades' && !editingId} title={key === 'unidades' && !editingId ? 'Guarde o produto primeiro' : undefined} onClick={() => setProductTab(key)} className={'px-3.5 py-2 text-[13px] font-medium border-b-2 -mb-px transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ' + (productTab === key ? 'border-accent text-text-primary' : 'border-transparent text-text-muted hover:text-text-primary')}>
@@ -501,6 +505,10 @@ export default function Products() {
             <label className="flex items-center gap-2.5 cursor-pointer select-none">
               <input type="checkbox" checked={form.notAvailablePos} onChange={(e) => updateField('notAvailablePos', e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
               <span className="text-sm text-text-primary">Não disponível POS</span>
+            </label>
+            <label className="flex items-center gap-2.5 cursor-pointer select-none">
+              <input type="checkbox" checked={form.preparedInKitchen} onChange={(e) => updateField('preparedInKitchen', e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
+              <span className="text-sm text-text-primary">Preparado na cozinha</span>
             </label>
             <label className="flex items-center gap-2.5 cursor-pointer select-none">
               <input type="checkbox" checked={form.internalUseOnly} onChange={(e) => updateField('internalUseOnly', e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />

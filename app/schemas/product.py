@@ -45,6 +45,7 @@ class ProductCreateRequest(BaseModel):
     managed_by_stock: bool = True
     managed_by_expiry: bool = False
     not_available_pos: bool = False
+    prepared_in_kitchen: bool = False
     internal_use_only: bool = False
     status: str = "ACTIVO"
     exemption_reason_id: uuid.UUID | None = None
@@ -102,6 +103,7 @@ class ProductUpdateRequest(BaseModel):
     managed_by_stock: bool = True
     managed_by_expiry: bool = False
     not_available_pos: bool = False
+    prepared_in_kitchen: bool = False
     internal_use_only: bool = False
     status: str = "ACTIVO"
     exemption_reason_id: uuid.UUID | None = None
@@ -154,7 +156,8 @@ class ProductResponse(BaseModel):
     unit_of_measure_code: str | None = None  # attached by the list: the unit's code (UN, CX...)
     sale_units: list[dict] = []  # attached by the list: active sale units (id, code, factor, price, barcode, is_fractional)
     unit_is_fractional: bool = False  # attached by the list: the base unit takes decimal quantities
-    batch_yield: float
+    batch_yield: float
+
     batch_yield_entry: float | None = None
     batch_yield_sale_unit_id: uuid.UUID | None = None
     is_raw_material: bool
@@ -169,6 +172,7 @@ class ProductResponse(BaseModel):
     managed_by_stock: bool
     managed_by_expiry: bool
     not_available_pos: bool
+    prepared_in_kitchen: bool = False
     internal_use_only: bool
     status: str
     exemption_reason_id: uuid.UUID | None

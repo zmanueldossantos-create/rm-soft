@@ -101,6 +101,7 @@ async def create_product(
     managed_by_stock: bool = True,
     managed_by_expiry: bool = False,
     not_available_pos: bool = False,
+    prepared_in_kitchen: bool = False,
     internal_use_only: bool = False,
     status: str = "ACTIVO",
     exemption_reason_id: uuid.UUID | None = None,
@@ -135,6 +136,7 @@ async def create_product(
         managed_by_stock=managed_by_stock,
         managed_by_expiry=managed_by_expiry,
         not_available_pos=not_available_pos,
+        prepared_in_kitchen=prepared_in_kitchen,
         internal_use_only=internal_use_only,
         status=status,
         exemption_reason_id=exemption_reason_id,
@@ -248,6 +250,7 @@ async def update_product(
     managed_by_stock: bool = True,
     managed_by_expiry: bool = False,
     not_available_pos: bool = False,
+    prepared_in_kitchen: bool = False,
     internal_use_only: bool = False,
     status: str = "ACTIVO",
     exemption_reason_id: uuid.UUID | None = None,
@@ -282,6 +285,7 @@ async def update_product(
     product.managed_by_stock = managed_by_stock
     product.managed_by_expiry = managed_by_expiry
     product.not_available_pos = not_available_pos
+    product.prepared_in_kitchen = prepared_in_kitchen
     product.internal_use_only = internal_use_only
     product.status = status
     product.exemption_reason_id = exemption_reason_id
