@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Wallet2, Plus, Loader2, X, Trash2, CheckCircle2, Search, Minus, ArrowRightLeft, LayoutGrid, RefreshCw } from 'lucide-react';
 import { useCan } from '../utils/permissions';
 import { listActivities } from '../api/activity';
@@ -7,7 +7,7 @@ import { listResources, listResourceStatuses } from '../api/booking';
 import { listProducts } from '../api/products';
 import { listServices } from '../api/services';
 import { listPaymentMethodPreferences } from '../api/tesouraria';
-import { listOpenAccounts, openAccount, getOpenAccount, listAccountLines, addAccountLine, updateAccountLineQuantity, removeAccountLine, closeAccount, transferAccountLines } from '../api/openAccount';
+import { listOpenAccounts, openAccount, getOpenAccount, listAccountLines, addAccountLine, updateAccountLineQuantity, updateAccountLineUnit, removeAccountLine, closeAccount, transferAccountLines } from '../api/openAccount';
 import { getPosStockLevels } from '../api/pos';
 import { extractErrorMessage } from '../utils/errors';
 import Modal from '../components/Modal';
@@ -175,6 +175,8 @@ export default function ContasAbertas() {
 
   async function refreshDetailLines() {
     if (!detailAccount) return;
+    // the stock shown on the cards follows every change on any account (what is left on the shelf)
+    getPosStockLevels(detailAccount.pos_id).then(setStockLevels).catch(() => setStockLevels({}));
     try {
       setDetailLines(await listAccountLines(detailAccount.id));
     } catch (err) {
@@ -219,6 +221,31 @@ export default function ContasAbertas() {
     } catch (err) {
       setDetailError(extractErrorMessage(err, 'Erro ao atualizar quantidade'));
     }
+  }
+
+  // Sells a line in another unit (UN, CX...), as the till cart's unit selector - the server checks the stock.
+  async function handleChangeUnit(line, value) {
+    if (!detailAccount) return;
+    setDetailError('');
+    try {
+      await updateAccountLineUnit(detailAccount.id, line.id, value === 'base' ? null : value);
+      await refreshDetailLines();
+    } catch (err) {
+      setDetailError(extractErrorMessage(err, 'Erro ao mudar a unidade'));
+    }
+  }
+
+  // The units a product line can be sold in: its base unit and its active sale units (as in the till).
+  function unitPicker(line) {
+    const product = line.product_id ? products.find((p) => p.id === line.product_id) : null;
+    const units = (product?.sale_units || []).filter((u) => u.is_active !== false);
+    if (units.length === 0) return null;
+    return (
+      <select value={line.sale_unit_id || 'base'} onChange={(e) => handleChangeUnit(line, e.target.value)} disabled={!can('open_accounts:edit_lines')} className="mt-1 bg-bg-elevated border border-border rounded px-1.5 py-0.5 text-[11px] font-mono text-text-primary cursor-pointer disabled:opacity-50">
+        <option value="base">{product.unit_of_measure_code || 'UN'}</option>
+        {units.map((u) => <option key={u.id} value={u.id}>{u.unit_of_measure_code} ({Number(u.factor)})</option>)}
+      </select>
+    );
   }
 
   const detailTotal = detailLines.reduce((sum, l) => sum + Number(l.unit_price) * Number(l.quantity), 0);
@@ -490,7 +517,7 @@ export default function ContasAbertas() {
           <p className="text-text-primary font-medium mb-1">{!selectedActivityId ? (activities.length === 0 ? 'Nenhuma atividade ativa' : 'Selecione uma atividade') : 'Nenhuma conta aberta'}</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
           {accounts.map((a) => (
             <button
               key={a.id}
@@ -631,7 +658,7 @@ export default function ContasAbertas() {
                     <div key={l.id} className="flex items-center justify-between bg-bg-inset border border-border rounded-md px-3 py-2">
                       <div>
                         <p className="text-[12px] text-text-primary">{l.name_snapshot}</p>
-                        <p className="text-[11px] text-text-muted font-mono">{formatKz(l.unit_price)} Kz/un</p>
+                        <p className="text-[11px] text-text-muted font-mono">{formatKz(l.unit_price)} Kz/{(l.unit_code_snapshot || 'un').toLowerCase()}</p>{unitPicker(l)}
                       </div>
                       <div className="flex items-center gap-2.5">
                         <div className="flex items-center gap-1.5 bg-bg-elevated border border-border rounded-md px-1.5 py-1">
@@ -643,7 +670,7 @@ export default function ContasAbertas() {
                             <Plus size={12} />
                           </button>
                         </div>
-                        <span className="font-mono text-[13px] text-text-primary font-semibold w-20 text-right">{formatKz(l.unit_price * l.quantity)} Kz</span>
+                        <span className="font-mono text-[13px] text-text-primary font-semibold min-w-20 whitespace-nowrap text-right">{formatKz(l.unit_price * l.quantity)} Kz</span>
                         <button onClick={() => handleRemoveLine(l.id)} disabled={!can('open_accounts:edit_lines')} className="text-text-muted hover:text-danger cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
                           <Trash2 size={13} />
                         </button>

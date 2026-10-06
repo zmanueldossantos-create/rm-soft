@@ -5,6 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.api.deps import require_permission
+from app.schemas.open_account import OpenAccountLineUnitRequest
+from app.services.open_account_service import InsufficientStockError, InvalidLineError, change_line_unit
 from app.models.user import User
 from app.schemas.open_account import (
     OpenAccountCreateRequest, OpenAccountResponse,
@@ -81,7 +83,7 @@ async def post_add_line(
     try:
         return await add_line(
             db, current_user.company_id, account_id, current_user.id,
-            payload.quantity, payload.product_id, payload.service_id,
+            payload.quantity, payload.product_id, payload.service_id, payload.sale_unit_id,
         )
     except OpenAccountNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
@@ -89,6 +91,10 @@ async def post_add_line(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except ItemNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except InsufficientStockError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except InvalidLineError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
 
 
 @router.patch("/{account_id}/lines/{line_id}", response_model=OpenAccountLineResponse | None)
@@ -105,6 +111,31 @@ async def patch_line_quantity(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except AccountAlreadyClosedError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except ItemNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except InsufficientStockError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except InvalidLineError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.patch("/{account_id}/lines/{line_id}/unit", response_model=OpenAccountLineResponse)
+async def patch_line_unit(
+    account_id: uuid.UUID,
+    line_id: uuid.UUID,
+    payload: OpenAccountLineUnitRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("open_accounts:edit_lines")),
+):
+    """Sells the line in another unit (UN <-> CX), as the till cart's unit selector."""
+    try:
+        return await change_line_unit(db, current_user.company_id, account_id, line_id, payload.sale_unit_id)
+    except (OpenAccountNotFoundError, ItemNotFoundError) as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (AccountAlreadyClosedError, InsufficientStockError) as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except InvalidLineError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
 
 
 @router.delete("/{account_id}/lines/{line_id}", status_code=status.HTTP_204_NO_CONTENT)

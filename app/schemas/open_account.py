@@ -1,4 +1,4 @@
-﻿import uuid
+import uuid
 from datetime import datetime
 
 from pydantic import BaseModel, Field
@@ -36,11 +36,16 @@ class OpenAccountResponse(BaseModel):
 class OpenAccountLineCreateRequest(BaseModel):
     product_id: uuid.UUID | None = None
     service_id: uuid.UUID | None = None
-    quantity: float = 1
+    sale_unit_id: uuid.UUID | None = None  # None: the product's base unit
+    quantity: float = Field(default=1, gt=0)
 
 
 class OpenAccountLineUpdateRequest(BaseModel):
     quantity: float
+
+
+class OpenAccountLineUnitRequest(BaseModel):
+    sale_unit_id: uuid.UUID | None = None  # None: back to the product's base unit
 
 
 class OpenAccountLineResponse(BaseModel):
@@ -51,6 +56,9 @@ class OpenAccountLineResponse(BaseModel):
     name_snapshot: str
     quantity: float
     unit_price: float
+    sale_unit_id: uuid.UUID | None = None
+    unit_factor: float = 1
+    unit_code_snapshot: str | None = None
     added_by_user_id: uuid.UUID
     added_at: datetime
 

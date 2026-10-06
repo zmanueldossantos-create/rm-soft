@@ -1,4 +1,4 @@
-﻿"""
+"""
 Service layer for OpenAccount - the generic running-tab engine. See
 app.models.open_account for the full design rationale.
 
@@ -81,7 +81,10 @@ async def list_account_lines(db: AsyncSession, account_id: uuid.UUID) -> list[Op
 async def add_line(
     db: AsyncSession, company_id: uuid.UUID, account_id: uuid.UUID, added_by_user_id: uuid.UUID,
     quantity: float, product_id: uuid.UUID | None = None, service_id: uuid.UUID | None = None,
+    sale_unit_id: uuid.UUID | None = None,
 ) -> OpenAccountLine:
+    if float(quantity) <= 0:
+        raise InvalidLineError("A quantidade deve ser superior a zero")
     account = await get_account_or_raise(db, company_id, account_id)
     if account.status == OpenAccountStatus.FECHADA:
         raise AccountAlreadyClosedError("Esta conta ja esta fechada")
@@ -93,15 +96,21 @@ async def add_line(
             raise ItemNotFoundError("Produto nao encontrado")
         if item.is_raw_material:
             raise ItemNotFoundError("Materia-prima nao pode ser adicionada a uma conta")
-        name_snapshot, unit_price = item.name, float(item.price)
+        # Sold in its base unit or one of its sale units (a CX of 24 at its own price), exactly as in the till.
+        unit_price, unit_factor, line_sale_unit_id, unit_code = await _resolve_unit(db, company_id, item, sale_unit_id, quantity)
+        name_snapshot = item.name
     elif service_id is not None:
         result = await db.execute(select(Service).where(Service.id == service_id, Service.company_id == company_id))
         item = result.scalar_one_or_none()
         if item is None:
             raise ItemNotFoundError("Servico nao encontrado")
         name_snapshot, unit_price = item.name, float(item.price or 0)
+        unit_factor, line_sale_unit_id, unit_code = 1.0, None, None
     else:
         raise ItemNotFoundError("Indique um produto ou servico")
+
+    if product_id is not None:
+        await _ensure_stock(db, company_id, account, item, float(quantity) * unit_factor)
 
     # If this product/service is already on the account, bump its quantity instead
     # of adding a duplicate line - matches Caixa's cart behaviour (see the "multiple
@@ -114,6 +123,7 @@ async def add_line(
             OpenAccountLine.account_id == account_id,
             OpenAccountLine.product_id == product_id,
             OpenAccountLine.service_id == service_id,
+            OpenAccountLine.sale_unit_id == line_sale_unit_id,
         ).order_by(OpenAccountLine.added_at).limit(1)
     )
     existing_line = existing_result.scalars().first()
@@ -126,6 +136,7 @@ async def add_line(
     line = OpenAccountLine(
         account_id=account_id, product_id=product_id, service_id=service_id,
         name_snapshot=name_snapshot, quantity=quantity, unit_price=unit_price, added_by_user_id=added_by_user_id,
+        sale_unit_id=line_sale_unit_id, unit_factor=unit_factor, unit_code_snapshot=unit_code,
     )
     db.add(line)
     await db.commit()
@@ -152,6 +163,13 @@ async def update_line_quantity(
         await db.delete(line)
         await db.commit()
         return None
+
+    if line.product_id is not None:
+        product = await _product_or_raise(db, company_id, line.product_id)
+        await _resolve_unit(db, company_id, product, line.sale_unit_id, quantity)  # a decimal quantity only in KG, L...
+        delta = (float(quantity) - float(line.quantity)) * float(line.unit_factor or 1)
+        if delta > _QTY_EPS:  # a lower quantity always passes, as in the till
+            await _ensure_stock(db, company_id, account, product, delta)
 
     line.quantity = quantity
     await db.commit()
@@ -185,7 +203,8 @@ async def close_account(
         raise EmptyAccountError("Nao e possivel fechar uma conta sem artigos")
 
     lines_input = [
-        {"product_id": str(l.product_id) if l.product_id else None, "service_id": str(l.service_id) if l.service_id else None, "quantity": float(l.quantity)}
+        {"product_id": str(l.product_id) if l.product_id else None, "service_id": str(l.service_id) if l.service_id else None, "quantity": float(l.quantity),
+         "sale_unit_id": str(l.sale_unit_id) if l.sale_unit_id else None}
         for l in lines
     ]
 
@@ -302,6 +321,7 @@ async def transfer_lines(
             target_line = OpenAccountLine(
                 account_id=target.id, product_id=line.product_id, service_id=line.service_id,
                 name_snapshot=line.name_snapshot, quantity=quantity, unit_price=line.unit_price,
+                sale_unit_id=line.sale_unit_id, unit_factor=line.unit_factor, unit_code_snapshot=line.unit_code_snapshot,
                 added_by_user_id=line.added_by_user_id, added_at=line.added_at,
             )
             db.add(target_line)
@@ -325,3 +345,113 @@ async def transfer_lines(
     await db.refresh(source)
     await db.refresh(target)
     return source, target, source_closed
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# An open account is a till cart kept open: same units, same stock rule. One difference: it is shared (several
+# waiters, several tables, for hours), so the check runs on the server, against what the other accounts hold.
+
+class InsufficientStockError(Exception):
+    pass
+
+
+class InvalidLineError(Exception):
+    pass
+
+
+def _fmt_qty(value: float) -> str:
+    """1.5 -> '1,5' ; 24.0 -> '24' (PT notation, up to 3 decimals)."""
+    return f"{value:.3f}".rstrip("0").rstrip(".").replace(".", ",")
+
+
+async def _product_or_raise(db: AsyncSession, company_id: uuid.UUID, product_id: uuid.UUID) -> Product:
+    product = (await db.execute(
+        select(Product).where(Product.id == product_id, Product.company_id == company_id)
+    )).scalar_one_or_none()
+    if product is None:
+        raise ItemNotFoundError("Produto nao encontrado")
+    return product
+
+
+async def _resolve_unit(
+    db: AsyncSession, company_id: uuid.UUID, product: Product, sale_unit_id, quantity: float | None,
+) -> tuple[float, float, uuid.UUID | None, str | None]:
+    """Price, factor, sale unit and unit code of a product line - the till's own rule (resolve_line_unit):
+    an internal-use article is never sold, a decimal quantity only in a fractional unit (KG, L)."""
+    if getattr(product, "internal_use_only", False):
+        raise InvalidLineError(f"{product.name} e de uso interno e nao pode ser vendido")
+    from app.services.product_sale_unit_service import SaleUnitInvalidError, resolve_line_unit
+    try:
+        price, factor, su_id, code = await resolve_line_unit(db, company_id, product, sale_unit_id, quantity)
+    except SaleUnitInvalidError as e:
+        raise InvalidLineError(str(e))
+    return float(price), float(factor or 1), su_id, code
+
+
+async def engaged_on_open_accounts(db: AsyncSession, warehouse_id: uuid.UUID) -> dict[uuid.UUID, float]:
+    """Base-unit quantity of every product sitting on the open accounts selling from this warehouse.
+    What is on an open account is already served: it is no longer on the shelf, even though the stock
+    only moves when the account is closed (pos_service.get_pos_stock subtracts it)."""
+    from app.models.activity import Activity
+    rows = (await db.execute(
+        select(OpenAccountLine.product_id, func.sum(OpenAccountLine.quantity * OpenAccountLine.unit_factor))
+        .join(OpenAccount, OpenAccount.id == OpenAccountLine.account_id)
+        .join(Activity, Activity.id == OpenAccount.activity_id)
+        .where(
+            OpenAccount.status == OpenAccountStatus.ABERTA,
+            Activity.warehouse_id == warehouse_id,
+            OpenAccountLine.product_id.is_not(None),
+        )
+        .group_by(OpenAccountLine.product_id)
+    )).all()
+    return {pid: float(q or 0) for pid, q in rows}
+
+
+async def _ensure_stock(
+    db: AsyncSession, company_id: uuid.UUID, account: OpenAccount, product: Product, extra_base: float,
+) -> None:
+    """The till cart's stock rule, applied on the server: extra_base more base units of the product must fit in
+    what is left in the warehouse of the account's point of sale (stock minus every open account) - unless the
+    warehouse allows a negative stock. Exits blocked refuse everything."""
+    if not product.managed_by_stock or extra_base <= _QTY_EPS:
+        return
+    # One writer at a time per product: two waiters can never both take the last unit.
+    await db.execute(select(Product.id).where(Product.id == product.id).with_for_update())
+    from app.services.pos_service import get_pos_stock
+    pos_stock = await get_pos_stock(db, company_id, account.pos_id)
+    if pos_stock["warehouse_id"] is None:
+        return
+    if pos_stock["exits_blocked"]:
+        raise InsufficientStockError("Saidas bloqueadas no armazem deste ponto de venda")
+    if pos_stock["allow_negative_stock"]:
+        return
+    available = float(pos_stock["stock"].get(str(product.id), 0.0))
+    if extra_base - available > _QTY_EPS:
+        _, _, _, base_code = await _resolve_unit(db, company_id, product, None, None)
+        raise InsufficientStockError(f"Stock insuficiente: {_fmt_qty(max(available, 0.0))} {base_code or 'UN'} disponivel")
+
+
+async def change_line_unit(
+    db: AsyncSession, company_id: uuid.UUID, account_id: uuid.UUID, line_id: uuid.UUID, sale_unit_id: uuid.UUID | None,
+) -> OpenAccountLine:
+    """Sells a product line in another unit (UN <-> CX), as the till cart's unit selector: the price follows the
+    unit, a bigger unit must fit in the stock."""
+    account = await get_account_or_raise(db, company_id, account_id)
+    if account.status == OpenAccountStatus.FECHADA:
+        raise AccountAlreadyClosedError("Esta conta ja esta fechada")
+    line = (await db.execute(
+        select(OpenAccountLine).where(OpenAccountLine.id == line_id, OpenAccountLine.account_id == account_id)
+    )).scalar_one_or_none()
+    if line is None:
+        raise ItemNotFoundError("Linha nao encontrada nesta conta")
+    if line.product_id is None:
+        raise InvalidLineError("Um servico nao tem outras unidades")
+    product = await _product_or_raise(db, company_id, line.product_id)
+    price, factor, su_id, code = await _resolve_unit(db, company_id, product, sale_unit_id, float(line.quantity))
+    delta = float(line.quantity) * (factor - float(line.unit_factor or 1))
+    if delta > _QTY_EPS:
+        await _ensure_stock(db, company_id, account, product, delta)
+    line.sale_unit_id, line.unit_factor, line.unit_code_snapshot, line.unit_price = su_id, factor, code, price
+    await db.commit()
+    await db.refresh(line)
+    return line

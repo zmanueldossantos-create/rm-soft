@@ -32,6 +32,11 @@ export async function updateAccountLineQuantity(accountId, lineId, quantity) {
   return res.data;
 }
 
+export async function updateAccountLineUnit(accountId, lineId, saleUnitId) {
+  const res = await apiClient.patch('/open-accounts/' + accountId + '/lines/' + lineId + '/unit', { sale_unit_id: saleUnitId });
+  return res.data;
+}
+
 export async function removeAccountLine(accountId, lineId) {
   await apiClient.delete('/open-accounts/' + accountId + '/lines/' + lineId);
 }

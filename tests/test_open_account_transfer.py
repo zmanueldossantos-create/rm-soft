@@ -246,7 +246,7 @@ async def test_add_line_survives_duplicate_lines_left_by_a_transfer(db, company_
     company_id, user_id = ctx["company"].id, ctx["gestor"].id
     product = Product(
         company_id=company_id, code="OA-001", name="Cerveja", vat_id=ctx["vat_ise"].id, price=500,
-        min_stock_threshold=0, product_type=ProductType.BEM,
+        min_stock_threshold=0, product_type=ProductType.BEM, managed_by_stock=False,  # about merging lines, not stock
     )
     db.add(product)
     await db.commit()

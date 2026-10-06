@@ -29,6 +29,12 @@ class OpenAccountLine(Base):
     quantity: Mapped[float] = mapped_column(Numeric(12, 3), nullable=False)
     unit_price: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
 
+    # The unit the line is sold in, as in the till cart: the base unit (no sale unit, factor 1) or one of the
+    # product's sale units (a CX of 24 at its own price). The stock counts quantity x unit_factor.
+    sale_unit_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("product_sale_units.id"), nullable=True)
+    unit_factor: Mapped[float] = mapped_column(Numeric(12, 4), nullable=False, default=1, server_default="1")
+    unit_code_snapshot: Mapped[str | None] = mapped_column(String(10), nullable=True)
+
     added_by_user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

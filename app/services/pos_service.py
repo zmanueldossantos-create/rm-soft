@@ -179,9 +179,13 @@ async def get_pos_stock(db: AsyncSession, company_id: uuid.UUID, pos_id: uuid.UU
     quantities = dict((await db.execute(
         select(Stock.product_id, Stock.quantity).where(Stock.warehouse_id == warehouse.id)
     )).all())
+    # What sits on open accounts is already served (a beer on table 2): it is no longer on the shelf, even though
+    # the stock only moves when the account is closed. The till and the open accounts both sell what is left.
+    from app.services.open_account_service import engaged_on_open_accounts
+    engaged = await engaged_on_open_accounts(db, warehouse.id)
     return {
         "warehouse_id": str(warehouse.id),
         "allow_negative_stock": bool(warehouse.allow_negative_stock),
         "exits_blocked": bool(getattr(warehouse, "saidas_bloqueadas", False)),
-        "stock": {str(pid): float(quantities.get(pid, 0) or 0) for pid in managed},
+        "stock": {str(pid): float(quantities.get(pid, 0) or 0) - engaged.get(pid, 0.0) for pid in managed},
     }
