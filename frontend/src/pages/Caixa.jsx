@@ -21,7 +21,7 @@ import { createCustomer } from '../api/customers';
 import { listProducts } from '../api/products';
 import { listCustomers } from '../api/customers';
 import { openCashSession, getOpenCashSession, closeCashSession, checkout, liquidatePendingInvoice, getCurrentCashBalance, getCarryForwardAmount } from '../api/pos';
-import { listPendingProFormas, listRecentIssuedInvoices, fetchInvoicePdfBlob } from '../api/invoices';
+import { listPendingProFormas, listRecentIssuedInvoices, fetchInvoicePdfBlob, getInvoiceDetail } from '../api/invoices';
 import { listPendingReceptions, receiveCashMovement, listPendingEmissions, cancelCashMovement, getDailyReport } from '../api/tesouraria';
 import DocumentActionModals from '../components/DocumentActionModals';
 import {
@@ -2192,7 +2192,20 @@ export default function Caixa() {
             posId={selectedPosId}
             activityId={pointsOfSale.find((p) => p.id === selectedPosId)?.activity_id}
             onChange={() => refreshPosStock(selectedPosId)}
-            onClosed={() => { refreshBalance(selectedPosId); refreshPosStock(selectedPosId); }}
+            onClosed={async (account) => {
+              // An account closed at the till ends like a direct sale: balance, stock, Documento gerado, printing.
+              refreshBalance(selectedPosId);
+              refreshPosStock(selectedPosId);
+              if (!account?.invoice_id) return;
+              try {
+                const invoice = await getInvoiceDetail(account.invoice_id);
+                setLastInvoice(invoice);
+                setSuccessModalOpen(true);
+                afterSalePrint(invoice);
+              } catch {
+                // the invoice exists all the same: Consultar documentos still shows it
+              }
+            }}
           />
         )}
       </Modal>
