@@ -7,7 +7,7 @@ import { listResources, listResourceStatuses } from '../api/booking';
 import { listProducts } from '../api/products';
 import { listServices } from '../api/services';
 import { listPaymentMethodPreferences } from '../api/tesouraria';
-import { listOpenAccounts, openAccount, getOpenAccount, listAccountLines, addAccountLine, updateAccountLineQuantity, updateAccountLineUnit, removeAccountLine, closeAccount, transferAccountLines } from '../api/openAccount';
+import { listOpenAccounts, openAccount, getOpenAccount, listAccountLines, addAccountLine, updateAccountLineQuantity, updateAccountLineUnit, removeAccountLine, closeAccount, cancelOpenAccount, transferAccountLines } from '../api/openAccount';
 import { getPosStockLevels } from '../api/pos';
 import { extractErrorMessage } from '../utils/errors';
 import Modal from '../components/Modal';
@@ -295,6 +295,19 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
 
   const closePaymentsSum = closePayments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
   const closeRemaining = Math.round((detailTotal - closePaymentsSum) * 100) / 100;
+
+  // An account opened by mistake: cancelled while empty - no fiscal document, the table is freed.
+  async function handleCancelEmpty() {
+    if (!detailAccount) return;
+    setDetailError('');
+    try {
+      await cancelOpenAccount(detailAccount.id);
+      setDetailAccount(null);
+      await loadAccounts();
+    } catch (err) {
+      setDetailError(extractErrorMessage(err, 'Erro ao anular conta'));
+    }
+  }
 
   async function handleCloseSubmit() {
     if (!detailAccount) return;
@@ -733,25 +746,41 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
               <span className="font-mono font-bold text-text-primary text-lg">{formatKz(detailTotal)} Kz</span>
             </div>
 
-            {can('open_accounts:transfer') && !detailAccount.booking_id && (
+            {/* The account's actions on one row: cancel (an empty account only), transfer / split, then close - the
+                main one, wider. On a narrow screen the two secondary ones keep only their icon (label on hover). */}
+            <div className="flex items-stretch gap-2">
+              {detailLines.length === 0 && !detailLoading && !detailAccount.booking_id && can('open_accounts:open') && (
+                <button
+                  type="button"
+                  onClick={handleCancelEmpty}
+                  title="Anular conta vazia"
+                  className="flex-1 min-w-0 flex items-center justify-center gap-2 border border-danger/40 hover:border-danger text-danger font-medium text-sm rounded-md px-3 py-2.5 transition-colors cursor-pointer"
+                >
+                  <X size={15} className="shrink-0" />
+                  <span className="hidden sm:inline truncate">Anular conta vazia</span>
+                </button>
+              )}
+              {can('open_accounts:transfer') && !detailAccount.booking_id && (
+                <button
+                  type="button"
+                  onClick={openTransferModal}
+                  disabled={detailLines.length === 0}
+                  title="Transferir / Dividir"
+                  className="flex-1 min-w-0 border border-border hover:border-accent text-text-primary font-medium text-sm rounded-md px-3 py-2.5 flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <ArrowRightLeft size={16} className="shrink-0" />
+                  <span className="hidden sm:inline truncate">Transferir / Dividir</span>
+                </button>
+              )}
               <button
-                type="button"
-                onClick={openTransferModal}
-                disabled={detailLines.length === 0}
-                className="border border-border hover:border-accent text-text-primary font-medium text-sm rounded-md py-2.5 flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                onClick={openCloseModal}
+                disabled={detailLines.length === 0 || !can('open_accounts:close')}
+                className="flex-[1.5] min-w-0 bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md px-3 py-2.5 flex items-center justify-center gap-2 transition-colors cursor-pointer"
               >
-                <ArrowRightLeft size={16} />
-                Transferir / Dividir
+                <CheckCircle2 size={17} className="shrink-0" />
+                <span className="truncate">Fechar conta</span>
               </button>
-            )}
-            <button
-              onClick={openCloseModal}
-              disabled={detailLines.length === 0 || !can('open_accounts:close')}
-              className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer"
-            >
-              <CheckCircle2 size={17} />
-              Fechar conta
-            </button>
+            </div>
           </div>
         )}
       </Modal>

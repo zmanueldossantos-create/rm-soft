@@ -527,3 +527,24 @@ async def open_total_of_resource(db: AsyncSession, resource_id: uuid.UUID) -> fl
         select(OpenAccount.id).where(OpenAccount.resource_id == resource_id, OpenAccount.status == OpenAccountStatus.ABERTA)
     )).scalars().all()
     return round(sum(total for _, _, _, total in (await _account_totals(db, list(ids))).values()), 2)
+
+
+async def cancel_empty_account(db: AsyncSession, company_id: uuid.UUID, account_id: uuid.UUID) -> OpenAccount:
+    """Cancels an account opened by mistake: only while it holds no article. It is closed without any fiscal
+    document - as a transfer closes the account it empties - and its table is freed. A hotel stay account is never
+    cancelled here: it closes at check-out."""
+    account = await get_account_or_raise(db, company_id, account_id)
+    if account.status == OpenAccountStatus.FECHADA:
+        raise AccountAlreadyClosedError("Esta conta ja esta fechada")
+    if account.booking_id is not None:
+        raise InvalidLineError("Uma conta de estadia fecha-se no check-out")
+    lines = (await db.execute(
+        select(func.count()).select_from(OpenAccountLine).where(OpenAccountLine.account_id == account.id)
+    )).scalar_one()
+    if lines:
+        raise InvalidLineError("So uma conta sem artigos pode ser anulada - retire ou transfira os artigos primeiro")
+    account.status = OpenAccountStatus.FECHADA
+    account.closed_at = func.now()
+    await db.commit()
+    await db.refresh(account)
+    return account

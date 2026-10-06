@@ -50,3 +50,9 @@ export async function transferAccountLines(accountId, payload) {
   const res = await apiClient.post('/open-accounts/' + accountId + '/transfer', payload);
   return res.data;
 }
+
+// An account opened by mistake, cancelled while empty: no fiscal document, the table is freed.
+export async function cancelOpenAccount(accountId) {
+  const res = await apiClient.post('/open-accounts/' + accountId + '/cancel');
+  return res.data;
+}

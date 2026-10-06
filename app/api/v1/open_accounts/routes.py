@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.api.deps import require_permission
 from app.schemas.open_account import OpenAccountLineUnitRequest
-from app.services.open_account_service import InsufficientStockError, InvalidLineError, change_line_unit
+from app.services.open_account_service import InsufficientStockError, InvalidLineError, cancel_empty_account, change_line_unit
 from app.models.user import User
 from app.schemas.open_account import (
     OpenAccountCreateRequest, OpenAccountResponse,
@@ -203,3 +203,19 @@ async def post_transfer_lines(
         target_account=OpenAccountResponse.model_validate(target),
         source_closed=source_closed,
     )
+
+
+@router.post("/{account_id}/cancel", response_model=OpenAccountResponse)
+async def post_cancel_empty_account(
+    account_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("open_accounts:open")),
+):
+    """Cancels an account opened by mistake - only while it holds no article; no fiscal document is issued.
+    Whoever may open an account may undo that mistake."""
+    try:
+        return await cancel_empty_account(db, current_user.company_id, account_id)
+    except OpenAccountNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (AccountAlreadyClosedError, InvalidLineError) as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
