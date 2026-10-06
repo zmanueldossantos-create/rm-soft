@@ -3,8 +3,8 @@ import { ShieldCheck, Loader2 } from 'lucide-react';
 import { getPermissionMatrix, setRolePermission } from '../api/permissions';
 import { extractErrorMessage } from '../utils/errors';
 
-const ROLES = ['GESTOR', 'CAIXA', 'ATENDENTE', 'ARMAZENISTA', 'CONTABILISTA'];
-const ROLE_LABELS = { GESTOR: 'Gestor', CAIXA: 'Caixa', ATENDENTE: 'Atendente', ARMAZENISTA: 'Armazenista', CONTABILISTA: 'Contabilista' };
+const ROLES = ['GESTOR', 'CAIXA', 'ATENDENTE', 'COZINHA', 'ARMAZENISTA', 'CONTABILISTA'];
+const ROLE_LABELS = { GESTOR: 'Gestor', CAIXA: 'Caixa', ATENDENTE: 'Atendente', COZINHA: 'Cozinha', ARMAZENISTA: 'Armazenista', CONTABILISTA: 'Contabilista' };
 
 export default function Permissoes() {
   const [entries, setEntries] = useState([]);

@@ -27,7 +27,7 @@ from app.models.role_permission import RolePermission
 from app.models.user import UserRole
 
 ALWAYS_ALLOWED_ROLE = "GESTOR"
-EDITABLE_ROLES = ("CAIXA", "ATENDENTE", "ARMAZENISTA", "CONTABILISTA")
+EDITABLE_ROLES = ("CAIXA", "ATENDENTE", "COZINHA", "ARMAZENISTA", "CONTABILISTA")
 
 # (code, label, category, default_roles) - GESTOR is implicit, never listed.
 PERMISSION_CATALOG: list[tuple[str, str, str, list[str]]] = [
@@ -87,7 +87,7 @@ PERMISSION_CATALOG: list[tuple[str, str, str, list[str]]] = [
     ("hotel:checkin", "Fazer check-in", "Hotel", ["CAIXA"]),
     ("hotel:checkout", "Fazer check-out", "Hotel", ["CAIXA"]),
     ("hotel:occupancy_view", "Ver historico de ocupacao", "Hotel", ["CAIXA"]),
-    ("activities:view", "Ver atividades", "Atividades", ["CAIXA", "ARMAZENISTA", "ATENDENTE"]),
+    ("activities:view", "Ver atividades", "Atividades", ["CAIXA", "ARMAZENISTA", "ATENDENTE", "COZINHA"]),
     ("activities:manage", "Criar, editar e ativar/desativar atividades", "Atividades", []),
     ("pos_terminals:view", "Ver pontos de venda de uma atividade", "Atividades", ["CAIXA", "ATENDENTE"]),
     ("pos_terminals:manage", "Criar, editar e ativar/desativar pontos de venda", "Atividades", []),
@@ -104,7 +104,7 @@ PERMISSION_CATALOG: list[tuple[str, str, str, list[str]]] = [
     ("tesouraria:receive", "Receber movimentos de tesouraria pendentes", "Tesouraria", ["CAIXA"]),
     ("tesouraria:cancel_movement", "Cancelar movimentos de tesouraria", "Tesouraria", ["CAIXA"]),
     ("tesouraria:daily_report", "Ver relatorio diario de tesouraria", "Tesouraria", ["CAIXA"]),
-    ("tesouraria:my_association", "Ver a minha associacao a caixa", "Tesouraria", ["CAIXA", "ARMAZENISTA", "CONTABILISTA", "ATENDENTE"]),
+    ("tesouraria:my_association", "Ver a minha associacao a caixa", "Tesouraria", ["CAIXA", "ARMAZENISTA", "CONTABILISTA", "ATENDENTE", "COZINHA"]),
     ("tesouraria:associations_manage", "Associar utilizadores as caixas (pontos de venda)", "Atividades", []),
     ("tesouraria:payment_prefs_view", "Ver metodos de pagamento da empresa", "Tesouraria", ["CAIXA"]),
     ("tesouraria:payment_prefs_manage", "Configurar metodos de pagamento da empresa", "Tesouraria", []),
@@ -113,7 +113,7 @@ PERMISSION_CATALOG: list[tuple[str, str, str, list[str]]] = [
     ("fiscal_periods:view", "Ver exercicios e periodos fiscais", "Contabilidade", []),
     ("fiscal_periods:manage", "Abrir exercicios e periodos fiscais", "Contabilidade", []),
     ("fiscal_periods:close", "Fechar exercicios e periodos fiscais", "Contabilidade", []),
-    ("fiscal_periods:current", "Ver o periodo fiscal corrente", "Contabilidade", ["CAIXA", "ARMAZENISTA", "CONTABILISTA", "ATENDENTE"]),
+    ("fiscal_periods:current", "Ver o periodo fiscal corrente", "Contabilidade", ["CAIXA", "ARMAZENISTA", "CONTABILISTA", "ATENDENTE", "COZINHA"]),
     ("saf_t:export", "Exportar SAF-T", "Contabilidade", []),
     ("company:view", "Ver dados da empresa", "Empresa", []),
     ("company:manage", "Editar dados e logotipo da empresa", "Empresa", []),
@@ -128,6 +128,8 @@ PERMISSION_CATALOG: list[tuple[str, str, str, list[str]]] = [
     ("catalogs:view_reference", "Ver catalogos de referencia (paises, moedas, bancos, IVA, unidades, tipos de documento...)", "Catalogos de Referencia", []),
     ("catalogs:view_billing", "Ver metodos e condicoes de pagamento, retencoes e denominacoes", "Catalogos de Referencia", ["CAIXA"]),
     ("open_accounts:transfer", "Transferir e dividir linhas entre contas", "Contas Abertas", ["CAIXA", "ATENDENTE"]),
+    ("kitchen:view", "Ver os pedidos da cozinha", "Cozinha", ["COZINHA"]),
+    ("kitchen:update", "Fazer avancar ou recusar pratos na cozinha", "Cozinha", ["COZINHA"]),
 ]
 
 

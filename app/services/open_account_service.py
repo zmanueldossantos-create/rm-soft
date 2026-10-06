@@ -506,7 +506,9 @@ async def list_open_accounts(db: AsyncSession, company_id: uuid.UUID, *args: obj
     for all of them, whatever filters the listing itself takes."""
     accounts = await _list_open_account_rows(db, company_id, *args, **kwargs)
     totals = await _account_totals(db, [a.id for a in accounts])
+    ready = await _ready_dishes(db, [a.id for a in accounts])
     for account in accounts:
+        account.ready_dishes = ready.get(account.id, 0)
         account.line_count, account.subtotal, account.vat_total, account.total = totals.get(account.id, (0, 0.0, 0.0, 0.0))
     return accounts
 
@@ -700,3 +702,15 @@ async def _ensure_pos_of_activity(db: AsyncSession, company_id: uuid.UUID, pos_i
     pos = await get_pos_or_raise(db, company_id, pos_id)
     if pos.activity_id != activity_id:
         raise InvalidLineError("Este ponto de venda pertence a outra atividade")
+
+
+async def _ready_dishes(db: AsyncSession, account_ids: list[uuid.UUID]) -> dict[uuid.UUID, int]:
+    """account id -> number of its dishes the kitchen has made ready (shown on the account card)."""
+    if not account_ids:
+        return {}
+    rows = (await db.execute(
+        select(OpenAccountLine.account_id, func.count(OpenAccountLine.id))
+        .where(OpenAccountLine.account_id.in_(account_ids), OpenAccountLine.kitchen_status == KITCHEN_READY)
+        .group_by(OpenAccountLine.account_id)
+    )).all()
+    return {account_id: int(count) for account_id, count in rows}

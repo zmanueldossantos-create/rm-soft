@@ -23,6 +23,7 @@ class UserRole(str, enum.Enum):
     ARMAZENISTA = "ARMAZENISTA"    # was MAGASINIER
     CONTABILISTA = "CONTABILISTA"  # was COMPTABLE
     ATENDENTE = "ATENDENTE"  # contas abertas sans fecho
+    COZINHA = "COZINHA"  # the kitchen screen: moves dishes forward, never cashes
 
 
 class User(Base):

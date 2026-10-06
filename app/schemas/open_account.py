@@ -33,6 +33,7 @@ class OpenAccountResponse(BaseModel):
     subtotal: float = 0
     vat_total: float = 0
     total: float = 0
+    ready_dishes: int = 0  # dishes the kitchen has made ready
 
     class Config:
         from_attributes = True

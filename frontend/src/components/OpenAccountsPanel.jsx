@@ -269,7 +269,7 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
 
   // ---- Kitchen (point 34b): what was sent, by whom, and what the room may still change ----
   const KITCHEN_LABEL = { NAO_ENVIADO: 'Nao enviado', EM_ESPERA: 'Em espera', EM_PREPARACAO: 'Em preparacao', PRONTO: 'Pronto', ANULADO: 'Anulado' };
-  const KITCHEN_STYLE = { NAO_ENVIADO: 'text-text-muted', EM_ESPERA: 'text-accent', EM_PREPARACAO: 'text-amber-500', PRONTO: 'text-success', ANULADO: 'text-danger' };
+  const KITCHEN_STYLE = { NAO_ENVIADO: 'text-text-muted', EM_ESPERA: 'text-sky-400', EM_PREPARACAO: 'text-amber-500', PRONTO: 'text-success', ANULADO: 'text-danger' };
   const unsentDishes = detailLines.filter((l) => l.kitchen_status === 'NAO_ENVIADO').length;
   const dishesInKitchen = detailLines.filter((l) => ['NAO_ENVIADO', 'EM_ESPERA', 'EM_PREPARACAO'].includes(l.kitchen_status)).length;
   const canLower = (l) => !l.kitchen_status || l.kitchen_status === 'NAO_ENVIADO' || l.kitchen_status === 'EM_ESPERA';
@@ -604,6 +604,7 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
               <p className="font-display font-semibold text-text-primary text-sm mb-1">{a.label}</p>
               <p className="text-text-primary text-[14px] font-mono font-semibold whitespace-nowrap">{formatKz(a.total)} Kz</p>
               <p className="text-text-muted text-[11px] font-mono">{a.line_count || 0} artigo(s) - desde {formatTime(a.opened_at)}</p>
+              {a.ready_dishes > 0 && <p className="text-success text-[11px] font-semibold mt-1">{a.ready_dishes} prato(s) pronto(s)</p>}
             </button>
           ))}
         </div>

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { ChefHat } from 'lucide-react';
 import { Link, useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { Building2, LogOut, LayoutDashboard, Sun, Moon, Package, Users, Calendar, Receipt, Settings, Package2, UserCog, History, FileText, Landmark, LayoutGrid, Store, Wheat, Factory, Wallet, SlidersHorizontal, Tags, Wrench, ChevronDown, Cog, Plus, ArrowLeftRight, Calculator, ClipboardList, Gauge, PiggyBank, CreditCard, Boxes, CalendarClock, Wallet2, PackageMinus, Truck, ShieldCheck } from 'lucide-react';
@@ -271,6 +272,9 @@ export default function Layout() {
             )}
             {can('open_accounts:view') && (
               <NavLink to="/contas-abertas" icon={Wallet2} label="Contas Abertas" active={isActive('/contas-abertas')} />
+            )}
+            {can('kitchen:view') && (
+              <NavLink to="/cozinha" icon={ChefHat} label="Cozinha" active={isActive('/cozinha')} />
             )}
             {can('saf_t:export') && (
               <NavLink to="/saf-t" icon={FileText} label="SAF-T" active={isActive('/saf-t')} />

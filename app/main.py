@@ -25,6 +25,7 @@ from app.api.v1.dashboard.routes import router as dashboard_router
 from app.api.v1.activities.routes import router as activities_router
 from app.api.v1.bookings.routes import router as bookings_router
 from app.api.v1.open_accounts.routes import router as open_accounts_router
+from app.api.v1.kitchen.routes import router as kitchen_router
 from app.api.v1.hotel.routes import router as hotel_router
 from app.api.v1.internal_consumption.routes import router as internal_consumption_router
 from app.api.v1.suppliers.routes import router as suppliers_router
@@ -111,6 +112,7 @@ app.include_router(dashboard_router)
 app.include_router(activities_router)
 app.include_router(bookings_router)
 app.include_router(open_accounts_router)
+app.include_router(kitchen_router)
 app.include_router(hotel_router)
 app.include_router(internal_consumption_router)
 app.include_router(suppliers_router)
