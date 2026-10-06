@@ -135,12 +135,9 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
   async function handleNewSubmit(e) {
     e.preventDefault();
     setNewError('');
-    if (resources.length > 0 && !newForm.resourceId) {
-      setNewError('Selecione uma mesa/recurso');
-      return;
-    }
-    if (resources.length === 0 && !newForm.label.trim()) {
-      setNewError('Preencha todos os campos obrigatorios');
+    // a table, a name (the counter: 'Paulo', 'Balcao 2'), or both (two groups at one table)
+    if (!newForm.resourceId && !newForm.label.trim()) {
+      setNewError('Escolha uma mesa ou indique um nome para a conta');
       return;
     }
     setNewSaving(true);
@@ -148,7 +145,7 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
       const resourceLabel = newForm.resourceId ? resources.find((r) => r.id === newForm.resourceId)?.name : null;
       await openAccount({
         activity_id: selectedActivityId,
-        label: resourceLabel || newForm.label.trim(),
+        label: [resourceLabel, newForm.label.trim()].filter(Boolean).join(' - '),
         resource_id: newForm.resourceId || null,
         notes: newForm.notes || null,
       });
@@ -612,9 +609,9 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
 
       <Modal open={newModalOpen} onClose={() => setNewModalOpen(false)} title="Nova conta">
         <form onSubmit={handleNewSubmit} className="flex flex-col gap-4">
-          {resources.length > 0 ? (
+          {resources.length > 0 && (
             <div>
-              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Mesa / Recurso *</label>
+              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Mesa / Recurso</label>
               <Select
                 value={newForm.resourceId}
                 onChange={(v) => setNewForm((p) => ({ ...p, resourceId: v }))}
@@ -622,9 +619,10 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
                 placeholder="Selecionar"
               />
             </div>
-          ) : (
+          )}
+          {(
             <div>
-              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Nome da conta *</label>
+              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Nome da conta</label>
               <input
                 value={newForm.label}
                 onChange={(e) => setNewForm((p) => ({ ...p, label: e.target.value }))}
