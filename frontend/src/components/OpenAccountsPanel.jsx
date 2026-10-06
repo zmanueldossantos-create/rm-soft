@@ -179,6 +179,18 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
     }
   }
 
+  // The account and table cards behind the open window follow every change of its lines - quietly, without the
+  // loading indicator (nothing blinks behind the window). On failure the cards keep their last state.
+  async function refreshListsQuietly() {
+    if (!selectedActivityId) return;
+    try {
+      setAccounts((await listOpenAccounts(selectedActivityId)).filter((a) => !posId || a.pos_id === posId));
+      await loadStatuses();
+    } catch {
+      // the next refresh will try again
+    }
+  }
+
   async function refreshDetailLines() {
     if (!detailAccount) return;
     // the stock shown on the cards follows every change on any account (what is left on the shelf)
@@ -186,6 +198,7 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
     if (onChange) onChange();
     try {
       setDetailLines(await listAccountLines(detailAccount.id));
+      refreshListsQuietly();
     } catch (err) {
       setDetailError(extractErrorMessage(err, 'Erro ao carregar linhas'));
     }
