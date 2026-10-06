@@ -39,13 +39,17 @@ async def _cards(db: AsyncSession, order_ids: list[uuid.UUID]) -> list[dict]:
         .where(KitchenOrder.id.in_(order_ids))
         .order_by(KitchenOrder.sent_at)
     )).all()
+    # each dish with the account it is on NOW: it may have moved to another table since it was sent
     lines = (await db.execute(
-        select(OpenAccountLine).where(OpenAccountLine.kitchen_order_id.in_(order_ids)).order_by(OpenAccountLine.added_at)
-    )).scalars().all()
+        select(OpenAccountLine, OpenAccount.label)
+        .join(OpenAccount, OpenAccount.id == OpenAccountLine.account_id)
+        .where(OpenAccountLine.kitchen_order_id.in_(order_ids)).order_by(OpenAccountLine.added_at)
+    )).all()
     by_order: dict[uuid.UUID, list[dict]] = {}
-    for line in lines:
+    for line, current_label in lines:
         by_order.setdefault(line.kitchen_order_id, []).append({
             "id": line.id, "name": line.name_snapshot, "quantity": float(line.quantity),
+            "account_label": current_label,
             "unit_code": line.unit_code_snapshot, "status": line.kitchen_status,
             "modified": bool(line.kitchen_modified), "cancel_reason": line.cancel_reason,
         })

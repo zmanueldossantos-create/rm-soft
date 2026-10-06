@@ -12,6 +12,7 @@ class KitchenLine(BaseModel):
     status: str
     modified: bool = False
     cancel_reason: str | None = None
+    account_label: str | None = None  # where the dish is now - it may have moved table since it was sent
 
 
 class KitchenCard(BaseModel):

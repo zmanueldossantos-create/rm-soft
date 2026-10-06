@@ -197,6 +197,9 @@ export default function Cozinha() {
                         </div>
                         {(l.modified && l.status !== 'ANULADO') && <p className="text-amber-500 text-[11px] font-semibold mt-0.5">Modificado</p>}
                         {l.cancel_reason && <p className="text-danger text-[11px] mt-0.5">{l.cancel_reason}</p>}
+                        {l.account_label && l.account_label !== o.account_label && (
+                          <p className="text-sky-400 text-[12px] font-semibold mt-0.5">Servir em: {l.account_label}</p>
+                        )}
                         {active && canUpdate && (
                           <div className="flex items-center gap-1.5 mt-2 flex-wrap">
                             {l.status === 'EM_ESPERA' && (

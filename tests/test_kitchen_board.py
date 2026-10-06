@@ -85,3 +85,16 @@ async def test_another_company_never_reaches_a_dish(db, company_with_essentials)
     table, line, order = await _sent_order(db, ctx)
     with pytest.raises(KitchenItemNotFoundError):
         await act_on_line(db, uuid.uuid4(), line.id, "ready")
+
+
+@pytest.mark.asyncio
+async def test_a_dish_moved_to_another_table_is_announced_where_it_is_now(db, company_with_essentials):
+    from app.services.open_account_service import transfer_lines
+    ctx = company_with_essentials
+    cid, uid = ctx["company"].id, ctx["gestor"].id
+    table, line, order = await _sent_order(db, ctx, quantity=1)
+    other = await open_account(db, cid, ctx["activity"].id, None, uid, "Mesa 4")
+    await transfer_lines(db, cid, table.id, uid, [{"line_id": line.id, "quantity": 1}], target_account_id=other.id)
+    card = next(o for o in (await kitchen_board(db, cid))["orders"] if o["id"] == order.id)
+    assert card["account_label"] == "Mesa 1"                # the order keeps the table it was sent from
+    assert card["lines"][0]["account_label"] == "Mesa 4"    # the dish says where to serve it
