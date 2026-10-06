@@ -409,7 +409,7 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
     : [];
   const occupiedResourceIds = new Set(accounts.filter((a) => a.resource_id).map((a) => a.resource_id));
   const freeResourceOptions = resources.filter((r) => !occupiedResourceIds.has(r.id)).map((r) => ({ value: r.id, label: r.name }));
-  const transferTotal = detailLines.reduce((sum, l) => sum + (transferSelection[l.id] !== undefined ? Number(l.unit_price) * (parseFloat(transferSelection[l.id]) || 0) : 0), 0);
+  const transferTotal = detailLines.reduce((sum, l) => sum + (transferSelection[l.id] !== undefined ? (Number(l.quantity) ? Number(l.line_total || 0) / Number(l.quantity) : 0) * (parseFloat(transferSelection[l.id]) || 0) : 0), 0);
 
   function openTransferModal() {
     setTransferSelection({});
@@ -933,14 +933,14 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
           <div>
             <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Artigos a mover</label>
             <div className="flex flex-col gap-1.5 max-h-[220px] overflow-y-auto scrollbar-thin">
-              {detailLines.map((l) => {
+              {detailLines.filter((l) => l.kitchen_status !== 'ANULADO').map((l) => {
                 const selected = transferSelection[l.id] !== undefined;
                 return (
                   <div key={l.id} className="flex items-center gap-3 bg-bg-inset border border-border rounded-md px-3 py-2">
                     <input type="checkbox" checked={selected} onChange={() => toggleTransferLine(l)} className="w-4 h-4 accent-accent cursor-pointer" />
                     <div className="flex-1 min-w-0">
                       <p className="text-[12px] text-text-primary truncate">{l.name_snapshot}</p>
-                      <p className="text-[11px] text-text-muted font-mono">{formatKz(l.unit_price)} Kz/un - na conta: {l.quantity}</p>
+                      <p className="text-[11px] text-text-muted font-mono">{formatKz(l.unit_price)} Kz/{(l.unit_code_snapshot || 'un').toLowerCase()} - na conta: {l.quantity}</p>
                     </div>
                     {selected && (
                       <input
@@ -988,7 +988,7 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
                   placeholder="Nome da nova conta"
                   className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors"
                 />
-                <p className="text-text-muted text-[12px]">A nova conta fica na mesma mesa e no mesmo ponto de venda - feche cada conta com o seu pagamento.</p>
+                <p className="text-text-muted text-[12px]">A nova conta fica na mesma mesa - feche cada conta com o seu pagamento.</p>
               </div>
             )}
           </div>
