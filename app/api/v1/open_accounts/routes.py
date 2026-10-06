@@ -166,6 +166,8 @@ async def post_close_account(
         payments = [{"payment_method_id": p.payment_method_id, "amount": p.amount} for p in payload.payments]
         return await close_account(
             db, current_user.company_id, account_id, current_user, payments, payload.invoice_type, payload.pos_id,
+            customer_id=payload.customer_id, discount_global_percent=payload.discount_global_percent,
+            payment_term_id=payload.payment_term_id,
         )
     except InvalidLineError as e:  # a till of another activity
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))

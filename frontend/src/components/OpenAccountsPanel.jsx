@@ -40,7 +40,9 @@ function formatTime(value) {
 //   closes, and onChange lets the
 //   till refresh its own stock whenever an account changes (what sits on a table is no longer on the shelf).
 // onClosed(account): an account was just closed - the till reloads its balance, as after a direct sale.
-export default function OpenAccountsPanel({ posId = null, activityId = null, onChange = null, onClosed = null }) {
+// closeOptions (the till only): its customers, document types, rules and payment terms - closing an account there
+// offers the choices of a direct sale.
+export default function OpenAccountsPanel({ posId = null, activityId = null, onChange = null, onClosed = null, closeOptions = null }) {
   const can = useCan();
   const [activities, setActivities] = useState([]);
   const [selectedActivityId, setSelectedActivityId] = useState(activityId || '');
@@ -73,6 +75,10 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
   const [closePayments, setClosePayments] = useState([]);
   const [closeError, setCloseError] = useState('');
   const [closeSaving, setCloseSaving] = useState(false);
+  const [closeInvoiceType, setCloseInvoiceType] = useState('');
+  const [closeCustomerId, setCloseCustomerId] = useState('');
+  const [closePaymentTermId, setClosePaymentTermId] = useState('');
+  const [closeDiscount, setCloseDiscount] = useState(0);
   const [viewMode, setViewMode] = useState('accounts');
   const [tableStatuses, setTableStatuses] = useState([]);
   const [tablePicker, setTablePicker] = useState(null);
@@ -292,10 +298,22 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
   const detailSubtotal = round2(detailLines.reduce((sum, l) => sum + Number(l.line_subtotal || 0), 0));
   const detailVat = round2(detailLines.reduce((sum, l) => sum + Number(l.line_vat || 0), 0));
   const detailTotal = round2(detailSubtotal + detailVat);
+  // Closing at the till: the document type decides (paid on issue: payments now; billed later: a payment term),
+  // and the global discount applies to the total VAT included - the invoice's own rule and rounding.
+  const closeRule = (rule) => !!(closeOptions && closeInvoiceType && closeOptions.ruleOf(closeInvoiceType, rule));
+  const closePaidOnIssue = !closeOptions || !closeInvoiceType || closeRule('paid_on_issue');
+  const closeNeedsCustomer = closeRule('requires_customer');
+  const closeNeedsTerm = closeRule('requires_payment_term');
+  const closeDiscountAmount = round2(detailTotal * (Number(closeDiscount) || 0) / 100);
+  const closeTotal = round2(detailTotal - closeDiscountAmount);
 
   function openCloseModal() {
     setClosePayments([]);
     setCloseError('');
+    setCloseInvoiceType(closeOptions?.defaultType || '');
+    setCloseCustomerId(detailAccount?.customer_id || '');
+    setClosePaymentTermId('');
+    setCloseDiscount(0);
     setCloseModalOpen(true);
   }
 
@@ -312,7 +330,7 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
   }
 
   const closePaymentsSum = closePayments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
-  const closeRemaining = Math.round((detailTotal - closePaymentsSum) * 100) / 100;
+  const closeRemaining = Math.round((closeTotal - closePaymentsSum) * 100) / 100;
 
   // An account opened by mistake: cancelled while empty - no fiscal document, the table is freed.
   async function handleCancelEmpty() {
@@ -334,7 +352,11 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
     try {
       const closed = await closeAccount(detailAccount.id, {
         pos_id: posId || null, // cashed by this till
-        payments: closePayments.filter((p) => parseFloat(p.amount) > 0).map((p) => ({ payment_method_id: p.payment_method_id, amount: parseFloat(p.amount) })),
+        invoice_type: closeOptions && closeInvoiceType ? closeInvoiceType : undefined,
+        customer_id: closeCustomerId || null,
+        discount_global_percent: Number(closeDiscount) || 0,
+        payment_term_id: closeNeedsTerm ? closePaymentTermId || null : null,
+        payments: !closePaidOnIssue ? [] : closePayments.filter((p) => parseFloat(p.amount) > 0).map((p) => ({ payment_method_id: p.payment_method_id, amount: parseFloat(p.amount) })),
       });
       setCloseModalOpen(false);
       setDetailAccount(null);
@@ -822,12 +844,51 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
           </div>
         )}
         <div className="flex flex-col gap-4">
+          {closeOptions && (
+            <div className="flex flex-col gap-3">
+              <div>
+                <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Tipo de documento</label>
+                <Select value={closeInvoiceType} onChange={setCloseInvoiceType} options={closeOptions.typeOptions} />
+              </div>
+              <div>
+                <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Cliente{closeNeedsCustomer ? ' *' : ' (opcional)'}</label>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1">
+                    <Select value={closeCustomerId} onChange={setCloseCustomerId} options={closeOptions.customers.map((c) => ({ value: c.id, label: c.name }))} placeholder="Selecionar" />
+                  </div>
+                  {closeOptions.onNewCustomer && (
+                    <button type="button" onClick={closeOptions.onNewCustomer} aria-label="Novo cliente" className="shrink-0 flex items-center justify-center w-9 h-9 bg-accent hover:bg-accent-hover text-white rounded-md transition-colors cursor-pointer">
+                      <Plus size={16} />
+                    </button>
+                  )}
+                </div>
+              </div>
+              {closeNeedsTerm && (
+                <div>
+                  <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Prazo de pagamento *</label>
+                  <Select value={closePaymentTermId} onChange={setClosePaymentTermId} options={closeOptions.paymentTerms.map((t) => ({ value: t.id, label: t.name || t.description || t.code }))} placeholder="Selecionar" />
+                </div>
+              )}
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted">Desconto global (%)</label>
+                <input
+                  type="number" min="0" max="100" step="0.5"
+                  value={closeDiscount}
+                  onChange={(e) => setCloseDiscount(Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
+                  className="w-24 bg-bg-inset border border-border rounded-md px-2.5 py-1.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors text-right"
+                />
+              </div>
+            </div>
+          )}
           <div className="flex justify-between items-center bg-bg-inset border border-border rounded-md px-4 py-3">
             <span className="text-text-muted text-[13px]">Total a pagar</span>
-            <span className="font-mono font-semibold text-text-primary text-lg">{formatKz(detailTotal)} Kz</span>
+            <span className="font-mono font-semibold text-text-primary text-lg text-right">
+              {formatKz(closeTotal)} Kz
+              {closeDiscountAmount > 0 && <span className="block text-[11px] text-text-muted font-normal">desconto {formatKz(closeDiscountAmount)} Kz</span>}
+            </span>
           </div>
           <div className="flex flex-col gap-1.5">
-            {posPaymentMethods.map((m) => {
+            {closePaidOnIssue && posPaymentMethods.map((m) => {
               const line = closePayments.find((p) => p.payment_method_id === m.id);
               return (
                 <div key={m.id} className="flex items-center gap-2">
@@ -848,7 +909,7 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
               );
             })}
           </div>
-          {posPaymentMethods.length > 0 && (
+          {closePaidOnIssue && posPaymentMethods.length > 0 && (
             <div className={'text-[12px] px-3 py-2 rounded-r border-l-2 ' + (closeRemaining === 0 ? 'bg-success/10 border-success text-success' : closeRemaining > 0 ? 'bg-accent/10 border-accent text-accent' : 'bg-danger/10 border-danger text-danger')}>
               {closeRemaining === 0 ? 'Valor exato' : closeRemaining > 0 ? `Falta ${formatKz(closeRemaining)} Kz` : `Excede em ${formatKz(Math.abs(closeRemaining))} Kz`}
             </div>
@@ -858,7 +919,8 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
           )}
           <button
             onClick={handleCloseSubmit}
-            disabled={closeSaving || (posPaymentMethods.length > 0 && closeRemaining !== 0)}
+            disabled={closeSaving || (closePaidOnIssue && posPaymentMethods.length > 0 && closeRemaining !== 0)
+              || (closeNeedsCustomer && !closeCustomerId) || (closeNeedsTerm && !closePaymentTermId)}
             className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer"
           >
             {closeSaving ? <Loader2 size={17} className="animate-spin" /> : <CheckCircle2 size={17} />}

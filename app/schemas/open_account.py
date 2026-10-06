@@ -94,6 +94,10 @@ class OpenAccountCloseRequest(BaseModel):
     invoice_type: str | None = None
     payments: list[OpenAccountClosePaymentInput] = []
     pos_id: uuid.UUID | None = None  # the till that cashes the account (any till of its activity)
+    # the choices of a direct sale at the till
+    customer_id: uuid.UUID | None = None  # None: the account's own customer, if any
+    discount_global_percent: float = Field(default=0, ge=0, le=100)
+    payment_term_id: uuid.UUID | None = None  # a document billed later (FT)
 
 
 class OpenAccountTransferItem(BaseModel):

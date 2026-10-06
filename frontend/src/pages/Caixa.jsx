@@ -2192,6 +2192,14 @@ export default function Caixa() {
             posId={selectedPosId}
             activityId={pointsOfSale.find((p) => p.id === selectedPosId)?.activity_id}
             onChange={() => refreshPosStock(selectedPosId)}
+            closeOptions={{
+              customers,
+              typeOptions: visibleTypeOptions.filter((o) => o.value !== 'PRO_FORMA'),
+              defaultType: (visibleTypeOptions.find((o) => o.value !== 'PRO_FORMA' && ruleOf(o.value, 'paid_on_issue')) || {}).value || '',
+              paymentTerms,
+              ruleOf,
+              onNewCustomer: can('customers:create') ? openNewCustomerModal : null,
+            }}
             onClosed={async (account) => {
               // An account closed at the till ends like a direct sale: balance, stock, Documento gerado, printing.
               refreshBalance(selectedPosId);

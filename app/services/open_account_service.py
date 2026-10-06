@@ -223,6 +223,7 @@ async def remove_line(db: AsyncSession, company_id: uuid.UUID, account_id: uuid.
 async def close_account(
     db: AsyncSession, company_id: uuid.UUID, account_id: uuid.UUID, closing_user: "User",
     payments: list[dict], invoice_type: str | None = None, pos_id: uuid.UUID | None = None,
+    customer_id: uuid.UUID | None = None, discount_global_percent: float = 0, payment_term_id: uuid.UUID | None = None,
 ) -> OpenAccount:
     """Converts the account's lines into a real Invoice via pos_service.checkout,
     then marks the account FECHADA and links the resulting invoice."""
@@ -249,9 +250,11 @@ async def close_account(
         await _ensure_pos_of_activity(db, company_id, pos_id, account.activity_id)
         closing_pos_id = pos_id
     invoice = await checkout(
-        db, company_id, closing_pos_id, closing_user, account.customer_id, lines_input, payments,
-        invoice_type=invoice_type,
+        db, company_id, closing_pos_id, closing_user, customer_id or account.customer_id, lines_input, payments,
+        invoice_type=invoice_type, discount_global_percent=discount_global_percent, payment_term_id=payment_term_id,
     )
+    if customer_id is not None:
+        account.customer_id = customer_id  # the customer the account was invoiced to
 
     account.status = OpenAccountStatus.FECHADA
     account.invoice_id = invoice.id
