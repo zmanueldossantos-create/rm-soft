@@ -1,4 +1,4 @@
-﻿"""
+"""
 Business logic for product management.
 Every query is scoped to the caller's company_id (multi-tenant isolation, section 2.5 v7) -
 a GESTOR/ADMIN only ever sees and manages their own company's products.
@@ -65,6 +65,12 @@ async def _check_all_fields_available(
         code_query = code_query.where(Product.id != exclude_id)
     if (await db.execute(code_query)).scalar_one_or_none() is not None:
         raise ProductAlreadyExistsError("Ja existe um produto registado com este codigo")
+    # products and services share one list of codes in the SAF-T (MasterFiles / Product): a code is unique across both
+    from app.models.service import Service
+    if (await db.execute(
+        select(Service.id).where(Service.company_id == company_id, func.lower(Service.code) == code.lower()).limit(1)
+    )).scalar_one_or_none() is not None:
+        raise ProductAlreadyExistsError("Ja existe um servico registado com este codigo")
 
     name_query = select(Product).where(Product.company_id == company_id, func.lower(Product.name) == name.lower())
     if exclude_id is not None:

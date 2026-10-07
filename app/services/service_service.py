@@ -33,6 +33,12 @@ async def _check_fields_available(
         code_query = code_query.where(Service.id != exclude_id)
     if (await db.execute(code_query)).scalar_one_or_none() is not None:
         raise ServiceAlreadyExistsError("Ja existe um servico registado com este codigo")
+    # products and services share one list of codes in the SAF-T (MasterFiles / Product): a code is unique across both
+    from app.models.product import Product
+    if (await db.execute(
+        select(Product.id).where(Product.company_id == company_id, func.lower(Product.code) == code.lower()).limit(1)
+    )).scalar_one_or_none() is not None:
+        raise ServiceAlreadyExistsError("Ja existe um produto registado com este codigo")
 
     name_query = select(Service).where(Service.company_id == company_id, func.lower(Service.name) == name.lower())
     if exclude_id is not None:
