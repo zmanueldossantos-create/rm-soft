@@ -169,7 +169,8 @@ const CATALOGS = [
   { key: 'document_types', label: 'Tipos de Documento', icon: FileText, api: documentTypesApi },
   { key: 'units', label: 'Unidades', icon: Ruler, api: unitsApi },
   { key: 'withholding_taxes', label: 'Retenções', icon: ShieldMinus, api: withholdingTaxesApi },
-  { key: 'fiscal_regimes', label: 'Regimes Fiscais', icon: Landmark, api: fiscalRegimesApi },
+  { key: 'fiscal_regimes', label: 'Regimes Fiscais', icon: Landmark, api: fiscalRegimesApi },
+
   { key: 'legal_vat_rates', label: 'Taxas legais de IVA', icon: Percent, api: legalVatRatesApi },
   { key: 'movement_types', label: 'Tipos de Movimento', icon: ArrowLeftRight, api: movementTypesApi },
   { key: 'modules', label: 'Módulos', icon: LayoutGrid, api: modulesApi },
@@ -202,7 +203,8 @@ export default function Configuracoes() {
   const [provinces, setProvinces] = useState([]);
   const [currencies, setCurrencies] = useState([]);
 
-  const [activeCatalog, setActiveCatalog] = useState(null);
+  const [activeCatalog, setActiveCatalog] = useState(null);
+
   // Active exemption motives, for the regime form's imposed motive (loaded when the regimes catalog is open).
   const [exemptionMotives, setExemptionMotives] = useState([]);
   useEffect(() => {
@@ -294,7 +296,8 @@ export default function Configuracoes() {
       case 'document_types': return { code: '', name: '', description: '', area: '', electronic_eligible: false, is_fiscal: true, rules_locked: false, saft_section: 'NONE', revenue_sign: 0, requires_origin: false, has_lines: true, paid_on_issue: false, sent_to_agt: false, deducts_stock: false, accepts_credit_note: false, accepts_debit_note: false, accepts_receipt: false, convertible: false, issuable_in_invoices: false, issuable_at_pos: false, requires_payment_term: false, requires_customer: false };
       case 'movement_types': return { code: '', name: '', direction: 'ENTRADA', is_auto: false, description: '' };
       case 'units': return { code: '', name: '', fixed_factor: '', is_fractional: false };
-      case 'withholding_taxes': return { name: '', rate: 0, tax_type: '' };
+      case 'withholding_taxes': return { name: '', rate: 0, tax_type: '' };
+
       case 'legal_vat_rates': return { tax_category: '', name: '', rate: 0 };
       case 'fiscal_regimes': return { name: '', description: '', allows_nor: true, allows_red: true, allows_ise: true, allows_int: false, allows_out: false, required_exemption_id: '' };
       case 'modules': return { name: '', description: '' };

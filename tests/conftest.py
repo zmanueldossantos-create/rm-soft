@@ -254,7 +254,8 @@ async def company_with_essentials(db):
         "pos": default_pos,
         "vat_nor": vat_nor,
         "vat_red": vat_red,
-        "vat_ise": vat_ise,
+        "vat_ise": vat_ise,
+
         "exemption_m11": exemption_m11,
         "unit_un": unit_un,
         "gestor": gestor,

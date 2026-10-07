@@ -1,4 +1,4 @@
-﻿"""
+"""
 VAT model - Angolan legal tax rates (0%, 5%, 14%).
 Centralized fiscal module shared across all business sectors -
 see specification v6/v7, section 4.5.
@@ -18,7 +18,8 @@ class VAT(Base):
     VAT rate, scoped to a Company (tenant).
     Rate stored as a percentage (ex. 14.00 for 14%).
     """
-    __tablename__ = "vat_rates"
+    __tablename__ = "vat_rates"
+
     # One rate per tax code per company: rates come from the legal catalog through the company's regime only.
     __table_args__ = (UniqueConstraint("company_id", "tax_category", name="uq_vat_rates_company_category"),)
 

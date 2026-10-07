@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Package2, Plus, Loader2, Search, AlertTriangle, ArrowDownToLine, SlidersHorizontal, Warehouse, Pencil, Check, X, ArrowRightLeft, Trash2, Power } from 'lucide-react';
 import Modal from '../components/Modal';
-import MovementForm from '../components/MovementForm';
+import MovementForm from '../components/MovementForm';
+
 import PostingPeriodSelect from '../components/PostingPeriodSelect';
 import UnitBreakdown from '../components/UnitBreakdown';
 import Select from '../components/Select';

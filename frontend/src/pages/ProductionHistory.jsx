@@ -137,7 +137,8 @@ export default function ProductionHistory() {
                 <p className="text-[12px] text-text-muted">{batch.warehouse_name}</p>
                 <p className="text-[12px] text-text-muted mt-1">
                   Consumiu: {batch.ingredients.map((i) => i.quantity + ' ' + i.product_name).join(', ')}
-                </p>
+                </p>
+
                 {batch.output && (batch.output.unit_cost != null ? (
                   <p className="text-[12px] text-text-muted mt-0.5 font-mono">
                     {'Custo: ' + Number(batch.output.unit_cost).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' Kz/un \u00b7 total '

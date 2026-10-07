@@ -1,4 +1,4 @@
-﻿"""
+"""
 Service layer for InternalConsumption - the generic "Consumo Interno" module
 (entry/exit/assignment of operational supplies - towels, soap, cleaning
 products - across any sector). See the model docstring for the full
@@ -19,7 +19,8 @@ from app.models.resource import Resource
 from app.models.user import User
 from app.services.activity_service import get_activity_or_raise
 from app.services.consumption_reason_service import get_consumption_reason_or_raise
-from app.services.stock_service import deduct_stock_for_sale, InsufficientStockError
+from app.services.stock_service import deduct_stock_for_sale, InsufficientStockError
+
 from app.services.fiscal_period_service import resolve_posting_period
 
 

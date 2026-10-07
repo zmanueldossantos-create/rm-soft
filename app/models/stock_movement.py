@@ -1,4 +1,4 @@
-﻿"""
+"""
 StockMovement - internal audit log of every stock quantity change (reception, transfer,
 loss, adjustment, sale deduction, production) - one row per warehouse per change, used to
 answer "who moved what, when, and why" (Historico de Stock). This is DISTINCT from the
@@ -56,7 +56,8 @@ class StockMovement(Base):
     loss_category: Mapped[LossCategory | None] = mapped_column(Enum(LossCategory), nullable=True)
 
     # PRODUCAO only - True for the finished-goods row, False for each consumed ingredient row.
-    is_production_output: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    is_production_output: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+
     # Cost per base unit at the time: an ingredient consumed by a production carries its average cost, the
     # product made carries the cost of what was consumed / the quantity made - None there = cost incomplete.
     unit_cost: Mapped[float | None] = mapped_column(Numeric(14, 4), nullable=True)

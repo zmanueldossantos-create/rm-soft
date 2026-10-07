@@ -1,4 +1,4 @@
-﻿"""
+"""
 Stock routes - scoped to the caller's company (multi-tenant isolation).
 See specification v6/v7, section 5.1.
 Multi-warehouse (see stock_service module docstring): goods are received
@@ -224,7 +224,8 @@ async def get_production_estimate(
     try:
         return await estimate_production_capacity(db, current_user.company_id, warehouse_id, product_id)
     except NoRecipeError as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
     except StockQuantityError as e:  # a unit the product does not have, or a decimal in a whole unit
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     except PeriodClosedError as e:
@@ -271,7 +272,8 @@ async def post_produce_stock(
             payload.quantity_to_produce, payload.reason, fiscal_period_id=payload.fiscal_period_id, sale_unit_id=payload.sale_unit_id,
         )
     except NoRecipeError as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
     except StockQuantityError as e:  # a unit the product does not have, or a decimal in a whole unit
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     except PeriodClosedError as e:

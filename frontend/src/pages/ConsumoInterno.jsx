@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import DateInput from '../components/DateInput';
 import { PackageMinus, Plus, Loader2 } from 'lucide-react';
 import { listActivities } from '../api/activity';
@@ -8,7 +8,8 @@ import { listConsumptionReasons, recordConsumption, listInternalConsumption } fr
 import { getMyPermissions } from '../api/permissions';
 import { extractErrorMessage } from '../utils/errors';
 import Modal from '../components/Modal';
-import Select from '../components/Select';
+import Select from '../components/Select';
+
 import PostingPeriodSelect from '../components/PostingPeriodSelect';
 
 function todayIso() {
@@ -34,7 +35,8 @@ export default function ConsumoInterno() {
   const [dateTo, setDateTo] = useState(todayIso());
 
   const [formOpen, setFormOpen] = useState(false);
-  const [form, setForm] = useState({ productId: '', quantity: '', reasonId: '', resourceId: '', notes: '', fiscalPeriodId: '' });
+  const [form, setForm] = useState({ productId: '', quantity: '', reasonId: '', resourceId: '', notes: '', fiscalPeriodId: '' });
+
   const [consumptionPeriodChoice, setConsumptionPeriodChoice] = useState(false); // a soft-closed period exists: choose it explicitly
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);

@@ -1,4 +1,4 @@
-﻿"""
+"""
 SAF-T (AO) XML generator - Modo Fatura, monthly export submitted manually
 to the AGT portal (see specification v6/v7, section 4.2 and the two-mode
 decision: Modo Fatura vs Faturacao Eletronica).
@@ -70,7 +70,8 @@ def _write_lines(parent_el, inv: dict, saft_type: str) -> None:
     """Writes the Line elements of a document - shared by SalesInvoices and WorkingDocuments (same structure)."""
     for idx, line in enumerate(inv["lines"], start=1):
         line_el = _el(parent_el, "Line")
-        _el(line_el, "LineNumber", idx)
+        _el(line_el, "LineNumber", idx)
+
         # A document issued from another one (an invoice from a pro-forma) names its origin - right after LineNumber (XSD).
         if inv.get("order_reference"):
             order_refs = _el(line_el, "OrderReferences")

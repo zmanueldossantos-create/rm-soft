@@ -1,4 +1,4 @@
-﻿"""
+"""
 Invoice PDF generation - thermal 80mm ticket and A4 formats.
 See specification v6/v7, section 4.1: "Impression au format Ticket 80mm
 (thermique) et A4, tous deux au format legal AGT" - must include logo, QR
@@ -99,7 +99,8 @@ def generate_invoice_pdf_thermal(invoice: dict, lines: list[dict], company: dict
         line_discount_amount = gross * (l.get("discount_percent", 0) / 100)
         total_discount_amount += line_discount_amount
         rate = l["vat_rate_snapshot"]
-        grp = vat_groups.setdefault((rate, l.get("exemption_code") if rate == 0 else None), {"incidencia": 0.0, "montante": 0.0})
+        grp = vat_groups.setdefault((rate, l.get("exemption_code") if rate == 0 else None), {"incidencia": 0.0, "montante": 0.0})
+
         grp.setdefault("motivo", l.get("exemption_reason") or "")
         grp["incidencia"] += l["line_subtotal"]
         grp["montante"] += l["line_subtotal"] * (rate / 100)
@@ -533,7 +534,8 @@ def generate_factura_style_a4(invoice, lines, company, customer):
         total_iliquido += l["line_subtotal"]
         total_discount_amount += line_discount_amount
         rate = l["vat_rate_snapshot"]
-        grp = vat_groups.setdefault((rate, l.get("exemption_code") if rate == 0 else None), {"incidencia": 0.0, "montante": 0.0})
+        grp = vat_groups.setdefault((rate, l.get("exemption_code") if rate == 0 else None), {"incidencia": 0.0, "montante": 0.0})
+
         grp.setdefault("motivo", l.get("exemption_reason") or "")
         grp["incidencia"] += l["line_subtotal"]
         grp["montante"] += l["line_subtotal"] * (rate / 100)

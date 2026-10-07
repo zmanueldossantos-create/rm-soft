@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Factory, Plus, Loader2, Search, Pencil, ChefHat } from 'lucide-react';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
@@ -7,7 +7,8 @@ import { getRecipe, setRecipe } from '../api/recipe';
 import { listWarehouses, getProductionEstimate, produceStock } from '../api/stock';
 import apiClient from '../api/client';
 import { unitsApi } from '../api/catalogs';
-import { extractErrorMessage } from '../utils/errors';
+import { extractErrorMessage } from '../utils/errors';
+
 import PostingPeriodSelect from '../components/PostingPeriodSelect';
 
 async function getProductsWithRecipe() {
@@ -549,7 +550,8 @@ export default function Producao() {
               onChange={(e) => handleQuantityChange(e.target.value)}
               required
               className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors"
-            />
+            />
+
             <div className="mt-2 flex items-center gap-2 text-[12px] text-text-muted">
               <span>Unidade</span>
               <select value={produceForm.saleUnitId || 'base'}

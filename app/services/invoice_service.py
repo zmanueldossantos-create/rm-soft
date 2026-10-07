@@ -1,4 +1,4 @@
-﻿"""
+"""
 Business logic for invoice creation.
 See specification v6/v7, section 4 (Priority #1 - AGT fiscal compliance).
 
@@ -331,10 +331,12 @@ async def create_invoice(
                 raise ProductNotFoundError("Servico nao encontrado ou inativo")
             vat_result = await db.execute(select(VAT).where(VAT.id == service.vat_id))
             vat = vat_result.scalar_one_or_none()
-            vat_rate = float(vat.rate) if vat else 0.0
+            vat_rate = float(vat.rate) if vat else 0.0
+
             tax_code = vat.tax_category if vat else "ISE"
             unit_price = float(service.price or 0)
-            line_unit_factor, line_sale_unit_id, line_unit_code = 1.0, None, None
+            line_unit_factor, line_sale_unit_id, line_unit_code = 1.0, None, None
+
             line_unit_code = await _base_unit_code(db, service)
             item_name = service.name
             line_product_id = None
@@ -366,7 +368,8 @@ async def create_invoice(
                 raise ProductNotFoundError("Materia-prima nao pode ser vendida ou faturada")
             vat_result = await db.execute(select(VAT).where(VAT.id == product.vat_id))
             vat = vat_result.scalar_one_or_none()
-            vat_rate = float(vat.rate) if vat else 0.0
+            vat_rate = float(vat.rate) if vat else 0.0
+
             tax_code = vat.tax_category if vat else "ISE"
             unit_price, line_unit_factor, line_sale_unit_id, line_unit_code = await _sale_unit_for_line(
                 db, company_id, product, line_input.get("sale_unit_id"), quantity=float(line_input["quantity"]),
@@ -401,7 +404,8 @@ async def create_invoice(
             quantity=quantity,
             unit_price=unit_price,
             discount_percent=discount_percent,
-            vat_rate_snapshot=vat_rate,
+            vat_rate_snapshot=vat_rate,
+
             tax_code_snapshot=tax_code,
             line_subtotal=line_subtotal,
             line_vat=line_vat,
@@ -410,7 +414,8 @@ async def create_invoice(
             retention_rate=line_retention_pct if line_retention > 0 else None,
             retention_amount=line_retention if line_retention > 0 else None,
             retention_type=line_retention_type if line_retention > 0 else None,
-            exemption_code=line_exemption_code,
+            exemption_code=line_exemption_code,
+
             exemption_reason_snapshot=line_exemption_reason,
             sale_unit_id=line_sale_unit_id,
             unit_code_snapshot=line_unit_code,
@@ -905,7 +910,8 @@ async def create_credit_note(
             restock_candidates.append((ref_line.product_id, quantity * float(ref_line.unit_factor or 1)))  # base units
 
         unit_price = float(ref_line.unit_price)
-        vat_rate = float(ref_line.vat_rate_snapshot)
+        vat_rate = float(ref_line.vat_rate_snapshot)
+
         tax_code = ref_line.tax_code_snapshot
         # The credited amount follows the ORIGINAL line (its line discount included), pro rata to the
         # quantity credited: re-pricing quantity x unit_price ignored the discount and could credit more
@@ -928,7 +934,8 @@ async def create_credit_note(
             product_name_snapshot=ref_line.product_name_snapshot,
             quantity=quantity,
             unit_price=unit_price,
-            vat_rate_snapshot=vat_rate,
+            vat_rate_snapshot=vat_rate,
+
             tax_code_snapshot=tax_code,
             line_subtotal=line_subtotal,
             line_vat=line_vat,
@@ -938,7 +945,8 @@ async def create_credit_note(
             retention_rate=ref_line.retention_rate if line_retention > 0 else None,
             retention_amount=line_retention if line_retention > 0 else None,
             retention_type=ref_line.retention_type if line_retention > 0 else None,
-            exemption_code=ref_line.exemption_code,
+            exemption_code=ref_line.exemption_code,
+
             exemption_reason_snapshot=ref_line.exemption_reason_snapshot,
             sale_unit_id=ref_line.sale_unit_id,
             unit_code_snapshot=ref_line.unit_code_snapshot,
@@ -1239,10 +1247,12 @@ async def create_debit_note(
                 raise ProductNotFoundError("Servico nao encontrado ou inativo")
             vat_result = await db.execute(select(VAT).where(VAT.id == service.vat_id))
             vat = vat_result.scalar_one_or_none()
-            vat_rate = float(vat.rate) if vat else 0.0
+            vat_rate = float(vat.rate) if vat else 0.0
+
             tax_code = vat.tax_category if vat else "ISE"
             unit_price = float(service.price or 0)
-            line_unit_factor, line_sale_unit_id, line_unit_code = 1.0, None, None
+            line_unit_factor, line_sale_unit_id, line_unit_code = 1.0, None, None
+
             line_unit_code = await _base_unit_code(db, service)
             item_name = service.name
             line_product_id = None
@@ -1267,7 +1277,8 @@ async def create_debit_note(
                 raise ProductNotFoundError("Materia-prima nao pode ser vendida ou faturada")
             vat_result = await db.execute(select(VAT).where(VAT.id == product.vat_id))
             vat = vat_result.scalar_one_or_none()
-            vat_rate = float(vat.rate) if vat else 0.0
+            vat_rate = float(vat.rate) if vat else 0.0
+
             tax_code = vat.tax_category if vat else "ISE"
             unit_price, line_unit_factor, line_sale_unit_id, line_unit_code = await _sale_unit_for_line(
                 db, company_id, product, line_input.get("sale_unit_id"), quantity=float(line_input["quantity"]),
@@ -1299,7 +1310,8 @@ async def create_debit_note(
             quantity=quantity,
             unit_price=unit_price,
             discount_percent=discount_percent,
-            vat_rate_snapshot=vat_rate,
+            vat_rate_snapshot=vat_rate,
+
             tax_code_snapshot=tax_code,
             line_subtotal=line_subtotal,
             line_vat=line_vat,
@@ -1308,7 +1320,8 @@ async def create_debit_note(
             retention_rate=line_retention_pct if line_retention > 0 else None,
             retention_amount=line_retention if line_retention > 0 else None,
             retention_type=line_retention_type if line_retention > 0 else None,
-            exemption_code=line_exemption_code,
+            exemption_code=line_exemption_code,
+
             exemption_reason_snapshot=line_exemption_reason,
             sale_unit_id=line_sale_unit_id,
             unit_code_snapshot=line_unit_code,
@@ -1615,10 +1628,12 @@ async def create_pro_forma(
                 raise ProductNotFoundError("Servico nao encontrado ou inativo")
             vat_result = await db.execute(select(VAT).where(VAT.id == service.vat_id))
             vat = vat_result.scalar_one_or_none()
-            vat_rate = float(vat.rate) if vat else 0.0
+            vat_rate = float(vat.rate) if vat else 0.0
+
             tax_code = vat.tax_category if vat else "ISE"
             unit_price = float(service.price or 0)
-            line_unit_factor, line_sale_unit_id, line_unit_code = 1.0, None, None
+            line_unit_factor, line_sale_unit_id, line_unit_code = 1.0, None, None
+
             line_unit_code = await _base_unit_code(db, service)
             item_name = service.name
             line_product_id = None
@@ -1642,7 +1657,8 @@ async def create_pro_forma(
                 raise ProductNotFoundError("Materia-prima nao pode ser vendida ou faturada")
             vat_result = await db.execute(select(VAT).where(VAT.id == product.vat_id))
             vat = vat_result.scalar_one_or_none()
-            vat_rate = float(vat.rate) if vat else 0.0
+            vat_rate = float(vat.rate) if vat else 0.0
+
             tax_code = vat.tax_category if vat else "ISE"
             unit_price, line_unit_factor, line_sale_unit_id, line_unit_code = await _sale_unit_for_line(
                 db, company_id, product, line_input.get("sale_unit_id"), quantity=float(line_input["quantity"]),
@@ -1675,7 +1691,8 @@ async def create_pro_forma(
             quantity=quantity,
             unit_price=unit_price,
             discount_percent=discount_percent,
-            vat_rate_snapshot=vat_rate,
+            vat_rate_snapshot=vat_rate,
+
             tax_code_snapshot=tax_code,
             line_subtotal=line_subtotal,
             line_vat=line_vat,
@@ -1684,7 +1701,8 @@ async def create_pro_forma(
             retention_rate=line_retention_pct if line_retention > 0 else None,
             retention_amount=line_retention if line_retention > 0 else None,
             retention_type=line_retention_type if line_retention > 0 else None,
-            exemption_code=line_exemption_code,
+            exemption_code=line_exemption_code,
+
             exemption_reason_snapshot=line_exemption_reason,
             sale_unit_id=line_sale_unit_id,
             unit_code_snapshot=line_unit_code,

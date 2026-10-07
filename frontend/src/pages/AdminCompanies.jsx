@@ -64,7 +64,8 @@ export default function AdminCompanies() {
   const [vatLoading, setVatLoading] = useState(false);
   // Fiscal regime history of the company being edited (most recent first).
   const [regimeHistory, setRegimeHistory] = useState([]);
-  const [editingId, setEditingId] = useState(null);
+  const [editingId, setEditingId] = useState(null);
+
   useEffect(() => {
     if (!editingId) {
       setRegimeHistory([]);
@@ -602,7 +603,8 @@ export default function AdminCompanies() {
               <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
                 <div className="sm:col-span-6">
                   <Field label="Regime fiscal">
-                    <Select value={form.fiscalRegimeId} onChange={(v) => updateField('fiscalRegimeId', v)} options={regimes.map((r) => ({ value: r.id, label: r.name }))} placeholder="Selecionar regime fiscal" />
+                    <Select value={form.fiscalRegimeId} onChange={(v) => updateField('fiscalRegimeId', v)} options={regimes.map((r) => ({ value: r.id, label: r.name }))} placeholder="Selecionar regime fiscal" />
+
                     {regimeHistory.length > 0 && (
                       <ul className="mt-1.5 flex flex-col gap-0.5 text-[11px] text-text-muted">
                         {regimeHistory.map((h, idx) => (

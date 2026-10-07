@@ -182,7 +182,8 @@ async def create_series(
     active document type matching the todos_* area toggles, all sharing the same
     series_code/description/dates. Returns the list of series rows created.
     """
-    year = year or _current_year()
+    year = year or _current_year()
+
     allowed = allowed_series_years()
     if year not in allowed:
         raise SeriesYearNotAllowedError("So e possivel criar series para " + " ou ".join(str(y) for y in allowed))
