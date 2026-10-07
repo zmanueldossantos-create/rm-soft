@@ -951,8 +951,25 @@ export default function Caixa() {
 
   // Printing after a sale, as this cash point asks: off = nothing (as before); one format = it prints at once;
   // both = the cashier picks one in the success window.
-  function afterSalePrint(invoice) {
-    const cfg = printConfigByPos[selectedPosId];
+  // The printing settings of the till are read again before each printing: a manager may change them during the
+  // day, and the till follows from the next sale on - no reload of the page. On failure, the last known settings.
+  async function freshPrintConfig() {
+    const known = printConfigByPos[selectedPosId];
+    const pos = allActivePos.find((x) => x.id === selectedPosId);
+    if (!pos) return known;
+    try {
+      const p = ((await listPointsOfSale(pos.activity_id)) || []).find((x) => x.id === selectedPosId);
+      if (!p) return known;
+      const cfg = { on: !!p.print_after_sale, ticket: p.print_ticket !== false, a4: !!p.print_a4 };
+      setPrintConfigByPos((prev) => ({ ...prev, [selectedPosId]: cfg }));
+      return cfg;
+    } catch {
+      return known;
+    }
+  }
+
+  async function afterSalePrint(invoice) {
+    const cfg = await freshPrintConfig();
     if (!invoice || !cfg || !cfg.on) return;
     if (cfg.ticket && cfg.a4) {
       setPrintChoice(true);
