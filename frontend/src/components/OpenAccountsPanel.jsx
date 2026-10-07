@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { listProductCategories } from '../api/productCategories';
 import { ChefHat } from 'lucide-react';
 import { Wallet2, Plus, Loader2, X, Trash2, CheckCircle2, Search, Minus, ArrowRightLeft, LayoutGrid, RefreshCw } from 'lucide-react';
 import { useCan } from '../utils/permissions';
@@ -68,6 +69,8 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
   const [stockLevels, setStockLevels] = useState({});
   const [itemTab, setItemTab] = useState('products');
   const [itemSearch, setItemSearch] = useState('');
+  const [categories, setCategories] = useState([]);
+  const [itemCategory, setItemCategory] = useState('');
   const [addingItemId, setAddingItemId] = useState(null);
   const [sendingKitchen, setSendingKitchen] = useState(false);
 
@@ -108,6 +111,8 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
     }).catch((err) => setError(extractErrorMessage(err, 'Erro ao carregar atividades')));
     listProducts().then((data) => setProducts(data.filter((p) => p.is_active && !p.is_raw_material && !p.not_available_pos && !p.internal_use_only))).catch(() => {});
     listServices().then((data) => setServices(data.filter((s) => s.is_active))).catch(() => {});
+    // the category chips of the catalogue - none shown if this role cannot read them
+    listProductCategories().then((data) => setCategories(data.filter((c) => c.is_active !== false))).catch(() => {});
     listPaymentMethodPreferences().then(setPaymentMethods).catch(() => {});
   }, []);
 
@@ -345,6 +350,14 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
     }
   }
 
+  // The name offered for a split: the table and the next number of its accounts ('M3 - Sala - 2', '- 3'...).
+  function splitLabel() {
+    const table = detailAccount?.resource_id ? resources.find((r) => r.id === detailAccount.resource_id) : null;
+    if (!table) return (detailAccount?.label || '') + ' - 2';
+    const onTable = accounts.filter((a) => a.resource_id === table.id).length;
+    return table.name + ' - ' + (onTable + 1);
+  }
+
   async function handleCloseSubmit() {
     if (!detailAccount) return;
     setCloseError('');
@@ -416,7 +429,7 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
     setTransferMode(transferAccountOptions.length > 0 ? 'account' : 'split');
     setTransferTargetAccountId('');
     setTransferTargetResourceId('');
-    setTransferNewLabel((detailAccount?.label || '') + ' - B');
+    setTransferNewLabel(splitLabel());
     setTransferError('');
     setTransferModalOpen(true);
   }
@@ -475,8 +488,14 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
 
   const posPaymentMethods = paymentMethods.filter((m) => m.available_at_pos && m.allows_receipt);
 
-  const filteredProducts = products.filter((p) => !itemSearch.trim() || p.name.toLowerCase().includes(itemSearch.toLowerCase()) || (p.code || '').toLowerCase().includes(itemSearch.toLowerCase()));
-  const filteredServices = services.filter((s) => !itemSearch.trim() || s.name.toLowerCase().includes(itemSearch.toLowerCase()));
+  // the catalogue: by name, code or barcode (a package's too), within the chosen category
+  const searchText = itemSearch.trim().toLowerCase();
+  const filteredProducts = products.filter((p) => (!itemCategory || p.category_id === itemCategory) && (!searchText
+    || p.name.toLowerCase().includes(searchText) || (p.code || '').toLowerCase().includes(searchText)
+    || (p.barcode || '').includes(searchText) || (p.sale_units || []).some((u) => (u.barcode || '').includes(searchText))));
+  const filteredServices = services.filter((s) => !searchText || s.name.toLowerCase().includes(searchText)
+    || (s.code || '').toLowerCase().includes(searchText));
+  const usedCategories = categories.filter((c) => products.some((p) => p.category_id === c.id));
 
   return (
     <main className={posId ? '' : 'max-w-[1600px] mx-auto px-4 sm:px-6 md:px-8 py-6 sm:py-9'}>
@@ -677,39 +696,37 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
         </form>
       </Modal>
 
-      <Modal open={!!detailAccount} onClose={() => setDetailAccount(null)} title={detailAccount?.label || ''} maxWidthClass="max-w-2xl">
+      <Modal open={!!detailAccount} onClose={() => setDetailAccount(null)} title={detailAccount?.label || ''} maxWidthClass="max-w-6xl">
         {detailAccount && (
-          <div className="flex flex-col gap-4">
-            <div className="relative">
-              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
-              <input
-                type="text"
-                placeholder="Pesquisar artigo..."
-                value={itemSearch}
-                onChange={(e) => setItemSearch(e.target.value)}
-                className="w-full bg-bg-inset border border-border rounded-md pl-9 pr-3 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setItemTab('products')}
-                className={'px-3.5 py-1.5 rounded-md text-[13px] font-medium transition-colors cursor-pointer ' + (itemTab === 'products' ? 'bg-accent text-white' : 'bg-bg-elevated border border-border text-text-muted hover:text-text-primary')}
-              >
-                Produtos
-              </button>
-              <button
-                type="button"
-                onClick={() => setItemTab('services')}
-                className={'px-3.5 py-1.5 rounded-md text-[13px] font-medium transition-colors cursor-pointer ' + (itemTab === 'services' ? 'bg-accent text-white' : 'bg-bg-elevated border border-border text-text-muted hover:text-text-primary')}
-              >
-                Servicos
-              </button>
-            </div>
-
-            {itemTab === 'products' ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[160px] overflow-y-auto scrollbar-thin">
-                {filteredProducts.map((p) => (
+          // Two columns on a large screen - the catalogue on the left, the account on the right - stacked below with
+          // the account first. Each column scrolls on its own: the totals and the actions always stay in sight.
+          <div className="flex flex-col-reverse lg:flex-row gap-4 lg:h-[calc(100vh-12rem)]">
+            <div className="flex-1 min-w-0 flex flex-col gap-3 lg:min-h-0">
+              <div className="relative">
+                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+                <input
+                  type="text"
+                  placeholder="Pesquisar por nome, codigo ou codigo de barras..."
+                  value={itemSearch}
+                  onChange={(e) => setItemSearch(e.target.value)}
+                  className="w-full bg-bg-inset border border-border rounded-md pl-9 pr-3 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors"
+                />
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button type="button" onClick={() => setItemTab('products')} className={'px-3 py-1.5 rounded-md text-[13px] font-medium transition-colors cursor-pointer ' + (itemTab === 'products' ? 'bg-accent text-white' : 'bg-bg-elevated border border-border text-text-muted hover:text-text-primary')}>Produtos</button>
+                <button type="button" onClick={() => setItemTab('services')} className={'px-3 py-1.5 rounded-md text-[13px] font-medium transition-colors cursor-pointer ' + (itemTab === 'services' ? 'bg-accent text-white' : 'bg-bg-elevated border border-border text-text-muted hover:text-text-primary')}>Servicos</button>
+                {itemTab === 'products' && usedCategories.length > 0 && (
+                  <>
+                    <span className="w-px h-5 bg-border mx-1" />
+                    <button type="button" onClick={() => setItemCategory('')} className={'px-3 py-1.5 rounded-md text-[13px] font-medium transition-colors cursor-pointer ' + (!itemCategory ? 'bg-accent text-white' : 'bg-bg-elevated border border-border text-text-muted hover:text-text-primary')}>Todas</button>
+                    {usedCategories.map((c) => (
+                      <button key={c.id} type="button" onClick={() => setItemCategory(c.id)} className={'px-3 py-1.5 rounded-md text-[13px] font-medium transition-colors cursor-pointer ' + (itemCategory === c.id ? 'bg-accent text-white' : 'bg-bg-elevated border border-border text-text-muted hover:text-text-primary')}>{c.name}</button>
+                    ))}
+                  </>
+                )}
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2 content-start overflow-y-auto scrollbar-thin max-h-[40vh] lg:max-h-none lg:flex-1 lg:min-h-0 pr-1">
+                {itemTab === 'products' ? filteredProducts.map((p) => (
                   <button key={'p-' + p.id} onClick={() => handleAddItem(p, false)} disabled={addingItemId === p.id || !can('open_accounts:edit_lines')} className="bg-bg-inset border border-border hover:border-accent rounded-md px-2.5 py-2 text-left transition-colors cursor-pointer disabled:opacity-50">
                     <p className="font-mono text-[10px] text-text-muted mb-0.5">{p.code}</p>
                     <p className="text-[12px] text-text-primary truncate">{p.name}</p>
@@ -722,116 +739,119 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
                       )}
                     </div>
                   </button>
-                ))}
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[160px] overflow-y-auto scrollbar-thin">
-                {filteredServices.map((s) => (
+                )) : filteredServices.map((s) => (
                   <button key={'s-' + s.id} onClick={() => handleAddItem(s, true)} disabled={addingItemId === s.id || !can('open_accounts:edit_lines')} className="bg-bg-inset border border-border hover:border-accent rounded-md px-2.5 py-2 text-left transition-colors cursor-pointer disabled:opacity-50">
                     <p className="font-mono text-[10px] text-text-muted mb-0.5">{s.code}</p>
                     <p className="text-[12px] text-text-primary truncate">{s.name}</p>
                     <p className="text-[11px] text-accent font-mono mt-0.5">{formatKz(s.price)} Kz</p>
                   </button>
                 ))}
+                {(itemTab === 'products' ? filteredProducts : filteredServices).length === 0 && (
+                  <p className="col-span-full text-text-muted text-[13px] text-center py-6">Nenhum artigo encontrado</p>
+                )}
               </div>
-            )}
+            </div>
 
-            <div className="border-t border-border pt-3">
-              {detailLoading ? (
-                <div className="flex justify-center py-6"><Loader2 size={18} className="animate-spin text-accent" /></div>
-              ) : detailLines.length === 0 ? (
-                <p className="text-text-muted text-[13px] text-center py-6">Nenhum artigo adicionado</p>
-              ) : (
-                <div className="flex flex-col gap-1.5 max-h-[220px] overflow-y-auto scrollbar-thin">
-                  {detailLines.map((l) => (
-                    <div key={l.id} className="flex items-center justify-between bg-bg-inset border border-border rounded-md px-3 py-2">
-                      <div>
-                        <p className={'text-[12px] ' + (l.kitchen_status === 'ANULADO' ? 'text-text-muted line-through' : 'text-text-primary')}>{l.name_snapshot}</p>
-                        {l.kitchen_status && (
-                          <p className="text-[10px] font-mono mt-0.5">
-                            <span className={KITCHEN_STYLE[l.kitchen_status]}>{KITCHEN_LABEL[l.kitchen_status]}{l.kitchen_modified && l.kitchen_status !== 'ANULADO' ? ' - Modificado' : ''}</span>
-                            {l.sent_by_name && <span className="text-text-muted"> - {l.sent_by_name} {formatTime(l.sent_at)} #{l.kitchen_order_number}</span>}
-                            {l.cancel_reason && <span className="text-text-muted"> - {l.cancel_reason}</span>}
-                          </p>
-                        )}
-                        <p className="text-[11px] text-text-muted font-mono">{formatKz(l.unit_price)} Kz/{(l.unit_code_snapshot || 'un').toLowerCase()}</p>{unitPicker(l)}
-                      </div>
-                      <div className="flex items-center gap-2.5">
-                        <div className="flex items-center gap-1.5 bg-bg-elevated border border-border rounded-md px-1.5 py-1">
-                          <button onClick={() => handleChangeQuantity(l, -1)} disabled={!can('open_accounts:edit_lines') || !canLower(l)} className="text-text-muted hover:text-accent cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
-                            <Minus size={12} />
-                          </button>
-                          <span className="text-[12px] text-text-primary font-mono w-6 text-center">{l.quantity}</span>
-                          <button onClick={() => handleChangeQuantity(l, 1)} disabled={!can('open_accounts:edit_lines') || !canRaise(l)} className="text-text-muted hover:text-accent cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
-                            <Plus size={12} />
-                          </button>
+            <div className="w-full lg:w-[420px] shrink-0 flex flex-col gap-3 lg:min-h-0">
+              <div className="overflow-y-auto scrollbar-thin max-h-[40vh] lg:max-h-none lg:flex-1 lg:min-h-0 pr-1">
+                {detailLoading ? (
+                  <div className="flex justify-center py-6"><Loader2 size={18} className="animate-spin text-accent" /></div>
+                ) : detailLines.length === 0 ? (
+                  <p className="text-text-muted text-[13px] text-center py-6">Nenhum artigo adicionado</p>
+                ) : (
+                  <div className="flex flex-col gap-1.5">
+                    {detailLines.map((l) => (
+                        <div key={l.id} className="flex items-center justify-between bg-bg-inset border border-border rounded-md px-3 py-2">
+                          <div>
+                            <p className={'text-[12px] ' + (l.kitchen_status === 'ANULADO' ? 'text-text-muted line-through' : 'text-text-primary')}>{l.name_snapshot}</p>
+                            {l.kitchen_status && (
+                              <p className="text-[10px] font-mono mt-0.5">
+                                <span className={KITCHEN_STYLE[l.kitchen_status]}>{KITCHEN_LABEL[l.kitchen_status]}{l.kitchen_modified && l.kitchen_status !== 'ANULADO' ? ' - Modificado' : ''}</span>
+                                {l.sent_by_name && <span className="text-text-muted"> - {l.sent_by_name} {formatTime(l.sent_at)} #{l.kitchen_order_number}</span>}
+                                {l.cancel_reason && <span className="text-text-muted"> - {l.cancel_reason}</span>}
+                              </p>
+                            )}
+                            <p className="text-[11px] text-text-muted font-mono">{formatKz(l.unit_price)} Kz/{(l.unit_code_snapshot || 'un').toLowerCase()}</p>{unitPicker(l)}
+                          </div>
+                          <div className="flex items-center gap-2.5">
+                            <div className="flex items-center gap-1.5 bg-bg-elevated border border-border rounded-md px-1.5 py-1">
+                              <button onClick={() => handleChangeQuantity(l, -1)} disabled={!can('open_accounts:edit_lines') || !canLower(l)} className="text-text-muted hover:text-accent cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
+                                <Minus size={12} />
+                              </button>
+                              <span className="text-[12px] text-text-primary font-mono w-6 text-center">{l.quantity}</span>
+                              <button onClick={() => handleChangeQuantity(l, 1)} disabled={!can('open_accounts:edit_lines') || !canRaise(l)} className="text-text-muted hover:text-accent cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
+                                <Plus size={12} />
+                              </button>
+                            </div>
+                            <span className="font-mono text-[13px] text-text-primary font-semibold min-w-20 whitespace-nowrap text-right">{formatKz(l.kitchen_status === 'ANULADO' ? 0 : l.unit_price * l.quantity)} Kz</span>
+                            <button onClick={() => handleRemoveLine(l.id)} disabled={!can('open_accounts:edit_lines') || !canLower(l)} className="text-text-muted hover:text-danger cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
                         </div>
-                        <span className="font-mono text-[13px] text-text-primary font-semibold min-w-20 whitespace-nowrap text-right">{formatKz(l.kitchen_status === 'ANULADO' ? 0 : l.unit_price * l.quantity)} Kz</span>
-                        <button onClick={() => handleRemoveLine(l.id)} disabled={!can('open_accounts:edit_lines') || !canLower(l)} className="text-text-muted hover:text-danger cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {detailError && (
+                <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{detailError}</div>
+              )}
+
+              <div className="bg-bg-inset border border-border rounded-md px-4 py-3 flex flex-col gap-1">
+                <div className="flex justify-between text-[12px]"><span className="text-text-muted">Subtotal</span><span className="font-mono text-text-primary">{formatKz(detailSubtotal)} Kz</span></div>
+                <div className="flex justify-between text-[12px]"><span className="text-text-muted">IVA</span><span className="font-mono text-text-primary">{formatKz(detailVat)} Kz</span></div>
+                <div className="flex justify-between items-center pt-1.5 mt-1 border-t border-border">
+                  <span className="text-text-muted text-[13px]">Total</span>
+                  <span className="font-mono font-bold text-text-primary text-lg">{formatKz(detailTotal)} Kz</span>
                 </div>
-              )}
-            </div>
+              </div>
 
-            {detailError && (
-              <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{detailError}</div>
-            )}
-
-            <div className="flex justify-between items-center bg-bg-inset border border-border rounded-md px-4 py-3">
-              <span className="text-text-muted text-[13px]">Total</span>
-              <span className="font-mono font-bold text-text-primary text-lg">{formatKz(detailTotal)} Kz</span>
-            </div>
-
-            {/* The account's actions on one row: cancel (an empty account only), transfer / split, then close - the
-                main one, wider. On a narrow screen the two secondary ones keep only their icon (label on hover). */}
-            <div className="flex items-stretch gap-2">
-              {detailLines.length === 0 && !detailLoading && !detailAccount.booking_id && can('open_accounts:open') && (
+              <div className="flex items-stretch gap-2">
+                  {detailLines.length === 0 && !detailLoading && !detailAccount.booking_id && can('open_accounts:open') && (
+                    <button
+                      type="button"
+                      onClick={handleCancelEmpty}
+                      title="Anular conta vazia"
+                      className="flex-1 min-w-0 flex items-center justify-center gap-2 border border-danger/40 hover:border-danger text-danger font-medium text-sm rounded-md px-3 py-2.5 transition-colors cursor-pointer"
+                    >
+                      <X size={15} className="shrink-0" />
+                      <span className="truncate">Anular</span>
+                    </button>
+                  )}
+                  {can('open_accounts:transfer') && !detailAccount.booking_id && (
+                    <button
+                      type="button"
+                      onClick={openTransferModal}
+                      disabled={detailLines.length === 0}
+                      title="Mover artigos: para outra conta, outra mesa ou uma nova conta"
+                      className="flex-1 min-w-0 border border-border hover:border-accent text-text-primary font-medium text-sm rounded-md px-3 py-2.5 flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <ArrowRightLeft size={16} className="shrink-0" />
+                      <span className="truncate">Mover</span>
+                    </button>
+                  )}
+                  {unsentDishes > 0 && can('open_accounts:edit_lines') && (
+                    <button
+                      type="button"
+                      onClick={handleSendToKitchen}
+                      disabled={sendingKitchen}
+                      title="Enviar para cozinha"
+                      className="flex-1 min-w-0 border border-accent/60 hover:border-accent text-accent font-medium text-sm rounded-md px-3 py-2.5 flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      <ChefHat size={16} className="shrink-0" />
+                      <span className="truncate">Cozinha ({unsentDishes})</span>
+                    </button>
+                  )}
                 <button
-                  type="button"
-                  onClick={handleCancelEmpty}
-                  title="Anular conta vazia"
-                  className="flex-1 min-w-0 flex items-center justify-center gap-2 border border-danger/40 hover:border-danger text-danger font-medium text-sm rounded-md px-3 py-2.5 transition-colors cursor-pointer"
+                  onClick={openCloseModal}
+                  disabled={detailLines.length === 0 || !can('open_accounts:close')}
+                  className="flex-[1.5] min-w-0 bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md px-3 py-2.5 flex items-center justify-center gap-2 transition-colors cursor-pointer"
                 >
-                  <X size={15} className="shrink-0" />
-                  <span className="hidden sm:inline truncate">Anular conta vazia</span>
+                  <CheckCircle2 size={17} className="shrink-0" />
+                  <span className="truncate">Fechar conta</span>
                 </button>
-              )}
-              {can('open_accounts:transfer') && !detailAccount.booking_id && (
-                <button
-                  type="button"
-                  onClick={openTransferModal}
-                  disabled={detailLines.length === 0}
-                  title="Transferir / Dividir"
-                  className="flex-1 min-w-0 border border-border hover:border-accent text-text-primary font-medium text-sm rounded-md px-3 py-2.5 flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  <ArrowRightLeft size={16} className="shrink-0" />
-                  <span className="hidden sm:inline truncate">Transferir / Dividir</span>
-                </button>
-              )}
-              {unsentDishes > 0 && can('open_accounts:edit_lines') && (
-                <button
-                  type="button"
-                  onClick={handleSendToKitchen}
-                  disabled={sendingKitchen}
-                  title="Enviar para cozinha"
-                  className="flex-1 min-w-0 border border-accent/60 hover:border-accent text-accent font-medium text-sm rounded-md px-3 py-2.5 flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:opacity-50"
-                >
-                  <ChefHat size={16} className="shrink-0" />
-                  <span className="hidden sm:inline truncate">Enviar para cozinha ({unsentDishes})</span>
-                </button>
-              )}
-              <button
-                onClick={openCloseModal}
-                disabled={detailLines.length === 0 || !can('open_accounts:close')}
-                className="flex-[1.5] min-w-0 bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md px-3 py-2.5 flex items-center justify-center gap-2 transition-colors cursor-pointer"
-              >
-                <CheckCircle2 size={17} className="shrink-0" />
-                <span className="truncate">Fechar conta</span>
-              </button>
+              </div>
             </div>
           </div>
         )}
@@ -928,7 +948,7 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
           </button>
         </div>
       </Modal>
-      <Modal open={transferModalOpen} onClose={() => setTransferModalOpen(false)} title={'Transferir / Dividir - ' + (detailAccount?.label || '')} maxWidthClass="max-w-2xl">
+      <Modal open={transferModalOpen} onClose={() => setTransferModalOpen(false)} title={'Mover artigos - ' + (detailAccount?.label || '')} maxWidthClass="max-w-2xl">
         <div className="flex flex-col gap-4">
           <div>
             <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Artigos a mover</label>
