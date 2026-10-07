@@ -120,7 +120,6 @@ async def edit_product(
             is_raw_material=payload.is_raw_material,
             category_id=payload.category_id,
             brand=payload.brand,
-            image_path=payload.image_path,
             purchase_price=payload.purchase_price,
             managed_by_batch=payload.managed_by_batch,
             managed_by_stock=payload.managed_by_stock,

@@ -250,7 +250,6 @@ async def update_product(
     is_raw_material: bool = False,
     category_id: uuid.UUID | None = None,
     brand: str | None = None,
-    image_path: str | None = None,
     purchase_price: float | None = None,
     managed_by_batch: bool = False,
     managed_by_stock: bool = True,
@@ -285,7 +284,7 @@ async def update_product(
     product.is_raw_material = is_raw_material
     product.category_id = category_id
     product.brand = brand
-    product.image_path = image_path
+    # the image is not touched here: it has its own routes (upload, removal), so a save never loses it
     product.purchase_price = purchase_price
     product.managed_by_batch = managed_by_batch
     product.managed_by_stock = managed_by_stock
