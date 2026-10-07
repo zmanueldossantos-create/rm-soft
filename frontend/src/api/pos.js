@@ -11,9 +11,11 @@ export async function getOpenCashSession(posId) {
   return res.data;
 }
 
-export async function getCurrentCashBalance(posId) {
+// The balance of the open session, justified: cash in the drawer (balance), received by payment method,
+// movements and receptions pending - see cash_session_service.get_session_summary.
+export async function getSessionSummary(posId) {
   const res = await apiClient.get('/pos/sessions/balance', { params: { pos_id: posId } });
-  return res.data.balance;
+  return res.data;
 }
 
 export async function getCarryForwardAmount(posId) {

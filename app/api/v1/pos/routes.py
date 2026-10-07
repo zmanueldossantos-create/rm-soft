@@ -26,7 +26,6 @@ from app.services.cash_session_service import (
     open_session,
     close_session,
     get_open_session,
-    get_current_expected_cash_balance,
     get_carry_forward_amount,
     list_sessions,
     SessionAlreadyOpenError,
@@ -53,7 +52,7 @@ from app.services.invoice_service import (
     ProFormaAlreadyConvertedError,
 )
 
-from app.services.cash_session_service import ClosingDifferenceNotAllowedError, ClosingReasonRequiredError
+from app.services.cash_session_service import ClosingDifferenceNotAllowedError, ClosingReasonRequiredError, get_session_summary
 
 router = APIRouter(prefix="/api/v1/pos", tags=["pos"])
 
@@ -93,9 +92,12 @@ async def get_current_balance(
 ):
     """Live expected cash balance for this POS's currently open session - not just
     the opening float, but opening + cash sales + net movements so far (same formula
-    as close_session, computed on demand - see get_current_expected_cash_balance)."""
-    balance = await get_current_expected_cash_balance(db, current_user.company_id, pos_id)
-    return {"balance": balance}
+    as close_session, computed on demand) - with its justification by payment method and movements, see
+    cash_session_service.get_session_summary."""
+    summary = await get_session_summary(db, current_user.company_id, pos_id)
+    if summary is None:
+        return {"balance": 0.0}
+    return {"balance": summary["expected_cash"], **summary}  # balance: the cash expected in the drawer
 
 
 @router.get("/sessions/carry-forward")

@@ -21,7 +21,7 @@ import { listActivities, listPointsOfSale } from '../api/activity';
 import { createCustomer } from '../api/customers';
 import { listProducts } from '../api/products';
 import { listCustomers } from '../api/customers';
-import { openCashSession, getOpenCashSession, closeCashSession, checkout, liquidatePendingInvoice, getCurrentCashBalance, getCarryForwardAmount } from '../api/pos';
+import { openCashSession, getOpenCashSession, closeCashSession, checkout, liquidatePendingInvoice, getSessionSummary, getCarryForwardAmount } from '../api/pos';
 import { listPendingProFormas, listRecentIssuedInvoices, fetchInvoicePdfBlob, getInvoiceDetail } from '../api/invoices';
 import { listPendingReceptions, receiveCashMovement, listPendingEmissions, cancelCashMovement, getDailyReport } from '../api/tesouraria';
 import DocumentActionModals from '../components/DocumentActionModals';
@@ -120,6 +120,7 @@ export default function Caixa() {
   const [cancellingId, setCancellingId] = useState(null);
   const [movementModalTab, setMovementModalTab] = useState('form');
   const [currentBalance, setCurrentBalance] = useState(null);
+  const [sessionSummary, setSessionSummary] = useState(null); // the balance justified, by payment method
   const [carryForwardAmount, setCarryForwardAmount] = useState(0);
   const [carryForwardLoading, setCarryForwardLoading] = useState(false);
   const [dailyReportModalOpen, setDailyReportModalOpen] = useState(false);
@@ -483,7 +484,9 @@ export default function Caixa() {
   async function refreshBalance(posId) {
     if (!posId) return;
     try {
-      setCurrentBalance(await getCurrentCashBalance(posId));
+      const summary = await getSessionSummary(posId);
+      setCurrentBalance(summary.balance);
+      setSessionSummary(summary);
     } catch (err) {
       // silent - supplementary display, not critical path
     }
@@ -1153,8 +1156,19 @@ export default function Caixa() {
           {session && currentBalance !== null && (
             <div className="flex items-center gap-2 bg-bg-elevated border border-border rounded-md px-4 py-2">
               <Wallet size={15} className="text-accent" />
-              <span className="text-text-muted text-[12px]">Saldo actual</span>
+              <span className="text-text-muted text-[12px]">Numerário na gaveta</span>
               <span className="font-mono font-semibold text-text-primary text-[15px]">{formatKz(currentBalance)} Kz</span>
+              {/* the other payment methods: received, but never in the drawer - the balance explains itself */}
+              {(sessionSummary?.by_method || []).filter((m) => !m.is_cash && m.amount).map((m) => (
+                <span key={m.code} title="Não entra na gaveta" className="text-[11px] text-text-muted border-l border-border pl-2">
+                  {m.name} <span className="font-mono text-text-secondary">{formatKz(m.amount)} Kz</span>
+                </span>
+              ))}
+              {sessionSummary?.pending_in > 0 && (
+                <span title="Transferências por confirmar em Recepção de fundos" className="text-[11px] text-amber-500 border-l border-border pl-2">
+                  A receber <span className="font-mono">{formatKz(sessionSummary.pending_in)} Kz</span>
+                </span>
+              )}
             </div>
           )}
           {session && (

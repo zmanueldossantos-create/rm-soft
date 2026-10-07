@@ -175,6 +175,73 @@ async def get_current_expected_cash_balance(
     return float(session.opening_amount) + cash_sales_total + movements_total
 
 
+async def get_session_summary(
+    db: AsyncSession, company_id: uuid.UUID, pos_id: uuid.UUID, session: CashSession | None = None,
+) -> dict | None:
+    """
+    The balance of a session, justified: what was received by payment method (cash or not), the movements of the
+    till, and the cash expected in the drawer - the latter from get_current_expected_cash_balance itself, never
+    recomputed here. Shown live in the till, at closing and on the closing report. None when no session is open.
+    """
+    from app.models.cash_movement import CashMovementType  # local: only this summary splits the movements by type
+
+    if session is None:
+        session = await get_open_session(db, company_id, pos_id)
+        if session is None:
+            return None
+
+    rows = await db.execute(
+        select(PaymentMethodCatalog.code, PaymentMethodCatalog.name, PaymentMethodCatalog.is_cash, func.sum(Payment.amount))
+        .join(Payment, Payment.payment_method_id == PaymentMethodCatalog.id)
+        .join(Invoice, Invoice.id == Payment.invoice_id)
+        .where(Invoice.cash_session_id == session.id)
+        .group_by(PaymentMethodCatalog.code, PaymentMethodCatalog.name, PaymentMethodCatalog.is_cash)
+        .order_by(PaymentMethodCatalog.is_cash.desc(), PaymentMethodCatalog.name)
+    )
+    by_method = [
+        {"code": code, "name": name, "is_cash": bool(is_cash), "amount": round(float(amount), 2)}
+        for code, name, is_cash, amount in rows.all()
+    ]
+
+    movements = await db.execute(
+        select(CashMovement).where(
+            CashMovement.company_id == company_id,
+            or_(CashMovement.source_pos_id == pos_id, CashMovement.destination_pos_id == pos_id),
+            CashMovement.created_at >= session.opened_at,
+        )
+    )
+    transfers_in = entries = transfers_out = exits = pending_in = 0.0
+    for movement in movements.scalars().all():
+        amount = float(movement.amount)
+        kind = movement.movement_type
+        if movement.destination_pos_id == pos_id:
+            if movement.status != CashMovementStatus.RECEBIDO:
+                pending_in += amount  # not in the drawer until the till confirms the reception
+            elif kind == CashMovementType.ENTRADA_EXTERNA:
+                entries += amount
+            else:
+                transfers_in += amount
+        if movement.source_pos_id == pos_id:
+            if kind == CashMovementType.SAIDA_EXTERNA:
+                exits += amount
+            else:
+                transfers_out += amount
+
+    return {
+        "session_id": str(session.id),
+        "opening_amount": round(float(session.opening_amount), 2),
+        "by_method": by_method,
+        "total_received": round(sum(m["amount"] for m in by_method), 2),
+        "cash_sales": round(sum(m["amount"] for m in by_method if m["is_cash"]), 2),
+        "transfers_in": round(transfers_in, 2),
+        "entries": round(entries, 2),
+        "transfers_out": round(transfers_out, 2),
+        "exits": round(exits, 2),
+        "pending_in": round(pending_in, 2),
+        "expected_cash": round(await get_current_expected_cash_balance(db, company_id, pos_id, session), 2),
+    }
+
+
 class BilletageRequiredError(Exception):
     """Raised when the POS requires billetage counting but no FECHO count has been recorded yet."""
     pass
