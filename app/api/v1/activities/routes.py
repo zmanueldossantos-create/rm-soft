@@ -120,7 +120,7 @@ async def create_new_pos(
 ):
     """Creates a new POS under this activity - several POS can share the same activity's stock/warehouse."""
     try:
-        return await create_point_of_sale(db, current_user.company_id, activity_id, payload.name, billetage_enabled=payload.billetage_enabled, print_after_sale=payload.print_after_sale, print_ticket=payload.print_ticket, print_a4=payload.print_a4)
+        return await create_point_of_sale(db, current_user.company_id, activity_id, payload.name, billetage_enabled=payload.billetage_enabled, print_after_sale=payload.print_after_sale, print_ticket=payload.print_ticket, print_a4=payload.print_a4, accept_closing_difference=payload.accept_closing_difference, print_closing_report=payload.print_closing_report)
     except PosPrintError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     except ActivityNotFoundError as e:
@@ -139,7 +139,7 @@ async def edit_pos(
     """Renames a POS."""
     try:
         try:
-            return await update_point_of_sale(db, current_user.company_id, pos_id, payload.name, billetage_enabled=payload.billetage_enabled, print_after_sale=payload.print_after_sale, print_ticket=payload.print_ticket, print_a4=payload.print_a4)
+            return await update_point_of_sale(db, current_user.company_id, pos_id, payload.name, billetage_enabled=payload.billetage_enabled, print_after_sale=payload.print_after_sale, print_ticket=payload.print_ticket, print_a4=payload.print_a4, accept_closing_difference=payload.accept_closing_difference, print_closing_report=payload.print_closing_report)
         except PosPrintError as e:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
         except DefaultPosNotModifiableError as e:

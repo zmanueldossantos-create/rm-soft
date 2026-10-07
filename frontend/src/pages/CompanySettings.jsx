@@ -99,7 +99,7 @@ export default function CompanySettings() {
   const [posLoadingActivityId, setPosLoadingActivityId] = useState(null);
   const [posModalOpen, setPosModalOpen] = useState(false);
   const [editingPosId, setEditingPosId] = useState(null);
-  const [posForm, setPosForm] = useState({ activityId: '', name: '', billetageEnabled: false, printAfterSale: false, printTicket: true, printA4: false });
+  const [posForm, setPosForm] = useState({ activityId: '', name: '', billetageEnabled: false, acceptClosingDifference: true, printClosingReport: false, printAfterSale: false, printTicket: true, printA4: false });
   const [posSaving, setPosSaving] = useState(false);
   const [posFormError, setPosFormError] = useState('');
   const [assocByPos, setAssocByPos] = useState({});
@@ -311,14 +311,14 @@ export default function CompanySettings() {
 
   function openCreatePos(activityId) {
     setEditingPosId(null);
-    setPosForm({ activityId, name: '', billetageEnabled: false, isDefault: false, printAfterSale: false, printTicket: true, printA4: false });
+    setPosForm({ activityId, name: '', billetageEnabled: false, acceptClosingDifference: true, printClosingReport: false, isDefault: false, printAfterSale: false, printTicket: true, printA4: false });
     setPosFormError('');
     setPosModalOpen(true);
   }
 
   function openEditPos(pos) {
     setEditingPosId(pos.id);
-    setPosForm({ activityId: pos.activity_id, name: pos.name, billetageEnabled: pos.billetage_enabled || false, printAfterSale: !!pos.print_after_sale, printTicket: pos.print_ticket !== false, printA4: !!pos.print_a4, isDefault: !!pos.is_default });
+    setPosForm({ activityId: pos.activity_id, name: pos.name, billetageEnabled: pos.billetage_enabled || false, acceptClosingDifference: pos.accept_closing_difference !== false, printClosingReport: !!pos.print_closing_report, printAfterSale: !!pos.print_after_sale, printTicket: pos.print_ticket !== false, printA4: !!pos.print_a4, isDefault: !!pos.is_default });
     setPosFormError('');
     setPosModalOpen(true);
   }
@@ -329,9 +329,9 @@ export default function CompanySettings() {
     setPosSaving(true);
     try {
       if (editingPosId) {
-        await updatePointOfSale(editingPosId, posForm.name, posForm.billetageEnabled, { print_after_sale: posForm.printAfterSale, print_ticket: posForm.printTicket, print_a4: posForm.printA4 });
+        await updatePointOfSale(editingPosId, posForm.name, posForm.billetageEnabled, { print_after_sale: posForm.printAfterSale, print_ticket: posForm.printTicket, print_a4: posForm.printA4, accept_closing_difference: posForm.acceptClosingDifference, print_closing_report: posForm.printClosingReport });
       } else {
-        await createPointOfSale(posForm.activityId, posForm.name, posForm.billetageEnabled, { print_after_sale: posForm.printAfterSale, print_ticket: posForm.printTicket, print_a4: posForm.printA4 });
+        await createPointOfSale(posForm.activityId, posForm.name, posForm.billetageEnabled, { print_after_sale: posForm.printAfterSale, print_ticket: posForm.printTicket, print_a4: posForm.printA4, accept_closing_difference: posForm.acceptClosingDifference, print_closing_report: posForm.printClosingReport });
       }
       setPosModalOpen(false);
       await loadPointsOfSale(posForm.activityId);
@@ -1327,6 +1327,18 @@ export default function CompanySettings() {
             />
             Exigir billetagem no fecho de caixa
           </label>
+            {/* closing: accept a difference (always with a reason) or refuse it; propose the A4 closing report */}
+            <label className="flex items-center gap-2 text-[13px] text-text-secondary cursor-pointer">
+              <input type="checkbox" checked={posForm.acceptClosingDifference} onChange={(e) => setPosForm((p) => ({ ...p, acceptClosingDifference: e.target.checked }))} />
+              Aceitar diferença no fecho (com motivo obrigatório)
+            </label>
+            {!posForm.acceptClosingDifference && (
+              <p className="text-[11px] text-text-muted -mt-1 ml-6">O fecho só é aceite se o contado for igual ao esperado.</p>
+            )}
+            <label className="flex items-center gap-2 text-[13px] text-text-secondary cursor-pointer">
+              <input type="checkbox" checked={posForm.printClosingReport} onChange={(e) => setPosForm((p) => ({ ...p, printClosingReport: e.target.checked }))} />
+              Propor a impressão do relatório de fecho (A4)
+            </label>
           <div className="rounded-md border border-border px-3.5 py-3 flex flex-col gap-2.5">
             <label className="flex items-center gap-2 text-[13px] text-text-primary cursor-pointer">
               <input type="checkbox" checked={posForm.printAfterSale} onChange={(e) => setPosForm((p) => ({ ...p, printAfterSale: e.target.checked }))} />

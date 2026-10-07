@@ -180,6 +180,18 @@ class BilletageRequiredError(Exception):
     pass
 
 
+def _kz(amount: float, signed: bool = False) -> str:
+    """An amount as an Angolan reads it: 40 000,00 (space for thousands, comma for decimals)."""
+    s = f"{amount:+,.2f}" if signed else f"{amount:,.2f}"
+    return s.replace(",", " ").replace(".", ",")
+
+
+class ClosingDifferenceNotAllowedError(Exception):
+    """Raised when the till does not accept a difference at closing (accept_closing_difference off) and the
+    counted cash differs from the expected - the manager turns the setting on to let it close with a reason."""
+    pass
+
+
 class ClosingReasonRequiredError(Exception):
     """Raised when the counted cash differs from the expected and no reason is given: the till is never blocked
     (the count is a fact, it is recorded as it is), but a difference is always explained - see the closing report."""
@@ -215,9 +227,14 @@ async def close_session(
     expected = await get_current_expected_cash_balance(db, company_id, session.pos_id, session)
     difference = round(closing_amount_counted - expected, 2)
     closing_notes = (closing_notes or "").strip() or None
+    if difference != 0 and not pos.accept_closing_difference:
+        raise ClosingDifferenceNotAllowedError(
+            f"Esta caixa nao aceita diferencas no fecho: contado {_kz(closing_amount_counted)} Kz, "
+            f"esperado {_kz(expected)} Kz (diferenca de {_kz(difference, True)} Kz)"
+        )
     if difference != 0 and closing_notes is None:
         raise ClosingReasonRequiredError(
-            f"Diferenca de {difference:+,.2f} Kz entre o contado e o esperado - indique o motivo para fechar a caixa"
+            f"Diferenca de {_kz(difference, True)} Kz entre o contado e o esperado - indique o motivo para fechar a caixa"
         )
 
     session.closed_by_user_id = closed_by_user_id

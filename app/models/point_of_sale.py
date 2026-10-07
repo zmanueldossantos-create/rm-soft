@@ -1,4 +1,4 @@
-﻿"""
+"""
 PointOfSale model - a physical/logical sales point within an Activity.
 An Activity (e.g. "Bar", "Padaria") can have several POS (e.g. "Caixa 1",
 "Balcao Rua"), each opening its own CashSession independently - all POS
@@ -27,12 +27,18 @@ class PointOfSale(Base):
     name: Mapped[str] = mapped_column(String(100), nullable=False)  # e.g. "Caixa 1", "Balcao Rua"
     # Denomination breakdown (billetagem) on open/close - toggle per cash point,
     # same field also exists on CashOffice (see cash_office.py).
-    billetage_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    billetage_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
     # Printing after a sale at this till: off = nothing printed automatically (as before); on = the ticket, the A4,
     # or - both chosen - the cashier picks one. Set per till: two tills of one activity may differ.
     print_after_sale: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
     print_ticket: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
     print_a4: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    # Closing: accept a difference between the counted and the expected cash (always with a reason), or refuse the
+    # closing until they match. And whether the closing report (A4) is proposed right after the closing - it can
+    # always be printed again later from the reports, whatever this setting.
+    accept_closing_difference: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
+    print_closing_report: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
     # The Activity's default cash point - auto-created alongside the Activity (see
     # activity_service.create_activity), never renamable/deactivatable/deletable,
     # same principle as the central Warehouse. Replaces the old separate CashOffice
