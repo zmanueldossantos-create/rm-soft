@@ -610,6 +610,9 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
                 {tb.status === 'OCUPADA' && tb.opened_at && (
                   <p className="text-text-muted text-[11px] font-mono">desde {formatTime(tb.opened_at)}</p>
                 )}
+                {tb.ready_dishes > 0 && (
+                  <p className="text-success text-[11px] font-semibold mt-1">{tb.ready_dishes} prato(s) pronto(s)</p>
+                )}
                 {tb.booking_id && (
                   <p className={'text-[11px] mt-1 ' + (tb.status === 'RESERVADA' ? 'text-accent font-medium' : 'text-text-muted')}>
                     Reserva {formatTime(tb.booking_starts_at)}

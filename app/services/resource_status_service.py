@@ -82,9 +82,11 @@ async def list_resource_statuses(
     rows = []
     for resource in resources:
         open_accounts, open_total, opened_at = tabs.get(resource.id, (0, 0.0, None))
+        ready_dishes = 0
         if open_accounts:  # what the invoice will charge, VAT included - the same rule as the account itself
-            from app.services.open_account_service import open_total_of_resource
+            from app.services.open_account_service import open_total_of_resource, ready_dishes_of_resource
             open_total = await open_total_of_resource(db, resource.id)
+            ready_dishes = await ready_dishes_of_resource(db, resource.id)  # dishes waiting to be served
         booking = soonest_booking.get(resource.id)
         if open_accounts > 0:
             status = STATUS_OCUPADA
@@ -99,6 +101,7 @@ async def list_resource_statuses(
             "status": status,
             "open_accounts": open_accounts,
             "open_total": open_total,
+            "ready_dishes": ready_dishes,
             "opened_at": opened_at,
             "booking_id": booking.id if booking else None,
             "booking_starts_at": booking.starts_at if booking else None,

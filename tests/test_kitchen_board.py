@@ -98,3 +98,28 @@ async def test_a_dish_moved_to_another_table_is_announced_where_it_is_now(db, co
     card = next(o for o in (await kitchen_board(db, cid))["orders"] if o["id"] == order.id)
     assert card["account_label"] == "Mesa 1"                # the order keeps the table it was sent from
     assert card["lines"][0]["account_label"] == "Mesa 4"    # the dish says where to serve it
+
+
+@pytest.mark.asyncio
+async def test_a_table_shows_how_many_dishes_wait_to_be_served(db, company_with_essentials):
+    from app.models.resource import Resource
+    from app.models.resource_type_catalog import ResourceTypeCatalog
+    from app.services.open_account_service import ready_dishes_of_resource
+    ctx = company_with_essentials
+    cid, uid = ctx["company"].id, ctx["gestor"].id
+    kind = ResourceTypeCatalog(company_id=cid, name="Mesa")
+    db.add(kind)
+    await db.flush()
+    table_resource = Resource(company_id=cid, activity_id=ctx["activity"].id, resource_type_id=kind.id, name="M7")
+    db.add(table_resource)
+    await db.commit()
+    dish = Product(company_id=cid, code="KR-1", name="Muamba", vat_id=ctx["vat_ise"].id, price=4500, min_stock_threshold=0,
+                   product_type=ProductType.BEM, managed_by_stock=False, prepared_in_kitchen=True)
+    db.add(dish)
+    await db.commit()
+    table = await open_account(db, cid, ctx["activity"].id, None, uid, "M7", resource_id=table_resource.id)
+    line = await add_line(db, cid, table.id, uid, 2, product_id=dish.id)
+    await send_to_kitchen(db, cid, table.id, uid)
+    assert await ready_dishes_of_resource(db, table_resource.id) == 0
+    await act_on_line(db, cid, line.id, "ready", user_id=uid)
+    assert await ready_dishes_of_resource(db, table_resource.id) == 1   # one dish line ready to be served

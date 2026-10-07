@@ -133,6 +133,7 @@ class ResourceStatusResponse(BaseModel):
     status: str  # LIVRE | OCUPADA | RESERVADA - derived on demand, see resource_status_service
     open_accounts: int
     open_total: float
+    ready_dishes: int = 0  # dishes the kitchen has made ready on this table
     opened_at: datetime | None
     booking_id: uuid.UUID | None
     booking_starts_at: datetime | None

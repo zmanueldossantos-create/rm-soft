@@ -719,3 +719,15 @@ async def _ready_dishes(db: AsyncSession, account_ids: list[uuid.UUID]) -> dict[
         .group_by(OpenAccountLine.account_id)
     )).all()
     return {account_id: int(count) for account_id, count in rows}
+
+
+async def ready_dishes_of_resource(db: AsyncSession, resource_id: uuid.UUID) -> int:
+    """Dishes the kitchen has made ready on the open accounts of a table - the floor plan's 'Pronto' badge."""
+    return int((await db.execute(
+        select(func.count(OpenAccountLine.id))
+        .join(OpenAccount, OpenAccount.id == OpenAccountLine.account_id)
+        .where(
+            OpenAccount.resource_id == resource_id, OpenAccount.status == OpenAccountStatus.ABERTA,
+            OpenAccountLine.kitchen_status == KITCHEN_READY,
+        )
+    )).scalar_one())
