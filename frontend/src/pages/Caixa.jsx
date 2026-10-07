@@ -1,3 +1,4 @@
+import { API_ORIGIN } from '../api/config';
 import DateInput from '../components/DateInput';
 import { useState, useEffect, useRef, Fragment } from 'react';
 import usePosDocumentTypes from '../utils/posDocumentTypes';
@@ -618,7 +619,7 @@ export default function Caixa() {
   });
 
   function imageUrl(path) {
-    return path ? 'http://127.0.0.1:8001' + path : null;
+    return path ? API_ORIGIN + path : null;
   }
 
   // saleUnit: one of the product's sale units (a box of 30) - the line sells that unit at its price, the server takes

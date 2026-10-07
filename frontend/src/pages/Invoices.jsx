@@ -1,11 +1,13 @@
 ﻿import { useState, useEffect, useMemo, useRef } from 'react';
+import { API_BASE_URL } from '../api/config';
 import { useNavigate } from 'react-router-dom';
 import { useCan } from '../utils/permissions';
 import { useAuthStore } from '../store/authStore';
 import { createPortal } from 'react-dom';
 import { Receipt, Plus, Loader2, Search, Trash2, FileText, Printer, Eye, X as XIcon, RefreshCw, RotateCcw, FilePlus, MoreVertical, ChevronLeft, ChevronRight } from 'lucide-react';
 import Modal from '../components/Modal';
-import InvoiceWizardModal from '../components/InvoiceWizardModal';
+import InvoiceWizardModal from '../components/InvoiceWizardModal';
+
 import DocumentActionModals from '../components/DocumentActionModals';
 import Select from '../components/Select';
 import { listInvoices, getInvoicePeriods, fetchInvoicePdfBlob, getInvoiceDetail, resubmitInvoice, createReceipt, convertProForma, getOpenCashPoints } from '../api/invoices';
@@ -34,7 +36,7 @@ const INVOICE_TYPE_CODE = {
   PRO_FORMA: 'FP',
 };
 
-const PDF_BASE_URL = 'http://127.0.0.1:8001/api/v1/invoices';
+const PDF_BASE_URL = API_BASE_URL + '/invoices';
 
 // Kebab-style row action menu, rendered through a portal so it is never clipped by the
 // table's horizontal scroll container (same technique as Select.jsx).
@@ -122,7 +124,8 @@ export default function Invoices() {
   const [services, setServices] = useState([]);
   const [paymentMethods, setPaymentMethods] = useState([]);
   const [documentTypes, setDocumentTypes] = useState(null);
-  const ruleOf = useDocumentRules();
+  const ruleOf = useDocumentRules();
+
   const rcActionsRef = useRef(null);
   useEffect(() => {
     // A user who cannot read the catalog keeps the default behaviour; the server enforces the rules anyway.

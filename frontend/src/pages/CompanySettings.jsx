@@ -1,3 +1,4 @@
+import { API_ORIGIN } from '../api/config';
 import { useState, useEffect, useRef } from 'react';
 import { Building2, Loader2, Save, Lock, Image, Upload, Store, Plus, Pencil, Landmark, X, Check, Trash2, FileStack, Sparkles, ChevronDown, CreditCard, Link2, Unlink, Users } from 'lucide-react';
 import Modal from '../components/Modal';
@@ -13,7 +14,6 @@ import { useCan } from '../utils/permissions';
 import { listUsers } from '../api/users';
 import { listCashPointAssociations, assignUserToCashPoint, unassignUserFromCashPoint } from '../api/tesouraria';
 
-const API_ORIGIN = 'http://127.0.0.1:8001';
 
 function ToggleSwitch({ checked, onChange, disabled }) {
   const trackClass = 'relative w-9 h-5 rounded-full transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ' + (checked ? 'bg-success' : 'bg-border');

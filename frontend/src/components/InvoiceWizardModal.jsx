@@ -1,3 +1,4 @@
+import { API_ORIGIN } from '../api/config';
 import DateInput from './DateInput';
 import { useState, useEffect, useMemo } from 'react';
 import { Plus, Trash2, Loader2, Copy, Eye, ArrowLeft, ArrowRight, Check, FileText } from 'lucide-react';
@@ -12,12 +13,12 @@ import { listVatRates } from '../api/vat';
 import { paymentTermsApi, paymentMethodsApi, unitsApi, documentRulesApi, banksApi, withholdingTaxesApi } from '../api/catalogs';
 import { getMyCompany, getMyCompanyBankAccounts } from '../api/company';
 import { listDocumentSeries } from '../api/documentSeries';
-import { extractErrorMessage } from '../utils/errors';
+import { extractErrorMessage } from '../utils/errors';
+
 import { dueDateFor, isProntoTerm } from '../utils/paymentTerms';
 import { useAuthStore } from '../store/authStore';
 
 const inputClass = "w-full bg-bg-inset border border-border rounded-md px-2.5 py-2 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors";
-const API_ORIGIN = 'http://127.0.0.1:8001';
 
 const INVOICE_TYPE_CODE = { FACTURA: 'FT', FACTURA_RECIBO: 'FR', PRO_FORMA: 'FP', NOTA_CREDITO: 'NC', NOTA_DEBITO: 'ND', RECIBO: 'RC' };
 const INVOICE_TYPE_LABEL = { FACTURA: 'Factura', FACTURA_RECIBO: 'Factura/Recibo', PRO_FORMA: 'Factura Pro-forma' };

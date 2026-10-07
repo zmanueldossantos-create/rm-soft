@@ -1,3 +1,4 @@
+import { API_ORIGIN } from '../api/config';
 import DateInput from '../components/DateInput';
 import { useCan } from '../utils/permissions';
 import VatReclassify from '../components/VatReclassify';
@@ -351,7 +352,7 @@ export default function Products() {
                     <td className="px-3 py-4"><input type="checkbox" checked={selectedIds.includes(p.id)} onChange={(e) => setSelectedIds((prev) => (e.target.checked ? [...prev, p.id] : prev.filter((x) => x !== p.id)))} /></td>
                     <td className="px-6 py-4">
                       {p.image_path ? (
-                        <img src={'http://127.0.0.1:8001' + p.image_path} alt={p.name} className="w-9 h-9 rounded object-cover border border-border" />
+                        <img src={API_ORIGIN + p.image_path} alt={p.name} className="w-9 h-9 rounded object-cover border border-border" />
                       ) : (
                         <div className="w-9 h-9 rounded bg-bg-inset border border-border flex items-center justify-center text-text-muted/40"><Package size={14} /></div>
                       )}
@@ -407,7 +408,7 @@ export default function Products() {
           {editingId && (
             <div className="flex items-center gap-3">
               {editingProduct?.image_path ? (
-                <img src={'http://127.0.0.1:8001' + editingProduct.image_path} alt="" className="w-16 h-16 rounded-md object-cover border border-border" />
+                <img src={API_ORIGIN + editingProduct.image_path} alt="" className="w-16 h-16 rounded-md object-cover border border-border" />
               ) : (
                 <div className="w-16 h-16 rounded-md bg-bg-inset border border-border flex items-center justify-center text-text-muted/40"><Package size={22} /></div>
               )}

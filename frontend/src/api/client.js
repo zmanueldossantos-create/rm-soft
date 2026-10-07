@@ -1,10 +1,11 @@
 ﻿// API client - connects to the FastAPI backend.
-// Base URL points to the local backend (port 8001, see backend .env).
+// The backend address: see ./config.js.
+import { API_BASE_URL } from './config';
 import axios from 'axios';
 import { useAuthStore } from '../store/authStore';
 
 const apiClient = axios.create({
-  baseURL: 'http://127.0.0.1:8001/api/v1',
+  baseURL: API_BASE_URL,
   headers: { 'Content-Type': 'application/json' },
 });
 
@@ -39,7 +40,7 @@ apiClient.interceptors.response.use(
 
       try {
         if (!refreshPromise) {
-          refreshPromise = axios.post('http://127.0.0.1:8001/api/v1/auth/refresh', {
+          refreshPromise = axios.post(API_BASE_URL + '/auth/refresh', {
             refresh_token: refreshToken,
           }).finally(() => {
             refreshPromise = null;
