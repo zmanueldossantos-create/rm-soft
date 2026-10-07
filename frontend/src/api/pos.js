@@ -94,3 +94,9 @@ export async function getPosStock(posId) {
   const res = await apiClient.get('/pos/stock', { params: { pos_id: posId } });
   return res.data;
 }
+
+// The closing report (A4 PDF) of a closed session, as an object URL for the in-app PDF viewer.
+export async function fetchClosingReportPdfBlob(sessionId) {
+  const res = await apiClient.get('/pos/sessions/' + sessionId + '/closing-report', { responseType: 'blob' });
+  return URL.createObjectURL(res.data);
+}

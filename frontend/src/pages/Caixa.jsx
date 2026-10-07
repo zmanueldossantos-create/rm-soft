@@ -21,7 +21,7 @@ import { listActivities, listPointsOfSale } from '../api/activity';
 import { createCustomer } from '../api/customers';
 import { listProducts } from '../api/products';
 import { listCustomers } from '../api/customers';
-import { openCashSession, getOpenCashSession, closeCashSession, checkout, liquidatePendingInvoice, getSessionSummary, getCarryForwardAmount } from '../api/pos';
+import { openCashSession, getOpenCashSession, closeCashSession, checkout, liquidatePendingInvoice, getSessionSummary, fetchClosingReportPdfBlob, getCarryForwardAmount } from '../api/pos';
 import { listPendingProFormas, listRecentIssuedInvoices, fetchInvoicePdfBlob, getInvoiceDetail } from '../api/invoices';
 import { listPendingReceptions, receiveCashMovement, listPendingEmissions, cancelCashMovement, getDailyReport } from '../api/tesouraria';
 import DocumentActionModals from '../components/DocumentActionModals';
@@ -209,7 +209,7 @@ export default function Caixa() {
 
       const printMap = {};
       posLists.forEach((list) => (list || []).forEach((p) => {
-        printMap[p.id] = { on: !!p.print_after_sale, ticket: p.print_ticket !== false, a4: !!p.print_a4 };
+        printMap[p.id] = { on: !!p.print_after_sale, ticket: p.print_ticket !== false, a4: !!p.print_a4, closingReport: !!p.print_closing_report };
       }));
       setPrintConfigByPos(printMap);
       const activityNameById = Object.fromEntries(activeActivities.map((a) => [a.id, a.name]));
@@ -572,6 +572,20 @@ export default function Caixa() {
     setCloseModalOpen(true);
   }
 
+  // The closing report (A4): proposed after the closing when the till asks for it (print_closing_report), and
+  // always available - the closing window closes, then the report opens in the PDF viewer.
+  const [closingReportProposed, setClosingReportProposed] = useState(false); // read fresh after each closing
+  async function finishAndPrintClosingReport(sessionId) {
+    finishClosing();
+    try {
+      setPdfBlobUrl(await fetchClosingReportPdfBlob(sessionId));
+      setPdfFilename('Relatório de fecho');
+      setPdfModalOpen(true);
+    } catch (err) {
+      setError(extractErrorMessage(err, 'Erro ao gerar o relatório de fecho'));
+    }
+  }
+
   async function handleCloseAfterBilletage() {
     setCloseSaving(true);
     setMoedeiroError('');
@@ -579,6 +593,7 @@ export default function Caixa() {
       const closed = await closeCashSession(session.id, null, closingNotes);
       setMoedeiroModalOpen(false);
       setCloseResult(closed);
+      freshPrintConfig().then((cfg) => setClosingReportProposed(!!cfg?.closingReport));
       setCloseModalOpen(true);
     } catch (err) {
       setMoedeiroError(extractErrorMessage(err, 'Erro ao fechar caixa'));
@@ -594,6 +609,7 @@ export default function Caixa() {
     try {
       const closed = await closeCashSession(session.id, parseFloat(closingAmountCounted || '0'), closingNotes);
       setCloseResult(closed);
+      freshPrintConfig().then((cfg) => setClosingReportProposed(!!cfg?.closingReport));
     } catch (err) {
       setCloseError(extractErrorMessage(err, 'Erro ao fechar caixa'));
     } finally {
@@ -964,7 +980,7 @@ export default function Caixa() {
     try {
       const p = ((await listPointsOfSale(pos.activity_id)) || []).find((x) => x.id === selectedPosId);
       if (!p) return known;
-      const cfg = { on: !!p.print_after_sale, ticket: p.print_ticket !== false, a4: !!p.print_a4 };
+      const cfg = { on: !!p.print_after_sale, ticket: p.print_ticket !== false, a4: !!p.print_a4, closingReport: !!p.print_closing_report };
       setPrintConfigByPos((prev) => ({ ...prev, [selectedPosId]: cfg }));
       return cfg;
     } catch {
@@ -1561,18 +1577,37 @@ export default function Caixa() {
         ) : (
           <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-2 bg-bg-inset border border-border rounded-md px-4 py-3">
-              <div className="flex justify-between text-[13px]"><span className="text-text-muted">Esperado</span><span className="font-mono text-text-primary">{Number(closeResult.closing_amount_expected).toFixed(2)} Kz</span></div>
-              <div className="flex justify-between text-[13px]"><span className="text-text-muted">Contado</span><span className="font-mono text-text-primary">{Number(closeResult.closing_amount_counted).toFixed(2)} Kz</span></div>
+              <div className="flex justify-between text-[13px]"><span className="text-text-muted">Esperado</span><span className="font-mono text-text-primary">{formatKz(Number(closeResult.closing_amount_expected))} Kz</span></div>
+              <div className="flex justify-between text-[13px]"><span className="text-text-muted">Contado</span><span className="font-mono text-text-primary">{formatKz(Number(closeResult.closing_amount_counted))} Kz</span></div>
               <div className="flex justify-between text-[13px] border-t border-border pt-2">
                 <span className="text-text-muted">Diferença</span>
                 <span className={'font-mono font-semibold ' + (Number(closeResult.closing_difference) === 0 ? 'text-success' : Number(closeResult.closing_difference) > 0 ? 'text-accent' : 'text-danger')}>
-                  {Number(closeResult.closing_difference) > 0 ? '+' : ''}{Number(closeResult.closing_difference).toFixed(2)} Kz
+                  {Number(closeResult.closing_difference) > 0 ? '+' : ''}{formatKz(Number(closeResult.closing_difference))} Kz
                 </span>
               </div>
+              {closeResult.closing_notes && (
+                <div className="text-[12px] text-text-muted border-t border-border pt-2">
+                  Motivo: <span className="text-text-primary">{closeResult.closing_notes}</span>
+                </div>
+              )}
             </div>
-            <button onClick={finishClosing} className="bg-accent hover:bg-accent-hover text-white font-semibold text-sm rounded-md py-3 transition-colors cursor-pointer">
-              Concluir
-            </button>
+            {/* the closing report: the main button when the till proposes it, otherwise next to Concluir */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => finishAndPrintClosingReport(closeResult.id)}
+                className={(closingReportProposed ? 'flex-1 bg-accent hover:bg-accent-hover text-white' : 'border border-border hover:border-accent text-text-primary')
+                  + ' font-semibold text-sm rounded-md py-3 px-4 transition-colors cursor-pointer'}
+              >
+                Imprimir relatório de fecho
+              </button>
+              <button
+                onClick={finishClosing}
+                className={(closingReportProposed ? 'border border-border hover:border-accent text-text-primary' : 'flex-1 bg-accent hover:bg-accent-hover text-white')
+                  + ' font-semibold text-sm rounded-md py-3 px-4 transition-colors cursor-pointer'}
+              >
+                Concluir
+              </button>
+            </div>
           </div>
         )}
       </Modal>

@@ -53,6 +53,9 @@ from app.services.invoice_service import (
 )
 
 from app.services.cash_session_service import ClosingDifferenceNotAllowedError, ClosingReasonRequiredError, get_session_summary
+from fastapi import Response
+from app.services.cash_report_service import SessionNotClosedError, get_closing_report_data
+from app.utils.cash_report_pdf import generate_closing_report_pdf
 
 router = APIRouter(prefix="/api/v1/pos", tags=["pos"])
 
@@ -135,6 +138,23 @@ async def post_close_session(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     except ClosingReasonRequiredError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.get("/sessions/{session_id}/closing-report")
+async def get_closing_report(
+    session_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("pos:view")),
+):
+    """The closing report (A4 PDF) of a closed session - rebuilt from what is recorded, identical at every print."""
+    try:
+        data = await get_closing_report_data(db, current_user.company_id, session_id)
+    except SessionNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except SessionNotClosedError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    return Response(content=generate_closing_report_pdf(data), media_type="application/pdf",
+                    headers={"Content-Disposition": f'inline; filename="fecho-caixa-{data["business_date"]}.pdf"'})
 
 
 @router.get("/sessions", response_model=list[CashSessionResponse])

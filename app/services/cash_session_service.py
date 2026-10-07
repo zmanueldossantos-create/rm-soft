@@ -208,6 +208,8 @@ async def get_session_summary(
             CashMovement.company_id == company_id,
             or_(CashMovement.source_pos_id == pos_id, CashMovement.destination_pos_id == pos_id),
             CashMovement.created_at >= session.opened_at,
+            # a closed session ends at its closing: a reprint the next day never counts later movements
+            *([CashMovement.created_at <= session.closed_at] if session.closed_at is not None else []),
         )
     )
     transfers_in = entries = transfers_out = exits = pending_in = 0.0
@@ -238,7 +240,10 @@ async def get_session_summary(
         "transfers_out": round(transfers_out, 2),
         "exits": round(exits, 2),
         "pending_in": round(pending_in, 2),
-        "expected_cash": round(await get_current_expected_cash_balance(db, company_id, pos_id, session), 2),
+        # closed: the expected recorded at the closing, frozen; open: computed live by the one formula
+        "expected_cash": round(float(session.closing_amount_expected), 2)
+        if session.status == CashSessionStatus.FECHADA and session.closing_amount_expected is not None
+        else round(await get_current_expected_cash_balance(db, company_id, pos_id, session), 2),
     }
 
 
