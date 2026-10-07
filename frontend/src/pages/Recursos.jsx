@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Boxes, Plus, Pencil, Loader2 } from 'lucide-react';
 import Select from '../components/Select';
 import { listActivities } from '../api/activity';

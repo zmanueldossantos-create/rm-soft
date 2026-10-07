@@ -1,4 +1,4 @@
-﻿"""add cash movement reception status
+"""add cash movement reception status
 
 Revision ID: debc6ed7cbd5
 Revises: 99238d553718

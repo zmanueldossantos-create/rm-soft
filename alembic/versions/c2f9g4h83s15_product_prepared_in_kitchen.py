@@ -1,4 +1,4 @@
-﻿"""products.prepared_in_kitchen : un article prepare en cuisine (un plat) - ce que la cuisine voit
+"""products.prepared_in_kitchen : un article prepare en cuisine (un plat) - ce que la cuisine voit
 
 Revision ID: c2f9g4h83s15
 Revises: b1e8f3g72r04

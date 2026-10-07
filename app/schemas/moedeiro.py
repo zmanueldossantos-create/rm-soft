@@ -1,4 +1,4 @@
-﻿"""
+"""
 Pydantic schemas for the Moedeiro (billetage) feature - denominations and
 cash-drawer counts.
 """

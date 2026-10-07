@@ -1,4 +1,4 @@
-﻿"""The kitchen is a capability of its own: the Restaurante has it, the Bar (now with tables) and the Hotel do not."""
+"""The kitchen is a capability of its own: the Restaurante has it, the Bar (now with tables) and the Hotel do not."""
 from app.core.capabilities import CAPABILITIES, SECTORS_BY_CODE, capability_of_permission, expand_dependencies
 
 

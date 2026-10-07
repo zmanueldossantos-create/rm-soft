@@ -1,4 +1,4 @@
-﻿// API calls for DocumentSeries (Video 4/8, company-scoped).
+// API calls for DocumentSeries (Video 4/8, company-scoped).
 import apiClient from './client';
 
 export async function listDocumentSeries() {

@@ -1,4 +1,4 @@
-﻿"""
+"""
 VatCode - the official AGT VAT code catalog (Codigo IVA), platform-wide,
 SUPER_ADMIN managed (see reference list: M22/Isento artigo 12 m do CIVA,
 M23, M24...) with the exact legal article text and a validity window.

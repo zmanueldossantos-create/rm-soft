@@ -1,4 +1,4 @@
-﻿import apiClient from './client';
+import apiClient from './client';
 
 // ---------- Resource types (managed catalog: Chambre, Praticien, Mesa...) ----------
 

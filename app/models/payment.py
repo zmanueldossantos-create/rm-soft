@@ -1,4 +1,4 @@
-﻿"""
+"""
 Payment model - one payment line for an Invoice. A sale can be split
 across multiple payment methods (e.g. 4000 Kz numerario + 6000 Kz
 Multicaixa Express for a 10000 Kz total) - see discussion on split

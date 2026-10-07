@@ -1,4 +1,4 @@
-﻿"""
+"""
 Activity model - a business line / point of sale within a Company.
 See discussion on multi-activity companies: a single company (one NIF) can
 run several activities (e.g. Hotel, Padaria, Bar, Restaurante) - confirmed

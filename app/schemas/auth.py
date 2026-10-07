@@ -1,4 +1,4 @@
-﻿"""
+"""
 Pydantic schemas for phone number authentication.
 See specification v7, section 2.4.
 """

@@ -1,4 +1,4 @@
-﻿"""role COZINHA : valeur du type et droits de lecture de base dans les entreprises existantes
+"""role COZINHA : valeur du type et droits de lecture de base dans les entreprises existantes
 (les droits kitchen:* sont nouveaux : le semis du demarrage les distribue tout seul)
 
 Revision ID: e4h1i6j05u37

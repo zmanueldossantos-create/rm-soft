@@ -1,4 +1,4 @@
-﻿"""
+"""
 Business logic for ProductCategory - company-scoped catalog (Video 3),
 managed by the company's own GESTOR (not SUPER_ADMIN, unlike the
 platform-wide catalogs in Configuracoes).

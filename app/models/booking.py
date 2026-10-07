@@ -1,4 +1,4 @@
-﻿"""
+"""
 Booking model - a reservation of a Resource for a time span, optionally tied
 to a Customer and a Service (the prestation being booked, e.g. "Massagem
 60min"). This is the generic reservation engine shared across every

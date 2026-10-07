@@ -1,4 +1,4 @@
-﻿"""
+"""
 PaymentTerm (Condicao de pagamento) catalog - platform-wide, SUPER_ADMIN
 managed (see reference list: A 60 dias, A 90 dias, Ate 8 dia do mes
 seguinte, etc). Determines how a Customer/Invoice data de vencimento

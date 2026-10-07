@@ -1,4 +1,4 @@
-﻿"""
+"""
 Phone number authentication routes.
 See specification v7, section 2.4.
 """

@@ -1,4 +1,4 @@
-﻿"""Point 34a - an account costs what its invoice will charge: price before VAT, VAT per line, same rounding."""
+"""Point 34a - an account costs what its invoice will charge: price before VAT, VAT per line, same rounding."""
 import pytest
 
 from app.models.product import Product, ProductType

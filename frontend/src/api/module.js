@@ -1,4 +1,4 @@
-﻿// API calls for the Module catalog and company module grants (SUPER_ADMIN only).
+// API calls for the Module catalog and company module grants (SUPER_ADMIN only).
 import apiClient from './client';
 
 export async function listModules() {

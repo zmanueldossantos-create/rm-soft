@@ -1,4 +1,4 @@
-﻿"""Point 33bis - an open account is a till cart kept open: the stock is checked when an item is added,
+"""Point 33bis - an open account is a till cart kept open: the stock is checked when an item is added,
 against what is left in the warehouse of its point of sale once every open account is counted."""
 import pytest
 

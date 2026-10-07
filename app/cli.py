@@ -1,4 +1,4 @@
-﻿"""
+"""
 Command-line utility to bootstrap the platform.
 Run once to create the very first SUPER_ADMIN account, since no one else
 can create it (SUPER_ADMIN creation is not exposed via any API route).

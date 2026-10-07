@@ -1,4 +1,4 @@
-﻿"""Remove ADMIN role
+"""Remove ADMIN role
 
 Revision ID: f558ce18dee5
 Revises: 2ca52b339d01

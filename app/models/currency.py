@@ -1,4 +1,4 @@
-﻿"""Currency catalog - platform-wide, SUPER_ADMIN managed."""
+"""Currency catalog - platform-wide, SUPER_ADMIN managed."""
 import uuid
 from datetime import datetime
 from sqlalchemy import String, Boolean, DateTime, func

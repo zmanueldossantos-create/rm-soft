@@ -1,4 +1,4 @@
-﻿"""
+"""
 Self-service company contact info routes.
 GESTOR can update their own company's address/phone/email (used on
 invoices) - fiscal identity (name/NIF) stays SUPER_ADMIN-only, unchanged

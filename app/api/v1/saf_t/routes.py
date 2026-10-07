@@ -1,4 +1,4 @@
-﻿"""
+"""
 SAF-T export routes - GESTOR only ("Modo Fatura" monthly export, section 4.2).
 """
 from fastapi import APIRouter, Depends, HTTPException, Response, status

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Module catalog - platform-wide reference list of business module types
 (Hotel, Padaria, Bar, Restaurante - extensible later, e.g. Farmacia).
 Managed by SUPER_ADMIN. A company is granted access to specific modules

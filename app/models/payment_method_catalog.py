@@ -1,4 +1,4 @@
-﻿"""
+"""
 PaymentMethodCatalog - the official AGT PaymentMechanism catalog (SAF-T AO
 XSD, "Meio de pagamento" - CC/Cartao credito, CD/Cartao debito, CH/Cheque
 bancario, CI/Credito documentario internacional, CO/Cheque ou cartao

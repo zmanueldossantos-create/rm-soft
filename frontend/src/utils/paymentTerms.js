@@ -1,4 +1,4 @@
-﻿// Payment terms - the one due-date computation for Faturas and the Caixa.
+// Payment terms - the one due-date computation for Faturas and the Caixa.
 // A fixed-day term (fixed_days) falls on day `days` of the document month plus `months_fixed_day` months (31, or any day
 // past the month's end, is that month's last day). Any other term is the document date plus `days`.
 export function dueDateFor(term, documentDate) {

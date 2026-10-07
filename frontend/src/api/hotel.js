@@ -1,4 +1,4 @@
-﻿import apiClient from './client';
+import apiClient from './client';
 
 export async function checkIn(bookingId, posId = null) {
   const params = posId ? { pos_id: posId } : {};

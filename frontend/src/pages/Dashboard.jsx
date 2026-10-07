@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { LayoutDashboard, TrendingUp, Receipt, AlertTriangle, Loader2, Package2, Send, Clock, CheckCircle2, XCircle } from 'lucide-react';
 import { getDashboardSummary } from '../api/dashboard';
 import { useAuthStore } from '../store/authStore';

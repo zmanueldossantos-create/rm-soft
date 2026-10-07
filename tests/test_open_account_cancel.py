@@ -1,4 +1,4 @@
-﻿"""Point 34a - an account opened by mistake is cancelled while empty: no fiscal document, the table is freed."""
+"""Point 34a - an account opened by mistake is cancelled while empty: no fiscal document, the table is freed."""
 import pytest
 
 from app.models.open_account import OpenAccountStatus

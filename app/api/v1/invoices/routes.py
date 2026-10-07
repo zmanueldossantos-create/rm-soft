@@ -1,4 +1,4 @@
-﻿"""
+"""
 Invoice routes - scoped to the caller's company (multi-tenant isolation, section 2.5 v7).
 Priority #1 of the specification (section 1) - AGT fiscal compliance.
 """

@@ -1,4 +1,4 @@
-﻿// API calls for products, scoped to the caller's company.
+// API calls for products, scoped to the caller's company.
 import apiClient from './client';
 
 export async function listProducts() {

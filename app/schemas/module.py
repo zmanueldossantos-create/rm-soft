@@ -1,4 +1,4 @@
-﻿"""
+"""
 Pydantic schemas for the Module catalog (SUPER_ADMIN only).
 """
 import uuid

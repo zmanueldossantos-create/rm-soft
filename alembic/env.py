@@ -1,4 +1,4 @@
-﻿"""
+"""
 Configuration Alembic - lit DATABASE_URL depuis .env (pas depuis alembic.ini)
 et connait les modeles du projet pour l'autogeneration des migrations.
 Adapte pour SQLAlchemy 2.0 Async (asyncpg).

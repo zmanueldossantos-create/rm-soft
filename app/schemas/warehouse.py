@@ -1,4 +1,4 @@
-﻿"""
+"""
 Pydantic schemas for the company's warehouse.
 Phase 1 keeps a single warehouse per company (section 5.2/2.8) - this
 schema supports viewing and renaming it, not full multi-warehouse CRUD.

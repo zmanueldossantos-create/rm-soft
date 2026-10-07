@@ -1,4 +1,4 @@
-﻿"""
+"""
 StockMovementDocument service - creates the printable Entrada/Saida document AND, for
 traceability, writes the corresponding low-level StockMovement ledger rows and updates
 the real Stock.quantity - see PARTIE1&2 GESTAO DE STOCK: "ce sont des documents comme

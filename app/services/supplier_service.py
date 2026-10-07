@@ -1,4 +1,4 @@
-﻿"""
+"""
 Service layer for Supplier - simple catalog CRUD, mirroring
 customer_service.py's shape but without the AGT-driven NIF requirement
 (see Supplier model docstring for why).

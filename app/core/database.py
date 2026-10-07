@@ -1,4 +1,4 @@
-﻿"""
+"""
 Connexion asynchrone a PostgreSQL via SQLAlchemy 2.0.
 Un seul moteur, reutilise dans les deux modes de deploiement (local/saas) -
 seule DATABASE_URL change selon l environnement (.env).

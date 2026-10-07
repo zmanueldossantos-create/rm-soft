@@ -1,4 +1,4 @@
-﻿# ERP Multisecteurs — Angola
+# ERP Multisecteurs — Angola
 
 ERP modulaire pour PME angolaises (Hotel, Boulangerie, Bar, Restauration, Alimentation),
 conforme au regime fiscal RGIFT 2.0 (AGT).

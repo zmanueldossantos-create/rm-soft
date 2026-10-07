@@ -1,4 +1,4 @@
-﻿// API calls for the Tesouraria module (motivos, movimentos de caixa,
+// API calls for the Tesouraria module (motivos, movimentos de caixa,
 // user <-> POS associations).
 //
 // ARCHITECTURE NOTE: this used to also cover a separate CashOffice entity

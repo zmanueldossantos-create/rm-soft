@@ -1,4 +1,4 @@
-﻿"""
+"""
 Fiscal regime reference table - platform-wide (not company-scoped), managed
 by SUPER_ADMIN. Angola's tax law defines several VAT regimes (Regime Geral,
 Regime de Exclusao, Regime Simplificado, and possibly others) that each

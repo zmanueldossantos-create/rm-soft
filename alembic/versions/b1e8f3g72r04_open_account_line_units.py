@@ -1,4 +1,4 @@
-﻿"""open_account_lines : unite de vente de la ligne (emballage, facteur, code), comme le panier de caisse
+"""open_account_lines : unite de vente de la ligne (emballage, facteur, code), comme le panier de caisse
 
 Revision ID: b1e8f3g72r04
 Revises: a0d7e2f61q93

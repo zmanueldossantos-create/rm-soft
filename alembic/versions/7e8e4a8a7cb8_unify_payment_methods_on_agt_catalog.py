@@ -1,4 +1,4 @@
-﻿"""unify payment methods on AGT catalog
+"""unify payment methods on AGT catalog
 
 Revision ID: 7e8e4a8a7cb8
 Revises: 97b8ac80d430

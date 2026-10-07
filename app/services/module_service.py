@@ -1,4 +1,4 @@
-﻿"""
+"""
 Business logic for the Module catalog (SUPER_ADMIN only, platform-wide).
 """
 import uuid

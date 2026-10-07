@@ -1,4 +1,4 @@
-﻿// API calls for the 8 platform-wide base catalogs (SUPER_ADMIN only).
+// API calls for the 8 platform-wide base catalogs (SUPER_ADMIN only).
 import apiClient from './client';
 
 function makeCatalogApi(basePath) {

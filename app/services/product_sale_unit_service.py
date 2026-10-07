@@ -1,4 +1,4 @@
-﻿"""
+"""
 Sale units of a product (see ProductSaleUnit): the other units it is sold in, each with a factor (base units
 contained), a price and an optional barcode. The product itself stays the base unit.
 """

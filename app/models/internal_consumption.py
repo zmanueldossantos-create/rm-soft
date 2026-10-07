@@ -1,4 +1,4 @@
-﻿"""
+"""
 InternalConsumption - a generic record of stock leaving a warehouse for
 internal operational use rather than a sale (e.g. towels/soap used for
 housekeeping, cleaning supplies used in a kitchen) - no invoice, no

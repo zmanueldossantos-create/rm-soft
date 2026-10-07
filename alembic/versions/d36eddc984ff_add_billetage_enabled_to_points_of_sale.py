@@ -1,4 +1,4 @@
-﻿"""add billetage_enabled to points_of_sale
+"""add billetage_enabled to points_of_sale
 
 Revision ID: d36eddc984ff
 Revises: ee3855aeebb7

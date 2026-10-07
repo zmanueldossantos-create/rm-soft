@@ -1,4 +1,4 @@
-﻿"""
+"""
 Service layer for Resource - the generic bookable "thing" (room, therapist,
 table...) behind the Booking system. See app.models.resource for the full
 design rationale.

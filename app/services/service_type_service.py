@@ -1,4 +1,4 @@
-﻿"""
+"""
 Business logic for ServiceType - company-scoped catalog (Video 3),
 managed by the company's own GESTOR (not SUPER_ADMIN).
 """

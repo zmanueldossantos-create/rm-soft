@@ -1,4 +1,4 @@
-﻿"""Add allows_int and allows_out to fiscal_regimes
+"""Add allows_int and allows_out to fiscal_regimes
 
 Revision ID: a02e6352b1ae
 Revises: 1b703146ed84

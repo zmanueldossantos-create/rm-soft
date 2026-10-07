@@ -1,4 +1,4 @@
-﻿"""
+"""
 SAF-T export service - gathers a company's data for a given fiscal period
 (year/month) and generates the AuditFile XML. See specification v6/v7,
 section 4.2 "Modo Fatura" - exported at month end, submitted manually to

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Stock model - current quantity of a Product within a Warehouse.
 See specification v6/v7, section 5.2. One row per (product, warehouse) pair,
 updated by StockMovement entries - never written to directly by business

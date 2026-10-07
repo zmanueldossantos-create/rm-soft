@@ -1,4 +1,4 @@
-﻿"""
+"""
 CompanyModule - grants a Company access to a Module (e.g. this company may
 use the "Padaria" and "Bar" modules). SUPER_ADMIN manages these grants,
 at company creation and afterward (a client may add a module later).

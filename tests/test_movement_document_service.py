@@ -1,4 +1,4 @@
-﻿import pytest
+import pytest
 
 from app.models.product import Product, ProductType
 from app.models.stock import Stock

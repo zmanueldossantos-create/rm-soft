@@ -1,4 +1,4 @@
-﻿"""cuisine : kitchen_orders (envois en cuisine) et etat cuisine des lignes de compte
+"""cuisine : kitchen_orders (envois en cuisine) et etat cuisine des lignes de compte
 
 Revision ID: d3g0h5i94t26
 Revises: c2f9g4h83s15

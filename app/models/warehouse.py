@@ -1,4 +1,4 @@
-﻿"""
+"""
 Warehouse model (Armazem / point de stockage).
 See specification v6/v7, section 2.8: entity hierarchy includes one or more
 warehouses per company. A default warehouse is auto-created for every new

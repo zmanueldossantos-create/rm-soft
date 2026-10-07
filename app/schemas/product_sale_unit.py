@@ -1,4 +1,4 @@
-﻿import uuid
+import uuid
 
 from pydantic import BaseModel, field_validator
 

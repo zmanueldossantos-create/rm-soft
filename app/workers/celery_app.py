@@ -1,4 +1,4 @@
-﻿"""
+"""
 Celery application configuration.
 See specification v6/v7, section 4.2: invoices are submitted to a "Mock AGT"
 server asynchronously via Celery, triggered immediately after creation.

@@ -1,4 +1,4 @@
-﻿// API calls for platform administration (SUPER_ADMIN only).
+// API calls for platform administration (SUPER_ADMIN only).
 import apiClient from './client';
 
 export async function listCompanies() {

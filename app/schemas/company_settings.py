@@ -1,4 +1,4 @@
-﻿"""
+"""
 Pydantic schemas for a company's own self-service settings, editable by
 its GESTOR - everything except the locked fiscal identity (name, NIF,
 legal_person_type, fiscal_regime), which remains SUPER_ADMIN-only (see

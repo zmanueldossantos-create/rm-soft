@@ -1,4 +1,4 @@
-﻿"""
+"""
 Fiscal Year model (Ano).
 See specification v6/v7, section 3.4: strict hierarchy - a Period (month) can
 only open if its parent Year is open; a Year can only close once its current

@@ -1,4 +1,4 @@
-﻿"""
+"""
 OpenAccountLine model - one item accumulated on an OpenAccount before it is
 settled. Mirrors InvoiceLine's snapshot pattern (name/price captured at add
 time, so later product/service edits never retroactively change what a

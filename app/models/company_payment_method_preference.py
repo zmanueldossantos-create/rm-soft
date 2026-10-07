@@ -1,4 +1,4 @@
-﻿"""
+"""
 CompanyPaymentMethodPreference - per-company choice of which
 PaymentMethodCatalog codes (the 12 official AGT ones) appear as selectable
 on that company's Caixa screen. Managed by each company's own GESTOR, not

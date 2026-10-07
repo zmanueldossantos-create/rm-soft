@@ -1,4 +1,4 @@
-﻿"""
+"""
 Business logic for platform-wide settings (single row, SUPER_ADMIN only).
 """
 from sqlalchemy import select

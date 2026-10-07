@@ -1,4 +1,4 @@
-﻿"""
+"""
 Service layer for Booking - the generic reservation engine. See
 app.models.booking for the full design rationale, especially the overlap
 rule enforced here (never at the DB level).

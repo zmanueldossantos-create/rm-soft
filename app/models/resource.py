@@ -1,4 +1,4 @@
-﻿"""
+"""
 Resource model - a generic bookable "thing" belonging to an Activity: a hotel
 room, a spa therapist, a hairdresser's chair, a restaurant table, a dentist's
 chair. This is the shared foundation behind the Booking model - see that

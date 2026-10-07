@@ -1,4 +1,4 @@
-﻿// API calls for RecipeIngredient (Bill of Materials) management.
+// API calls for RecipeIngredient (Bill of Materials) management.
 // Recipes are expressed PER BATCH (see Product.batch_yield) rather than
 // per single unit - e.g. "1 saco de farinha per batch -> 400 paes".
 import apiClient from './client';

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Invoice model.
 See specification v6/v7, section 4: Factura, Factura-Recibo, Nota de Credito,
 Nota de Debito. ATCUD, hash and QR code are simulated (correct format, not

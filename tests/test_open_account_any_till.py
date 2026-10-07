@@ -1,4 +1,4 @@
-﻿"""An open account belongs to its activity: no till is chosen to open it (the default one is recorded)."""
+"""An open account belongs to its activity: no till is chosen to open it (the default one is recorded)."""
 import pytest
 
 from app.models.point_of_sale import PointOfSale

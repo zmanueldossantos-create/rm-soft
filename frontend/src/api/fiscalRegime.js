@@ -1,4 +1,4 @@
-﻿// API calls for fiscal regimes (SUPER_ADMIN only).
+// API calls for fiscal regimes (SUPER_ADMIN only).
 import apiClient from './client';
 
 export async function listFiscalRegimes() {

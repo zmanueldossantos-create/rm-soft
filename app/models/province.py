@@ -1,4 +1,4 @@
-﻿"""Province catalog - platform-wide, SUPER_ADMIN managed, scoped to a Country."""
+"""Province catalog - platform-wide, SUPER_ADMIN managed, scoped to a Country."""
 import uuid
 from datetime import datetime
 from sqlalchemy import String, Boolean, DateTime, ForeignKey, func

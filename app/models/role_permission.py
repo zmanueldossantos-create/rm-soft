@@ -1,4 +1,4 @@
-﻿"""
+"""
 RolePermission - per-company grant of a Permission to a UserRole. Absence of
 a row for (company_id, role, permission_id) means "not granted" - the seed
 step (see permission_service.seed_default_permissions) inserts one row per

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Business logic for Establishment - company-scoped, needed for electronic
 invoicing series requests (Video 8).
 """

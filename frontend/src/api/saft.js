@@ -1,4 +1,4 @@
-﻿// API calls for SAF-T export ("Modo Fatura", section 4.2).
+// API calls for SAF-T export ("Modo Fatura", section 4.2).
 import apiClient from './client';
 
 export async function downloadSaftFile(year, month) {

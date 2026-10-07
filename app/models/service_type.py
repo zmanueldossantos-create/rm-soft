@@ -1,4 +1,4 @@
-﻿"""
+"""
 ServiceType - company-scoped catalog (Video 3: "Tipo de Servico") -
 mirrors ProductCategory but for services (e.g. "Alojamento", "Lavandaria"
 for a hotel; company-specific, not platform-managed).

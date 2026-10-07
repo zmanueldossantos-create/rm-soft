@@ -1,4 +1,4 @@
-﻿"""
+"""
 Pydantic schemas for VAT rates.
 """
 import uuid

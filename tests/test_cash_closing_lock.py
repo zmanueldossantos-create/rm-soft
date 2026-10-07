@@ -1,4 +1,4 @@
-﻿"""A till that does not accept a difference at closing refuses it, even with a reason: the manager turns the
+"""A till that does not accept a difference at closing refuses it, even with a reason: the manager turns the
 setting on to let it close. An exact count always closes."""
 import pytest
 

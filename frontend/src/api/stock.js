@@ -1,4 +1,4 @@
-﻿// API calls for stock, scoped to the caller's company.
+// API calls for stock, scoped to the caller's company.
 // Multi-warehouse: goods are received into the CENTRAL warehouse, then
 // internally transferred between any of the company's warehouses.
 import apiClient from './client';

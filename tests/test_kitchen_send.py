@@ -1,4 +1,4 @@
-﻿"""Point 34b - sending dishes to the kitchen: one order per sending (who, when, number of the day); the room may
+"""Point 34b - sending dishes to the kitchen: one order per sending (who, when, number of the day); the room may
 lower or cancel a dish while it waits, never once the kitchen has started; a cancelled dish is never charged."""
 import pytest
 from sqlalchemy import select

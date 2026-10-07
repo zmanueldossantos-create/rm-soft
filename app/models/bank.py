@@ -1,4 +1,4 @@
-﻿"""Bank catalog - platform-wide, SUPER_ADMIN managed. Used by Company bank account setup (see onglet 3)."""
+"""Bank catalog - platform-wide, SUPER_ADMIN managed. Used by Company bank account setup (see onglet 3)."""
 import uuid
 from datetime import datetime
 from sqlalchemy import String, Boolean, DateTime, func

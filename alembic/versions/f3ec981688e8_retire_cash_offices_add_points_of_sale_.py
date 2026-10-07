@@ -1,4 +1,4 @@
-﻿"""retire cash_offices, add points_of_sale.is_default
+"""retire cash_offices, add points_of_sale.is_default
 
 Revision ID: f3ec981688e8
 Revises: d3a90de9c926

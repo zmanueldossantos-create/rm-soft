@@ -1,4 +1,4 @@
-﻿// API calls for ProductCategory (company-scoped, Video 3).
+// API calls for ProductCategory (company-scoped, Video 3).
 import apiClient from './client';
 
 export async function listProductCategories() {

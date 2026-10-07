@@ -1,4 +1,4 @@
-﻿// API calls for VAT rates (read-only for GESTOR/ADMIN - see decision on fiscal compliance).
+// API calls for VAT rates (read-only for GESTOR/ADMIN - see decision on fiscal compliance).
 import apiClient from './client';
 
 export async function listVatRates() {

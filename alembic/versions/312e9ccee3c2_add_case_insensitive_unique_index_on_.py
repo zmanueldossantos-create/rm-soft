@@ -1,4 +1,4 @@
-﻿"""Add case-insensitive unique index on companies.name
+"""Add case-insensitive unique index on companies.name
 
 Revision ID: 312e9ccee3c2
 Revises: ef64a2ad8c64

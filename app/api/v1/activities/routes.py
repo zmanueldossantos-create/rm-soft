@@ -1,4 +1,4 @@
-﻿"""
+"""
 Activity routes - business lines / points of sale within a Company.
 GESTOR configures these (CAIXA needs read access to select one when
 invoicing), but only for Modules the company has been granted by SUPER_ADMIN.

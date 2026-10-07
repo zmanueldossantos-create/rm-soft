@@ -1,4 +1,4 @@
-﻿"""
+"""
 Tests for cash_movement_service and its integration with close_session's
 expected-amount calculation (see close_session docstring update).
 

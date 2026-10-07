@@ -1,4 +1,4 @@
-﻿"""
+"""
 ResourceTypeCatalog model - the managed catalog of resource types (Chambre,
 Praticien, Mesa, Cadeira...) a company can create Resources under, replacing
 the earlier free-text resource_type field on Resource (which allowed

@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { PiggyBank, Loader2, ArrowLeftRight } from 'lucide-react';
 import { listCashMovements } from '../api/tesouraria';
 import { extractErrorMessage } from '../utils/errors';

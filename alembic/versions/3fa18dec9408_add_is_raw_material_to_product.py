@@ -1,4 +1,4 @@
-﻿"""Add is_raw_material to Product
+"""Add is_raw_material to Product
 
 Revision ID: 3fa18dec9408
 Revises: edd97ab5e3cd

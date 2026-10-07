@@ -1,4 +1,4 @@
-﻿"""
+"""
 Fiscal Period model (Período - calendar month).
 See specification v6/v7, section 3.4: strict hierarchy enforced at the
 service layer (fiscal_period_service.py) - a Period can only open if its

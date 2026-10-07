@@ -1,4 +1,4 @@
-﻿"""
+"""
 Stock movement document routes (Entrada/Saida) - scoped to the caller's company, same
 multi-tenant isolation pattern as invoices.
 """

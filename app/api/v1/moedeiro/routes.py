@@ -1,4 +1,4 @@
-﻿"""
+"""
 Routes for the Moedeiro (billetage) feature: denomination catalog (read-only)
 and cash-drawer denomination counts.
 """

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Hotel-specific service layer - check-in/check-out actions that combine the
 two generic building blocks (Booking for the reservation, OpenAccount for the
 running tab of extras) into the hotel stay workflow. See the road-map

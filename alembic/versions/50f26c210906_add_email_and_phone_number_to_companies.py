@@ -1,4 +1,4 @@
-﻿"""Add email and phone_number to companies
+"""Add email and phone_number to companies
 
 Revision ID: 50f26c210906
 Revises: cb8d03a6c0ec

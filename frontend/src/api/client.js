@@ -1,4 +1,4 @@
-﻿// API client - connects to the FastAPI backend.
+// API client - connects to the FastAPI backend.
 // The backend address: see ./config.js.
 import { API_BASE_URL } from './config';
 import axios from 'axios';

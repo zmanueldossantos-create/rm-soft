@@ -1,4 +1,4 @@
-﻿"""
+"""
 Customer routes - scoped to the caller's company (multi-tenant isolation, section 2.5 v7).
 Accessible to GESTOR/ADMIN of the company.
 """

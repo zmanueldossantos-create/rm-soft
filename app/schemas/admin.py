@@ -1,4 +1,4 @@
-﻿"""
+"""
 Pydantic schemas for platform-level administration (SUPER_ADMIN only).
 Extended (Video 1) with the 3-tab company fields observed in the
 reference legalized software.

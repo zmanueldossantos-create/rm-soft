@@ -1,4 +1,4 @@
-﻿// API calls for Activities (business lines / points of sale within the company).
+// API calls for Activities (business lines / points of sale within the company).
 import apiClient from './client';
 export async function listActivities() {
   const res = await apiClient.get('/activities');

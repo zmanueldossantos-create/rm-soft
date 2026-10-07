@@ -1,4 +1,4 @@
-﻿"""
+"""
 Pydantic schemas for invoices.
 See specification v6/v7, section 4.
 """

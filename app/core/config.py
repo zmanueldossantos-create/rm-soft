@@ -1,4 +1,4 @@
-﻿"""
+"""
 Configuration centrale de l'application.
 Lit les variables d'environnement (.env) et les expose sous forme d'objet Settings.
 Un seul point de verite pour DEPLOYMENT_MODE (local | saas) - voir cahier des charges v7, section 2.3.

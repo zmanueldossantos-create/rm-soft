@@ -1,4 +1,4 @@
-﻿"""
+"""
 Product routes - scoped to the caller's company (multi-tenant isolation, section 2.5 v7).
 Accessible to GESTOR/ADMIN of the company - not restricted to SUPER_ADMIN,
 since each business manages its own catalog (see decision on SUPER_ADMIN scope).

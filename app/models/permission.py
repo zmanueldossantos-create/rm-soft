@@ -1,4 +1,4 @@
-﻿"""
+"""
 Permission catalog - platform-wide (not per-company), listing every
 fine-grained action the app can gate (e.g. "internal_consumption:create",
 "suppliers:manage"). Paired with RolePermission (per-company grants) to

@@ -1,4 +1,4 @@
-﻿"""add points_of_sale table and cash_sessions.pos_id
+"""add points_of_sale table and cash_sessions.pos_id
 
 Revision ID: eb44a60d2a44
 Revises: e8f69cea69d6

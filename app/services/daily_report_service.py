@@ -1,4 +1,4 @@
-﻿"""
+"""
 Daily cash register report ("brouillard de caixa") - a chronological journal of
 every operation touching a given POS's drawer within a date range: sales (via the
 cash sessions opened on that POS) and cash movements (transfers, entrada/saida

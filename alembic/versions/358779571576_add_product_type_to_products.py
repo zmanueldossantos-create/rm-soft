@@ -1,4 +1,4 @@
-﻿"""Add product_type to products
+"""Add product_type to products
 
 Revision ID: 358779571576
 Revises: 93e1f2d75f95

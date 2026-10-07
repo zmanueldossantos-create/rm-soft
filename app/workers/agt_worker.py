@@ -1,4 +1,4 @@
-﻿"""
+"""
 AGT submission worker.
 See specification v6/v7, section 4.2: each invoice is submitted to a "Mock
 AGT" server within 30 seconds via an asynchronous Celery task, triggered

@@ -1,4 +1,4 @@
-﻿// API calls for Establishment (company-scoped, Video 8).
+// API calls for Establishment (company-scoped, Video 8).
 import apiClient from './client';
 
 export async function listEstablishments() {

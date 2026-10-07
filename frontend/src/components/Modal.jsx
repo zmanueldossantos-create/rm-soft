@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 
 // stacked: this modal opens on top of another already-open one (e.g. Liquidar pro-forma over Consultar

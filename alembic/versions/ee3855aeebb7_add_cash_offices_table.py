@@ -1,4 +1,4 @@
-﻿"""add cash_offices table
+"""add cash_offices table
 
 Revision ID: ee3855aeebb7
 Revises: eb44a60d2a44

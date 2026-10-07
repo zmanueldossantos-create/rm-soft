@@ -1,4 +1,4 @@
-﻿"""
+"""
 CustomerBankAccountLink - links a Customer to one of the COMPANY's own
 bank accounts (Video 2: "Contas Bancarias / Documentos Vendas" tab) -
 this is NOT the customer's own bank account, it is which of the

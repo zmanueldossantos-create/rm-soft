@@ -1,4 +1,4 @@
-﻿"""Country catalog - platform-wide, SUPER_ADMIN managed (see "Configuracoes" screen)."""
+"""Country catalog - platform-wide, SUPER_ADMIN managed (see "Configuracoes" screen)."""
 import uuid
 from datetime import datetime
 from sqlalchemy import String, Boolean, DateTime, ForeignKey, func

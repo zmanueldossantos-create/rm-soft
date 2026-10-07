@@ -1,4 +1,4 @@
-﻿"""sale unit controls: fixed factor on universal units (a dozen is always 12), per-company price / factor checks
+"""sale unit controls: fixed factor on universal units (a dozen is always 12), per-company price / factor checks
 
 Revision ID: v9y6z1a50l82
 Revises: u8x5y0z49k71

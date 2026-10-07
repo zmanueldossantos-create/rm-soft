@@ -1,4 +1,4 @@
-﻿"""
+"""
 Pydantic schemas for platform-wide settings (SUPER_ADMIN only).
 """
 import uuid

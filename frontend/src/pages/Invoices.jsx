@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { API_BASE_URL } from '../api/config';
 import { useNavigate } from 'react-router-dom';
 import { useCan } from '../utils/permissions';

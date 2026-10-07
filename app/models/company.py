@@ -1,4 +1,4 @@
-﻿"""
+"""
 Company model - root of the multi-tenant hierarchy.
 See specification v7, section 2.8 (Entity hierarchy), extended with the
 fields observed in the reference legalized software (Video 1: 3 tabs -

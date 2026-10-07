@@ -1,4 +1,4 @@
-﻿"""
+"""
 Denomination catalog - platform-wide, SUPER_ADMIN managed (see Bank/Currency
 for the same pattern). The physical notes/coins for a given currency (e.g.
 Kwanza banknotes: 200, 500, 1000, 2000, 5000, 10000; coins: 1, 5, 10, 20, 50)

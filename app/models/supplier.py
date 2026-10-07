@@ -1,4 +1,4 @@
-﻿"""
+"""
 Supplier model (Fornecedor) - an external entity the company purchases stock
 from. The purchase-side counterpart to Customer, deliberately much simpler:
 no AGT NIF requirement (a supplier receipt/Guia de Entrada is NOT a

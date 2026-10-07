@@ -1,4 +1,4 @@
-﻿"""Pydantic schemas for Establishment (Video 8, company-scoped)."""
+"""Pydantic schemas for Establishment (Video 8, company-scoped)."""
 import uuid
 from datetime import datetime
 from pydantic import BaseModel, field_validator

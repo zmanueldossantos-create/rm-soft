@@ -1,4 +1,4 @@
-﻿"""Add PERDA movement type and loss_category
+"""Add PERDA movement type and loss_category
 
 Revision ID: 656364042b58
 Revises: c4cd41d24cea

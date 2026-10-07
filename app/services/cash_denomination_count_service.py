@@ -1,4 +1,4 @@
-﻿"""
+"""
 Business logic for cash-drawer denomination counting (Moedeiro / billetage).
 Only meaningful when the session's POS has billetage_enabled=True - see
 Denomination/CashDenominationCount model docstrings.

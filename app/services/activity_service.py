@@ -1,4 +1,4 @@
-﻿"""
+"""
 Business logic for Activity (business line / point of sale within a
 Company) - GESTOR configures these, but only for Modules the company
 has been granted by SUPER_ADMIN (see CompanyModule/company_module_service).

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Security module - password hashing and JWT management (access + refresh tokens).
 See specification v7, section 2.4 (phone number authentication).
 """

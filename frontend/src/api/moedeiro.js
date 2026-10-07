@@ -1,4 +1,4 @@
-﻿// API calls for the Moedeiro (billetage) feature.
+// API calls for the Moedeiro (billetage) feature.
 import apiClient from './client';
 
 export async function listDenominations(currencyId) {

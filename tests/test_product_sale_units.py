@@ -1,4 +1,4 @@
-﻿"""Sale units of a product: rules checked by the service (base unit, duplicate, barcode, factor), deactivation."""
+"""Sale units of a product: rules checked by the service (base unit, duplicate, barcode, factor), deactivation."""
 import pytest
 from sqlalchemy import select
 

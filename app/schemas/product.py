@@ -1,4 +1,4 @@
-﻿"""
+"""
 Pydantic schemas for products.
 See specification v6/v7, section 5.1.
 Extended (Video 3) with category, brand, image, purchase price, the

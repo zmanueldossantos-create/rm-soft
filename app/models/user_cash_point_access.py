@@ -1,4 +1,4 @@
-﻿"""
+"""
 UserCashPointAccess model - associates a User to exactly ONE PointOfSale
 at a time - see discussion on cash operation permissions: a user with no
 association here cannot perform ANY cash operation (open session, sell,

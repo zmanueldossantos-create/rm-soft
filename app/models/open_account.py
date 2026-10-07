@@ -1,4 +1,4 @@
-﻿"""
+"""
 OpenAccount model - a running tab that accumulates consumption over time
 before being settled in a single final sale: a Bar customer's tab, a
 Restaurant table's bill during the meal, a Hotel guest's room extras

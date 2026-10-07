@@ -1,4 +1,4 @@
-﻿"""
+"""
 Business logic for CompanyPaymentMethodPreference - which of the 12 AGT
 PaymentMethodCatalog codes a company's Caixa screen offers. Managed by
 GESTOR, not SUPER_ADMIN (see model docstring).

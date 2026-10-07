@@ -1,4 +1,4 @@
-﻿"""product sale units: several ways to sell a product (pallet / egg, box / blister / tablet), stock in base units
+"""product sale units: several ways to sell a product (pallet / egg, box / blister / tablet), stock in base units
 
 Revision ID: u8x5y0z49k71
 Revises: t7w4x9y38j60

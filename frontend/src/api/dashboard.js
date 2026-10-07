@@ -1,4 +1,4 @@
-﻿// API calls for the dashboard summary.
+// API calls for the dashboard summary.
 import apiClient from './client';
 
 export async function getDashboardSummary() {

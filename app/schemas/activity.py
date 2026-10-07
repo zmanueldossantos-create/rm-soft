@@ -1,4 +1,4 @@
-﻿"""
+"""
 Pydantic schemas for Activity (business line / point of sale within a
 Company - e.g. Padaria, Bar, Hotel) - GESTOR configures these, but only
 for Modules the company has been granted by SUPER_ADMIN.

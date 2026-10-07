@@ -1,4 +1,4 @@
-﻿"""
+"""
 CashMovement model - a treasury movement between cash points (POS), or
 between a POS and the "outside world" (bank, cash loss/theft). Distinct
 from a POS sale (which goes through Invoice/Payment) - this is pure

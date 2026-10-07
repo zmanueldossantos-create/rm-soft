@@ -1,4 +1,4 @@
-﻿"""A difference between the counted cash and the expected one never blocks the closing of a till, but it is always
+"""A difference between the counted cash and the expected one never blocks the closing of a till, but it is always
 explained: without a reason the closing is refused (the session stays open), with one it is recorded as it is."""
 import pytest
 

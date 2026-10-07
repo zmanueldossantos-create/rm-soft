@@ -1,4 +1,4 @@
-﻿"""
+"""
 InvoiceLine model.
 See specification v6/v7, section 4.5: each line applies the product's VAT
 rate at the moment of sale (snapshot, not a live reference) - if the VAT

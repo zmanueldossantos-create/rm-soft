@@ -1,4 +1,4 @@
-﻿"""
+"""
 CashMovementReason catalog - company-scoped, managed by GESTOR (not
 SUPER_ADMIN, unlike most other catalogs - these are business-specific:
 "Deposito bancario", "Eletricidade", "Perda/Roubo", etc). Required on

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Business logic for UserCashPointAccess - assigns/unassigns a User to exactly
 one PointOfSale at a time. See model docstring: a user with no assignment
 here cannot perform ANY cash operation, GESTOR bypasses this check entirely

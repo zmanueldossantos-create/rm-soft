@@ -1,4 +1,4 @@
-﻿"""Rename user roles to Portuguese
+"""Rename user roles to Portuguese
 
 Revision ID: cb8d03a6c0ec
 Revises: f8f53b52fd1e

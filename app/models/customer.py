@@ -1,4 +1,4 @@
-﻿"""
+"""
 Customer model.
 See specification v6/v7, section 4.1: "Gestion des Clients avec NIF ;
 blocage de la vente si le NIF obligatoire n'est pas renseigne".

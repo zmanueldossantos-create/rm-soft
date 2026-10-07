@@ -1,4 +1,4 @@
-﻿"""payment method uses_bank_account: which payment methods go through a bank account
+"""payment method uses_bank_account: which payment methods go through a bank account
 
 Revision ID: t7w4x9y38j60
 Revises: s6u3v8w27h59

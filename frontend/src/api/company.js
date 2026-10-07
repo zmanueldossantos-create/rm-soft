@@ -1,4 +1,4 @@
-﻿// API calls for the caller's own company settings (GESTOR self-service).
+// API calls for the caller's own company settings (GESTOR self-service).
 import apiClient from './client';
 
 export async function getMyCompany() {

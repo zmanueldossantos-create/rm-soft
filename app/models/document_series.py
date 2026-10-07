@@ -1,4 +1,4 @@
-﻿"""
+"""
 DocumentSeries - one numbering series per (company, document type, year).
 See decision on Video 4/8: always one row per document type - in MANUAL
 mode all of a year's rows simply share the same series_code (either the

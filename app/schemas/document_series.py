@@ -1,4 +1,4 @@
-﻿"""Pydantic schemas for DocumentSeries (Video 4/8)."""
+"""Pydantic schemas for DocumentSeries (Video 4/8)."""
 import uuid
 from datetime import date, datetime
 from pydantic import BaseModel

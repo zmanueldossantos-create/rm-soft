@@ -1,4 +1,4 @@
-﻿import apiClient from './client';
+import apiClient from './client';
 
 export async function createMovementDocument(payload) {
   const res = await apiClient.post('/movements', payload);

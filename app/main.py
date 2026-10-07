@@ -1,4 +1,4 @@
-﻿"""
+"""
 Application entry point.
 Behavior (CORS, deployment mode) is driven by app.core.config.
 See specification v7, section 2.3 (hybrid Local / SaaS architecture).

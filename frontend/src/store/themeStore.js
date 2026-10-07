@@ -1,4 +1,4 @@
-﻿// Zustand store - theme preference (dark default, light optional).
+// Zustand store - theme preference (dark default, light optional).
 // See specification v6/v7, section 2.2: dark mode by default, toggle to light, preference remembered.
 import { create } from 'zustand';
 

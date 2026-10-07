@@ -1,4 +1,4 @@
-﻿"""
+"""
 Dashboard summary route - available to all company-scoped roles.
 """
 from fastapi import APIRouter, Depends

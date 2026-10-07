@@ -1,4 +1,4 @@
-﻿// Extracts a human-readable message from an API error response.
+// Extracts a human-readable message from an API error response.
 // FastAPI/Pydantic validation errors return detail as an array of
 // {type, loc, msg, input, ctx} objects rather than a plain string -
 // this normalizes both shapes to avoid crashing React (objects are not

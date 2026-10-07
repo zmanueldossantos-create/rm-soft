@@ -1,4 +1,4 @@
-﻿"""
+"""
 Business logic for PointOfSale (POS) - CRUD scoped to the caller's company,
 nested under an Activity. See model docstring: several POS can share the
 same Activity's stock/warehouse, only the cash register is per-POS.

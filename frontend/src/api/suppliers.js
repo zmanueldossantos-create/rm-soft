@@ -1,4 +1,4 @@
-﻿import apiClient from './client';
+import apiClient from './client';
 
 export async function listSuppliers() {
   const res = await apiClient.get('/suppliers');

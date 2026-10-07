@@ -1,4 +1,4 @@
-﻿"""
+"""
 Read access to the Denomination catalog (platform-wide, SUPER_ADMIN managed -
 see model docstring). Companies only ever list denominations to build the
 Moedeiro counting grid, never create/edit them.

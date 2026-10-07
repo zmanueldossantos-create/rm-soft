@@ -1,4 +1,4 @@
-﻿"""replace resource free-text type with managed catalog
+"""replace resource free-text type with managed catalog
 
 Revision ID: d3fd5f06f398
 Revises: de9069751f47

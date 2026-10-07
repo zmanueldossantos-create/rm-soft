@@ -1,4 +1,4 @@
-﻿"""
+"""
 Business logic for company (tenant) management.
 Reserved for SUPER_ADMIN use - platform-level administration only.
 See specification v7, section 2.4 and Decision on SUPER_ADMIN scope.

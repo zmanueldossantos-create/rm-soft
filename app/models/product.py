@@ -1,4 +1,4 @@
-﻿"""
+"""
 Product model - core product sheet.
 See specification v6/v7, section 5.1 (Code, Price, Minimum threshold, DLC)
 and 5.4 (barcode), 5.5 (sold by weight).

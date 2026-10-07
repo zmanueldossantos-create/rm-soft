@@ -1,4 +1,4 @@
-﻿"""
+"""
 Dashboard aggregation service - summary stats for the company's main
 screen (revenue, invoice status breakdown, low stock alerts, recent sales).
 """

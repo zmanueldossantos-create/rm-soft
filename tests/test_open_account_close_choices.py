@@ -1,4 +1,4 @@
-﻿"""Point 3 - closing an account at the till takes the choices of a direct sale."""
+"""Point 3 - closing an account at the till takes the choices of a direct sale."""
 import uuid
 
 import pytest

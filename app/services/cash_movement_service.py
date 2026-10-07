@@ -1,4 +1,4 @@
-﻿"""
+"""
 Business logic for cash treasury movements (transfers between an Activity's
 POS, including its default "Caixa Geral" POS, and external entradas/saidas)
 and their reason catalog.

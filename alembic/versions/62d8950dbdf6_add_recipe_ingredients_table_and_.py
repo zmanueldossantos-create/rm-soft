@@ -1,4 +1,4 @@
-﻿"""Add recipe_ingredients table and PRODUCAO movement type
+"""Add recipe_ingredients table and PRODUCAO movement type
 
 Revision ID: 62d8950dbdf6
 Revises: 312e9ccee3c2

@@ -1,4 +1,4 @@
-﻿"""
+"""
 CashDenominationCount / CashDenominationCountLine - a physical cash count by
 denomination for a CashSession (Moedeiro / billetage feature). Only used
 when the session's POS has billetage_enabled=True.

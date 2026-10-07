@@ -1,4 +1,4 @@
-﻿"""The image of a product has its own routes (upload, removal): editing the product (its price, its name) never
+"""The image of a product has its own routes (upload, removal): editing the product (its price, its name) never
 loses it - a save from the screen used to overwrite the path just written by the upload."""
 import uuid
 

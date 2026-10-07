@@ -1,4 +1,4 @@
-﻿// API calls for user (team member) management - GESTOR only.
+// API calls for user (team member) management - GESTOR only.
 import apiClient from './client';
 
 export async function listUsers() {

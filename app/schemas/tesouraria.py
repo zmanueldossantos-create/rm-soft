@@ -1,4 +1,4 @@
-﻿"""
+"""
 Pydantic schemas for the Tesouraria module - CashMovementReason, CashMovement,
 and user <-> POS cash-point associations.
 """

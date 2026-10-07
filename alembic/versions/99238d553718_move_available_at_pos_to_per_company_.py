@@ -1,4 +1,4 @@
-﻿"""move available_at_pos to per-company preference table
+"""move available_at_pos to per-company preference table
 
 Revision ID: 99238d553718
 Revises: 7e8e4a8a7cb8

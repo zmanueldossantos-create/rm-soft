@@ -1,4 +1,4 @@
-﻿"""Add unit_of_measure and batch_yield to Product; rename RecipeIngredient.quantity_per_unit to quantity_per_batch
+"""Add unit_of_measure and batch_yield to Product; rename RecipeIngredient.quantity_per_unit to quantity_per_batch
 
 Revision ID: edd97ab5e3cd
 Revises: 62d8950dbdf6

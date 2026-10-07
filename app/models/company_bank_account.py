@@ -1,4 +1,4 @@
-﻿"""
+"""
 CompanyBankAccount - one bank account for a Company (Video 1, onglet 3:
 Coordenadas Bancarias). A company can have any number of these; the tab
 itself is optional, but once a row is started every field on it is

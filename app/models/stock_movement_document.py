@@ -1,4 +1,4 @@
-﻿"""
+"""
 StockMovementDocument - a real, numbered, printable document (Entrada/Saida) recording
 stock coming in or out of a warehouse (see PARTIE1&2 GESTAO DE STOCK notes: "ce sont des
 documents comme avec les factures"). DISTINCT from StockMovement (stock_movement.py),

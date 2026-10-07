@@ -1,4 +1,4 @@
-﻿"""
+"""
 Business logic for stock management.
 See specification v6/v7, section 5.1: every quantity change is logged as a
 StockMovement (Recepcao, Saida, Transferencia, Ajuste, Inventario) -

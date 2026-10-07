@@ -1,4 +1,4 @@
-﻿"""
+"""
 Municipality catalog - platform-wide, SUPER_ADMIN managed, scoped to a
 Province - selecting a Province filters which Municipalities appear
 (cascading select, see discussion on company setup).

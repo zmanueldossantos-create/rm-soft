@@ -1,4 +1,4 @@
-﻿"""
+"""
 ProductSaleUnit - another way to sell a product than its base unit (section 5.3, multi-unit conversions): a pallet of
 30 eggs, a box of 3 blisters. The product itself stays the base unit (its unit_of_measure_id, price and stock); a sale
 unit holds how many base units it contains (factor), its own price and optionally its own barcode. Stock always moves in

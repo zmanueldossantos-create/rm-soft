@@ -1,4 +1,4 @@
-﻿"""Point 34a - the account cards show each account's number of lines and total, computed by the listing."""
+"""Point 34a - the account cards show each account's number of lines and total, computed by the listing."""
 import pytest
 
 from app.models.product import Product, ProductType

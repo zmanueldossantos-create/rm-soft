@@ -1,4 +1,4 @@
-﻿"""
+"""
 Routes for the Tesouraria module: CashMovementReason CRUD, CashMovement
 create/list, and user <-> POS cash-point associations.
 

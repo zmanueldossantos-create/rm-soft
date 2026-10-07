@@ -1,4 +1,4 @@
-﻿"""
+"""
 Establishment - a physical/legal place of business (Video 8: needed for
 electronic invoicing series requests to AGT - each electronic
 DocumentSeries must be tied to one).

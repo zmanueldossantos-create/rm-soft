@@ -1,4 +1,4 @@
-﻿"""
+"""
 Central import point for all SQLAlchemy models.
 Ensures every model is registered with SQLAlchemy before use
 (avoids NoReferencedTableError on foreign keys).

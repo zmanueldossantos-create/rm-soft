@@ -1,4 +1,4 @@
-﻿// Zustand store - authentication state.
+// Zustand store - authentication state.
 // Persists tokens to localStorage so the session survives a page reload.
 import { create } from 'zustand';
 

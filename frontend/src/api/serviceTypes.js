@@ -1,4 +1,4 @@
-﻿// API calls for ServiceType (company-scoped, Video 3).
+// API calls for ServiceType (company-scoped, Video 3).
 import apiClient from './client';
 
 export async function listServiceTypes() {

@@ -1,4 +1,4 @@
-﻿// API calls for the fiscal Year/Period hierarchy (section 3.4 v6/v7).
+// API calls for the fiscal Year/Period hierarchy (section 3.4 v6/v7).
 // Year and month are computed server-side (strict sequential rule) -
 // these calls never send a year/month value, only ids.
 import apiClient from './client';

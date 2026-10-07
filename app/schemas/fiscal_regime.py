@@ -1,4 +1,4 @@
-﻿"""
+"""
 Pydantic schemas for fiscal regimes (SUPER_ADMIN only) - see FiscalRegime model.
 """
 import uuid

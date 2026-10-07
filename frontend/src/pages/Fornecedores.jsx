@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Truck, Plus, Pencil, Loader2, Search } from 'lucide-react';
 import { listSuppliers, createSupplier, updateSupplier, toggleSupplierStatus } from '../api/suppliers';
 import { extractErrorMessage } from '../utils/errors';

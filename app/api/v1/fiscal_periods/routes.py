@@ -1,4 +1,4 @@
-﻿"""
+"""
 Fiscal Year/Period routes.
 See specification v6/v7, section 6.2: opening/closing a Year or Period is
 an exclusive power of the GESTOR - not ADMIN, not CAIXA.

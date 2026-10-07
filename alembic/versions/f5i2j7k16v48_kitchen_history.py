@@ -1,4 +1,4 @@
-﻿"""cuisine : qui et quand a chaque etape d'un plat (debut, pronto, annulation) - historique de la cuisine
+"""cuisine : qui et quand a chaque etape d'un plat (debut, pronto, annulation) - historique de la cuisine
 
 Revision ID: f5i2j7k16v48
 Revises: e4h1i6j05u37

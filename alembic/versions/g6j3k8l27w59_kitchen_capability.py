@@ -1,4 +1,4 @@
-﻿"""Cozinha devient une capacite a part : une ligne pour chaque module existant (cochee pour Restaurante seulement),
+"""Cozinha devient une capacite a part : une ligne pour chaque module existant (cochee pour Restaurante seulement),
 et le Bar recoit les mesas (Recursos). Les autres reglages du super admin ne sont pas touches.
 
 Revision ID: g6j3k8l27w59

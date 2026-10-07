@@ -1,4 +1,4 @@
-﻿"""
+"""
 ProductCategory - company-scoped catalog (Video 3: "Categoria de Produto")
 - unlike the platform-wide catalogs in Configuracoes, this is managed by
 each company's own GESTOR, since a bakery's categories (Paes, Bolos) have

@@ -1,4 +1,4 @@
-﻿"""Add is_production_output to StockMovement
+"""Add is_production_output to StockMovement
 
 Revision ID: 54fffbb20899
 Revises: 3fa18dec9408

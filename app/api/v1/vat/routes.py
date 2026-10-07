@@ -1,4 +1,4 @@
-﻿"""
+"""
 VAT routes - READ-ONLY listing, scoped to the caller's company.
 VAT rates are seeded automatically when a company is created (section 4.5 v6/v7).
 

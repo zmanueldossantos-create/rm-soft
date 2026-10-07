@@ -1,4 +1,4 @@
-﻿"""
+"""
 Pydantic schemas for customers.
 See specification v6/v7, section 4.1 (NIF required for AGT invoicing).
 Extended (Video 2) with the 2-tab fields observed in the reference

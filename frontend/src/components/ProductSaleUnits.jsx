@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Plus, Loader2, Pencil, Power, Check, X } from 'lucide-react';
 import Select from './Select';
 import { listSaleUnits, createSaleUnit, updateSaleUnit, toggleSaleUnit } from '../api/products';

@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import DateInput from '../components/DateInput';
 import { History, Loader2 } from 'lucide-react';
 import { listActivities } from '../api/activity';

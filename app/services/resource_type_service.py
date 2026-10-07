@@ -1,4 +1,4 @@
-﻿"""
+"""
 Service layer for ResourceTypeCatalog - the managed catalog of resource
 types (Chambre, Praticien, Mesa...). See app.models.resource_type_catalog
 for the full design rationale.

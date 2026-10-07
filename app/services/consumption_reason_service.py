@@ -1,4 +1,4 @@
-﻿"""
+"""
 Service layer for ConsumptionReasonCatalog - the managed catalog of reasons
 for internal stock consumption (Limpeza, Quebra/Perda...). Mirrors
 resource_type_service.py's CRUD shape exactly, since both are consumed

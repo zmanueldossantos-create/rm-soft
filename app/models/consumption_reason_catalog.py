@@ -1,4 +1,4 @@
-﻿"""
+"""
 ConsumptionReasonCatalog - managed catalog of reasons for internal stock
 consumption (e.g. "Limpeza de quarto", "Reposicao de amenities",
 "Quebra/Perda", "Uso administrativo"). Same pattern as

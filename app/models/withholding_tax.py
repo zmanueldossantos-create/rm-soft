@@ -1,4 +1,4 @@
-﻿"""
+"""
 WithholdingTax (Retencao) catalog - platform-wide, SUPER_ADMIN managed
 (Video 3: Sem Retencoes, Retencao na fonte imposto industrial 6.5%,
 Imposto Predial 15%) - only applicable to pessoa coletiva customers/services.

@@ -1,4 +1,4 @@
-﻿"""
+"""
 DocumentType catalog - platform-wide, SUPER_ADMIN managed (see Video 4:
 AC-Aviso Cobranca, FT-Fatura, FP-Fatura Pro-forma, FR-Fatura/Recibo,
 GR-Guia de Remessa, GT-Guia de Transporte, NC-Nota Credito, ND-Nota

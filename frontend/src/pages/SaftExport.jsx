@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { FileDown, Loader2, FileText } from 'lucide-react';
 import Select from '../components/Select';
 import { listFiscalYears, listFiscalPeriods } from '../api/fiscal';

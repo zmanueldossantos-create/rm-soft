@@ -1,4 +1,4 @@
-﻿"""Point 34c - the kitchen: its role, its board, and what it does with each dish."""
+"""Point 34c - the kitchen: its role, its board, and what it does with each dish."""
 import pytest
 
 from app.core.capabilities import capability_of_permission

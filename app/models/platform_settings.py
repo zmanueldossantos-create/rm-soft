@@ -1,4 +1,4 @@
-﻿"""
+"""
 Platform-wide settings model - a single row, not scoped to any company.
 See discussion on SoftwareValidationNumber: this number is issued by the
 AGT to the SOFTWARE PRODUCT itself (RM SOFT), not to each client company -

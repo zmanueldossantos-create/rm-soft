@@ -1,4 +1,4 @@
-﻿"""
+"""
 Pydantic schemas for StockMovementDocument (Entrada/Saida) - see PARTIE1&2 GESTAO DE STOCK.
 """
 import uuid

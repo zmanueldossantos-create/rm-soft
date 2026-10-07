@@ -1,4 +1,4 @@
-﻿"""Point 34d - kitchen history: every step of a dish is signed and timed, and the period adds them up."""
+"""Point 34d - kitchen history: every step of a dish is signed and timed, and the period adds them up."""
 from datetime import date
 
 import pytest

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Pydantic schemas for stock management.
 See specification v6/v7, section 5.1.
 Multi-warehouse (see stock_service module docstring): every request that

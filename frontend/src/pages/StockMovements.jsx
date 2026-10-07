@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { History, Loader2, Search, ArrowDownToLine, ArrowUpFromLine, SlidersHorizontal, ClipboardList, ArrowRightLeft, Trash2, Factory, Plus } from 'lucide-react';
 import { listStockMovements, getMovementPeriods, listWarehouses } from '../api/stock';

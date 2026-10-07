@@ -1,4 +1,4 @@
-﻿"""
+"""
 Service routes - scoped to the caller's company (Video 3).
 Genuinely separate from Product (see decision on split model).
 """

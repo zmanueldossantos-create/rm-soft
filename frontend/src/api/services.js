@@ -1,4 +1,4 @@
-﻿// API calls for Service (Video 3, company-scoped, separate from Product).
+// API calls for Service (Video 3, company-scoped, separate from Product).
 import apiClient from './client';
 
 export async function listServices() {

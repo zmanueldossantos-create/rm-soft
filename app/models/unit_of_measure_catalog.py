@@ -1,4 +1,4 @@
-﻿"""
+"""
 UnitOfMeasureCatalog - platform-wide, SUPER_ADMIN managed (Video 3: select
 unidade administrable) - e.g. UN, KG, L, CX. Distinct from Product.unit_of_measure
 (free text) - reconciling the two is a separate future step.

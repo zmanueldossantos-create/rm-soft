@@ -1,4 +1,4 @@
-﻿"""
+"""
 Pydantic schemas for the fiscal Year / Period hierarchy.
 See specification v6/v7, section 3.4.
 Year and month are NOT supplied by the client - they are computed

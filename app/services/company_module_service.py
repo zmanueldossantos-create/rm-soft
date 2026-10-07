@@ -1,4 +1,4 @@
-﻿"""
+"""
 Business logic for granting/revoking Company access to Modules -
 SUPER_ADMIN only. The GESTOR can only create Activities for modules
 granted here (see activity_service).
