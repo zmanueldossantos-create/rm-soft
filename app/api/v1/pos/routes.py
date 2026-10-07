@@ -53,6 +53,8 @@ from app.services.invoice_service import (
     ProFormaAlreadyConvertedError,
 )
 
+from app.services.cash_session_service import ClosingReasonRequiredError
+
 router = APIRouter(prefix="/api/v1/pos", tags=["pos"])
 
 
@@ -127,6 +129,8 @@ async def post_close_session(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except BilletageRequiredError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except ClosingReasonRequiredError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
 
 
 @router.get("/sessions", response_model=list[CashSessionResponse])

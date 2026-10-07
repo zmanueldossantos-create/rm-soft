@@ -1529,7 +1529,7 @@ export default function Caixa() {
               />
             </div>
             <div>
-              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Notas (opcional)</label>
+              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Motivo da diferença (obrigatório se houver diferença)</label>
               <input
                 value={closingNotes}
                 onChange={(e) => setClosingNotes(e.target.value)}
@@ -1859,6 +1859,15 @@ export default function Caixa() {
               </div>
               {closingViaBilletage && (
                 <>
+                  {/* a difference between the count and the expected is always explained (never blocking) */}
+                  <div>
+                    <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Motivo da diferença (obrigatório se houver diferença)</label>
+                    <input
+                      value={closingNotes}
+                      onChange={(e) => setClosingNotes(e.target.value)}
+                      className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors"
+                    />
+                  </div>
                   {moedeiroError && (
                     <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{moedeiroError}</div>
                   )}
