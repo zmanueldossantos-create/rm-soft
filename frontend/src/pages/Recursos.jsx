@@ -1,3 +1,4 @@
+import { formatKz } from '../utils/format';
 import { useState, useEffect } from 'react';
 import { Boxes, Plus, Pencil, Loader2 } from 'lucide-react';
 import Select from '../components/Select';
@@ -22,10 +23,6 @@ const STATUS_STYLE = {
   OCUPADA: 'text-danger bg-danger/10',
   RESERVADA: 'text-accent bg-accent/10',
 };
-
-function formatKz(value) {
-  return Number(value || 0).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
 
 export default function Recursos() {
   const [activities, setActivities] = useState([]);

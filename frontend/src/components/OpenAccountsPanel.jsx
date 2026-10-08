@@ -1,3 +1,4 @@
+import { formatKz } from '../utils/format';
 import { useState, useEffect } from 'react';
 import { listProductCategories } from '../api/productCategories';
 import { ChefHat } from 'lucide-react';
@@ -14,10 +15,6 @@ import { getPosStockLevels } from '../api/pos';
 import { extractErrorMessage } from '../utils/errors';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
-
-function formatKz(value) {
-  return Number(value || 0).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
 
 const TABLE_STATUS_LABEL = { LIVRE: 'Livre', OCUPADA: 'Ocupado', RESERVADA: 'Reservado' };
 const TABLE_BADGE_STYLE = {

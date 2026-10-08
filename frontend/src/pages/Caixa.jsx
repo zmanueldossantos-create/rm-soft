@@ -1,3 +1,4 @@
+import { formatKz } from '../utils/format';
 import { API_ORIGIN } from '../api/config';
 import DateInput from '../components/DateInput';
 import { useState, useEffect, useRef, Fragment } from 'react';
@@ -55,10 +56,6 @@ function addDays(dateStr, days) {
   const d = new Date(dateStr);
   d.setDate(d.getDate() + days);
   return d.toISOString().slice(0, 10);
-}
-
-function formatKz(value) {
-  return Number(value).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 export default function Caixa() {

@@ -1,3 +1,4 @@
+import { formatKz } from '../utils/format';
 import ProductSaleUnits from '../components/ProductSaleUnits';
 import { useState, useEffect } from 'react';
 import { Wheat, Plus, Loader2, Search, Pencil } from 'lucide-react';
@@ -300,7 +301,7 @@ export default function MateriaPrima() {
 
           {editingMaterial && (() => {
             const base = units.find((u) => u.id === form.unit_of_measure_id)?.code || '';
-            const kz = (v) => (v == null ? '\u2013' : Number(v).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' Kz' + (base ? ' / ' + base : ''));
+            const kz = (v) => (v == null ? '\u2013' : formatKz(v) + ' Kz' + (base ? ' / ' + base : ''));
             return (
               <div className="sm:col-span-2 grid grid-cols-2 gap-3 rounded-md border border-border bg-bg-inset/40 px-3.5 py-2.5 text-[12px]">
                 <div><p className="text-text-muted">{'\u00daltimo pre\u00e7o de compra'}</p><p className="font-mono text-text-primary">{kz(editingMaterial.purchase_price)}</p></div>

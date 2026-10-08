@@ -1,3 +1,4 @@
+import { formatKz } from '../utils/format';
 import { API_ORIGIN } from '../api/config';
 import DateInput from '../components/DateInput';
 import { useCan } from '../utils/permissions';
@@ -366,8 +367,8 @@ export default function Products() {
                       </div>
                     </td>
                     <td className="px-6 py-4 font-mono text-text-primary">{p.price.toFixed(2)} Kz</td>
-                    <td className="px-6 py-4 font-mono text-text-primary">{p.purchase_price != null ? Number(p.purchase_price).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}</td>
-                    <td className="px-6 py-4 font-mono text-text-primary">{p.average_cost != null ? Number(p.average_cost).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}</td>
+                    <td className="px-6 py-4 font-mono text-text-primary">{p.purchase_price != null ? formatKz(p.purchase_price) : '-'}</td>
+                    <td className="px-6 py-4 font-mono text-text-primary">{p.average_cost != null ? formatKz(p.average_cost) : '-'}</td>
                     <td className="px-6 py-4 font-mono text-text-muted">{vatById[p.vat_id] ? vatById[p.vat_id].rate + '%' : '-'}</td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2.5">
@@ -466,7 +467,7 @@ export default function Products() {
             </Field>
             <Field label="Custo médio (calculado)">
               <div className="w-full bg-bg-inset/40 border border-border rounded-md px-3.5 py-2.5 text-sm font-mono text-text-muted cursor-not-allowed" title="Calculado pelo sistema a partir das entradas de stock com preço de compra (custo médio ponderado)">
-                {form.averageCost != null ? Number(form.averageCost).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' Kz' : 'Sem custo conhecido'}
+                {form.averageCost != null ? formatKz(form.averageCost) + ' Kz' : 'Sem custo conhecido'}
               </div>
             </Field>
           </div>

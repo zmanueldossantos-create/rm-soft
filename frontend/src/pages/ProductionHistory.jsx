@@ -1,3 +1,4 @@
+import { formatKz } from '../utils/format';
 import DateInput from '../components/DateInput';
 import { useState, useEffect } from 'react';
 import { ClipboardList, Loader2 } from 'lucide-react';
@@ -141,8 +142,8 @@ export default function ProductionHistory() {
 
                 {batch.output && (batch.output.unit_cost != null ? (
                   <p className="text-[12px] text-text-muted mt-0.5 font-mono">
-                    {'Custo: ' + Number(batch.output.unit_cost).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' Kz/un \u00b7 total '
-                      + (batch.output.unit_cost * batch.output.quantity).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' Kz'}
+                    {'Custo: ' + formatKz(batch.output.unit_cost) + ' Kz/un \u00b7 total '
+                      + formatKz(batch.output.unit_cost * batch.output.quantity) + ' Kz'}
                   </p>
                 ) : (
                   <p className="text-[12px] text-amber-500 mt-0.5">{'Custo incompleto (um ingrediente sem custo)'}</p>

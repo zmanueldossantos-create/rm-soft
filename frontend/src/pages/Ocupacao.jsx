@@ -1,3 +1,4 @@
+import { formatKz } from '../utils/format';
 import { useState, useEffect } from 'react';
 import DateInput from '../components/DateInput';
 import { History, Loader2 } from 'lucide-react';
@@ -10,10 +11,6 @@ const STATUS_COLORS = { EM_CURSO: 'text-accent bg-accent/10', CONCLUIDA: 'text-t
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
-}
-
-function formatKz(v) {
-  return Number(v || 0).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function formatDate(iso) {

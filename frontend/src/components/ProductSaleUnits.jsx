@@ -1,3 +1,4 @@
+import { formatKz } from '../utils/format';
 import { useEffect, useState } from 'react';
 import { Plus, Loader2, Pencil, Power, Check, X } from 'lucide-react';
 import Select from './Select';
@@ -7,7 +8,7 @@ import { extractErrorMessage } from '../utils/errors';
 const inputClass = 'w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors';
 const labelClass = 'text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block';
 const EMPTY = { unit_of_measure_id: '', factor: '', price: '', barcode: '' };
-const money = (v) => Number(v || 0).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const money = (v) => formatKz(v || 0);
 
 // The other units a product is sold in (a pallet of 30 eggs, a box of 3 blisters). The product itself stays the base
 // unit: stock is always counted in it. Each change is saved at once, independently of the product form; a sale unit is
