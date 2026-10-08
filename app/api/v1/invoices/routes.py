@@ -472,6 +472,17 @@ async def download_invoice_pdf(
                 "total": float(ref_invoice.total),
             }
 
+    # The payments actually recorded on the document (a mixed payment has several), with the official AGT name
+    # of their method - shown on the A4 invoice under "Meios de pagamento".
+    from app.models.payment import Payment
+    payment_rows = await db.execute(
+        select(PaymentMethodCatalog.name, Payment.amount)
+        .join(Payment, Payment.payment_method_id == PaymentMethodCatalog.id)
+        .where(Payment.invoice_id == invoice.id)
+        .order_by(Payment.created_at)
+    )
+    payments_list = [{"name": name, "amount": float(amount)} for name, amount in payment_rows.all()]
+
     invoice_dict = {
         "invoice_type": INVOICE_TYPE_CODE.get(invoice.invoice_type.value, invoice.invoice_type.value),
         "series": invoice.series,
@@ -495,6 +506,8 @@ async def download_invoice_pdf(
         "invoice_hash": invoice.invoice_hash,
         "qr_code_data": invoice.qr_code_data,
         "reference_invoice": reference_invoice_dict,
+        "created_at": invoice.created_at,  # the time of recording: "Data de emissao: 08/10/2026 - 15h45"
+        "payments": payments_list,
     }
     product_ids = [l.product_id for l in lines if l.product_id]
     service_ids = [l.service_id for l in lines if l.service_id]

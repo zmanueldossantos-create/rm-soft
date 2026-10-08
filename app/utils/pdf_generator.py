@@ -12,6 +12,7 @@ Visual identity matches the app's own bordeaux design system.
 import io
 import os
 import textwrap
+from datetime import date, datetime, timedelta, timezone
 
 import qrcode
 from reportlab.lib.pagesizes import A4
@@ -30,8 +31,8 @@ BORDER = HexColor("#D8D4CE")
 DOCUMENT_TYPE_LABELS = {
     "FT": "Factura",
     "FR": "Factura/Recibo",
-    "NC": "Nota de Credito",
-    "ND": "Nota de Debito",
+    "NC": "Nota de Crédito",
+    "ND": "Nota de Débito",
     "RC": "Recibo",
     "FP": "Factura Pro-forma",
 }
@@ -48,16 +49,52 @@ TITLE_BLACK = HexColor("#161616")
 DOCUMENT_TYPE_LABELS_SENTENCE = {
     "FT": "Factura",
     "FR": "Factura/Recibo",
-    "NC": "Nota de credito",
-    "ND": "Nota de debito",
+    "NC": "Nota de crédito",
+    "ND": "Nota de débito",
     "RC": "Recibo",
     "FP": "Factura pro-forma",
 }
 
 
 def fmt(value: float) -> str:
-    """Formats a monetary value with a space as thousand separator, e.g. 5130.5 -> '5 130.50'."""
-    return f"{value:,.2f}".replace(",", " ")
+    """A value as on the AGT model: a space between the thousands, a decimal comma - 5130.5 -> '5 130,50'."""
+    return f"{value:,.2f}".replace(",", " ").replace(".", ",")
+
+
+LUANDA_TZ = timezone(timedelta(hours=1))  # Angola: UTC+1 all year
+
+
+def _date_pt(value) -> str:
+    """A date as on the AGT model: 08/10/2026 (the data sent to the AGT stays in ISO format)."""
+    if not value:
+        return "-"
+    if isinstance(value, (date, datetime)):
+        return value.strftime("%d/%m/%Y")
+    try:
+        return datetime.strptime(str(value)[:10], "%Y-%m-%d").strftime("%d/%m/%Y")
+    except ValueError:
+        return str(value)
+
+
+def _emission_text(invoice: dict) -> str:
+    """Data de emissao as on the AGT model - 08/10/2026 - 15h45: the day of the document (the one declared in the
+    SAF-T), and the time it was recorded, in Luanda time."""
+    day = _date_pt(invoice.get("business_date"))
+    created = invoice.get("created_at")
+    if not isinstance(created, datetime):
+        return day
+    if created.tzinfo is not None:
+        created = created.astimezone(LUANDA_TZ)
+    return f"{day} - {created:%H}h{created:%M}"
+
+
+def _fit_text(c, text: str, font: str, size: float, width: float) -> str:
+    """Cuts a text to the width of its column, with an ellipsis - never over the next column."""
+    if c.stringWidth(text, font, size) <= width:
+        return text
+    while text and c.stringWidth(text + "...", font, size) > width:
+        text = text[:-1]
+    return text + "..."
 
 
 def _make_qr_image(data: str):
@@ -193,12 +230,12 @@ def generate_invoice_pdf_thermal(invoice: dict, lines: list[dict], company: dict
     doc_title = DOCUMENT_TYPE_LABELS.get(invoice["invoice_type"], invoice["invoice_type"])
     doc_number = f"{invoice['series']}/{invoice['number']}"
     two_col(doc_title, doc_number, size=8, bold=True)
-    two_col("Data e Hora:", invoice.get("business_date", "-"), size=7.5)
+    two_col("Data e hora:", _emission_text(invoice), size=7.5)
     two_col("Atendido por:", company["name"][:24], size=7.5)
     y -= 1 * mm
 
     # --- Line items: name on its own line, then Qtd/P.Un/IVA%/Total ---
-    left("Descricao", size=7.5, bold=True)
+    left("Descrição", size=7.5, bold=True)
     y -= 3.2 * mm
     col_qty = margin
     col_price = margin + 16 * mm
@@ -478,15 +515,15 @@ def generate_factura_style_a4(invoice, lines, company, customer):
     c.setFillColor(TEXT_PRIMARY)
     c.setFont("Helvetica-Bold", 10)
     doc_title_sentence = DOCUMENT_TYPE_LABELS_SENTENCE.get(invoice["invoice_type"], doc_title)
-    c.drawString(margin, y, f"{doc_title_sentence} no {invoice['series']}/{invoice['number']}")
+    c.drawString(margin, y, f"{doc_title_sentence} nº {invoice['series']}/{invoice['number']}")
     y -= 5 * mm
     c.setFont("Helvetica", 9)
-    c.drawString(margin, y, f"Data de emissao: {invoice.get('business_date', '-')}")
+    c.drawString(margin, y, f"Data de emissão: {_emission_text(invoice)}")
     y -= 8 * mm
 
     col_tipo = margin
     col_cod = margin + 8 * mm
-    col_desc = margin + 24 * mm
+    col_desc = margin + 30 * mm  # the code column holds a long code (PRT-FRANGO)
     col_qt = margin + 74 * mm
     col_preco = margin + 86 * mm
     col_desc_pct = margin + 104 * mm
@@ -505,11 +542,11 @@ def generate_factura_style_a4(invoice, lines, company, customer):
     c.setFont("Helvetica-Bold", 6.8)
     hy = y - 3.2 * mm
     c.drawString(col_tipo + 1 * mm, hy, "Tipo")
-    c.drawString(col_cod + 1 * mm, hy, "Codigo")
-    c.drawString(col_desc + 1 * mm, hy, "Descricao")
+    c.drawString(col_cod + 1 * mm, hy, "Código")
+    c.drawString(col_desc + 1 * mm, hy, "Descrição")
     c.drawString(col_qt, hy, "Qt")
-    c.drawString(col_preco, hy, "Preco")
-    c.drawString(col_desc_pct, hy, "Desc.")
+    c.drawString(col_preco, hy, "Preço Unit")
+    c.drawString(col_desc_pct, hy, "Desconto")
     c.drawString(col_valor, hy, "Valor")
     c.drawCentredString(tax_block_x + tax_w / 2, y - 2.4 * mm, "Impostos")
     c.drawRightString(col_total - 1 * mm, hy, "Total")
@@ -544,9 +581,9 @@ def generate_factura_style_a4(invoice, lines, company, customer):
         c.setFillColor(TEXT_PRIMARY)
         c.setFont("Helvetica", 7.5)
         c.drawString(col_tipo + 1 * mm, ty, "S" if l.get("service_line") else "P")
-        c.drawString(col_cod + 1 * mm, ty, str(l.get("code", "-"))[:10])
-        c.drawString(col_desc + 1 * mm, ty, l["product_name_snapshot"][:32])
-        c.drawString(col_qt, ty, f"{l['quantity']:.2f} {l.get('unit_code') or ''}".strip())  # the unit sold: 1.00 SC, 2.00 DZ...
+        c.drawString(col_cod + 1 * mm, ty, _fit_text(c, str(l.get("code") or "-"), "Helvetica", 7.5, col_desc - col_cod - 2 * mm))
+        c.drawString(col_desc + 1 * mm, ty, _fit_text(c, l["product_name_snapshot"], "Helvetica", 7.5, col_qt - col_desc - 2 * mm))
+        c.drawString(col_qt, ty, f"{fmt(l['quantity'])} {l.get('unit_code') or ''}".strip())  # the unit sold: 1.00 SC, 2.00 DZ...
         c.drawString(col_preco, ty, fmt(l["unit_price"]))
         c.drawString(col_desc_pct, ty, f"{l.get('discount_percent', 0):.0f}%")
         c.drawString(col_valor, ty, fmt(l["line_subtotal"]))
@@ -591,7 +628,7 @@ def generate_factura_style_a4(invoice, lines, company, customer):
         y -= 4 * mm
         c.setFillColor(TEXT_MUTED)
         c.setFont("Helvetica-Oblique", 6.5)
-        c.drawString(margin, y, "(valores informativos nao integrados no total do documento)")
+        c.drawString(margin, y, "(valores informativos não integrados no total do documento)")
         y -= 4.5 * mm
 
         rh = 5 * mm
@@ -606,7 +643,7 @@ def generate_factura_style_a4(invoice, lines, company, customer):
         y -= rh
         c.setFont("Helvetica", 7.5)
         c.drawString(margin + 1 * mm, y - rh + 1.6 * mm, "II")
-        c.drawString(margin + 30 * mm, y - rh + 1.6 * mm, "Retencao na fonte")
+        c.drawString(margin + 30 * mm, y - rh + 1.6 * mm, "Retenção na fonte")
         c.drawString(margin + 55 * mm, y - rh + 1.6 * mm, "-")
         c.drawRightString(margin + left_w - 1 * mm, y - rh + 1.6 * mm, fmt(retention_total) + " Kz")
         c.setStrokeColor(BORDER)
@@ -614,7 +651,7 @@ def generate_factura_style_a4(invoice, lines, company, customer):
         y -= rh + 2 * mm
 
     doc_rows = [
-        ("Total iliquido", total_iliquido),
+        ("Total ilíquido", total_iliquido),
         ("Total de descontos", total_discount_amount),
         ("Total de impostos (IVA)", invoice["vat_total"]),
     ]
@@ -641,12 +678,12 @@ def generate_factura_style_a4(invoice, lines, company, customer):
         ry -= 2 * mm
         c.setFillColor(TEXT_MUTED)
         c.setFont("Helvetica", 7.5)
-        c.drawString(right_col_x + 2 * mm, ry, "Retencao na fonte")
+        c.drawString(right_col_x + 2 * mm, ry, "Retenção na fonte")
         c.setFillColor(TEXT_PRIMARY)
         c.drawRightString(right_col_x + right_w - 2 * mm, ry, fmt(retention_total))
         ry -= 4.6 * mm
         c.setFont("Helvetica-Bold", 8)
-        c.drawString(right_col_x + 2 * mm, ry, "Liquido a pagar")
+        c.drawString(right_col_x + 2 * mm, ry, "Líquido a pagar")
         c.drawRightString(right_col_x + right_w - 2 * mm, ry, fmt(invoice["total"] - retention_total))
         ry -= 4.6 * mm
 
@@ -658,10 +695,25 @@ def generate_factura_style_a4(invoice, lines, company, customer):
         c.drawString(margin, y, f"Total: {invoice['amount_in_words']}")
         y -= 6 * mm
 
+    # The payments recorded on the document, with the official AGT name of their method (a mixed payment: one
+    # line per method). A pro-forma, or a Factura billed later without a deposit, has none.
+    payments = invoice.get("payments") or []
+    if payments:
+        c.setFillColor(TEXT_PRIMARY)
+        c.setFont("Helvetica-Bold", 8)
+        c.drawString(margin, y, "Meios de pagamento")
+        y -= 4.2 * mm
+        c.setFont("Helvetica", 7.5)
+        for p in payments:
+            c.drawString(margin, y, p["name"])
+            c.drawRightString(margin + left_w, y, fmt(p["amount"]) + " Kz")
+            y -= 3.8 * mm
+        y -= 2 * mm
+
     if invoice.get("observations"):
         c.setFillColor(ACCENT)
         c.setFont("Helvetica-Bold", 8)
-        c.drawString(margin, y, "Observacoes:")
+        c.drawString(margin, y, "Observações:")
         y -= 4.5 * mm
         c.setFillColor(TEXT_PRIMARY)
         c.setFont("Helvetica", 7.5)
@@ -672,7 +724,7 @@ def generate_factura_style_a4(invoice, lines, company, customer):
     if bank_accounts:
         c.setFillColor(TEXT_PRIMARY)
         c.setFont("Helvetica-Bold", 8)
-        c.drawString(margin, y, "Coordenadas Bancarias")
+        c.drawString(margin, y, "Coordenadas bancárias")
         y -= 4.2 * mm
         c.setFont("Helvetica", 7)
         for b in bank_accounts:
@@ -688,13 +740,13 @@ def generate_factura_style_a4(invoice, lines, company, customer):
 
     c.setFillColor(TEXT_MUTED)
     c.setFont("Helvetica-Oblique", 6.5)
-    c.drawString(margin, margin + 3 * mm, "SIMUL - Processado por programa nao homologado (simulacao)")
+    c.drawString(margin, margin + 3 * mm, "SIMUL - Processado por programa não homologado (simulação)")
     if invoice.get("atcud"):
         c.drawString(margin, margin, f"ATCUD: {invoice['atcud']}")
 
     c.setFillColor(TEXT_MUTED)
     c.setFont("Helvetica", 7)
-    c.drawRightString(page_width - margin, margin, "Pag. 1/1")
+    c.drawRightString(page_width - margin, margin, "Pág. 1/1")
 
     c.save()
     buffer.seek(0)
@@ -878,7 +930,7 @@ def generate_recibo_style_a4(invoice, company, customer):
 
     c.setFillColor(TEXT_MUTED)
     c.setFont("Helvetica", 7)
-    c.drawString(margin, margin, "Pag. 1/1")
+    c.drawString(margin, margin, "Pág. 1/1")
 
     c.save()
     buffer.seek(0)
