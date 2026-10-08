@@ -42,8 +42,13 @@ async def test_a_cashier_reads_his_own_till_only(db, company_with_essentials):
     assert isinstance(await tesouraria_routes.get_pos_daily_report(
         pos_id=own_pos.id, date_from=day_from, date_to=day_to, db=db, current_user=cashier), list)
 
+    assert await pos_routes.get_carry_forward(pos_id=own_pos.id, db=db, current_user=cashier) is not None
+    assert await pos_routes.get_current_open_session(pos_id=own_pos.id, db=db, current_user=cashier) is None
+
     # another till: refused everywhere
     for call in (
+        pos_routes.get_current_open_session(pos_id=other.id, db=db, current_user=cashier),
+        pos_routes.get_carry_forward(pos_id=other.id, db=db, current_user=cashier),
         pos_routes.get_sessions(activity_id=None, pos_id=other.id, db=db, current_user=cashier),
         pos_routes.get_closing_report(session_id=other_session.id, db=db, current_user=cashier),
         pos_routes.get_current_balance(pos_id=other.id, db=db, current_user=cashier),

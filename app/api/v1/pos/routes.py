@@ -88,6 +88,10 @@ async def get_current_open_session(
     current_user: User = Depends(require_permission("pos:view")),
 ):
     """Returns the currently open session for this POS, or null if none - lets the frontend know whether to show the checkout screen or the open-session prompt."""
+    try:
+        await require_cash_point_read_access(db, current_user.company_id, current_user, pos_id)
+    except CashPointAccessDeniedError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
     return await get_open_session(db, current_user.company_id, pos_id)
 
 
@@ -120,6 +124,10 @@ async def get_carry_forward(
     """The amount that will automatically become the opening float if this POS's
     session is opened right now (last closed session's counted total, or 0) - lets
     the "Abrir caixa" confirmation show it before the cashier commits."""
+    try:
+        await require_cash_point_read_access(db, current_user.company_id, current_user, pos_id)
+    except CashPointAccessDeniedError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
     amount = await get_carry_forward_amount(db, current_user.company_id, pos_id)
     return {"amount": amount}
 
