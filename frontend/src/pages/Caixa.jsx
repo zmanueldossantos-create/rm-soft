@@ -1219,7 +1219,7 @@ export default function Caixa() {
               <span className="text-text-muted text-[11px]">▾</span>
               {/* only the cash to count is shown; everything received in the session, on hover or tap */}
               {balanceDetailOpen && sessionSummary && (
-                <div className="absolute right-0 top-full mt-2 z-30 w-80 bg-bg-elevated border border-border rounded-md shadow-lg p-3 flex flex-col gap-1.5 text-[12px] cursor-default">
+                <div className="absolute right-0 top-full mt-2 z-30 w-96 max-w-[90vw] bg-bg-elevated border border-border rounded-md shadow-lg p-3 flex flex-col gap-1.5 text-[12px] cursor-default">
                   <p className="text-text-muted uppercase tracking-wide text-[10px] mb-0.5">Recebido nesta sessão</p>
                   {(sessionSummary.by_method || []).length === 0 && <p className="text-text-muted">Nenhum recebimento</p>}
                   {(sessionSummary.by_method || []).map((m) => (
