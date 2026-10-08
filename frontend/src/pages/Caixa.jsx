@@ -21,7 +21,7 @@ import { listActivities, listPointsOfSale } from '../api/activity';
 import { createCustomer } from '../api/customers';
 import { listProducts } from '../api/products';
 import { listCustomers } from '../api/customers';
-import { openCashSession, getOpenCashSession, closeCashSession, checkout, liquidatePendingInvoice, getSessionSummary, fetchClosingReportPdfBlob, getCarryForwardAmount } from '../api/pos';
+import { openCashSession, getOpenCashSession, closeCashSession, checkout, liquidatePendingInvoice, getSessionSummary, listCashSessions, fetchClosingReportPdfBlob, getCarryForwardAmount } from '../api/pos';
 import { listPendingProFormas, listRecentIssuedInvoices, fetchInvoicePdfBlob, getInvoiceDetail } from '../api/invoices';
 import { listPendingReceptions, receiveCashMovement, listPendingEmissions, cancelCashMovement, getDailyReport, fetchDailyReportPdfBlob } from '../api/tesouraria';
 import DocumentActionModals from '../components/DocumentActionModals';
@@ -129,6 +129,9 @@ export default function Caixa() {
   const [dailyReportLoading, setDailyReportLoading] = useState(false);
   const [dailyReportDateFrom, setDailyReportDateFrom] = useState('');
   const [dailyReportDateTo, setDailyReportDateTo] = useState('');
+  const [reportTab, setReportTab] = useState('movimentos'); // Relatórios: the journal, or the closings
+  const [reportSessions, setReportSessions] = useState([]);
+  const [reportSessionsLoading, setReportSessionsLoading] = useState(false);
   const [closingViaBilletage, setClosingViaBilletage] = useState(false);
 
   const [session, setSession] = useState(null);
@@ -469,6 +472,8 @@ export default function Caixa() {
     setDailyReportDateTo(defaultDate);
     setDailyReportModalOpen(true);
     loadDailyReport(defaultDate, defaultDate);
+    setReportTab('movimentos');
+    loadReportSessions();
   }
 
   // The movements report (A4): the very lines of the journal shown, for the dates chosen.
@@ -481,6 +486,32 @@ export default function Caixa() {
       setError(extractErrorMessage(err, 'Erro ao gerar o relatório de movimentos'));
     }
   }
+
+  // The closings of the till, newest first - each closed one can print its closing report again.
+  async function loadReportSessions() {
+    setReportSessionsLoading(true);
+    try {
+      setReportSessions(await listCashSessions(selectedPosId));
+    } catch (err) {
+      setReportSessions([]);
+    } finally {
+      setReportSessionsLoading(false);
+    }
+  }
+
+  async function printClosingReport(sessionId) {
+    try {
+      setPdfBlobUrl(await fetchClosingReportPdfBlob(sessionId));
+      setPdfFilename('Relatório de fecho');
+      setPdfModalOpen(true);
+    } catch (err) {
+      setError(extractErrorMessage(err, 'Erro ao gerar o relatório de fecho'));
+    }
+  }
+
+  const shortDateTime = (value) => (value
+    ? new Date(value).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+    : '-');
 
   async function loadDailyReport(dateFrom, dateTo) {
     setDailyReportLoading(true);
@@ -589,13 +620,7 @@ export default function Caixa() {
   const [closingReportProposed, setClosingReportProposed] = useState(false); // read fresh after each closing
   async function finishAndPrintClosingReport(sessionId) {
     finishClosing();
-    try {
-      setPdfBlobUrl(await fetchClosingReportPdfBlob(sessionId));
-      setPdfFilename('Relatório de fecho');
-      setPdfModalOpen(true);
-    } catch (err) {
-      setError(extractErrorMessage(err, 'Erro ao gerar o relatório de fecho'));
-    }
+    await printClosingReport(sessionId);
   }
 
   async function handleCloseAfterBilletage() {
@@ -1168,7 +1193,7 @@ export default function Caixa() {
         </button>
         <button onClick={() => toggleSideDrawer('report', openDailyReportModal)} disabled={!selectedPosId || !can('tesouraria:daily_report')} className={'group relative w-11 h-11 flex items-center justify-center rounded-lg border hover:border-accent hover:bg-accent/5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer ' + (activeSideDrawer === 'report' ? 'border-accent bg-accent/5' : 'border-accent/20 bg-bg-inset')}>
           <FileText size={18} className="text-accent" />
-          <span className="pointer-events-none absolute left-full ml-2 whitespace-nowrap rounded-md bg-bg-elevated border border-border px-2.5 py-1 text-[12px] text-text-primary shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-50">Relatorio do dia</span>
+          <span className="pointer-events-none absolute left-full ml-2 whitespace-nowrap rounded-md bg-bg-elevated border border-border px-2.5 py-1 text-[12px] text-text-primary shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-50">Relatórios</span>
         </button>
         <button onClick={() => toggleSideDrawer('accounts', () => setOpenAccountsModalOpen(true))} disabled={!selectedPosId || !can('open_accounts:view')} className={'group relative w-11 h-11 flex items-center justify-center rounded-lg border hover:border-accent hover:bg-accent/5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer ' + (activeSideDrawer === 'accounts' ? 'border-accent bg-accent/5' : 'border-accent/20 bg-bg-inset')}>
           <OpenAccountsIcon size={18} className="text-accent" />
@@ -1722,8 +1747,22 @@ export default function Caixa() {
         </div>
       </Modal>
 
-      <Modal variant="drawer" drawerLeftClass="left-16" open={dailyReportModalOpen} onClose={() => setDailyReportModalOpen(false)} title="Relatorio do dia" maxWidthClass="max-w-2xl">
+      <Modal variant="drawer" drawerLeftClass="left-16" open={dailyReportModalOpen} onClose={() => setDailyReportModalOpen(false)} title="Relatórios" maxWidthClass="max-w-2xl">
         <div className="flex flex-col gap-4">
+          {/* Relatórios: the journal of the movements, and the closings of the till (reprint of the closing report) */}
+          <div className="flex gap-1 border-b border-border">
+            {[['movimentos', 'Movimentos'], ['fecho', 'Fechos de caixa']].map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => setReportTab(key)}
+                className={'px-3.5 py-2 text-sm -mb-px border-b-2 transition-colors cursor-pointer '
+                  + (reportTab === key ? 'border-accent text-text-primary font-medium' : 'border-transparent text-text-muted hover:text-text-primary')}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {reportTab === 'movimentos' && (<>
           <div className="flex items-end gap-2.5">
             <div className="flex-1">
               <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">De</label>
@@ -1797,6 +1836,50 @@ export default function Caixa() {
               </button>
             </>
           )}
+          </>)}
+          {reportTab === 'fecho' && (reportSessionsLoading ? (
+            <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin text-accent" /></div>
+          ) : reportSessions.length === 0 ? (
+            <p className="text-[13px] text-text-muted text-center py-8">Nenhuma sessão de caixa</p>
+          ) : (
+            <div className="flex flex-col divide-y divide-border border border-border rounded-md">
+              {reportSessions.map((s) => {
+                const closed = s.status === 'FECHADA';
+                const diff = Number(s.closing_difference || 0);
+                return (
+                  <div key={s.id} className="flex items-center gap-3 px-3.5 py-2.5 text-[13px]">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-text-primary">
+                        Dia {new Date(s.business_date + 'T00:00:00').toLocaleDateString('pt-PT')}
+                        <span className="text-text-muted"> · {shortDateTime(s.opened_at)} → {closed ? shortDateTime(s.closed_at) : 'em curso'}</span>
+                      </p>
+                      {closed && (
+                        <p className="text-[12px] text-text-muted truncate">
+                          Esperado <span className="font-mono">{formatKz(Number(s.closing_amount_expected))}</span>
+                          {' · '}Contado <span className="font-mono">{formatKz(Number(s.closing_amount_counted))}</span>
+                          {s.closing_notes ? ' · ' + s.closing_notes : ''}
+                        </p>
+                      )}
+                    </div>
+                    {closed ? (
+                      <span className={'font-mono font-semibold whitespace-nowrap ' + (diff === 0 ? 'text-success' : diff > 0 ? 'text-accent' : 'text-danger')}>
+                        {diff > 0 ? '+' : ''}{formatKz(diff)} Kz
+                      </span>
+                    ) : (
+                      <span className="text-[11px] text-amber-500 whitespace-nowrap">Aberta</span>
+                    )}
+                    <button
+                      onClick={() => printClosingReport(s.id)}
+                      disabled={!closed}
+                      className="border border-border hover:border-accent text-text-primary text-[12px] font-medium px-3 py-1.5 rounded-md transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      Imprimir
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
         </div>
       </Modal>
 
