@@ -1205,21 +1205,21 @@ export default function Caixa() {
         <div className="flex items-center gap-2 flex-wrap">
           {session && currentBalance !== null && (
             <div
-              className="relative flex items-center gap-2 bg-bg-elevated border border-border rounded-md px-4 py-2 cursor-pointer select-none"
+              className="relative w-96 max-w-[90vw] flex items-center gap-2 bg-bg-elevated border border-border rounded-md px-4 py-2 cursor-pointer select-none"
               onPointerEnter={(e) => e.pointerType === 'mouse' && setBalanceDetailOpen(true)}
               onPointerLeave={(e) => e.pointerType === 'mouse' && setBalanceDetailOpen(false)}
               onClick={(e) => e.nativeEvent.pointerType !== 'mouse' && setBalanceDetailOpen((open) => !open)}
             >
               <Wallet size={15} className="text-accent" />
               <span className="text-text-muted text-[12px]">Numerário na gaveta</span>
-              <span className="font-mono font-semibold text-text-primary text-[15px]">{formatKz(currentBalance)} Kz</span>
+              <span className="ml-auto font-mono font-semibold text-text-primary text-[15px]">{formatKz(currentBalance)} Kz</span>
               {sessionSummary?.pending_in > 0 && (
                 <span title="Transferências por confirmar" className="w-2 h-2 rounded-full bg-amber-500" />
               )}
               <span className="text-text-muted text-[11px]">▾</span>
               {/* only the cash to count is shown; everything received in the session, on hover or tap */}
               {balanceDetailOpen && sessionSummary && (
-                <div className="absolute right-0 top-full mt-2 z-30 w-96 max-w-[90vw] bg-bg-elevated border border-border rounded-md shadow-lg p-3 flex flex-col gap-1.5 text-[12px] cursor-default">
+                <div className="absolute left-0 right-0 top-full mt-2 z-30 bg-bg-elevated border border-border rounded-md shadow-lg p-3 flex flex-col gap-1.5 text-[12px] cursor-default">
                   <p className="text-text-muted uppercase tracking-wide text-[10px] mb-0.5">Recebido nesta sessão</p>
                   {(sessionSummary.by_method || []).length === 0 && <p className="text-text-muted">Nenhum recebimento</p>}
                   {(sessionSummary.by_method || []).map((m) => (
