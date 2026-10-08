@@ -121,6 +121,7 @@ export default function Caixa() {
   const [movementModalTab, setMovementModalTab] = useState('form');
   const [currentBalance, setCurrentBalance] = useState(null);
   const [sessionSummary, setSessionSummary] = useState(null); // the balance justified, by payment method
+  const [balanceDetailOpen, setBalanceDetailOpen] = useState(false); // its detail: hover (mouse) or tap (touch)
   const [carryForwardAmount, setCarryForwardAmount] = useState(0);
   const [carryForwardLoading, setCarryForwardLoading] = useState(false);
   const [dailyReportModalOpen, setDailyReportModalOpen] = useState(false);
@@ -1170,20 +1171,55 @@ export default function Caixa() {
         </h2>
         <div className="flex items-center gap-2 flex-wrap">
           {session && currentBalance !== null && (
-            <div className="flex items-center gap-2 bg-bg-elevated border border-border rounded-md px-4 py-2">
+            <div
+              className="relative flex items-center gap-2 bg-bg-elevated border border-border rounded-md px-4 py-2 cursor-pointer select-none"
+              onPointerEnter={(e) => e.pointerType === 'mouse' && setBalanceDetailOpen(true)}
+              onPointerLeave={(e) => e.pointerType === 'mouse' && setBalanceDetailOpen(false)}
+              onClick={(e) => e.nativeEvent.pointerType !== 'mouse' && setBalanceDetailOpen((open) => !open)}
+            >
               <Wallet size={15} className="text-accent" />
               <span className="text-text-muted text-[12px]">Numerário na gaveta</span>
               <span className="font-mono font-semibold text-text-primary text-[15px]">{formatKz(currentBalance)} Kz</span>
-              {/* the other payment methods: received, but never in the drawer - the balance explains itself */}
-              {(sessionSummary?.by_method || []).filter((m) => !m.is_cash && m.amount).map((m) => (
-                <span key={m.code} title="Não entra na gaveta" className="text-[11px] text-text-muted border-l border-border pl-2">
-                  {m.name} <span className="font-mono text-text-secondary">{formatKz(m.amount)} Kz</span>
-                </span>
-              ))}
               {sessionSummary?.pending_in > 0 && (
-                <span title="Transferências por confirmar em Recepção de fundos" className="text-[11px] text-amber-500 border-l border-border pl-2">
-                  A receber <span className="font-mono">{formatKz(sessionSummary.pending_in)} Kz</span>
-                </span>
+                <span title="Transferências por confirmar" className="w-2 h-2 rounded-full bg-amber-500" />
+              )}
+              <span className="text-text-muted text-[11px]">▾</span>
+              {/* only the cash to count is shown; everything received in the session, on hover or tap */}
+              {balanceDetailOpen && sessionSummary && (
+                <div className="absolute right-0 top-full mt-2 z-30 w-80 bg-bg-elevated border border-border rounded-md shadow-lg p-3 flex flex-col gap-1.5 text-[12px] cursor-default">
+                  <p className="text-text-muted uppercase tracking-wide text-[10px] mb-0.5">Recebido nesta sessão</p>
+                  {(sessionSummary.by_method || []).length === 0 && <p className="text-text-muted">Nenhum recebimento</p>}
+                  {(sessionSummary.by_method || []).map((m) => (
+                    <div key={m.code} className="flex justify-between gap-3">
+                      <span className="text-text-secondary">{m.name}{!m.is_cash && <span className="text-text-muted"> · fora da gaveta</span>}</span>
+                      <span className="font-mono text-text-primary">{formatKz(m.amount)} Kz</span>
+                    </div>
+                  ))}
+                  <div className="flex justify-between gap-3 border-t border-border pt-1.5 font-semibold text-text-primary">
+                    <span>Total recebido</span><span className="font-mono">{formatKz(sessionSummary.total_received)} Kz</span>
+                  </div>
+                  <p className="text-text-muted uppercase tracking-wide text-[10px] mt-1.5 mb-0.5">Gaveta</p>
+                  {[
+                    ['Fundo de abertura', sessionSummary.opening_amount],
+                    ['+ Numerário recebido', sessionSummary.cash_sales],
+                    ['+ Transferências recebidas', sessionSummary.transfers_in],
+                    ['+ Entradas', sessionSummary.entries],
+                    ['- Transferências enviadas', sessionSummary.transfers_out],
+                    ['- Saídas', sessionSummary.exits],
+                  ].filter(([label, value], i) => i < 2 || value).map(([label, value]) => (
+                    <div key={label} className="flex justify-between gap-3 text-text-secondary">
+                      <span>{label}</span><span className="font-mono">{formatKz(value)} Kz</span>
+                    </div>
+                  ))}
+                  <div className="flex justify-between gap-3 border-t border-border pt-1.5 font-semibold text-text-primary">
+                    <span>Numerário na gaveta</span><span className="font-mono">{formatKz(currentBalance)} Kz</span>
+                  </div>
+                  {sessionSummary.pending_in > 0 && (
+                    <div className="flex justify-between gap-3 text-amber-500">
+                      <span>A receber (por confirmar)</span><span className="font-mono">{formatKz(sessionSummary.pending_in)} Kz</span>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           )}
