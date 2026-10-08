@@ -110,3 +110,16 @@ async def require_cash_point_access(
 
     if access.pos_id != pos_id:
         raise CashPointAccessDeniedError("Nao tem acesso a este ponto de venda")
+
+
+async def require_cash_point_read_access(
+    db: AsyncSession, company_id: uuid.UUID, user: User, pos_id: uuid.UUID,
+) -> None:
+    """
+    Enforces the association rule for READING a till (its sessions, journal and reports): a CAIXA reads only the
+    till he is assigned to - same check and message as the cash operations (require_cash_point_access). Every other
+    role reads every till, as in Faturas: a manager or an accountant checks them all.
+    """
+    if getattr(user.role, "value", user.role) != "CAIXA":
+        return
+    await require_cash_point_access(db, company_id, user, pos_id)

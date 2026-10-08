@@ -64,6 +64,7 @@ from app.services.daily_report_service import get_daily_report
 
 from fastapi import Response
 from app.services.cash_report_service import get_movements_report_data
+from app.services.user_cash_point_access_service import require_cash_point_read_access
 from app.services.point_of_sale_service import PosNotFoundError
 from app.utils.cash_report_pdf import generate_movements_report_pdf
 
@@ -328,6 +329,10 @@ async def get_pos_daily_report(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("tesouraria:daily_report")),
 ):
+    try:
+        await require_cash_point_read_access(db, current_user.company_id, current_user, pos_id)
+    except CashPointAccessDeniedError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
     return await get_daily_report(db, current_user.company_id, pos_id, date_from, date_to)
 
 
@@ -341,8 +346,11 @@ async def get_pos_daily_report_pdf(
 ):
     """The movements report (A4 PDF) of a till over a period - the very lines of the journal shown on screen."""
     try:
+        await require_cash_point_read_access(db, current_user.company_id, current_user, pos_id)
         data = await get_movements_report_data(db, current_user.company_id, pos_id, date_from, date_to)
     except PosNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except CashPointAccessDeniedError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
     return Response(content=generate_movements_report_pdf(data), media_type="application/pdf",
                     headers={"Content-Disposition": f'inline; filename="movimentos-caixa-{date_from}-{date_to}.pdf"'})
