@@ -62,6 +62,11 @@ from app.schemas.catalog import PaymentMethodPreferenceResponse, PaymentMethodPr
 from app.schemas.tesouraria import DailyReportEntry
 from app.services.daily_report_service import get_daily_report
 
+from fastapi import Response
+from app.services.cash_report_service import get_movements_report_data
+from app.services.point_of_sale_service import PosNotFoundError
+from app.utils.cash_report_pdf import generate_movements_report_pdf
+
 router = APIRouter(prefix="/api/v1/tesouraria", tags=["tesouraria"])
 
 
@@ -324,3 +329,20 @@ async def get_pos_daily_report(
     current_user: User = Depends(require_permission("tesouraria:daily_report")),
 ):
     return await get_daily_report(db, current_user.company_id, pos_id, date_from, date_to)
+
+
+@router.get("/daily-report/pdf")
+async def get_pos_daily_report_pdf(
+    pos_id: uuid.UUID,
+    date_from: date,
+    date_to: date,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("tesouraria:daily_report")),
+):
+    """The movements report (A4 PDF) of a till over a period - the very lines of the journal shown on screen."""
+    try:
+        data = await get_movements_report_data(db, current_user.company_id, pos_id, date_from, date_to)
+    except PosNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    return Response(content=generate_movements_report_pdf(data), media_type="application/pdf",
+                    headers={"Content-Disposition": f'inline; filename="movimentos-caixa-{date_from}-{date_to}.pdf"'})

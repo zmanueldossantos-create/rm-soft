@@ -38,6 +38,16 @@ def _user_label(user: User | None) -> str:
     return "-"
 
 
+def _company_dict(company: Company) -> dict:
+    """What the PDF header reads - the same keys as the invoices (see pdf_generator._draw_company_box)."""
+    return {
+        "name": company.name, "nif": company.nif, "address": getattr(company, "address", None),
+        "phone_number": getattr(company, "phone_number", None),
+        "phone_number_2": getattr(company, "phone_number_2", None),
+        "logo_path": getattr(company, "logo_path", None),
+    }
+
+
 async def get_closing_report_data(db: AsyncSession, company_id: uuid.UUID, session_id: uuid.UUID) -> dict:
     session = await get_session_or_raise(db, company_id, session_id)
     if session.status != CashSessionStatus.FECHADA:
@@ -61,12 +71,7 @@ async def get_closing_report_data(db: AsyncSession, company_id: uuid.UUID, sessi
     documents.sort(key=lambda d: d["label"])
 
     return {
-        "company": {
-            "name": company.name, "nif": company.nif, "address": getattr(company, "address", None),
-            "phone_number": getattr(company, "phone_number", None),
-            "phone_number_2": getattr(company, "phone_number_2", None),
-            "logo_path": getattr(company, "logo_path", None),
-        },
+        "company": _company_dict(company),
         "pos_name": pos.name,
         "activity_name": activity.name,
         "business_date": session.business_date,
@@ -79,4 +84,35 @@ async def get_closing_report_data(db: AsyncSession, company_id: uuid.UUID, sessi
         "counted": round(float(session.closing_amount_counted), 2),
         "difference": round(float(session.closing_difference), 2),
         "notes": session.closing_notes,
+    }
+
+
+async def get_movements_report_data(
+    db: AsyncSession, company_id: uuid.UUID, pos_id: uuid.UUID, date_from, date_to,
+) -> dict:
+    """The movements report of a till over a period: the very lines of the daily journal (get_daily_report), their
+    totals, and the sales less the refunds by payment method."""
+    from app.services.daily_report_service import get_daily_report  # local: the journal is only needed here
+
+    pos = await get_pos_or_raise(db, company_id, pos_id)
+    activity = (await db.execute(select(Activity).where(Activity.id == pos.activity_id))).scalar_one()
+    company = (await db.execute(select(Company).where(Company.id == company_id))).scalar_one()
+    entries = await get_daily_report(db, company_id, pos_id, date_from, date_to)
+
+    by_method: dict[str, dict] = {}
+    for e in entries:
+        if e.get("payment_method"):
+            m = by_method.setdefault(e["payment_method"], {"name": e["payment_method"], "is_cash": e.get("is_cash"), "amount": 0.0})
+            m["amount"] += e["amount"] if e["direction"] == "entrada" else -e["amount"]
+    return {
+        "company": _company_dict(company),
+        "pos_name": pos.name,
+        "activity_name": activity.name,
+        "date_from": date_from,
+        "date_to": date_to,
+        "entries": entries,
+        "total_in": round(sum(e["amount"] for e in entries if e["direction"] == "entrada"), 2),
+        "total_out": round(sum(e["amount"] for e in entries if e["direction"] == "saida"), 2),
+        "by_method": sorted(({**m, "amount": round(m["amount"], 2)} for m in by_method.values()),
+                            key=lambda m: (not m["is_cash"], m["name"])),
     }

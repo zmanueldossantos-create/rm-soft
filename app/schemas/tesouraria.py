@@ -83,3 +83,5 @@ class DailyReportEntry(BaseModel):
     amount: float
     direction: str
     reference: str
+    payment_method: str | None = None
+    is_cash: bool | None = None

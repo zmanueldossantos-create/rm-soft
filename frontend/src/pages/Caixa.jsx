@@ -23,7 +23,7 @@ import { listProducts } from '../api/products';
 import { listCustomers } from '../api/customers';
 import { openCashSession, getOpenCashSession, closeCashSession, checkout, liquidatePendingInvoice, getSessionSummary, fetchClosingReportPdfBlob, getCarryForwardAmount } from '../api/pos';
 import { listPendingProFormas, listRecentIssuedInvoices, fetchInvoicePdfBlob, getInvoiceDetail } from '../api/invoices';
-import { listPendingReceptions, receiveCashMovement, listPendingEmissions, cancelCashMovement, getDailyReport } from '../api/tesouraria';
+import { listPendingReceptions, receiveCashMovement, listPendingEmissions, cancelCashMovement, getDailyReport, fetchDailyReportPdfBlob } from '../api/tesouraria';
 import DocumentActionModals from '../components/DocumentActionModals';
 import {
   getMyCashPointAssociation, listCashPointAssociations,
@@ -469,6 +469,17 @@ export default function Caixa() {
     setDailyReportDateTo(defaultDate);
     setDailyReportModalOpen(true);
     loadDailyReport(defaultDate, defaultDate);
+  }
+
+  // The movements report (A4): the very lines of the journal shown, for the dates chosen.
+  async function printDailyReport() {
+    try {
+      setPdfBlobUrl(await fetchDailyReportPdfBlob(selectedPosId, dailyReportDateFrom, dailyReportDateTo));
+      setPdfFilename('Relatório de movimentos');
+      setPdfModalOpen(true);
+    } catch (err) {
+      setError(extractErrorMessage(err, 'Erro ao gerar o relatório de movimentos'));
+    }
   }
 
   async function loadDailyReport(dateFrom, dateTo) {
@@ -1742,6 +1753,13 @@ export default function Caixa() {
               className="bg-accent hover:bg-accent-hover text-white font-medium text-sm px-4 py-2.5 rounded-md transition-colors cursor-pointer"
             >
               Filtrar
+            </button>
+            <button
+              onClick={printDailyReport}
+              disabled={dailyReportLoading || !dailyReportDateFrom || !dailyReportDateTo}
+              className="border border-border hover:border-accent text-text-primary font-medium text-sm px-4 py-2.5 rounded-md transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Imprimir
             </button>
           </div>
 

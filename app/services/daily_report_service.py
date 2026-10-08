@@ -19,7 +19,7 @@ from app.models.invoice import Invoice
 from app.models.payment import Payment
 from app.models.payment_method_catalog import PaymentMethodCatalog
 from app.models.cash_session import CashSession
-from app.models.cash_movement import CashMovement, CashMovementType
+from app.models.cash_movement import CashMovement, CashMovementStatus, CashMovementType
 
 
 async def get_daily_report(
@@ -43,7 +43,7 @@ async def get_daily_report(
     # cash sessions. A Fatura billed later or a pro-forma has no payment, so no line. A credit note has a payment only
     # when money was explicitly given back from this cash point: that payment is negative, shown as an outgoing line.
     payments_result = await db.execute(
-        select(Payment, Invoice, PaymentMethodCatalog.name)
+        select(Payment, Invoice, PaymentMethodCatalog.name, PaymentMethodCatalog.is_cash)
         .join(Invoice, Invoice.id == Payment.invoice_id)
         .join(CashSession, CashSession.id == Invoice.cash_session_id)
         .join(PaymentMethodCatalog, PaymentMethodCatalog.id == Payment.payment_method_id)
@@ -56,7 +56,7 @@ async def get_daily_report(
         .order_by(Payment.created_at)
     )
     invoice_type_labels = {"FACTURA": "FT", "FACTURA_RECIBO": "FR", "PRO_FORMA": "PF", "NOTA_CREDITO": "NC", "NOTA_DEBITO": "ND", "RECIBO": "RC"}
-    for payment, inv, method_name in payments_result.all():
+    for payment, inv, method_name, method_is_cash in payments_result.all():
         type_value = inv.invoice_type.value if hasattr(inv.invoice_type, "value") else str(inv.invoice_type)
         label = invoice_type_labels.get(type_value, type_value)
         is_refund = float(payment.amount) < 0
@@ -68,6 +68,8 @@ async def get_daily_report(
             "amount": abs(float(payment.amount)),
             "direction": "saida" if is_refund else "entrada",
             "reference": f"{inv.series}/{inv.number}",
+            "payment_method": method_name,  # totals by method on the movements report
+            "is_cash": bool(method_is_cash),
         })
 
     movements_result = await db.execute(
@@ -89,7 +91,9 @@ async def get_daily_report(
             "type": "movimento",
             "time": mov.created_at,
             "business_date": mov.movement_date,
-            "description": label + (" (saida)" if is_outgoing else " (entrada)"),
+            # a transfer received but not confirmed is not in the drawer yet - said so on the line
+            "description": label + (" (saida)" if is_outgoing else " (entrada)")
+            + (" - por confirmar" if not is_outgoing and mov.status != CashMovementStatus.RECEBIDO else ""),
             "amount": float(mov.amount),
             "direction": "saida" if is_outgoing else "entrada",
             "reference": mov.description or label,

@@ -94,33 +94,22 @@ def _table(p: _Page, headers, rows, widths, aligns, total=None) -> None:
     p.y -= 4 * mm
 
 
-def generate_closing_report_pdf(data: dict) -> bytes:
-    buffer = io.BytesIO()
-    c = canvas.Canvas(buffer, pagesize=A4)
-    c.setTitle(f"Relatorio de fecho - {data['pos_name']} - {_when(data['business_date'])}")
-    p = _Page(c)
-    s = data["summary"]
-
-    # header: logo, title, the session; then the company box and the session details side by side
-    logo = _resolve_logo_path(data["company"])
+def _draw_header(p: "_Page", company: dict, title: str, right_lines: list[str], details: list[tuple[str, str]]) -> None:
+    """Logo and title on top, then the company box (as on the invoices) and the report's details side by side."""
+    c = p.c
+    logo = _resolve_logo_path(company)
     if logo:
         c.drawImage(ImageReader(logo), MARGIN, p.y - 18 * mm, width=40 * mm, height=18 * mm,
                     preserveAspectRatio=True, anchor="w", mask="auto")
     c.setFillColor(ACCENT)
     c.setFont("Helvetica-Bold", 15)
-    c.drawRightString(MARGIN + CONTENT_W, p.y - 6 * mm, "RELATÓRIO DE FECHO DE CAIXA")
+    c.drawRightString(MARGIN + CONTENT_W, p.y - 6 * mm, title)
     c.setFillColor(TEXT_PRIMARY)
     c.setFont("Helvetica", 10)
-    c.drawRightString(MARGIN + CONTENT_W, p.y - 12 * mm, f"{data['pos_name']}  ·  {data['activity_name']}")
-    c.drawRightString(MARGIN + CONTENT_W, p.y - 17 * mm, f"Dia comercial {_when(data['business_date'])}")
+    for k, line in enumerate(right_lines):
+        c.drawRightString(MARGIN + CONTENT_W, p.y - (12 + 5 * k) * mm, line)
     p.y -= 24 * mm
-
-    box_h = _draw_company_box(c, MARGIN, p.y, 95 * mm, data["company"])
-    details = [
-        ("Abertura", f"{_when(data['opened_at'])}  ·  {data['opened_by']}"),
-        ("Fecho", f"{_when(data['closed_at'])}  ·  {data['closed_by']}"),
-        ("Impresso em", _when(datetime.now(LUANDA))),
-    ]
+    box_h = _draw_company_box(c, MARGIN, p.y, 95 * mm, company)
     dy = p.y - 6 * mm
     for label, value in details:
         c.setFont("Helvetica-Bold", 9)
@@ -129,6 +118,29 @@ def generate_closing_report_pdf(data: dict) -> bytes:
         c.drawString(MARGIN + 122 * mm, dy, value[:40])
         dy -= 5.5 * mm
     p.y -= max(box_h, 20 * mm) + 8 * mm
+
+
+def _fit(c, text: str, font: str, size: float, width: float) -> str:
+    """Cuts a text to the width of its column, with an ellipsis."""
+    if c.stringWidth(text, font, size) <= width:
+        return text
+    while text and c.stringWidth(text + "...", font, size) > width:
+        text = text[:-1]
+    return text + "..."
+
+
+def generate_closing_report_pdf(data: dict) -> bytes:
+    buffer = io.BytesIO()
+    c = canvas.Canvas(buffer, pagesize=A4)
+    c.setTitle(f"Relatorio de fecho - {data['pos_name']} - {_when(data['business_date'])}")
+    p = _Page(c)
+    s = data["summary"]
+
+    _draw_header(p, data["company"], "RELATÓRIO DE FECHO DE CAIXA",
+                 [f"{data['pos_name']}  ·  {data['activity_name']}", f"Dia comercial {_when(data['business_date'])}"],
+                 [("Abertura", f"{_when(data['opened_at'])}  ·  {data['opened_by']}"),
+                  ("Fecho", f"{_when(data['closed_at'])}  ·  {data['closed_by']}"),
+                  ("Impresso em", _when(datetime.now(LUANDA)))])
 
     _section_title(p, "Recebimentos por modo de pagamento")
     _table(p, ["Modo de pagamento", "Na gaveta", "Valor"],
@@ -190,6 +202,50 @@ def generate_closing_report_pdf(data: dict) -> bytes:
         c.setFillColor(TEXT_MUTED)
         c.setFont("Helvetica", 8.5)
         c.drawString(x, p.y - 4.5 * mm, label + (f"  ·  {name}" if name else ""))
+
+    c.setFillColor(TEXT_MUTED)
+    c.setFont("Helvetica-Oblique", 7.5)
+    c.drawCentredString(PAGE_W / 2, 12 * mm, "Documento interno de controlo de caixa - sem valor fiscal")
+    c.showPage()
+    c.save()
+    return buffer.getvalue()
+
+
+def generate_movements_report_pdf(data: dict) -> bytes:
+    """The movements of a till over a period: the lines of the daily journal, their totals, the sales by method."""
+    buffer = io.BytesIO()
+    c = canvas.Canvas(buffer, pagesize=A4)
+    same_day = data["date_from"] == data["date_to"]
+    period = _when(data["date_from"]) if same_day else f"{_when(data['date_from'])} a {_when(data['date_to'])}"
+    c.setTitle(f"Relatorio de movimentos - {data['pos_name']} - {period}")
+    p = _Page(c)
+    _draw_header(p, data["company"], "RELATÓRIO DE MOVIMENTOS DE CAIXA",
+                 [f"{data['pos_name']}  ·  {data['activity_name']}", ("Dia " if same_day else "Período ") + period],
+                 [("Linhas", str(len(data["entries"]))), ("Impresso em", _when(datetime.now(LUANDA)))])
+
+    _section_title(p, "Movimentos")
+    desc_w = 0.46 * CONTENT_W - 4 * mm
+    rows = [[_when(e["time"]), _fit(c, e["description"], "Helvetica", 9, desc_w),
+             kz(e["amount"]) if e["direction"] == "entrada" else "",
+             kz(e["amount"]) if e["direction"] == "saida" else ""] for e in data["entries"]]
+    _table(p, ["Data / hora", "Descrição", "Entrada", "Saída"], rows, [0.20, 0.46, 0.17, 0.17], ["l", "l", "r", "r"],
+           total=["Totais", "", kz(data["total_in"]), kz(data["total_out"])])
+
+    _section_title(p, "Resumo por modo de pagamento (vendas menos reembolsos)")
+    _table(p, ["Modo de pagamento", "Na gaveta", "Valor"],
+           [[m["name"], "Sim" if m["is_cash"] else "Não", kz(m["amount"])] for m in data["by_method"]],
+           [0.55, 0.15, 0.30], ["l", "l", "r"])
+
+    balance = round(data["total_in"] - data["total_out"], 2)
+    p.need(16 * mm)
+    c.setFillColor(TEXT_PRIMARY)
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(MARGIN + 2 * mm, p.y, "Saldo do período (entradas - saídas)")
+    c.drawRightString(MARGIN + CONTENT_W - 2 * mm, p.y, kz(balance, signed=balance != 0))
+    p.y -= 6 * mm
+    c.setFillColor(TEXT_MUTED)
+    c.setFont("Helvetica-Oblique", 8.5)
+    c.drawString(MARGIN + 2 * mm, p.y, "Inclui todos os modos de pagamento. O numerário na gaveta consta do relatório de fecho.")
 
     c.setFillColor(TEXT_MUTED)
     c.setFont("Helvetica-Oblique", 7.5)

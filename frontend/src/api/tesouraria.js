@@ -105,3 +105,13 @@ export async function setPaymentMethodPreference(paymentMethodId, availableAtPos
   const res = await apiClient.put('/tesouraria/payment-method-preferences/' + paymentMethodId, { available_at_pos: availableAtPos });
   return res.data;
 }
+
+// The movements report (A4 PDF) of a till for the chosen dates - the very lines of the journal shown - as an
+// object URL for the in-app PDF viewer.
+export async function fetchDailyReportPdfBlob(posId, dateFrom, dateTo) {
+  const res = await apiClient.get('/tesouraria/daily-report/pdf', {
+    params: { pos_id: posId, date_from: dateFrom, date_to: dateTo },
+    responseType: 'blob',
+  });
+  return URL.createObjectURL(res.data);
+}
