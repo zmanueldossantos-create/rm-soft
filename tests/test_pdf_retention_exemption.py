@@ -54,7 +54,7 @@ def _texts(generate, invoice):
 def test_a4_prints_the_withholding_and_the_official_exemption_reason():
     seen = _texts(generate_invoice_pdf_a4, _invoice(10.0))
     assert "Retenção na fonte" in seen and "Líquido a pagar" in seen
-    assert "204.00" in seen  # 214 - 10
+    assert "204,00" in seen  # 214 - 10
     assert "M11" in seen
     assert "M11 - " + M11_REASON in seen
 
