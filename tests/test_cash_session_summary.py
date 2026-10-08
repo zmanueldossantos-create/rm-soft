@@ -62,3 +62,25 @@ async def test_sales_are_split_by_payment_method_and_only_cash_goes_to_the_drawe
     assert by_code["MB"]["amount"] == 1140 and not by_code["MB"]["is_cash"]
     assert s["cash_sales"] == 1140 and s["total_received"] == 2280
     assert s["expected_cash"] == 2140  # the opening float + the cash sale only
+
+
+@pytest.mark.asyncio
+async def test_the_till_shows_the_short_label_and_the_report_keeps_the_official_name(db, company_with_essentials):
+    from sqlalchemy import text
+    from app.models.service import Service
+    from app.services.invoice_service import create_invoice
+
+    ctx = company_with_essentials
+    company_id = ctx["company"].id
+    await db.execute(text("UPDATE payment_method_catalog SET short_label = 'Multicaixa (referência)' WHERE code = 'MB'"))
+    multicaixa_id = (await db.execute(text("SELECT id FROM payment_method_catalog WHERE code = 'MB'"))).scalar_one()
+    service = Service(company_id=company_id, code="SRV-LBL", name="Servico rotulo", price=1000.0, vat_id=ctx["vat_nor"].id)
+    db.add(service)
+    await db.commit()
+    session = await open_session(db, company_id, ctx["pos"].id, ctx["gestor"], opening_amount=0)
+    await create_invoice(db, company_id, ctx["activity"].id, customer_id=None, invoice_type="FACTURA_RECIBO",
+                         lines_input=[{"service_id": service.id, "quantity": 1}], amount_received=1140.0,
+                         payment_method_id=multicaixa_id, cash_session_id=session.id)
+
+    mb = next(m for m in (await get_session_summary(db, company_id, ctx["pos"].id))["by_method"] if m["code"] == "MB")
+    assert mb["label"] == "Multicaixa (referência)" and mb["name"] != mb["label"]

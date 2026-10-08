@@ -122,6 +122,7 @@ class PaymentMethodCatalogResponse(BaseModel):
     is_cash: bool
     uses_bank_account: bool = False
     is_active: bool
+    short_label: str | None = None
 
     class Config:
         from_attributes = True
@@ -135,6 +136,7 @@ class PaymentMethodPreferenceResponse(BaseModel):
     allows_receipt: bool
     is_cash: bool
     available_at_pos: bool
+    short_label: str | None = None
 
 
 class PaymentMethodPreferenceUpdateRequest(BaseModel):

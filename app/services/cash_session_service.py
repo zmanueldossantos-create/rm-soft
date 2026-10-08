@@ -191,16 +191,20 @@ async def get_session_summary(
             return None
 
     rows = await db.execute(
-        select(PaymentMethodCatalog.code, PaymentMethodCatalog.name, PaymentMethodCatalog.is_cash, func.sum(Payment.amount))
+        select(PaymentMethodCatalog.code, PaymentMethodCatalog.name, PaymentMethodCatalog.short_label,
+               PaymentMethodCatalog.is_cash, func.sum(Payment.amount))
         .join(Payment, Payment.payment_method_id == PaymentMethodCatalog.id)
         .join(Invoice, Invoice.id == Payment.invoice_id)
         .where(Invoice.cash_session_id == session.id)
-        .group_by(PaymentMethodCatalog.code, PaymentMethodCatalog.name, PaymentMethodCatalog.is_cash)
+        .group_by(PaymentMethodCatalog.code, PaymentMethodCatalog.name, PaymentMethodCatalog.short_label,
+                  PaymentMethodCatalog.is_cash)
         .order_by(PaymentMethodCatalog.is_cash.desc(), PaymentMethodCatalog.name)
     )
     by_method = [
-        {"code": code, "name": name, "is_cash": bool(is_cash), "amount": round(float(amount), 2)}
-        for code, name, is_cash, amount in rows.all()
+        # name: the official one, for the documents and reports; label: what the till screen shows
+        {"code": code, "name": name, "label": short_label or name, "is_cash": bool(is_cash),
+         "amount": round(float(amount), 2)}
+        for code, name, short_label, is_cash, amount in rows.all()
     ]
 
     movements = await db.execute(

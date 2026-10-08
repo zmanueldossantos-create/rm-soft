@@ -33,6 +33,7 @@ async def list_payment_method_preferences(db: AsyncSession, company_id: uuid.UUI
             "id": m.id,
             "code": m.code,
             "name": m.name,
+            "short_label": m.short_label,
             "allows_payment": m.allows_payment,
             "allows_receipt": m.allows_receipt,
             "is_cash": m.is_cash,

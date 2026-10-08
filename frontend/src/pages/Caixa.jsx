@@ -1224,7 +1224,7 @@ export default function Caixa() {
                   {(sessionSummary.by_method || []).length === 0 && <p className="text-text-muted">Nenhum recebimento</p>}
                   {(sessionSummary.by_method || []).map((m) => (
                     <div key={m.code} className="flex justify-between gap-3">
-                      <span className="text-text-secondary">{m.name}{!m.is_cash && <span className="text-text-muted"> · fora da gaveta</span>}</span>
+                      <span className="text-text-secondary">{m.label || m.name}{!m.is_cash && <span className="text-text-muted"> · fora da gaveta</span>}</span>
                       <span className="font-mono text-text-primary">{formatKz(m.amount)} Kz</span>
                     </div>
                   ))}
@@ -1709,7 +1709,7 @@ export default function Caixa() {
                 <div key={m.id} className="flex items-center gap-2">
                   <label className="flex items-center gap-2 flex-1 cursor-pointer select-none">
                     <input type="checkbox" checked={!!line} onChange={() => togglePaymentMethod(m.id)} className="w-4 h-4 accent-accent cursor-pointer" />
-                    <span className="text-[13px] text-text-primary">{m.name}</span>
+                    <span className="text-[13px] text-text-primary">{m.short_label || m.name}</span>
                   </label>
                   {line && (
                     <input
@@ -1918,7 +1918,7 @@ export default function Caixa() {
                           disabled={!paidOnIssue}
                           className="w-4 h-4 accent-accent cursor-pointer"
                         />
-                        <span className="text-[13px] text-text-primary">{m.name}</span>
+                        <span className="text-[13px] text-text-primary">{m.short_label || m.name}</span>
                       </label>
                       {line && (
                         <input

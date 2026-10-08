@@ -33,6 +33,9 @@ class PaymentMethodCatalog(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     code: Mapped[str] = mapped_column(String(4), nullable=False, unique=True)  # e.g. "NU", "TB" - fixed AGT PaymentMechanism codes
     name: Mapped[str] = mapped_column(String(100), nullable=False)
+    # The name a cashier understands (CD -> "Multicaixa (cartão)"), shown on the till screens only; documents,
+    # reports and the SAF-T keep the official name and the code. Empty = the official name is shown.
+    short_label: Mapped[str | None] = mapped_column(String(60), nullable=True)
     allows_payment: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     allows_receipt: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_cash: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
