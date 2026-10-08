@@ -42,4 +42,5 @@ async def test_the_movements_report_totals_the_journal(db, company_with_essentia
     assert data["total_in"] == 2480 and data["total_out"] == 300  # 1140 + 1140 + 200 in, 300 out
     assert sorted((m["is_cash"], m["amount"]) for m in data["by_method"]) == [(False, 1140.0), (True, 1140.0)]
     assert any(e["description"].endswith("por confirmar") for e in data["entries"])
+    assert any(e["description"] == f"Transferência para {other.name}" for e in data["entries"])
     assert generate_movements_report_pdf(data).startswith(b"%PDF")

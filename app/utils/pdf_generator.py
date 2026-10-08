@@ -348,7 +348,7 @@ def _draw_company_box(c, x, y, w, company, label="Contribuinte"):
     addr = company.get("address") or "-"
     phones = " / ".join([p for p in [company.get("phone_number"), company.get("phone_number_2")] if p]) or "-"
 
-    addr_label = "Localizacao: "
+    addr_label = "Localização: "
     addr_label_w = c.stringWidth(addr_label, "Helvetica-Bold", 9)
     addr_wrapped = _wrap_to_width(c, addr, "Helvetica", 9, w - 8 * mm - addr_label_w)
 

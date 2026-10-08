@@ -20,6 +20,7 @@ from app.models.payment import Payment
 from app.models.payment_method_catalog import PaymentMethodCatalog
 from app.models.cash_session import CashSession
 from app.models.cash_movement import CashMovement, CashMovementStatus, CashMovementType
+from app.models.point_of_sale import PointOfSale
 
 
 async def get_daily_report(
@@ -80,19 +81,27 @@ async def get_daily_report(
             CashMovement.movement_date <= date_to,
         ).order_by(CashMovement.created_at)
     )
+    # the other till of a transfer is named on its line: one query for the names of the company's tills
+    pos_names = dict((await db.execute(
+        select(PointOfSale.id, PointOfSale.name).where(PointOfSale.company_id == company_id)
+    )).all())
     for mov in movements_result.scalars().all():
         is_outgoing = mov.source_pos_id == pos_id
         label = {
-            CashMovementType.TRANSFERENCIA: "Transferencia",
+            CashMovementType.TRANSFERENCIA: "Transferência",
             CashMovementType.ENTRADA_EXTERNA: "Entrada externa",
-            CashMovementType.SAIDA_EXTERNA: "Saida externa",
+            CashMovementType.SAIDA_EXTERNA: "Saída externa",
         }.get(mov.movement_type, str(mov.movement_type))
         entries.append({
             "type": "movimento",
             "time": mov.created_at,
             "business_date": mov.movement_date,
             # a transfer received but not confirmed is not in the drawer yet - said so on the line
-            "description": label + (" (saida)" if is_outgoing else " (entrada)")
+            "description": (
+                (f"Transferência para {pos_names.get(mov.destination_pos_id, '-')}" if is_outgoing
+                 else f"Transferência de {pos_names.get(mov.source_pos_id, '-')}")
+                if mov.movement_type == CashMovementType.TRANSFERENCIA else label
+            )
             + (" - por confirmar" if not is_outgoing and mov.status != CashMovementStatus.RECEBIDO else ""),
             "amount": float(mov.amount),
             "direction": "saida" if is_outgoing else "entrada",
