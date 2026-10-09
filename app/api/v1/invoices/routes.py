@@ -435,9 +435,12 @@ async def download_invoice_pdf(
 
     # Amount in words (Kiami-style "Total: SEIS MILHOES E ...") - integer part only, since
     # AOA has no minor-unit convention commonly spelled out on these documents.
-    total_int = int(round(float(invoice.total)))
+    # the whole amount in words, centimos included: 615,60 -> SEISCENTOS E QUINZE KWANZAS E SESSENTA CENTIMOS
+    kwanzas, centimos = divmod(int(round(float(invoice.total) * 100)), 100)
     try:
-        amount_in_words = num2words(total_int, lang="pt").upper() + " KWANZAS"
+        amount_in_words = num2words(kwanzas, lang="pt").upper() + (" KWANZA" if kwanzas == 1 else " KWANZAS")
+        if centimos:
+            amount_in_words += " E " + num2words(centimos, lang="pt").upper() + (" CÊNTIMO" if centimos == 1 else " CÊNTIMOS")
     except Exception:
         amount_in_words = None
 

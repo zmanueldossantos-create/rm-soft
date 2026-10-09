@@ -12,6 +12,8 @@ Visual identity matches the app's own bordeaux design system.
 import io
 import os
 import textwrap
+
+from app.services.document_amounts import split_global_discount
 from datetime import date, datetime, timedelta, timezone
 
 import qrcode
@@ -131,7 +133,10 @@ def generate_invoice_pdf_thermal(invoice: dict, lines: list[dict], company: dict
 
     vat_groups = {}
     total_discount_amount = 0.0
-    for l in lines:
+    # the incidence of each rate after the global discount (spread over the lines), as declared in the SAF-T
+    split = split_global_discount([(l["line_subtotal"], l["vat_rate_snapshot"]) for l in lines],
+                                  invoice.get("discount_global_percent") or 0, invoice["total"])
+    for l, part in zip(lines, split["lines"]):
         gross = l["quantity"] * l["unit_price"]
         line_discount_amount = gross * (l.get("discount_percent", 0) / 100)
         total_discount_amount += line_discount_amount
@@ -139,8 +144,8 @@ def generate_invoice_pdf_thermal(invoice: dict, lines: list[dict], company: dict
         grp = vat_groups.setdefault((rate, l.get("exemption_code") if rate == 0 else None), {"incidencia": 0.0, "montante": 0.0})
 
         grp.setdefault("motivo", l.get("exemption_reason") or "")
-        grp["incidencia"] += l["line_subtotal"]
-        grp["montante"] += l["line_subtotal"] * (rate / 100)
+        grp["incidencia"] += part["net"]
+        grp["montante"] += part["vat"]
 
     discount_global_pct = invoice.get("discount_global_percent", 0)
     gross_before_global = invoice["subtotal"] + invoice["vat_total"]
@@ -624,6 +629,16 @@ def generate_factura_style_a4(invoice, lines, company, customer):
 
     y -= 2 * mm
 
+    # The totals as declared in the SAF-T: the global discount spread over the lines, the VAT on the net. Without a
+    # global discount, the stored amounts as they are.
+    total_gross = round(total_iliquido + total_discount_amount, 2)  # before any discount
+    net_total, tax_total, discounts_total = total_iliquido, invoice["vat_total"], total_discount_amount
+    if invoice.get("discount_global_percent"):
+        split = split_global_discount([(l["line_subtotal"], l["vat_rate_snapshot"]) for l in lines],
+                                      invoice["discount_global_percent"], invoice["total"])
+        net_total, tax_total = split["net_total"], split["tax_total"]
+        discounts_total = round(total_discount_amount + split["discount_total"], 2)
+
     retention_total = invoice.get("retention_total") or 0
     left_w = 0.52 * (page_width - 2 * margin) - 4 * mm
     right_col_x = margin + left_w + 8 * mm
@@ -660,9 +675,9 @@ def generate_factura_style_a4(invoice, lines, company, customer):
         y -= rh + 2 * mm
 
     doc_rows = [
-        ("Total ilíquido", total_iliquido),
-        ("Total de descontos", total_discount_amount),
-        ("Total de impostos (IVA)", invoice["vat_total"]),
+        ("Total ilíquido", total_gross),
+        ("Total de descontos", discounts_total),
+        ("Total de impostos (IVA)", tax_total),
     ]
     ry = section_top
     c.setFillColor(TEXT_PRIMARY)
@@ -672,9 +687,9 @@ def generate_factura_style_a4(invoice, lines, company, customer):
     ry -= _totais_documento_box(c, right_col_x, ry, right_w, doc_rows, highlight_last=False)
 
     kz_rows = [
-        ("Totais sem impostos", total_iliquido),
-        ("Valor de impostos", invoice["vat_total"]),
-        ("Valor de descontos", total_discount_amount),
+        ("Totais sem impostos", net_total),
+        ("Valor de impostos", tax_total),
+        ("Valor de descontos", discounts_total),
         ("Valor total a pagar", invoice["total"]),
     ]
     ry -= 4 * mm

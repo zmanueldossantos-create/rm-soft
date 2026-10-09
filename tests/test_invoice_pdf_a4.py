@@ -35,3 +35,21 @@ def test_the_invoice_shows_its_payments_and_its_emission_time():
     text = "".join(page.extract_text() for page in pypdf.PdfReader(io.BytesIO(ticket)).pages)
     assert "Meios de pagamento" in text and "Cartão débito" in text and "1,00 UN" in text
     assert "Caixa Restaurante" in text
+
+
+def test_a_global_discount_is_shown_and_the_totals_add_up():
+    pypdf = pytest.importorskip("pypdf")
+    line = {"quantity": 1.0, "unit_price": 600.0, "discount_percent": 0, "line_subtotal": 600.0, "vat_rate_snapshot": 14.0,
+            "exemption_code": None, "exemption_reason": None, "service_line": False, "code": "BEB-CUCA",
+            "product_name_snapshot": "Cuca 33cl", "unit_code": "UN", "iec_amount": 0, "iselo_amount": 0, "line_total": 684.0}
+    company = {"name": "Restaurante Teste", "nif": "5000999011", "address": "Rua X", "phone_number": "+244923100011",
+               "logo_path": None, "bank_accounts": []}
+    invoice = {"invoice_type": "FR", "series": "FR2026", "number": 7, "business_date": "2026-10-06", "print_count": 1,
+               "retention_total": 0, "subtotal": 600.0, "vat_total": 84.0, "total": 615.6, "discount_global_percent": 10.0,
+               "amount_in_words": None, "observations": None, "qr_code_data": "test", "atcud": "SIMUL-7", "payments": []}
+    a4 = "".join(p.extract_text() for p in pypdf.PdfReader(io.BytesIO(generate_factura_style_a4(invoice, [line], company, None))).pages)
+    assert "540,00" in a4 and "75,60" in a4 and "60,00" in a4  # net, VAT and discount after the 10 %
+    ticket = generate_invoice_pdf_thermal({**invoice, "payment_method_name": None}, [line], company, None)
+    text = "".join(p.extract_text() for p in pypdf.PdfReader(io.BytesIO(ticket)).pages)
+    assert "540,00" in text  # the incidence after the discount
+
