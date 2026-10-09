@@ -19,6 +19,7 @@ from app.models.product import Product
 from app.models.service import Service
 from app.models.vat import VAT
 from app.models.invoice import Invoice
+from app.models.user import User
 from app.models.invoice_line import InvoiceLine
 from app.models.platform_settings import PlatformSettings
 from app.utils.saf_t_generator import INVOICE_TYPE_MAP, generate_saf_t_xml
@@ -102,6 +103,11 @@ async def export_saf_t_for_period(db: AsyncSession, company_id: uuid.UUID, year:
 
     # SAF-T section of each document (Faturas / Payments / Working), from the document type catalog.
     section_by_code = {code: section for code, section in (await db.execute(select(DocumentType.code, DocumentType.saft_section))).all()}
+    # SourceID - "Codigo do utilizador": the phone number the author logs in with (unique in the company, 13
+    # characters of the 30 allowed). A document recorded before the author was kept falls back to RMSOFT.
+    source_codes = dict((await db.execute(
+        select(User.id, User.phone_number).where(User.company_id == company_id)
+    )).all())
     invoices_data = []
     for inv in invoices:
         receipt_extra = await _receipt_extras(db, inv) if inv.invoice_type.value == "RECIBO" else {}
@@ -116,6 +122,7 @@ async def export_saf_t_for_period(db: AsyncSession, company_id: uuid.UUID, year:
             "created_at": inv.created_at.replace(tzinfo=None),
             "atcud": inv.atcud,
             "invoice_hash": inv.invoice_hash,
+            "source_id": (source_codes.get(inv.created_by_user_id) or "RMSOFT")[:30],
             "subtotal": float(inv.subtotal),
             "vat_total": float(inv.vat_total),
             "total": float(inv.total),

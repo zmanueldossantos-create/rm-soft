@@ -483,6 +483,10 @@ async def download_invoice_pdf(
     )
     payments_list = [{"name": name, "amount": float(amount)} for name, amount in payment_rows.all()]
 
+    created_by_name = None
+    if invoice.created_by_user_id is not None:
+        created_by_name = (await db.execute(select(User.full_name).where(User.id == invoice.created_by_user_id))).scalar_one_or_none()
+
     invoice_dict = {
         "invoice_type": INVOICE_TYPE_CODE.get(invoice.invoice_type.value, invoice.invoice_type.value),
         "series": invoice.series,
@@ -508,6 +512,7 @@ async def download_invoice_pdf(
         "reference_invoice": reference_invoice_dict,
         "created_at": invoice.created_at,  # the time of recording: "Data de emissao: 08/10/2026 - 15h45"
         "payments": payments_list,
+        "created_by_name": created_by_name,  # the ticket's "Atendido por"
     }
     product_ids = [l.product_id for l in lines if l.product_id]
     service_ids = [l.service_id for l in lines if l.service_id]

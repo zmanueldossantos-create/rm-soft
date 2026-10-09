@@ -231,7 +231,7 @@ def generate_invoice_pdf_thermal(invoice: dict, lines: list[dict], company: dict
     doc_number = f"{invoice['series']}/{invoice['number']}"
     two_col(doc_title, doc_number, size=8, bold=True)
     two_col("Data e hora:", _emission_text(invoice), size=7.5)
-    two_col("Atendido por:", company["name"][:24], size=7.5)
+    two_col("Atendido por:", (invoice.get("created_by_name") or company["name"])[:24], size=7.5)  # who issued it
     y -= 1 * mm
 
     # --- Line items: name on its own line, then Qtd/P.Un/IVA%/Total ---

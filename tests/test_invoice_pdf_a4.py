@@ -31,6 +31,7 @@ def test_the_invoice_shows_its_payments_and_its_emission_time():
     assert "08/10/2026 - 15h45" in text
     assert "Meios de pagamento" in text and "Cartão débito" in text and "4 560,00" in text
     ticket = generate_invoice_pdf_thermal({**invoice, "subtotal": 4000.0, "discount_global_percent": 0,
-                                           "payment_method_name": None}, [line], company, None)
+                                           "payment_method_name": None, "created_by_name": "Caixa Restaurante"}, [line], company, None)
     text = "".join(page.extract_text() for page in pypdf.PdfReader(io.BytesIO(ticket)).pages)
     assert "Meios de pagamento" in text and "Cartão débito" in text and "1,00 UN" in text
+    assert "Caixa Restaurante" in text
