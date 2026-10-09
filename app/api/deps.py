@@ -3,6 +3,7 @@ Reusable FastAPI dependencies to protect routes.
 get_current_user extracts and validates the JWT, loads the user from the DB.
 See specification v7, section 2.4 (auth) and 2.5 (multi-tenant isolation).
 """
+from app.core.request_context import current_user_id
 import uuid
 
 from fastapi import Depends, HTTPException, Request, status
@@ -65,6 +66,7 @@ async def get_current_user(
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Utilizador nao encontrado ou desativado")
 
+    current_user_id.set(user.id)  # who makes this request: every document it creates records it
     return user
 
 

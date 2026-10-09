@@ -9,6 +9,7 @@ activity_id ties the invoice to one of the company's Activities (e.g.
 Padaria, Bar, Hotel) - see discussion on multi-activity companies. series
 is derived from the Activity's series_code at creation time.
 """
+from app.core.request_context import current_user_id
 import enum
 import uuid
 from datetime import date, datetime
@@ -128,6 +129,12 @@ class Invoice(Base):
     qr_code_data: Mapped[str] = mapped_column(String(500), nullable=False)  # simulated payload
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # Who created the document - the authenticated user of the request, filled at insert whatever path creates it
+    # (sale, Faturas, credit note, receipt, pro-forma, conversion). The SAF-T SourceID and the ticket's
+    # "Atendido por" read it. Empty outside a request (tests, background tasks).
+    created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=True, default=lambda: current_user_id.get(),
+    )
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     def __repr__(self) -> str:
