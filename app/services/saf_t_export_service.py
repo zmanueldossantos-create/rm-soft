@@ -5,7 +5,15 @@ section 4.2 "Modo Fatura" - exported at month end, submitted manually to
 the AGT portal by the business.
 """
 import uuid
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
+
+LUANDA = timezone(timedelta(hours=1))  # Angola: UTC+1 all year
+
+
+def _local(moment: datetime) -> datetime:
+    """A recorded moment in Luanda time, without offset - the SAF-T dates (SystemEntryDate, InvoiceStatusDate)
+    are local times: a sale at 00h30 in Luanda belongs to that day, not the previous one."""
+    return (moment.astimezone(LUANDA) if moment.tzinfo else moment).replace(tzinfo=None)
 from calendar import monthrange
 
 from sqlalchemy import select, text
@@ -119,7 +127,7 @@ async def export_saf_t_for_period(db: AsyncSession, company_id: uuid.UUID, year:
             "series": inv.series,
             "number": inv.number,
             "business_date": inv.business_date,
-            "created_at": inv.created_at.replace(tzinfo=None),
+            "created_at": _local(inv.created_at),
             "atcud": inv.atcud,
             "invoice_hash": inv.invoice_hash,
             "source_id": (source_codes.get(inv.created_by_user_id) or "RMSOFT")[:30],
