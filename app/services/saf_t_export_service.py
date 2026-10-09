@@ -27,10 +27,32 @@ from app.models.product import Product
 from app.models.service import Service
 from app.models.vat import VAT
 from app.models.invoice import Invoice
+from app.services.document_amounts import split_global_discount
 from app.models.user import User
 from app.models.invoice_line import InvoiceLine
 from app.models.platform_settings import PlatformSettings
 from app.utils.saf_t_generator import INVOICE_TYPE_MAP, generate_saf_t_xml
+
+
+def _apply_declared_amounts(doc: dict, discount_percent: float) -> None:
+    """
+    The amounts the SAF-T declares, as the AGT specification defines them: each line's amount after ALL its discounts,
+    its SettlementAmount = its own discount + its share of the global discount, and the document's NetTotal and
+    TaxPayable after the global discount (the stored subtotal and VAT are before it; the stored total, after).
+    A receipt declares a payment, not sale lines: left as it is.
+    """
+    if doc.get("invoice_type") == "RECIBO":
+        return
+    for line in doc["lines"]:
+        gross = round(line["quantity"] * line["unit_price"], 2)
+        line["settlement"] = max(round(gross - line["line_subtotal"], 2), 0.0)  # the line's own discount
+    if not discount_percent:
+        return
+    split = split_global_discount([(l["line_subtotal"], l["vat_rate"]) for l in doc["lines"]], discount_percent, doc["total"])
+    for line, part in zip(doc["lines"], split["lines"]):
+        line["line_subtotal"] = part["net"]
+        line["settlement"] = round(line["settlement"] + part["settlement"], 2)
+    doc["subtotal"], doc["vat_total"] = split["net_total"], split["tax_total"]
 
 
 class CompanyNotFoundError(Exception):
@@ -158,6 +180,7 @@ async def export_saf_t_for_period(db: AsyncSession, company_id: uuid.UUID, year:
                 for l in lines
             ],
         })
+        _apply_declared_amounts(invoices_data[-1], float(inv.discount_global_percent or 0))
 
     company_dict = {
         "name": company.name,

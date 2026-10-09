@@ -110,7 +110,7 @@ def _write_lines(parent_el, inv: dict, saft_type: str) -> None:
             _el(line_el, "TaxExemptionReason", exemption_reason)
             _el(line_el, "TaxExemptionCode", exemption_code)
 
-        _el(line_el, "SettlementAmount", "0.00")
+        _el(line_el, "SettlementAmount", _money(line.get("settlement", 0)))  # its own discount + its share of the global one
 
 
 def _write_withholding(parent_el, entries) -> None:
