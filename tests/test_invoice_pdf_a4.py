@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from app.utils.pdf_generator import _emission_text, fmt, generate_factura_style_a4
+from app.utils.pdf_generator import _emission_text, fmt, generate_factura_style_a4, generate_invoice_pdf_thermal
 
 
 def test_amounts_and_emission_date_as_on_the_agt_model():
@@ -30,3 +30,7 @@ def test_the_invoice_shows_its_payments_and_its_emission_time():
     text = "".join(page.extract_text() for page in pypdf.PdfReader(io.BytesIO(pdf)).pages)
     assert "08/10/2026 - 15h45" in text
     assert "Meios de pagamento" in text and "Cartão débito" in text and "4 560,00" in text
+    ticket = generate_invoice_pdf_thermal({**invoice, "subtotal": 4000.0, "discount_global_percent": 0,
+                                           "payment_method_name": None}, [line], company, None)
+    text = "".join(page.extract_text() for page in pypdf.PdfReader(io.BytesIO(ticket)).pages)
+    assert "Meios de pagamento" in text and "Cartão débito" in text and "1,00 UN" in text

@@ -255,7 +255,7 @@ def generate_invoice_pdf_thermal(invoice: dict, lines: list[dict], company: dict
         name_line = l["product_name_snapshot"]
         c.drawString(margin, y, name_line[:44])
         y -= 3.2 * mm
-        c.drawString(col_qty, y, f"{l['quantity']:.2f} {l.get('unit_code') or ''}".strip())  # the unit sold: 1.00 SC, 2.00 DZ...
+        c.drawString(col_qty, y, f"{fmt(l['quantity'])} {l.get('unit_code') or ''}".strip())  # the unit sold: 1.00 SC, 2.00 DZ...
         c.drawString(col_price, y, fmt(l["unit_price"]))
         c.drawString(col_vat, y, f"{l['vat_rate_snapshot']:.0f}")
         c.drawRightString(col_total, y, fmt(l["line_total"]))
@@ -278,7 +278,7 @@ def generate_invoice_pdf_thermal(invoice: dict, lines: list[dict], company: dict
         c.setFillColor(TEXT_MUTED)
         c.setFont("Helvetica-Bold", 6.5)
         c.drawString(margin, y, "Taxa")
-        c.drawString(margin + 12 * mm, y, "Incidencia")
+        c.drawString(margin + 12 * mm, y, "Incidência")
         c.drawString(margin + 38 * mm, y, "Motivo")
         y -= 3.5 * mm
         for rate, code in sorted(vat_groups.keys(), key=lambda k: (k[0], k[1] or "")):
@@ -287,7 +287,7 @@ def generate_invoice_pdf_thermal(invoice: dict, lines: list[dict], company: dict
             motivo = grp.get("motivo", "") if rate == 0 else "IVA"
             c.setFillColor(TEXT_PRIMARY)
             c.setFont("Helvetica", 6.5)
-            c.drawString(margin, y, f"{rate:.2f}")
+            c.drawString(margin, y, f"{rate:.0f}%")
             c.drawString(margin + 12 * mm, y, fmt(grp["incidencia"]))
             wrapped = textwrap.wrap(motivo, 28) or [""]
             c.drawString(margin + 38 * mm, y, wrapped[0])
@@ -298,9 +298,18 @@ def generate_invoice_pdf_thermal(invoice: dict, lines: list[dict], company: dict
 
     dashed_line()
 
+    # --- The payments recorded on the document, with the official AGT name of their method ---
+    payments = invoice.get("payments") or []
+    if payments:
+        left("Meios de pagamento", size=7.5, bold=True)
+        y -= 3.5 * mm
+        for p in payments:
+            two_col(p["name"], fmt(p["amount"]), size=7.5)
+        dashed_line()
+
     # --- Footer: validation line, QR code, thank-you ---
-    center("SIMUL - Processado por programa nao homologado", size=6, color=TEXT_MUTED)
-    center("(simulacao)", size=6, color=TEXT_MUTED)
+    center("SIMUL - Processado por programa não homologado", size=6, color=TEXT_MUTED)
+    center("(simulação)", size=6, color=TEXT_MUTED)
     y -= 1 * mm
 
     qr_buffer = _make_qr_image(invoice["qr_code_data"])
@@ -308,7 +317,7 @@ def generate_invoice_pdf_thermal(invoice: dict, lines: list[dict], company: dict
     c.drawImage(ImageReader(qr_buffer), center_x - qr_size / 2, y - qr_size, width=qr_size, height=qr_size)
     y -= qr_size + 3 * mm
 
-    center("Obrigado pela Preferencia", size=8, bold=True)
+    center("Obrigado pela preferência", size=8, bold=True)
 
     c.save()
     buffer.seek(0)
@@ -458,7 +467,7 @@ def _totais_documento_box(c, x, y, w, rows, highlight_last=True):
     c.rect(x, y - header_h, w, header_h, fill=1, stroke=0)
     c.setFillColor(TEXT_PRIMARY)
     c.setFont("Helvetica-Bold", 7.5)
-    c.drawString(x + 2 * mm, y - header_h + 1.6 * mm, "Descricao")
+    c.drawString(x + 2 * mm, y - header_h + 1.6 * mm, "Descrição")
     c.drawRightString(x + w - 2 * mm, y - header_h + 1.6 * mm, "Valor")
 
     ry = y - header_h
@@ -527,7 +536,7 @@ def generate_factura_style_a4(invoice, lines, company, customer):
     col_qt = margin + 74 * mm
     col_preco = margin + 86 * mm
     col_desc_pct = margin + 104 * mm
-    col_valor = margin + 116 * mm
+    col_valor = margin + 118 * mm  # room after the Desconto header
     tax_block_x = margin + 134 * mm
     tax_w = 32 * mm
     col_iec = tax_block_x
