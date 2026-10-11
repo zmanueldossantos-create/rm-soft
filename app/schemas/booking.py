@@ -117,8 +117,25 @@ class BookingRescheduleRequest(BaseModel):
     party_size: int | None = Field(default=None, ge=1, le=1000)
 
 
+class BookingChargePaymentInput(BaseModel):
+    payment_method_id: uuid.UUID
+    amount: float
+
+
+class BookingChargeRequest(BaseModel):
+    """Cobrar uma marcação: the till that cashes it, the payments and the customer of the invoice (none: Consumidor final)."""
+    pos_id: uuid.UUID
+    payments: list[BookingChargePaymentInput]
+    customer_id: uuid.UUID | None = None
+
+
 class BookingStatusUpdateRequest(BaseModel):
     status: str
+
+
+class BookingChargeResponse(BaseModel):
+    booking: "BookingResponse"
+    invoice_id: uuid.UUID
 
 
 class BookingResponse(BaseModel):
@@ -135,7 +152,7 @@ class BookingResponse(BaseModel):
     party_size: int | None = None
     created_by_user_id: uuid.UUID
     created_at: datetime
-    invoice_id: uuid.UUID | None = None  # a prepaid passage: its invoice
+    invoice_id: uuid.UUID | None = None  # a prepaid passage, or a marcação charged: its invoice
     checked_out_at: datetime | None = None
     # a stay in progress: its open account and what it will cost (listing only)
     stay_account_id: uuid.UUID | None = None
@@ -162,3 +179,6 @@ class ResourceStatusResponse(BaseModel):
     booking_party_size: int | None = None
     stay_ends_at: datetime | None = None  # a stay in progress: its planned end
     stay_overdue_minutes: int = 0  # ... and how far beyond it
+
+
+BookingChargeResponse.model_rebuild()

@@ -78,6 +78,28 @@ def _date_pt(value) -> str:
         return str(value)
 
 
+CREDIT_NOTE_REASON_LABELS = {"ANL": "Anulação", "RTF": "Retificação"}
+
+
+def _reference_texts(invoice: dict) -> list[str]:
+    """What a correcting document (Nota de Crédito, Nota de Débito) prints about the document it corrects: the origin
+    document with its date, and for a credit note its reason and cause - 'Documento de origem: FR FR2026/1 de
+    11/10/2026', 'Motivo: Anulação - Cliente desistiu'. Nothing for any other document."""
+    if invoice.get("invoice_type") not in ("NC", "ND"):
+        return []
+    texts = []
+    ref = invoice.get("reference_invoice")
+    if ref:
+        texts.append(f"Documento de origem: {ref['invoice_type']} {ref['series']}/{ref['number']} de {_date_pt(ref.get('business_date'))}")
+    elif invoice.get("document_reference"):
+        texts.append(f"Documento de origem: {invoice['document_reference']}")
+    reason = CREDIT_NOTE_REASON_LABELS.get(invoice.get("credit_note_reason") or "")
+    if reason:
+        cause = (invoice.get("credit_note_cause") or "").strip()
+        texts.append(f"Motivo: {reason}" + (f" - {cause}" if cause else ""))
+    return texts
+
+
 def _emission_text(invoice: dict) -> str:
     """Data de emissao as on the AGT model - 08/10/2026 - 15h45: the day of the document (the one declared in the
     SAF-T), and the time it was recorded, in Luanda time."""
@@ -158,7 +180,8 @@ def generate_invoice_pdf_thermal(invoice: dict, lines: list[dict], company: dict
     # Generous overestimate on purpose - raw canvas drawing has no auto-flow, and product
     # names / "Motivo" text wrap onto extra lines unpredictably, so a tight height risks
     # clipping the QR code / footer at the bottom (see the "8 100,00" example that clipped).
-    height = (150 + len(lines) * 16 + len(vat_groups) * 8 + (12 if invoice.get("observations") else 0)) * mm + logo_extra
+    height = (150 + len(lines) * 16 + len(vat_groups) * 8 + (12 if invoice.get("observations") else 0)
+              + 6 * len(_reference_texts(invoice))) * mm + logo_extra
 
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=(width, height))
@@ -242,6 +265,10 @@ def generate_invoice_pdf_thermal(invoice: dict, lines: list[dict], company: dict
     two_col(doc_title, doc_number, size=8, bold=True)
     two_col("Data e hora:", _emission_text(invoice), size=7.5)
     two_col("Atendido por:", (invoice.get("created_by_name") or company["name"])[:24], size=7.5)  # who issued it
+    for text in _reference_texts(invoice):  # a credit / debit note: the document it corrects, and why
+        for text_line in _wrap_to_width(c, text, "Helvetica", 7, width - 2 * margin)[:2]:
+            left(text_line, size=7)
+            y -= 3 * mm
     y -= 1 * mm
 
     # --- Line items: name on its own line, then Qtd/P.Un/IVA%/Total ---
@@ -275,7 +302,7 @@ def generate_invoice_pdf_thermal(invoice: dict, lines: list[dict], company: dict
 
     # --- Totals ---
     two_col("Total Desconto:", fmt(total_discount_all), size=7.5)
-    two_col("Total a pagar :", fmt(invoice["total"]), size=8.5, bold=True)
+    two_col("Total a creditar :" if invoice.get("invoice_type") == "NC" else "Total a pagar :", fmt(invoice["total"]), size=8.5, bold=True)
     if invoice.get("retention_total"):
         two_col("Retencao:", fmt(invoice["retention_total"]), size=7.5)
         two_col("Liquido a pagar:", fmt(invoice["total"] - invoice["retention_total"]), size=8, bold=True)
@@ -538,6 +565,9 @@ def generate_factura_style_a4(invoice, lines, company, customer):
     y -= 5 * mm
     c.setFont("Helvetica", 9)
     c.drawString(margin, y, f"Data de emissão: {_emission_text(invoice)}")
+    for text in _reference_texts(invoice):  # a credit / debit note: the document it corrects, and why
+        y -= 4.6 * mm
+        c.drawString(margin, y, _fit_text(c, text, "Helvetica", 9, page_width - 2 * margin))
     y -= 8 * mm
 
     col_tipo = margin
@@ -695,7 +725,7 @@ def generate_factura_style_a4(invoice, lines, company, customer):
         ("Totais sem impostos", net_total),
         ("Valor de impostos", tax_total),
         ("Valor de descontos", discounts_total),
-        ("Valor total a pagar", invoice["total"]),
+        ("Valor total a creditar" if invoice.get("invoice_type") == "NC" else "Valor total a pagar", invoice["total"]),
     ]
     ry -= 4 * mm
     box_h_kz = _totais_documento_box(c, right_col_x, ry, right_w, kz_rows, highlight_last=True)

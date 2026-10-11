@@ -69,6 +69,13 @@ export async function updateBookingStatus(bookingId, newStatus) {
   return res.data;
 }
 
+// Cobrar uma marcação: { pos_id, payments: [{ payment_method_id, amount }], customer_id } - the booked service sold
+// at this till, the booking concluded with its invoice. Returns { booking, invoice_id }.
+export async function chargeBooking(bookingId, payload) {
+  const res = await apiClient.post('/bookings/' + bookingId + '/charge', payload);
+  return res.data;
+}
+
 export async function rescheduleBooking(bookingId, startsAt, endsAt, serviceId = null, notes = null, customerId = null, guestName = null, partySize = null) {
   const res = await apiClient.patch('/bookings/' + bookingId + '/reschedule', { starts_at: startsAt, ends_at: endsAt, service_id: serviceId, notes, customer_id: customerId, guest_name: guestName, party_size: partySize });
   return res.data;

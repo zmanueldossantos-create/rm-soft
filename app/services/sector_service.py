@@ -153,6 +153,37 @@ async def get_company_capabilities(db: AsyncSession, company_id: uuid.UUID) -> s
     return set(sources[company_id])
 
 
+async def module_capabilities_map(db: AsyncSession, module_ids) -> dict[uuid.UUID, set[str]]:
+    """What each module (sector) gives, as ticked by the SUPER_ADMIN - a module never seeded (no rows) gives its
+    sector's defaults. Read per activity: in a company with a Hotel and a Spa, each activity keeps its own workflow."""
+    ids = set(module_ids)
+    result: dict[uuid.UUID, set[str]] = {module_id: set() for module_id in ids}
+    if not ids:
+        return result
+    seeded = set()
+    for module_id, capability, enabled in (await db.execute(
+        select(ModuleCapability.module_id, ModuleCapability.capability, ModuleCapability.is_enabled)
+        .where(ModuleCapability.module_id.in_(ids))
+    )).all():
+        seeded.add(module_id)
+        if enabled:
+            result[module_id].add(capability)
+    unseeded = ids - seeded
+    if unseeded:
+        for module_id, code in (await db.execute(select(Module.id, Module.code).where(Module.id.in_(unseeded)))).all():
+            sector = SECTORS_BY_CODE.get(code or "")
+            if sector is not None:
+                result[module_id] = expand_dependencies(set(sector.capabilities))
+    return result
+
+
+async def activity_has_capability(db: AsyncSession, activity_id: uuid.UUID, code: str) -> bool:
+    module_id = (await db.execute(select(Activity.module_id).where(Activity.id == activity_id))).scalar_one_or_none()
+    if module_id is None:
+        return False
+    return code in (await module_capabilities_map(db, [module_id]))[module_id]
+
+
 async def _data_counts(db: AsyncSession) -> dict:
     counts = {}
     for capability, sql in DATA_COUNT_SQL.items():

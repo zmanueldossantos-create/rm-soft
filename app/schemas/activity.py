@@ -41,6 +41,7 @@ class ActivityResponse(BaseModel):
     name: str
     is_active: bool
     created_at: datetime
+    capabilities: list[str] = []  # the module's (list only): HOTEL_STAY, BOOKINGS...
 
     class Config:
         from_attributes = True

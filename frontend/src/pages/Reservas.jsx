@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import DateInput from '../components/DateInput';
-import { CalendarClock, Plus, Loader2, X, CheckCircle2, Pencil, ChevronLeft, ChevronRight, DoorOpen } from 'lucide-react';
+import { CalendarClock, Plus, Loader2, X, CheckCircle2, Pencil, ChevronLeft, ChevronRight, DoorOpen, Banknote } from 'lucide-react';
 import { useCan } from '../utils/permissions';
 import { listActivities } from '../api/activity';
-import { listResources, listBookings, createBooking, updateBookingStatus, rescheduleBooking } from '../api/booking';
+import { listResources, listBookings, createBooking, updateBookingStatus, rescheduleBooking, chargeBooking } from '../api/booking';
 import { listPointsOfSale } from '../api/activity';
 import { listResourceTypes } from '../api/booking';
 import { listCustomers, createCustomer } from '../api/customers';
@@ -88,6 +88,16 @@ function formatDayLabel(dateStr) {
   return WEEKDAYS[(dow + 6) % 7] + ' ' + pad2(d) + '/' + pad2(m);
 }
 
+// How many times a booked service is charged - as the server does (hotel_service._stay_quantity): a timed service
+// once per started duration (90 min on a 60 min massage: 2), a service without duration once per night (at least 1).
+function bookingQuantity(service, booking) {
+  const minutes = (new Date(booking.ends_at) - new Date(booking.starts_at)) / 60000;
+  if (service.duration_minutes) return Math.max(Math.ceil(minutes / service.duration_minutes - 1e-9), 1);
+  const day = (iso) => new Date(new Date(iso).getTime() + 3600000).toISOString().slice(0, 10);  // Luanda: UTC+1
+  const nights = Math.round((Date.parse(day(booking.ends_at)) - Date.parse(day(booking.starts_at))) / 86400000);
+  return Math.max(nights, 1);
+}
+
 // The reservations - a page for the manager, and a drawer in the till (Caixa) for the reception: same list, same
 // forms, same actions. In the till (posId given) the activity is the till's own and a check-in bills the stay through
 // that till, so there is never a till to pick.
@@ -101,9 +111,12 @@ export default function Reservas() {
 
 // onPayStay(accountId): in the till, the check-out of a stay with something to pay - the till opens its account for
 // the payment (closing it concludes the stay). Without it (the manager's page) that check-out is done at the till.
-// onSale(invoiceId): in the till, a passage sold at the entry - the till shows and prints its document.
+// onSale(invoiceId): in the till, a passage sold at the entry or a marcação charged - the till shows and prints its document.
 export function ReservasPanel({ posId = null, activityId = null, onPayStay = null, onSale = null }) {
   const embedded = !!posId;
+  // Cobrar: a marcação (spa, salão, consultório) paid at this till - its service sold, the booking concluded
+  // (booking_charge_service). Shares the payment block of the Entrada: one of the two is open at a time.
+  const [chargeTarget, setChargeTarget] = useState(null);
   // Entrada: a prepaid passage (hotel_service.walk_in) - a free room, a timed service, paid now at this till.
   const [walkInOpen, setWalkInOpen] = useState(false);
   const [walkInForm, setWalkInForm] = useState({ resourceId: '', serviceId: '', customerId: '', guestName: '', partySize: '' });
@@ -121,6 +134,12 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
   const can = useCan();
   const [activities, setActivities] = useState([]);
   const [selectedActivityId, setSelectedActivityId] = useState('');
+  // The activity's own workflow (the capabilities of its module): with the hotel stay a booking is billed through
+  // its check-in and its account; without it (spa, salão, consultório) a marcação is charged at the till. The words
+  // follow: the guest of a room, the client of a marcação. A module without any capability ticked keeps the old rule.
+  const activityCapabilities = activities.find((a) => a.id === selectedActivityId)?.capabilities || [];
+  const hasStay = activityCapabilities.length ? activityCapabilities.includes('HOTEL_STAY') : can('hotel:checkin');
+  const personWord = hasStay ? 'hóspede' : 'cliente';
   const [resources, setResources] = useState([]);
   const [services, setServices] = useState([]);
   const [resourceTypesCatalog, setResourceTypesCatalog] = useState([]);
@@ -271,10 +290,10 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
     setFormOpen(true);
   }
 
-  // A table (resource type without a required service) is booked for a couple of hours on the
-  // same day, unlike a hotel room (check-in 14:00, check-out 12:00 the next day). While the
-  // times are still the untouched hotel defaults, picking such a resource switches to a
-  // same-day slot: next full hour for today (12:00 for a future date), two hours long.
+  // A table or a practitioner (a resource type without usual hours) is booked on the same day, unlike a
+  // hotel room (check-in 14:00, check-out 12:00 the next day). While the times are still the untouched
+  // defaults, picking such a resource switches to a same-day slot: next full hour for today (12:00 for a
+  // future date), as long as the chosen service (two hours without one).
   function handleResourceChange(resourceId) {
     setForm((prev) => {
       const next = { ...prev, resourceId };
@@ -289,12 +308,15 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
         next.endDate = next.date;
         return withAutoEnd(next);
       }
-      if (type && !type.requires_service && untouched) {
+      // A type without usual hours (a table, a practitioner): a same-day slot from the next full hour - an hour
+      // already past is never proposed. The end follows the chosen service's duration (withAutoEnd), else 2 hours.
+      if (type && untouched) {
         next.endDate = next.date;
         const startHour = prev.date === todayIso() ? Math.min(new Date().getHours() + 1, 21) : 12;
         const pad = (n) => String(n).padStart(2, '0');
         next.startTime = pad(startHour) + ':00';
         next.endTime = pad(startHour + 2) + ':00';
+        return withAutoEnd(next);
       }
       return next;
     });
@@ -481,21 +503,64 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
     }
   }
 
+  // What a payment at this till needs: its methods, the VAT rates (the total) and the withholdings (company customers).
+  async function loadPaymentContext() {
+    const [methods, rates] = await Promise.all([listPaymentMethodPreferences(), listVatRates()]);
+    setWalkInMethods(methods.filter((m) => m.available_at_pos && m.allows_receipt));
+    setVatRates(rates);
+    withholdingTaxesApi.list().then(setWithholdingTaxes).catch(() => {});
+  }
+
   async function openWalkIn() {
+    setChargeTarget(null);
     setWalkInForm({ resourceId: '', serviceId: '', customerId: '', guestName: '', partySize: '' });
     setWalkInPayments({});
     setWalkInError('');
     setWalkInOpen(true);
     try {
-      const [statuses, methods, rates] = await Promise.all([
-        listResourceStatuses(selectedActivityId), listPaymentMethodPreferences(), listVatRates(),
-      ]);
+      const [statuses] = await Promise.all([listResourceStatuses(selectedActivityId), loadPaymentContext()]);
       setWalkInRooms(statuses.filter((s) => s.status === 'LIVRE'));
-      setWalkInMethods(methods.filter((m) => m.available_at_pos && m.allows_receipt));
-      setVatRates(rates);
-      withholdingTaxesApi.list().then(setWithholdingTaxes).catch(() => {});
     } catch (err) {
       setWalkInError(extractErrorMessage(err, 'Erro ao carregar os quartos livres'));
+    }
+  }
+
+  // Cobrar: the customer of the invoice starts as the booking's own (Consumidor final when it has none).
+  async function openCharge(b) {
+    setWalkInOpen(false);
+    setWalkInForm({ resourceId: '', serviceId: '', customerId: b.customer_id || '', guestName: '', partySize: '' });
+    setWalkInPayments({});
+    setWalkInError('');
+    setChargeTarget(b);
+    try {
+      await loadPaymentContext();
+    } catch (err) {
+      setWalkInError(extractErrorMessage(err, 'Erro ao carregar os métodos de pagamento'));
+    }
+  }
+
+  async function handleChargeSubmit(e) {
+    e.preventDefault();
+    if (Math.abs(walkInPaid - walkInDue) > 0.009) {
+      setWalkInError('O pagamento (' + formatKz(walkInPaid) + ' Kz) deve ser igual ao valor a pagar (' + formatKz(walkInDue) + ' Kz)');
+      return;
+    }
+    setWalkInSaving(true);
+    setWalkInError('');
+    try {
+      const result = await chargeBooking(chargeTarget.id, {
+        pos_id: posId,
+        payments: Object.entries(walkInPayments).filter(([, v]) => Number(v) > 0).map(([id, v]) => ({ payment_method_id: id, amount: Number(v) })),
+        customer_id: walkInForm.customerId || null,  // none: Consumidor final
+      });
+      setChargeTarget(null);
+      setAgendaVersion((v) => v + 1);
+      await loadBookings();
+      if (onSale) await onSale(result.invoice_id);
+    } catch (err) {
+      setWalkInError(extractErrorMessage(err, 'Erro ao cobrar a reserva'));
+    } finally {
+      setWalkInSaving(false);
     }
   }
 
@@ -503,16 +568,20 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
   const walkInRoom = resources.find((r) => r.id === walkInForm.resourceId);
   const walkInServices = services.filter((s) => s.duration_minutes && (!s.resource_type_id || s.resource_type_id === walkInRoom?.resource_type_id));
   const walkInService = services.find((s) => s.id === walkInForm.serviceId);
+  // What is sold: the Entrada's service once, or the charged marcação's service as many times as it lasts.
+  const chargeService = chargeTarget ? services.find((s) => s.id === chargeTarget.service_id) : null;
+  const saleService = chargeTarget ? chargeService : walkInService;
+  const saleQuantity = chargeTarget && chargeService ? bookingQuantity(chargeService, chargeTarget) : 1;
+  const saleSubtotal = saleService ? Math.round(Number(saleService.price || 0) * saleQuantity * 100) / 100 : 0;
   // the price before VAT, plus its rate - rounded as the invoice does (create_invoice)
   const walkInTotal = (() => {
-    if (!walkInService) return 0;
-    const subtotal = Math.round(Number(walkInService.price || 0) * 100) / 100;
-    const rate = Number(vatRates.find((v) => v.id === walkInService.vat_id)?.rate || 0);
-    return Math.round((subtotal + Math.round(subtotal * rate) / 100) * 100) / 100;
+    if (!saleService) return 0;
+    const rate = Number(vatRates.find((v) => v.id === saleService.vat_id)?.rate || 0);
+    return Math.round((saleSubtotal + Math.round(saleSubtotal * rate) / 100) * 100) / 100;
   })();
   // a company customer keeps the withholding of the service, if it carries one: the till collects the rest
-  const walkInRetention = walkInService ? withholdingOf(
-    [{ service_id: walkInService.id, subtotal: Math.round(Number(walkInService.price || 0) * 100) / 100 }],
+  const walkInRetention = saleService ? withholdingOf(
+    [{ service_id: saleService.id, subtotal: saleSubtotal }],
     { services, withholdingTaxes, customer: customers.find((c) => c.id === walkInForm.customerId) || null },
   ) : 0;
   const walkInDue = Math.round((walkInTotal - walkInRetention) * 100) / 100;
@@ -588,7 +657,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
         legal_person_type: customerForm.nif ? customerForm.legalPersonType : 'FISICA',  // a final consumer is a private person
       });
       setCustomers((prev) => [...prev, created]);
-      if (walkInOpen) setWalkInForm((p) => ({ ...p, customerId: created.id }));
+      if (walkInOpen || chargeTarget) setWalkInForm((p) => ({ ...p, customerId: created.id }));
       else setForm((p) => ({ ...p, customerId: created.id }));
       setCustomerModalOpen(false);
     } catch (err) {
@@ -596,6 +665,21 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
     } finally {
       setCustomerSaving(false);
     }
+  }
+
+  // a booking whose service has a price: it ends with its payment, never concluded by hand
+  function isPriced(b) {
+    return Number(services.find((s) => s.id === b.service_id)?.price || 0) > 0;
+  }
+
+  // a marcação charged at the till (Cobrar): concluded with its invoice, never checked out - shown as Paga
+  function isPaidMarcacao(b) {
+    return !hasStay && b.status === 'CONCLUIDA' && !!b.invoice_id && !b.checked_out_at;
+  }
+
+  // a booking of a later day: charged on its own day only (booking_charge_service refuses it before)
+  function isLaterDay(b) {
+    return luandaDateParts(b.starts_at).date > luandaDateParts(new Date().toISOString()).date;
   }
 
   function resourceName(resourceId) {
@@ -646,6 +730,67 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
     });
     setFormError('');
     setFormOpen(true);
+  }
+
+  // The customer of the invoice (Entrada, Cobrar): Consumidor final unless one is chosen, + creates one.
+  function renderInvoiceCustomer() {
+    return (
+          <div>
+            <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Cliente da fatura (opcional - sem cliente: Consumidor final)</label>
+            <div className="flex items-center gap-1.5">
+              <div className="flex-1">
+                <Select
+                  value={walkInForm.customerId}
+                  onChange={(v) => { setWalkInForm((p) => ({ ...p, customerId: v })); setWalkInPayments({}); }}
+                  options={[{ value: '', label: 'Consumidor final' }, ...customers.map((c) => ({ value: c.id, label: c.name + (c.nif ? ' - NIF ' + c.nif : '') }))]}
+                  placeholder="Consumidor final"
+                />
+              </div>
+              <button type="button" onClick={openCustomerModal} disabled={!can('customers:create')} title="Novo cliente (nome e NIF)" className="flex items-center justify-center w-10 h-10 rounded-md border border-border text-text-muted hover:text-accent hover:border-accent transition-colors cursor-pointer shrink-0 disabled:opacity-40 disabled:cursor-not-allowed">
+                <Plus size={15} />
+              </button>
+            </div>
+          </div>
+    );
+  }
+
+  // The payment at this till (Entrada, Cobrar): the total, the withholding of a company customer, then the methods -
+  // none ticked at first, ticking one puts the rest on it.
+  function renderPayment(totalLabel) {
+    return (
+            <div className="bg-bg-inset border border-border rounded-md p-3.5 flex flex-col gap-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-text-muted text-[13px]">{totalLabel}</span>
+                <span className="font-mono text-text-primary font-semibold">{formatKz(walkInTotal)} Kz</span>
+              </div>
+              {walkInRetention > 0 && (
+                <>
+                  <div className="flex items-center justify-between text-[13px]">
+                    <span className="text-text-muted">Retenção na fonte (fica com o cliente)</span>
+                    <span className="font-mono text-text-primary">- {formatKz(walkInRetention)} Kz</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[13px]">
+                    <span className="text-text-primary font-semibold">A pagar</span>
+                    <span className="font-mono text-text-primary font-semibold">{formatKz(walkInDue)} Kz</span>
+                  </div>
+                </>
+              )}
+              {walkInMethods.map((m) => (
+                <div key={m.id} className="flex items-center justify-between gap-3">
+                  <label className="flex items-center gap-2 flex-1 cursor-pointer select-none">
+                    <input type="checkbox" checked={m.id in walkInPayments} onChange={() => toggleWalkInPayment(m.id)} className="w-4 h-4 accent-accent cursor-pointer" />
+                    <span className="text-[13px] text-text-primary">{m.short_label || m.name}</span>
+                  </label>
+                  {m.id in walkInPayments && (
+                    <input type="number" min="0" step="0.01" value={walkInPayments[m.id]} onChange={(e) => setWalkInPayments((p) => ({ ...p, [m.id]: e.target.value }))} className="w-36 bg-bg-elevated border border-border rounded-md px-3 py-2 text-sm text-right font-mono text-text-primary outline-none focus:border-accent transition-colors" />
+                  )}
+                </div>
+              ))}
+              <div className={'text-[12px] px-3 py-2 rounded-r border-l-2 ' + (walkInRemaining === 0 ? 'bg-success/10 border-success text-success' : walkInRemaining > 0 ? 'bg-accent/10 border-accent text-accent' : 'bg-danger/10 border-danger text-danger')}>
+                {walkInRemaining === 0 ? 'Valor exato' : walkInRemaining > 0 ? `Falta ${formatKz(walkInRemaining)} Kz` : `Excede em ${formatKz(Math.abs(walkInRemaining))} Kz`}
+              </div>
+            </div>
+    );
   }
 
   function renderAgenda() {
@@ -787,7 +932,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
                             key={b.id}
                             onClick={(ev) => { ev.stopPropagation(); if (editable) openEditForm(b); }}
                             title={formatDateTime(b.starts_at) + ' - ' + formatDateTime(b.ends_at) + (who ? ' - ' + who : '')}
-                            className={'absolute left-1 right-1 rounded-md border px-2 py-1 overflow-hidden text-[11px] leading-tight ' + (AGENDA_STATUS_STYLE[b.status] || AGENDA_STATUS_STYLE.PENDENTE) + (editable ? ' cursor-pointer' : ' cursor-default')}
+                            className={'absolute left-1 right-1 rounded-md border px-2 py-1 overflow-hidden text-[11px] leading-tight ' + (isPaidMarcacao(b) ? AGENDA_STATUS_STYLE.CONFIRMADA : (AGENDA_STATUS_STYLE[b.status] || AGENDA_STATUS_STYLE.PENDENTE)) + (editable ? ' cursor-pointer' : ' cursor-default')}
                             style={{ top: (sg.startMin - startHour * 60) / 60 * HOUR_PX, height: Math.max((sg.endMin - sg.startMin) / 60 * HOUR_PX - 2, 22) }}
                           >
                             <p className="font-mono font-semibold">{(sg.startsHere ? s.time : '00:00') + ' - ' + (sg.endsHere ? e.time : '24:00')}</p>
@@ -809,34 +954,13 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
 
   return (
     <div>
-      <div className={'flex items-center justify-between flex-wrap gap-3 ' + (embedded ? 'mb-4' : 'mb-1')}>
-        {!embedded && (
-        <h2 className="font-display font-semibold text-[22px] text-text-primary flex items-center gap-2.5">
+      {!embedded && (
+        <h2 className="font-display font-semibold text-[22px] text-text-primary flex items-center gap-2.5 mb-1">
           <CalendarClock size={22} className="text-accent" />
           Reservas
         </h2>
-        )}
-        {embedded && (
-          <button
-            onClick={openWalkIn}
-            disabled={resources.length === 0 || !can('hotel:checkin')}
-            title="Passagem paga já: quarto livre, serviço com duração"
-            className="ml-auto flex items-center gap-2 border border-accent text-accent hover:bg-accent/10 disabled:opacity-50 font-medium text-sm px-4 py-2 rounded-md transition-colors cursor-pointer"
-          >
-            <DoorOpen size={16} />
-            Entrada
-          </button>
-        )}
-        <button
-          onClick={openCreateForm}
-          disabled={resources.length === 0 || !can('bookings:create')}
-          className={(embedded ? '' : 'ml-auto ') + 'flex items-center gap-2 bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-medium text-sm px-4 py-2 rounded-md transition-colors cursor-pointer'}
-        >
-          <Plus size={16} />
-          Nova reserva
-        </button>
-      </div>
-      {!embedded && <p className="text-text-muted text-sm mb-6">Gerir reservas de quartos, praticiens, mesas ou qualquer outro recurso</p>}
+      )}
+      {!embedded && <p className="text-text-muted text-sm mb-6">Gerir reservas de quartos, praticantes, mesas ou qualquer outro recurso</p>}
 
       {activities.length > 1 && !activityId && (
         <div className="flex items-center gap-2 mb-4 flex-wrap">
@@ -852,6 +976,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
         </div>
       )}
 
+      {/* One row: the view (Lista / Agenda) on the left, the actions (Entrada for a hotel, Nova reserva) on the right. */}
       <div className="flex items-center gap-2 mb-4 flex-wrap">
         <button
           type="button"
@@ -867,6 +992,27 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
         >
           Agenda
         </button>
+        <div className="ml-auto flex items-center gap-2">
+          {embedded && hasStay && (
+            <button
+              onClick={openWalkIn}
+              disabled={resources.length === 0}
+              title="Passagem paga já: quarto livre, serviço com duração"
+              className="flex items-center gap-2 border border-accent text-accent hover:bg-accent/10 disabled:opacity-50 font-medium text-[13px] px-3.5 py-1.5 rounded-md transition-colors cursor-pointer"
+            >
+              <DoorOpen size={15} />
+              Entrada
+            </button>
+          )}
+          <button
+            onClick={openCreateForm}
+            disabled={resources.length === 0 || !can('bookings:create')}
+            className="flex items-center gap-2 bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-medium text-[13px] px-3.5 py-1.5 rounded-md transition-colors cursor-pointer"
+          >
+            <Plus size={15} />
+            Nova reserva
+          </button>
+        </div>
       </div>
 
       {!selectedActivityId && activities.length > 1 && !activityId && (
@@ -927,7 +1073,8 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
                 {b.notes && <p className="text-text-muted text-[12px] mt-0.5">{b.notes}</p>}
               </div>
               <div className="flex items-center gap-2">
-                <span className={'text-[11px] font-semibold px-2.5 py-1 rounded-full ' + (STATUS_COLORS[b.status] || '')}>{STATUS_LABELS[b.status] || b.status}</span>
+                {/* a marcação charged at the till: paid, before, during and after the service - it keeps its slot */}
+                <span className={'text-[11px] font-semibold px-2.5 py-1 rounded-full ' + (isPaidMarcacao(b) ? 'text-success bg-success/10' : (STATUS_COLORS[b.status] || ''))}>{isPaidMarcacao(b) ? 'Paga' : (STATUS_LABELS[b.status] || b.status)}</span>
                 {checkActionId === b.id || statusUpdatingId === b.id ? (
                   <Loader2 size={16} className="animate-spin text-accent" />
                 ) : b.status === 'EM_CURSO' ? (
@@ -976,25 +1123,38 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
                       <Pencil size={12} />
                       Editar
                     </button>
-                    <button
-                      onClick={() => handleCheckIn(b.id)}
-                      disabled={!can('hotel:checkin')}
-                      className="flex items-center gap-1.5 bg-accent hover:bg-accent-hover text-white text-[12px] font-medium px-3 py-1.5 rounded-md transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      <CheckCircle2 size={13} />
-                      Check-in
-                    </button>
+                    {hasStay ? (
+                      <button
+                        onClick={() => handleCheckIn(b.id)}
+                        className="flex items-center gap-1.5 bg-accent hover:bg-accent-hover text-white text-[12px] font-medium px-3 py-1.5 rounded-md transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        <CheckCircle2 size={13} />
+                        Check-in
+                      </button>
+                    ) : isPriced(b) && (
+                      <span title={!posId ? 'Cobra-se na Caixa, no painel Reservas' : isLaterDay(b) ? 'Cobra-se no próprio dia (' + formatDayLabel(luandaDateParts(b.starts_at).date) + ')' : 'Receber o serviço e concluir a reserva'}>
+                        <button
+                          onClick={() => openCharge(b)}
+                          disabled={!posId || !can('bookings:charge') || isLaterDay(b)}
+                          className="flex items-center gap-1.5 bg-accent hover:bg-accent-hover text-white text-[12px] font-medium px-3 py-1.5 rounded-md transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          <Banknote size={13} />
+                          Cobrar
+                        </button>
+                      </span>
+                    )}
                     {can('bookings:update') && (
                     <Select
                       value=""
                       onChange={(v) => handleStatusChange(b.id, v)}
-                      options={Object.entries(STATUS_LABELS).filter(([k]) => k !== b.status && k !== 'EM_CURSO').map(([k, label]) => ({ value: k, label }))}
+                      // a priced booking is concluded by its payment (Cobrar, or the stay's check-out), never by hand
+                      options={Object.entries(STATUS_LABELS).filter(([k]) => k !== b.status && k !== 'EM_CURSO' && !(k === 'CONCLUIDA' && isPriced(b))).map(([k, label]) => ({ value: k, label }))}
                       placeholder="Alterar estado"
                     />
                     )}
                   </>
                 ) : (
-                  <span className="text-text-muted text-[11px] italic">Estado final</span>
+                  <span className="text-text-muted text-[11px] italic">{b.status === 'CANCELADA' && b.invoice_id && !hasStay ? 'Anulada por nota de crédito' : 'Estado final'}</span>
                 )}
               </div>
             </div>
@@ -1024,22 +1184,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
               />
             </div>
           </div>
-          <div>
-            <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Cliente da fatura (opcional - sem cliente: Consumidor final)</label>
-            <div className="flex items-center gap-1.5">
-              <div className="flex-1">
-                <Select
-                  value={walkInForm.customerId}
-                  onChange={(v) => { setWalkInForm((p) => ({ ...p, customerId: v })); setWalkInPayments({}); }}
-                  options={[{ value: '', label: 'Consumidor final' }, ...customers.map((c) => ({ value: c.id, label: c.name + (c.nif ? ' - NIF ' + c.nif : '') }))]}
-                  placeholder="Consumidor final"
-                />
-              </div>
-              <button type="button" onClick={openCustomerModal} disabled={!can('customers:create')} title="Novo cliente (nome e NIF)" className="flex items-center justify-center w-10 h-10 rounded-md border border-border text-text-muted hover:text-accent hover:border-accent transition-colors cursor-pointer shrink-0 disabled:opacity-40 disabled:cursor-not-allowed">
-                <Plus size={15} />
-              </button>
-            </div>
-          </div>
+          {renderInvoiceCustomer()}
           <div className="grid grid-cols-4 gap-3">
             <div className="col-span-3">
               <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Nome do hóspede (opcional)</label>
@@ -1050,40 +1195,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
               <input type="number" min="1" step="1" value={walkInForm.partySize} onChange={(e) => setWalkInForm((p) => ({ ...p, partySize: e.target.value }))} className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
             </div>
           </div>
-          {walkInService && (
-            <div className="bg-bg-inset border border-border rounded-md p-3.5 flex flex-col gap-2.5">
-              <div className="flex items-center justify-between">
-                <span className="text-text-muted text-[13px]">Total a pagar (IVA incluído) - até {new Date(Date.now() + walkInService.duration_minutes * 60000).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Luanda' })}</span>
-                <span className="font-mono text-text-primary font-semibold">{formatKz(walkInTotal)} Kz</span>
-              </div>
-              {walkInRetention > 0 && (
-                <>
-                  <div className="flex items-center justify-between text-[13px]">
-                    <span className="text-text-muted">Retenção na fonte (fica com o cliente)</span>
-                    <span className="font-mono text-text-primary">- {formatKz(walkInRetention)} Kz</span>
-                  </div>
-                  <div className="flex items-center justify-between text-[13px]">
-                    <span className="text-text-primary font-semibold">A pagar</span>
-                    <span className="font-mono text-text-primary font-semibold">{formatKz(walkInDue)} Kz</span>
-                  </div>
-                </>
-              )}
-              {walkInMethods.map((m) => (
-                <div key={m.id} className="flex items-center justify-between gap-3">
-                  <label className="flex items-center gap-2 flex-1 cursor-pointer select-none">
-                    <input type="checkbox" checked={m.id in walkInPayments} onChange={() => toggleWalkInPayment(m.id)} className="w-4 h-4 accent-accent cursor-pointer" />
-                    <span className="text-[13px] text-text-primary">{m.short_label || m.name}</span>
-                  </label>
-                  {m.id in walkInPayments && (
-                    <input type="number" min="0" step="0.01" value={walkInPayments[m.id]} onChange={(e) => setWalkInPayments((p) => ({ ...p, [m.id]: e.target.value }))} className="w-36 bg-bg-elevated border border-border rounded-md px-3 py-2 text-sm text-right font-mono text-text-primary outline-none focus:border-accent transition-colors" />
-                  )}
-                </div>
-              ))}
-              <div className={'text-[12px] px-3 py-2 rounded-r border-l-2 ' + (walkInRemaining === 0 ? 'bg-success/10 border-success text-success' : walkInRemaining > 0 ? 'bg-accent/10 border-accent text-accent' : 'bg-danger/10 border-danger text-danger')}>
-                {walkInRemaining === 0 ? 'Valor exato' : walkInRemaining > 0 ? `Falta ${formatKz(walkInRemaining)} Kz` : `Excede em ${formatKz(Math.abs(walkInRemaining))} Kz`}
-              </div>
-            </div>
-          )}
+          {walkInService && renderPayment('Total a pagar (IVA incluído) - até ' + new Date(Date.now() + walkInService.duration_minutes * 60000).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Luanda' }))}
           {walkInError && (
             <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{walkInError}</div>
           )}
@@ -1092,6 +1204,26 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
             {walkInSaving ? 'A registar...' : 'Receber e dar entrada'}
           </button>
         </form>
+      </Modal>
+
+      <Modal open={!!chargeTarget} onClose={() => setChargeTarget(null)} title={'Cobrar' + (chargeTarget ? ' - ' + resourceName(chargeTarget.resource_id) : '')} maxWidthClass="max-w-xl">
+        {chargeTarget && (
+          <form onSubmit={handleChargeSubmit} className="flex flex-col gap-4">
+            <div className="text-[13px] text-text-primary">
+              <p className="font-medium">{chargeService?.name || '-'}{saleQuantity > 1 ? ' × ' + saleQuantity : ''}</p>
+              <p className="text-text-muted font-mono text-[12px] mt-0.5">{formatDateTime(chargeTarget.starts_at)} - {formatDateTime(chargeTarget.ends_at)}{chargeTarget.guest_name ? ' - ' + chargeTarget.guest_name : ''}</p>
+            </div>
+            {renderInvoiceCustomer()}
+            {chargeService && renderPayment('Total a pagar (IVA incluído)')}
+            {walkInError && (
+              <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{walkInError}</div>
+            )}
+            <button type="submit" disabled={walkInSaving || !chargeService || walkInTotal <= 0 || walkInRemaining !== 0} className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer">
+              {walkInSaving ? <Loader2 size={17} className="animate-spin" /> : <Banknote size={17} />}
+              {walkInSaving ? 'A cobrar...' : 'Receber e concluir'}
+            </button>
+          </form>
+        )}
       </Modal>
 
       <Modal open={!!extendBooking} onClose={() => setExtendBooking(null)} title={'Prolongar estadia' + (extendBooking ? ' - ' + resourceName(extendBooking.resource_id) : '')} maxWidthClass="max-w-md">
@@ -1194,7 +1326,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
             />
           </div>
           <div>
-            <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Hóspede (opcional)</label>
+            <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">{personWord === 'hóspede' ? 'Hóspede' : 'Cliente'} (opcional)</label>
             <div className="flex items-center gap-1.5">
               <div className="flex-1">
                 <Select
@@ -1210,7 +1342,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
             </div>
           </div>
           <div>
-            <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Nome do hóspede (opcional)</label>
+            <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Nome do {personWord} (opcional)</label>
             <input value={form.guestName} onChange={(e) => setForm((p) => ({ ...p, guestName: e.target.value }))} maxLength={150} placeholder="Ex: Família Silva" className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
           </div>
           <div>

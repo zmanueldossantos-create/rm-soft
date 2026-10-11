@@ -503,6 +503,8 @@ async def download_invoice_pdf(
         "retention_total": float(invoice.retention_total or 0),
         "discount_global_percent": float(invoice.discount_global_percent or 0),
         "document_reference": invoice.document_reference,
+        "credit_note_reason": invoice.credit_note_reason.value if invoice.credit_note_reason else None,
+        "credit_note_cause": invoice.credit_note_cause,
         "observations": invoice.observations,
         "payment_method_name": payment_method_name,
         "payment_term_name": payment_term_name,

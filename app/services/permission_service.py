@@ -84,6 +84,7 @@ PERMISSION_CATALOG: list[tuple[str, str, str, list[str]]] = [
     ("bookings:view", "Ver reservas", "Recursos e Reservas", ["CAIXA"]),
     ("bookings:create", "Criar reservas", "Recursos e Reservas", ["CAIXA"]),
     ("bookings:update", "Alterar estado e reagendar reservas", "Recursos e Reservas", ["CAIXA"]),
+    ("bookings:charge", "Cobrar marcações na caixa", "Recursos e Reservas", ["CAIXA"]),
     ("hotel:checkin", "Fazer check-in", "Hotel", ["CAIXA"]),
     ("hotel:checkout", "Fazer check-out", "Hotel", ["CAIXA"]),
     ("hotel:occupancy_view", "Ver historico de ocupacao", "Hotel", ["CAIXA"]),

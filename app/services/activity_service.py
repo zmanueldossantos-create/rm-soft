@@ -23,8 +23,15 @@ class ModuleNotGrantedError(Exception):
 
 
 async def list_activities(db: AsyncSession, company_id: uuid.UUID) -> list[Activity]:
+    """Each activity carries the capabilities of its module (capabilities): the screens follow the activity's own
+    workflow - a hotel's bookings check in, a spa's marcações are charged."""
+    from app.services.sector_service import module_capabilities_map  # lazy: sector_service is a heavier import
     result = await db.execute(select(Activity).where(Activity.company_id == company_id).order_by(Activity.name))
-    return list(result.scalars().all())
+    activities = list(result.scalars().all())
+    by_module = await module_capabilities_map(db, {a.module_id for a in activities})
+    for activity in activities:
+        activity.capabilities = sorted(by_module.get(activity.module_id, set()))
+    return activities
 
 
 async def create_activity(

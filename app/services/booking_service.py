@@ -44,11 +44,16 @@ async def _has_overlap(
     Two ranges [a_start, a_end) and [b_start, b_end) overlap iff a_start < b_end
     AND b_start < a_end - the classic half-open interval overlap test, applied
     only against bookings still in an active status (a CANCELADA/NO_SHOW booking
-    no longer holds its slot).
+    no longer holds its slot) and against marcações already charged (paid before
+    or during the service, they keep their slot until its planned end).
     """
     query = select(Booking).where(
         Booking.resource_id == resource_id,
-        Booking.status.in_(_ACTIVE_STATUSES),
+        or_(
+            Booking.status.in_(_ACTIVE_STATUSES),
+            # a marcação charged at the till (booking_charge_service): concluded, paid, and still holding its slot
+            and_(Booking.status == BookingStatus.CONCLUIDA, Booking.invoice_id.is_not(None), Booking.checked_out_at.is_(None)),
+        ),
         Booking.starts_at < ends_at,
         Booking.ends_at > starts_at,
     )
@@ -175,12 +180,22 @@ async def _has_open_stay_account(db: AsyncSession, booking_id: uuid.UUID) -> boo
     )).first() is not None
 
 
+async def _has_priced_service(db: AsyncSession, booking: Booking) -> bool:
+    if booking.service_id is None:
+        return False
+    price = (await db.execute(select(Service.price).where(Service.id == booking.service_id))).scalar_one_or_none()
+    return price is not None and float(price) > 0
+
+
 async def update_booking_status(
     db: AsyncSession, company_id: uuid.UUID, booking_id: uuid.UUID, new_status: BookingStatus,
 ) -> Booking:
     booking = await get_booking_or_raise(db, company_id, booking_id)
     if await _has_open_stay_account(db, booking.id):
         raise BookingNotEditableError("Esta reserva tem uma estadia em curso com conta aberta - o check-out faz-se na Caixa, com o pagamento")
+    if new_status == BookingStatus.CONCLUIDA and booking.invoice_id is None and await _has_priced_service(db, booking):
+        # concluded by hand, a priced marcação would end without its invoice: it is concluded by being charged
+        raise BookingNotEditableError("Esta reserva tem um serviço com preço - conclui-se ao cobrar, na Caixa")
     booking.status = new_status
     await db.commit()
     await db.refresh(booking)

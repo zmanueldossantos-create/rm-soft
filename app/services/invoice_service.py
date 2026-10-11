@@ -804,6 +804,20 @@ async def get_credit_note_info(db: AsyncSession, company_id: uuid.UUID, invoice_
     }
 
 
+async def _cancel_charged_bookings(db: AsyncSession, invoice_id: uuid.UUID) -> None:
+    """A marcação charged at the till (booking_charge_service) and then fully credited - the client did not come, or
+    was refunded - no longer holds its slot: it becomes CANCELADA, its invoice link kept for the record. A partial
+    credit (a discount after the fact) leaves it paid; a stay or a passage (checked out, or still in progress) is
+    never touched."""
+    from app.models.booking import Booking, BookingStatus
+    for booking in (await db.execute(
+        select(Booking).where(
+            Booking.invoice_id == invoice_id, Booking.status == BookingStatus.CONCLUIDA, Booking.checked_out_at.is_(None),
+        )
+    )).scalars().all():
+        booking.status = BookingStatus.CANCELADA
+
+
 async def create_credit_note(
     db: AsyncSession,
     company_id: uuid.UUID,
@@ -1138,6 +1152,9 @@ async def create_credit_note(
         )
     else:
         reference_invoice.document_status = DocumentLifecycleStatus.RECTIFICADO_PARCIAL
+
+    if is_full_credit:
+        await _cancel_charged_bookings(db, reference_invoice.id)
 
     await db.commit()
     await db.refresh(credit_note)

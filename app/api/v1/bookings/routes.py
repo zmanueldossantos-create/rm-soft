@@ -12,8 +12,15 @@ from app.schemas.booking import (
     ResourceCreateRequest, ResourceUpdateRequest, ResourceResponse,
     ResourceTypeCreateRequest, ResourceTypeUpdateRequest, ResourceTypeResponse,
     BookingCreateRequest, BookingRescheduleRequest, BookingStatusUpdateRequest, BookingResponse,
-    ResourceStatusResponse,
+    BookingChargeRequest, BookingChargeResponse, ResourceStatusResponse,
 )
+from app.services.booking_charge_service import charge_booking, BookingNotChargeableError
+from app.services.hotel_service import NoDefaultPosError
+from app.services.fiscal_period_service import PeriodClosedError
+from app.services.invoice_service import (
+    CustomerNotFoundError, DocumentTypeNotConfiguredError, PaymentAmountMismatchError, SeriesNotConfiguredError,
+)
+from app.services.pos_service import NoOpenSessionError
 from app.services.resource_service import (
     create_resource, get_resource_or_raise, list_resources, update_resource, toggle_resource_status,
     ResourceNotFoundError,
@@ -193,6 +200,29 @@ async def patch_booking_status(
     except BookingNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except BookingNotEditableError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+
+
+@router.post("/bookings/{booking_id}/charge", response_model=BookingChargeResponse)
+async def post_charge_booking(
+    booking_id: uuid.UUID,
+    payload: BookingChargeRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("bookings:charge")),
+):
+    """Cobrar uma marcação: the sale of its service at this till, then the booking concluded with its invoice."""
+    try:
+        booking, invoice = await charge_booking(
+            db, current_user.company_id, booking_id, current_user, payload.pos_id,
+            [{"payment_method_id": p.payment_method_id, "amount": p.amount} for p in payload.payments],
+            payload.customer_id,
+        )
+        return {"booking": booking, "invoice_id": invoice.id}
+    except (BookingNotFoundError, ResourceNotFoundError, CustomerNotFoundError) as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (PaymentAmountMismatchError, DocumentTypeNotConfiguredError) as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    except (BookingNotChargeableError, NoDefaultPosError, NoOpenSessionError, PeriodClosedError, SeriesNotConfiguredError) as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
 
 
