@@ -552,6 +552,7 @@ async def download_invoice_pdf(
         lines_dict.append({
             "code": code,
             "unit": unit,
+            "service_line": l.service_id is not None,  # the A4's Tipo column: S for a service, P for a product (as the SAF-T)
             "product_name_snapshot": l.product_name_snapshot,
             "quantity": float(l.quantity), "unit_code": l.unit_code_snapshot,
             "unit_price": float(l.unit_price),

@@ -11,6 +11,9 @@ import { checkIn, checkOut, extendStay, walkIn } from '../api/hotel';
 import { listResourceStatuses } from '../api/booking';
 import { listPaymentMethodPreferences } from '../api/tesouraria';
 import { listVatRates } from '../api/vat';
+import { withholdingTaxesApi } from '../api/catalogs';
+import { withholdingOf } from '../utils/withholding';
+import { guessLegalPersonType, LEGAL_PERSON_OPTIONS } from '../utils/customerType';
 import { formatKz } from '../utils/format';
 import { listServices } from '../api/services';
 import { extractErrorMessage } from '../utils/errors';
@@ -108,6 +111,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
   const [walkInMethods, setWalkInMethods] = useState([]);
   const [walkInPayments, setWalkInPayments] = useState({});
   const [vatRates, setVatRates] = useState([]);
+  const [withholdingTaxes, setWithholdingTaxes] = useState([]);
   const [walkInError, setWalkInError] = useState('');
   const [walkInSaving, setWalkInSaving] = useState(false);
   const [extendBooking, setExtendBooking] = useState(null);
@@ -122,7 +126,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
   const [resourceTypesCatalog, setResourceTypesCatalog] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
-  const [customerForm, setCustomerForm] = useState({ name: '', phoneNumber: '', nif: '' });
+  const [customerForm, setCustomerForm] = useState({ name: '', phoneNumber: '', nif: '', legalPersonType: 'FISICA', typeTouched: false });
   const [customerFormError, setCustomerFormError] = useState('');
   const [customerSaving, setCustomerSaving] = useState(false);
   const [selectedResourceId, setSelectedResourceId] = useState('');
@@ -489,6 +493,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
       setWalkInRooms(statuses.filter((s) => s.status === 'LIVRE'));
       setWalkInMethods(methods.filter((m) => m.available_at_pos && m.allows_receipt));
       setVatRates(rates);
+      withholdingTaxesApi.list().then(setWithholdingTaxes).catch(() => {});
     } catch (err) {
       setWalkInError(extractErrorMessage(err, 'Erro ao carregar os quartos livres'));
     }
@@ -505,8 +510,14 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
     const rate = Number(vatRates.find((v) => v.id === walkInService.vat_id)?.rate || 0);
     return Math.round((subtotal + Math.round(subtotal * rate) / 100) * 100) / 100;
   })();
+  // a company customer keeps the withholding of the service, if it carries one: the till collects the rest
+  const walkInRetention = walkInService ? withholdingOf(
+    [{ service_id: walkInService.id, subtotal: Math.round(Number(walkInService.price || 0) * 100) / 100 }],
+    { services, withholdingTaxes, customer: customers.find((c) => c.id === walkInForm.customerId) || null },
+  ) : 0;
+  const walkInDue = Math.round((walkInTotal - walkInRetention) * 100) / 100;
   const walkInPaid = Object.values(walkInPayments).reduce((sum, v) => sum + (Number(v) || 0), 0);
-  const walkInRemaining = Math.round((walkInTotal - walkInPaid) * 100) / 100;
+  const walkInRemaining = Math.round((walkInDue - walkInPaid) * 100) / 100;
 
   // As in the till's Fechar conta: nothing chosen for the reception - ticking a method puts the rest on it.
   function chooseWalkInService(serviceId) {
@@ -522,7 +533,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
         return next;
       }
       const paid = Object.values(prev).reduce((sum, v) => sum + (Number(v) || 0), 0);
-      return { ...prev, [methodId]: Math.max(Math.round((walkInTotal - paid) * 100) / 100, 0) };
+      return { ...prev, [methodId]: Math.max(Math.round((walkInDue - paid) * 100) / 100, 0) };
     });
   }
 
@@ -532,8 +543,8 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
       setWalkInError('Escolha o quarto e o serviço');
       return;
     }
-    if (Math.abs(walkInPaid - walkInTotal) > 0.009) {
-      setWalkInError('O pagamento (' + formatKz(walkInPaid) + ' Kz) deve ser igual ao total (' + formatKz(walkInTotal) + ' Kz)');
+    if (Math.abs(walkInPaid - walkInDue) > 0.009) {
+      setWalkInError('O pagamento (' + formatKz(walkInPaid) + ' Kz) deve ser igual ao valor a pagar (' + formatKz(walkInDue) + ' Kz)');
       return;
     }
     setWalkInSaving(true);
@@ -559,7 +570,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
   }
 
   function openCustomerModal() {
-    setCustomerForm({ name: '', phoneNumber: '', nif: '' });
+    setCustomerForm({ name: '', phoneNumber: '', nif: '', legalPersonType: 'FISICA', typeTouched: false });
     setCustomerFormError('');
     setCustomerModalOpen(true);
   }
@@ -574,6 +585,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
         phone_number: customerForm.phoneNumber,
         nif: customerForm.nif || '',
         is_final_consumer: !customerForm.nif,
+        legal_person_type: customerForm.nif ? customerForm.legalPersonType : 'FISICA',  // a final consumer is a private person
       });
       setCustomers((prev) => [...prev, created]);
       if (walkInOpen) setWalkInForm((p) => ({ ...p, customerId: created.id }));
@@ -1018,7 +1030,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
               <div className="flex-1">
                 <Select
                   value={walkInForm.customerId}
-                  onChange={(v) => setWalkInForm((p) => ({ ...p, customerId: v }))}
+                  onChange={(v) => { setWalkInForm((p) => ({ ...p, customerId: v })); setWalkInPayments({}); }}
                   options={[{ value: '', label: 'Consumidor final' }, ...customers.map((c) => ({ value: c.id, label: c.name + (c.nif ? ' - NIF ' + c.nif : '') }))]}
                   placeholder="Consumidor final"
                 />
@@ -1044,6 +1056,18 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
                 <span className="text-text-muted text-[13px]">Total a pagar (IVA incluído) - até {new Date(Date.now() + walkInService.duration_minutes * 60000).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Luanda' })}</span>
                 <span className="font-mono text-text-primary font-semibold">{formatKz(walkInTotal)} Kz</span>
               </div>
+              {walkInRetention > 0 && (
+                <>
+                  <div className="flex items-center justify-between text-[13px]">
+                    <span className="text-text-muted">Retenção na fonte (fica com o cliente)</span>
+                    <span className="font-mono text-text-primary">- {formatKz(walkInRetention)} Kz</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[13px]">
+                    <span className="text-text-primary font-semibold">A pagar</span>
+                    <span className="font-mono text-text-primary font-semibold">{formatKz(walkInDue)} Kz</span>
+                  </div>
+                </>
+              )}
               {walkInMethods.map((m) => (
                 <div key={m.id} className="flex items-center justify-between gap-3">
                   <label className="flex items-center gap-2 flex-1 cursor-pointer select-none">
@@ -1246,8 +1270,14 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
           </div>
           <div>
             <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">NIF (opcional)</label>
-            <input value={customerForm.nif} onChange={(e) => setCustomerForm((p) => ({ ...p, nif: e.target.value }))} placeholder="Deixe vazio para consumidor final" className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
+            <input value={customerForm.nif} onChange={(e) => setCustomerForm((p) => ({ ...p, nif: e.target.value, legalPersonType: p.typeTouched ? p.legalPersonType : guessLegalPersonType(e.target.value) }))} placeholder="Deixe vazio para consumidor final" className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
           </div>
+          {customerForm.nif.trim() && (
+            <div>
+              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Tipo *</label>
+              <Select value={customerForm.legalPersonType} onChange={(v) => setCustomerForm((p) => ({ ...p, legalPersonType: v, typeTouched: true }))} options={LEGAL_PERSON_OPTIONS} />
+            </div>
+          )}
           {customerFormError && (
             <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{customerFormError}</div>
           )}

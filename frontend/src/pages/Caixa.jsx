@@ -1,4 +1,5 @@
 import { formatKz } from '../utils/format';
+import { guessLegalPersonType, isPessoaColetiva, LEGAL_PERSON_OPTIONS } from '../utils/customerType';
 import { API_ORIGIN } from '../api/config';
 import DateInput from '../components/DateInput';
 import { useState, useEffect, useRef, Fragment } from 'react';
@@ -89,7 +90,7 @@ export default function Caixa() {
   const [customersModalOpen, setCustomersModalOpen] = useState(false);
   const [customerSearchQuery, setCustomerSearchQuery] = useState('');
   const [newCustomerModalOpen, setNewCustomerModalOpen] = useState(false);
-  const [newCustomerForm, setNewCustomerForm] = useState({ name: '', nif: '', phone_number: '', email: '' });
+  const [newCustomerForm, setNewCustomerForm] = useState({ name: '', nif: '', phone_number: '', email: '', legal_person_type: 'FISICA', typeTouched: false });
   const [newCustomerSaving, setNewCustomerSaving] = useState(false);
   const [newCustomerError, setNewCustomerError] = useState('');
   const [articlesModalOpen, setArticlesModalOpen] = useState(false);
@@ -330,7 +331,7 @@ export default function Caixa() {
   }
 
   function openNewCustomerModal() {
-    setNewCustomerForm({ name: '', nif: '', phone_number: '', email: '' });
+    setNewCustomerForm({ name: '', nif: '', phone_number: '', email: '', legal_person_type: 'FISICA', typeTouched: false });
     setNewCustomerError('');
     setNewCustomerModalOpen(true);
   }
@@ -340,7 +341,8 @@ export default function Caixa() {
     setNewCustomerError('');
     setNewCustomerSaving(true);
     try {
-      const customer = await createCustomer(newCustomerForm);
+      const { name, nif, phone_number, email, legal_person_type } = newCustomerForm;
+      const customer = await createCustomer({ name, nif, phone_number, email, legal_person_type });
       setCustomers((prev) => [...prev, customer]);
       setSelectedCustomerId(customer.id);
       setNewCustomerModalOpen(false);
@@ -907,7 +909,8 @@ export default function Caixa() {
   const [printConfigByPos, setPrintConfigByPos] = useState({}); // each cash point -> its printing after a sale
   const [printChoice, setPrintChoice] = useState(false); // ticket and A4 both allowed: the cashier picks one
 
-  const isCustomerPessoaColetiva = customers.find((c) => c.id === selectedCustomerId)?.legal_person_type === 'JURIDICA';
+  // a withholding for a real pessoa coletiva only - never the Consumidor final (NIF 999999999)
+  const isCustomerPessoaColetiva = isPessoaColetiva(customers.find((c) => c.id === selectedCustomerId));
 
   const cartCalculation = cart.reduce((acc, line) => {
     const vatRate = vatRates.find((v) => v.id === line.vatId)?.rate || 0;
@@ -2355,9 +2358,14 @@ export default function Caixa() {
             <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">NIF</label>
             <input
               value={newCustomerForm.nif}
-              onChange={(e) => setNewCustomerForm((p) => ({ ...p, nif: e.target.value }))}
+              // the type follows the NIF (a company's: 10 digits from 5) until it is chosen by hand
+              onChange={(e) => setNewCustomerForm((p) => ({ ...p, nif: e.target.value, legal_person_type: p.typeTouched ? p.legal_person_type : guessLegalPersonType(e.target.value) }))}
               className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors"
             />
+          </div>
+          <div>
+            <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Tipo *</label>
+            <Select value={newCustomerForm.legal_person_type} onChange={(v) => setNewCustomerForm((p) => ({ ...p, legal_person_type: v, typeTouched: true }))} options={LEGAL_PERSON_OPTIONS} />
           </div>
           <div>
             <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Telefone *</label>

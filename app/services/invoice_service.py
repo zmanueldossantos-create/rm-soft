@@ -316,7 +316,9 @@ async def create_invoice(
     line_objects = []
 
     retention_total = 0.0
-    customer_is_juridica = customer is not None and customer.legal_person_type == LegalPersonType.JURIDICA
+    # a withholding only for a real pessoa coletiva - never for the Consumidor final (NIF 999999999), whatever its type
+    customer_is_juridica = (customer is not None and customer.legal_person_type == LegalPersonType.JURIDICA
+                            and not customer.is_final_consumer)
     for line_input in lines_input:
         product_id = line_input.get("product_id")
         service_id = line_input.get("service_id")
@@ -1228,7 +1230,9 @@ async def create_debit_note(
     vat_total = 0.0
     retention_total = 0.0
     line_objects = []
-    customer_is_juridica = customer is not None and customer.legal_person_type == LegalPersonType.JURIDICA
+    # a withholding only for a real pessoa coletiva - never for the Consumidor final (NIF 999999999), whatever its type
+    customer_is_juridica = (customer is not None and customer.legal_person_type == LegalPersonType.JURIDICA
+                            and not customer.is_final_consumer)
 
     for line_input in lines_input:
         product_id = line_input.get("product_id")
@@ -1612,7 +1616,9 @@ async def create_pro_forma(
     vat_total = 0.0
     pro_forma_retention = 0.0
     line_objects = []
-    customer_is_juridica = customer is not None and customer.legal_person_type == LegalPersonType.JURIDICA
+    # a withholding only for a real pessoa coletiva - never for the Consumidor final (NIF 999999999), whatever its type
+    customer_is_juridica = (customer is not None and customer.legal_person_type == LegalPersonType.JURIDICA
+                            and not customer.is_final_consumer)
 
     for line_input in lines_input:
         product_id = line_input.get("product_id")

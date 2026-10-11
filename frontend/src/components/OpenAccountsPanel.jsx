@@ -12,6 +12,8 @@ import { listServices } from '../api/services';
 import { listPaymentMethodPreferences } from '../api/tesouraria';
 import { listOpenAccounts, openAccount, getOpenAccount, listAccountLines, addAccountLine, updateAccountLineQuantity, updateAccountLineUnit, removeAccountLine, closeAccount, cancelOpenAccount, sendToKitchen, transferAccountLines } from '../api/openAccount';
 import { getPosStockLevels } from '../api/pos';
+import { withholdingTaxesApi } from '../api/catalogs';
+import { withholdingOf } from '../utils/withholding';
 import { extractErrorMessage } from '../utils/errors';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
@@ -82,6 +84,7 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
   const [closeCustomerId, setCloseCustomerId] = useState('');
   const [closePaymentTermId, setClosePaymentTermId] = useState('');
   const [closeDiscount, setCloseDiscount] = useState(0);
+  const [withholdingTaxes, setWithholdingTaxes] = useState([]);
   const [viewMode, setViewMode] = useState('accounts');
   const [tableStatuses, setTableStatuses] = useState([]);
   const [tablePicker, setTablePicker] = useState(null);
@@ -114,6 +117,7 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
     // the category chips of the catalogue - none shown if this role cannot read them
     listProductCategories().then((data) => setCategories(data.filter((c) => c.is_active !== false))).catch(() => {});
     listPaymentMethodPreferences().then(setPaymentMethods).catch(() => {});
+    withholdingTaxesApi.list().then(setWithholdingTaxes).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -317,6 +321,14 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
   const closeNeedsTerm = closeRule('requires_payment_term');
   const closeDiscountAmount = round2(detailTotal * (Number(closeDiscount) || 0) / 100);
   const closeTotal = round2(detailTotal - closeDiscountAmount);
+  // A company customer keeps the withholding of the services that carry one (and pays it to the AGT): the till
+  // collects the total minus it - exactly what the invoice will expect.
+  const closeCustomer = closeOptions?.customers?.find((c) => c.id === closeCustomerId) || null;
+  const closeRetention = withholdingOf(
+    detailLines.filter((l) => l.kitchen_status !== 'ANULADO').map((l) => ({ service_id: l.service_id, subtotal: l.line_subtotal })),
+    { services, withholdingTaxes, customer: closeCustomer },
+  );
+  const closeDue = round2(closeTotal - closeRetention);
 
   function openCloseModal() {
     setClosePayments([]);
@@ -341,7 +353,7 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
   }
 
   const closePaymentsSum = closePayments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
-  const closeRemaining = Math.round((closeTotal - closePaymentsSum) * 100) / 100;
+  const closeRemaining = Math.round((closeDue - closePaymentsSum) * 100) / 100;
 
   // An account opened by mistake: cancelled while empty - no fiscal document, the table is freed.
   async function handleCancelEmpty() {
@@ -923,6 +935,12 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
               {closeDiscountAmount > 0 && <span className="block text-[11px] text-text-muted font-normal">desconto {formatKz(closeDiscountAmount)} Kz</span>}
             </span>
           </div>
+          {closeRetention > 0 && (
+            <div className="flex flex-col gap-1 bg-bg-inset border border-border rounded-md px-4 py-3 text-[13px]">
+              <div className="flex justify-between"><span className="text-text-muted">Retenção na fonte (fica com o cliente)</span><span className="font-mono text-text-primary">- {formatKz(closeRetention)} Kz</span></div>
+              <div className="flex justify-between"><span className="text-text-primary font-semibold">A pagar</span><span className="font-mono font-semibold text-text-primary">{formatKz(closeDue)} Kz</span></div>
+            </div>
+          )}
           <div className="flex flex-col gap-1.5">
             {closePaidOnIssue && posPaymentMethods.map((m) => {
               const line = closePayments.find((p) => p.payment_method_id === m.id);

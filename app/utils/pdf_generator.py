@@ -158,7 +158,7 @@ def generate_invoice_pdf_thermal(invoice: dict, lines: list[dict], company: dict
     # Generous overestimate on purpose - raw canvas drawing has no auto-flow, and product
     # names / "Motivo" text wrap onto extra lines unpredictably, so a tight height risks
     # clipping the QR code / footer at the bottom (see the "8 100,00" example that clipped).
-    height = (150 + len(lines) * 16 + len(vat_groups) * 8) * mm + logo_extra
+    height = (150 + len(lines) * 16 + len(vat_groups) * 8 + (12 if invoice.get("observations") else 0)) * mm + logo_extra
 
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=(width, height))
@@ -229,6 +229,11 @@ def generate_invoice_pdf_thermal(invoice: dict, lines: list[dict], company: dict
     else:
         left("Cliente: Consumidor Final", size=7.5)
         y -= 3.2 * mm
+    # Observações (a hotel stay: guest, room and dates), wrapped to the ticket's width
+    if invoice.get("observations"):
+        for text_line in _wrap_to_width(c, "Obs.: " + str(invoice["observations"]), "Helvetica", 7, width - 2 * margin)[:4]:
+            left(text_line, size=7)
+            y -= 3 * mm
     y -= 1 * mm
 
     # --- Document type/number, date, attendant ---
@@ -741,8 +746,10 @@ def generate_factura_style_a4(invoice, lines, company, customer):
         y -= 4.5 * mm
         c.setFillColor(TEXT_PRIMARY)
         c.setFont("Helvetica", 7.5)
-        c.drawString(margin, y, str(invoice["observations"])[:100])
-        y -= 5 * mm
+        for text_line in _wrap_to_width(c, str(invoice["observations"]), "Helvetica", 7.5, left_w)[:3]:
+            c.drawString(margin, y, text_line)
+            y -= 3.8 * mm
+        y -= 1.2 * mm
 
     bank_accounts = company.get("bank_accounts") or []
     if bank_accounts:

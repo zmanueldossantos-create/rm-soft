@@ -48,6 +48,7 @@ from app.services.booking_service import (
 )
 from app.services.document_rules import default_paid_on_issue_type
 from app.services.pos_service import checkout
+from app.services.stay_text import stay_observation
 from app.services.resource_service import get_resource_or_raise
 from app.services.open_account_service import open_account, add_line, KITCHEN_CANCELLED
 
@@ -246,6 +247,7 @@ async def walk_in(
         db, company_id, pos.id, selling_user, customer_id,
         [{"product_id": None, "service_id": str(service.id), "quantity": 1.0, "sale_unit_id": None}],
         payments, invoice_type=await default_paid_on_issue_type(db), stay_sale=True,
+        observations=stay_observation(resource.name, starts_at, ends_at, _clean_guest_name(guest_name), party_size),
     )
     booking = Booking(
         company_id=company_id, resource_id=resource.id, customer_id=customer_id, service_id=service.id,

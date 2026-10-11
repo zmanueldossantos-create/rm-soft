@@ -291,10 +291,17 @@ async def close_account(
     if pos_id is not None and pos_id != account.pos_id:
         await _ensure_pos_of_activity(db, company_id, pos_id, account.activity_id)
         closing_pos_id = pos_id
+    observations = None
+    if account.booking_id is not None:  # a hotel stay: its FR tells who stayed, in which room, from when to when
+        from app.models.booking import Booking
+        from app.services.stay_text import stay_observation
+        stay = await db.get(Booking, account.booking_id)
+        if stay is not None:
+            observations = stay_observation(account.label, stay.starts_at, stay.ends_at, stay.guest_name, stay.party_size)
     invoice = await checkout(
         db, company_id, closing_pos_id, closing_user, customer_id or account.customer_id, lines_input, payments,
         invoice_type=invoice_type, discount_global_percent=discount_global_percent, payment_term_id=payment_term_id,
-        stay_sale=account.booking_id is not None,
+        stay_sale=account.booking_id is not None, observations=observations,
     )
     if customer_id is not None:
         account.customer_id = customer_id  # the customer the account was invoiced to

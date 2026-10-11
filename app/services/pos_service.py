@@ -70,8 +70,10 @@ async def checkout(
     bank_account_id: uuid.UUID | None = None,
     due_date=None,
     stay_sale: bool = False,
+    observations: str | None = None,
 ) -> Invoice:
     """
+    observations: the Observações of the document (a hotel stay: guest, room and dates - see stay_text).
     stay_sale: the sale of a room with its rate (hotel_service.walk_in, or a stay's account closed) - the only sales
     where a room rate may appear (see _ensure_no_stay_rate).
 
@@ -102,6 +104,7 @@ async def checkout(
         cash_session_id=session.id,
         payments=payments if payments else None,
         discount_global_percent=discount_global_percent,
+        observations=observations,
         payment_term_id=payment_term_id,
         payment_method_id=payment_method_id,
         bank_account_id=bank_account_id,

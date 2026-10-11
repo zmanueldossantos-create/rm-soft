@@ -51,6 +51,7 @@ async def test_a_passage_is_sold_then_occupies_the_room_for_its_duration(db, com
     assert float(invoice.total) == 5700.0
     assert booking.status == BookingStatus.EM_CURSO and booking.invoice_id == invoice.id
     assert booking.ends_at - booking.starts_at == timedelta(minutes=60)
+    assert invoice.observations.startswith("Hóspede: Passagem - Quarto 103 - ")  # who, which room, from when to when
     status = (await list_resource_statuses(db, ctx["company"].id, ctx["activity"].id))[0]
     assert status["status"] == "OCUPADA" and status["stay_overdue_minutes"] == 0
 
@@ -152,3 +153,54 @@ async def test_a_room_rate_is_never_sold_alone_in_the_cart(db, company_with_esse
     assert flags["PAS-1H"] is True
     await _enter(db, ctx, room, hour)  # the Entrada still sells it
     assert await _invoices(db, ctx) == 1
+
+
+@pytest.mark.asyncio
+async def test_a_company_keeps_the_withholding_of_a_room_rate_that_carries_one(db, company_with_essentials):
+    """A room rate with a withholding (6,5 %) sold to a pessoa coletiva: the till collects the total minus the
+    withholding (5 700 - 325 = 5 375) - the screens show it; asking for the whole total is refused."""
+    from app.models.customer import Customer, LegalPersonType
+    from app.models.withholding_tax import WithholdingTax
+    from app.services.invoice_service import PaymentAmountMismatchError
+    ctx = company_with_essentials
+    room, hour, _ = await _rooms(db, ctx)
+    tax = WithholdingTax(name="Retenção na fonte", rate=6.5, tax_type="II")
+    company = Customer(company_id=ctx["company"].id, name="Empresa Hóspede", nif="5000777888", legal_person_type=LegalPersonType.JURIDICA)
+    db.add_all([tax, company])
+    await db.flush()
+    hour.withholding_tax_id = tax.id
+    await db.commit()
+    with pytest.raises(PaymentAmountMismatchError):
+        await walk_in(db, ctx["company"].id, room.id, hour.id, ctx["gestor"], ctx["pos"].id,
+                      [{"payment_method_id": ctx["pm_numerario"].id, "amount": 5700.0}], customer_id=company.id)
+    booking, invoice = await walk_in(db, ctx["company"].id, room.id, hour.id, ctx["gestor"], ctx["pos"].id,
+                                     [{"payment_method_id": ctx["pm_numerario"].id, "amount": 5375.0}], customer_id=company.id)
+    assert float(invoice.total) == 5700.0 and float(invoice.retention_total) == 325.0
+
+
+@pytest.mark.asyncio
+async def test_the_final_consumer_never_has_a_withholding(db, company_with_essentials):
+    """A Consumidor final (NIF 999999999) is a private person: no withholding, even if it was recorded as a pessoa
+    coletiva by an old default - the whole total is cashed. A new final consumer is always recorded as singular."""
+    from app.models.customer import Customer, LegalPersonType
+    from app.models.withholding_tax import WithholdingTax
+    ctx = company_with_essentials
+    room, hour, _ = await _rooms(db, ctx)
+    tax = WithholdingTax(name="Retenção na fonte", rate=6.5, tax_type="II")
+    old = Customer(company_id=ctx["company"].id, name="Família Teste", nif="999999999", is_final_consumer=True,
+                   legal_person_type=LegalPersonType.JURIDICA)  # the old wrong default
+    db.add_all([tax, old])
+    await db.flush()
+    hour.withholding_tax_id = tax.id
+    await db.commit()
+    _, invoice = await walk_in(db, ctx["company"].id, room.id, hour.id, ctx["gestor"], ctx["pos"].id,
+                               [{"payment_method_id": ctx["pm_numerario"].id, "amount": 5700.0}], customer_id=old.id)
+    assert float(invoice.retention_total or 0) == 0.0
+
+
+@pytest.mark.asyncio
+async def test_a_new_final_consumer_is_recorded_as_a_private_person(db, company_with_essentials):
+    from app.models.customer import LegalPersonType
+    from app.services.customer_service import create_customer
+    new = await create_customer(db, company_with_essentials["company"].id, "Consumidor", "", is_final_consumer=True)
+    assert new.legal_person_type == LegalPersonType.FISICA and new.nif == "999999999"

@@ -80,6 +80,8 @@ async def create_customer(
 ) -> Customer:
     """Creates a customer within the caller's company."""
     effective_nif = FINAL_CONSUMER_NIF if is_final_consumer else nif
+    if is_final_consumer:  # a final consumer is a private person: never a pessoa coletiva (no withholding)
+        legal_person_type = "FISICA"
     await _check_nif_available(db, company_id, effective_nif)
 
     customer = Customer(
@@ -156,6 +158,8 @@ async def update_customer(
     """Updates a customer's editable fields, scoped to the caller's company."""
     customer = await get_customer_or_raise(db, company_id, customer_id)
     effective_nif = FINAL_CONSUMER_NIF if is_final_consumer else nif
+    if is_final_consumer:  # a final consumer is a private person: never a pessoa coletiva (no withholding)
+        legal_person_type = "FISICA"
     await _check_nif_available(db, company_id, effective_nif, exclude_id=customer_id)
 
     customer.name = name

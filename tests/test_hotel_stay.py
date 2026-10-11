@@ -115,6 +115,9 @@ async def test_paying_the_stay_at_the_till_concludes_the_booking(db, company_wit
                                   [{"payment_method_id": ctx["pm_numerario"].id, "amount": 28500.0}])  # 25 000 + 14 %
     await db.refresh(booking)
     assert account.invoice_id is not None
+    from app.models.invoice import Invoice
+    invoice = await db.get(Invoice, account.invoice_id)
+    assert invoice.observations.startswith("Quarto 101 - ")  # the room and the dates of the stay
     assert booking.status == BookingStatus.CONCLUIDA
     assert booking.checked_out_at is not None  # the real departure
 

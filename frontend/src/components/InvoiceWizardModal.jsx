@@ -17,6 +17,7 @@ import { extractErrorMessage } from '../utils/errors';
 
 import { dueDateFor, isProntoTerm } from '../utils/paymentTerms';
 import { useAuthStore } from '../store/authStore';
+import { isPessoaColetiva } from '../utils/customerType';
 
 const inputClass = "w-full bg-bg-inset border border-border rounded-md px-2.5 py-2 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors";
 
@@ -264,7 +265,8 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
   }, [withholdingTaxes]);
 
   const selectedCustomer = useMemo(() => customers.find((c) => c.id === customerId), [customers, customerId]);
-  const customerIsJuridica = selectedCustomer?.legal_person_type === 'JURIDICA';
+  // a withholding for a real pessoa coletiva only - never the Consumidor final (NIF 999999999)
+  const customerIsJuridica = isPessoaColetiva(selectedCustomer);
   const maxBusinessDate = company?.allows_future_sale_date ? null : todayStr();
 
   const documentPreview = useMemo(() => {
