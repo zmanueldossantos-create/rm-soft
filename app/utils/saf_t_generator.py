@@ -158,6 +158,14 @@ def generate_saf_t_xml(
     receipts = [inv for inv in invoices if _section(inv) == "PAYMENTS" and inv.get("reference_invoice_no")]
     # SalesInvoices also needs the SAF-T InvoiceType code (FT, FR, NC, ND) of the stored type.
     invoices = [inv for inv in invoices if _section(inv) == "INVOICES" and inv["invoice_type"] in INVOICE_TYPE_MAP]
+    # Each section lists its documents in their numbering order - by type, series, then number (FR FR2026/1, /2,
+    # ... /10) - whatever order they were read in: a sequence must read as a sequence for the AGT.
+    def _numbering(inv):
+        return (INVOICE_TYPE_MAP.get(inv["invoice_type"], inv["invoice_type"]), str(inv["series"]), int(inv["number"]))
+
+    invoices.sort(key=_numbering)
+    working_docs.sort(key=_numbering)
+    receipts.sort(key=_numbering)
 
     root = etree.Element(_q("AuditFile"), nsmap=NSMAP)
 

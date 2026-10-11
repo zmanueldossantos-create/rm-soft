@@ -105,13 +105,13 @@ async def export_saf_t_for_period(db: AsyncSession, company_id: uuid.UUID, year:
     )
     customers = customers_result.scalars().all()
 
-    products_result = await db.execute(select(Product).where(Product.company_id == company_id))
+    products_result = await db.execute(select(Product).where(Product.company_id == company_id).order_by(Product.code))
     products = products_result.scalars().all()
 
     # Services are sellable articles too: a service line has no product_id, so it used to be exported with
     # ProductCode "N/A" - which matches no MasterFiles/Product (XSD keyref InvoiceProductCodeConstraint) -
     # and the service itself never reached MasterFiles.
-    services_result = await db.execute(select(Service).where(Service.company_id == company_id))
+    services_result = await db.execute(select(Service).where(Service.company_id == company_id).order_by(Service.code))
     services = services_result.scalars().all()
     product_code_by_id = {p.id: p.code for p in products}
     service_code_by_id = {s.id: s.code for s in services}
@@ -124,7 +124,7 @@ async def export_saf_t_for_period(db: AsyncSession, company_id: uuid.UUID, year:
             Invoice.company_id == company_id,
             Invoice.business_date >= start_date,
             Invoice.business_date <= end_date,
-        )
+        ).order_by(Invoice.invoice_type, Invoice.series, Invoice.number)  # the generator sorts each section too
     )
     invoices = invoices_result.scalars().all()
 
@@ -141,7 +141,7 @@ async def export_saf_t_for_period(db: AsyncSession, company_id: uuid.UUID, year:
     invoices_data = []
     for inv in invoices:
         receipt_extra = await _receipt_extras(db, inv) if inv.invoice_type.value == "RECIBO" else {}
-        lines_result = await db.execute(select(InvoiceLine).where(InvoiceLine.invoice_id == inv.id))
+        lines_result = await db.execute(select(InvoiceLine).where(InvoiceLine.invoice_id == inv.id).order_by(InvoiceLine.created_at, InvoiceLine.id))
         lines = lines_result.scalars().all()
 
         invoices_data.append({
@@ -203,6 +203,7 @@ async def export_saf_t_for_period(db: AsyncSession, company_id: uuid.UUID, year:
     products_data = [{"code": p.code, "name": p.name, "product_type": p.product_type.value} for p in products]
     known_codes = {d["code"] for d in products_data}
     products_data += [{"code": s.code, "name": s.name, "product_type": "SERVICO"} for s in services if s.code not in known_codes]
+    products_data.sort(key=lambda d: d["code"])  # MasterFiles in code order, products and services together (as the AGT-validated exports)
     vat_data = [{"name": v.name, "rate": float(v.rate), "tax_code": v.tax_category} for v in vat_rates]
 
     # An invoice issued from a pro-forma names it (OrderReferences): the pro-forma keeps the link (converted_to_invoice_id).
