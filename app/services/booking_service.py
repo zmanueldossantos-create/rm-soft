@@ -135,10 +135,21 @@ async def list_bookings(
     return list(result.scalars().all())
 
 
+async def _has_open_stay_account(db: AsyncSession, booking_id: uuid.UUID) -> bool:
+    """A stay in progress keeps an open account: only paying it at the till (or the check-out of a stay with
+    nothing to pay) may end the booking - a manual status change would free the room with the bill unpaid."""
+    from app.models.open_account import OpenAccount, OpenAccountStatus
+    return (await db.execute(
+        select(OpenAccount.id).where(OpenAccount.booking_id == booking_id, OpenAccount.status == OpenAccountStatus.ABERTA).limit(1)
+    )).first() is not None
+
+
 async def update_booking_status(
     db: AsyncSession, company_id: uuid.UUID, booking_id: uuid.UUID, new_status: BookingStatus,
 ) -> Booking:
     booking = await get_booking_or_raise(db, company_id, booking_id)
+    if await _has_open_stay_account(db, booking.id):
+        raise BookingNotEditableError("Esta reserva tem uma estadia em curso com conta aberta - o check-out faz-se na Caixa, com o pagamento")
     booking.status = new_status
     await db.commit()
     await db.refresh(booking)

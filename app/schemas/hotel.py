@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 
 from pydantic import BaseModel
 
@@ -11,12 +12,9 @@ class CheckInResponse(BaseModel):
     account: OpenAccountResponse
 
 
-class CheckOutPaymentInput(BaseModel):
-    payment_method_id: uuid.UUID
-    amount: float
-
-
-from datetime import datetime
+class StayExtendRequest(BaseModel):
+    """The new end of a stay in progress (later to stay longer, earlier to leave sooner)."""
+    ends_at: datetime
 
 
 class OccupancyHistoryEntry(BaseModel):
@@ -29,7 +27,3 @@ class OccupancyHistoryEntry(BaseModel):
     invoice_series: str | None
     invoice_number: int | None
     invoice_total: float | None
-
-
-class CheckOutRequest(BaseModel):
-    payments: list[CheckOutPaymentInput] = []

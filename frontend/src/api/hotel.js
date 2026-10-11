@@ -6,8 +6,15 @@ export async function checkIn(bookingId, posId = null) {
   return res.data;
 }
 
-export async function checkOut(bookingId, payments = []) {
-  const res = await apiClient.post('/hotel/bookings/' + bookingId + '/check-out', { payments });
+// Only a stay with nothing left to pay: a stay with articles is paid at the till (closing its account concludes it).
+export async function checkOut(bookingId) {
+  const res = await apiClient.post('/hotel/bookings/' + bookingId + '/check-out');
+  return res.data;
+}
+
+// New end of a stay in progress - the room-rate line of its account follows.
+export async function extendStay(bookingId, endsAt) {
+  const res = await apiClient.post('/hotel/bookings/' + bookingId + '/extend', { ends_at: endsAt });
   return res.data;
 }
 

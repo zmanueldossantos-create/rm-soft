@@ -8,37 +8,48 @@ check-out), glued together here rather than as a third generic concept.
 
 check_in: transitions the Booking to EM_CURSO, opens an OpenAccount for the
 room (labeled with the room's name) linked back to the booking via
-OpenAccount.booking_id, and - if the booking has a service (the nightly rate,
-e.g. "Diaria Quarto Standard") - adds one line for that rate multiplied by the
-number of nights, so the guest's bill already reflects the room charge before
-any extras are added.
+OpenAccount.booking_id, and - if the booking has a service (the rate, e.g.
+"Diaria Quarto Standard" or "Quarto 1 hora") - adds one line for that rate,
+charged as many times as the stay lasts (see _stay_quantity), so the guest's
+bill already reflects the room charge before any extras are added.
 
-check_out: closes the OpenAccount (via open_account_service.close_account,
-producing the consolidated invoice - room charge + all extras, in the exact
-same pipeline as every other sale) and marks the Booking CONCLUIDA.
+The money of a stay is cashed at the till, never here: closing the stay's
+account (open_account_service.close_account, the same pipeline as every other
+sale) concludes the booking. check_out only ends a stay with nothing left to
+pay (an account without articles, or none at all).
+
+extend_stay: moves the end of a stay in progress (the guest stays longer, or
+leaves earlier) and recomputes the room-rate line of its account.
 
 Room status (Livre/Ocupado) is deliberately NOT stored anywhere - it's derived
 on demand from whether a resource currently has an EM_CURSO booking, computed
 by whoever renders the room list (avoids a second source of truth to keep in
 sync with Booking.status).
 """
+import math
 import uuid
-from datetime import datetime, date
+from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.booking import Booking, BookingStatus
 from app.models.open_account import OpenAccount, OpenAccountStatus
+from app.models.open_account_line import OpenAccountLine
 from app.models.point_of_sale import PointOfSale
 from app.models.cash_session import CashSession, CashSessionStatus
 from app.models.service import Service
 from app.models.resource import Resource
 from app.models.customer import Customer
 from app.models.invoice import Invoice
-from app.services.booking_service import get_booking_or_raise
+from app.services.booking_service import (
+    get_booking_or_raise, _has_overlap, BookingOverlapError, InvalidBookingRangeError,
+)
 from app.services.resource_service import get_resource_or_raise
-from app.services.open_account_service import open_account, add_line, close_account
+from app.services.open_account_service import open_account, add_line, KITCHEN_CANCELLED
+
+# Angola has a single time zone, UTC+1, without daylight saving: a night is counted on Luanda's calendar.
+LUANDA = timezone(timedelta(hours=1))
 
 
 class NoDefaultPosError(Exception):
@@ -53,9 +64,34 @@ class AlreadyCheckedInError(Exception):
     pass
 
 
+class InvalidStayStateError(Exception):
+    """The booking is not in the state the action needs (check-in of a cancelled booking, check-out of a stay
+    that never started...)."""
+
+
+class StayHasUnpaidAccountError(Exception):
+    """The stay's account still holds articles: it is paid at the till, which concludes the booking."""
+
+
 def _nights_between(starts_at: datetime, ends_at: datetime) -> int:
-    nights = (ends_at.date() - starts_at.date()).days
+    """Nights between two moments, on Luanda's calendar - at least one (a short stay is charged one night)."""
+    nights = (ends_at.astimezone(LUANDA).date() - starts_at.astimezone(LUANDA).date()).days
     return max(nights, 1)
+
+
+def _stay_quantity(service: Service, starts_at: datetime, ends_at: datetime) -> int:
+    """How many times the booked rate is charged: a timed rate ("Quarto 1 hora", duration 60 min) once per started
+    slice of its duration - 2h30 on a 1-hour rate is 3; a rate without duration (the night) once per night."""
+    if service.duration_minutes:
+        minutes = (ends_at - starts_at).total_seconds() / 60
+        return max(math.ceil(minutes / service.duration_minutes - 1e-9), 1)
+    return _nights_between(starts_at, ends_at)
+
+
+async def _open_stay_account(db: AsyncSession, booking_id: uuid.UUID) -> OpenAccount | None:
+    return (await db.execute(
+        select(OpenAccount).where(OpenAccount.booking_id == booking_id, OpenAccount.status == OpenAccountStatus.ABERTA)
+    )).scalar_one_or_none()
 
 
 async def check_in(
@@ -71,7 +107,9 @@ async def check_in(
     """
     booking = await get_booking_or_raise(db, company_id, booking_id)
     if booking.status == BookingStatus.EM_CURSO:
-        raise AlreadyCheckedInError("Esta reserva ja tem check-in efetuado")
+        raise AlreadyCheckedInError("Esta reserva já tem check-in efetuado")
+    if booking.status not in (BookingStatus.PENDENTE, BookingStatus.CONFIRMADA):
+        raise InvalidStayStateError("Só uma reserva pendente ou confirmada pode fazer check-in")
 
     resource = await get_resource_or_raise(db, company_id, booking.resource_id)
 
@@ -81,7 +119,7 @@ async def check_in(
         )
         pos = pos_result.scalar_one_or_none()
         if pos is None:
-            raise NoDefaultPosError("Ponto de venda nao encontrado para esta atividade")
+            raise NoDefaultPosError("Ponto de venda não encontrado para esta atividade")
     else:
         # No explicit pos_id - find whichever of this activity's POS currently has
         # an open cash session (normal case: one cashier active at a time), rather
@@ -104,7 +142,7 @@ async def check_in(
             )
             pos = default_result.scalar_one_or_none()
             if pos is None:
-                raise NoDefaultPosError("Ponto de venda nao encontrado para esta atividade")
+                raise NoDefaultPosError("Ponto de venda não encontrado para esta atividade")
 
     account = await open_account(
         db, company_id, resource.activity_id, pos.id, checking_in_user.id,
@@ -118,8 +156,8 @@ async def check_in(
         service_result = await db.execute(select(Service).where(Service.id == booking.service_id))
         service = service_result.scalar_one_or_none()
         if service is not None and service.price is not None:
-            nights = _nights_between(booking.starts_at, booking.ends_at)
-            await add_line(db, company_id, account.id, checking_in_user.id, quantity=nights, service_id=service.id)
+            quantity = _stay_quantity(service, booking.starts_at, booking.ends_at)
+            await add_line(db, company_id, account.id, checking_in_user.id, quantity=quantity, service_id=service.id)
 
     booking.status = BookingStatus.EM_CURSO
     await db.commit()
@@ -129,19 +167,56 @@ async def check_in(
     return booking, account
 
 
-async def check_out(
-    db: AsyncSession, company_id: uuid.UUID, booking_id: uuid.UUID, checking_out_user: "User", payments: list[dict],
-) -> Booking:
+async def check_out(db: AsyncSession, company_id: uuid.UUID, booking_id: uuid.UUID) -> Booking:
+    """Ends a stay with nothing left to pay. A stay whose account holds articles is paid at the till - closing
+    that account concludes the booking (open_account_service.close_account) - so it is refused here: no money
+    ever leaves this path without a payment. An account without articles is closed without any document."""
     booking = await get_booking_or_raise(db, company_id, booking_id)
+    if booking.status != BookingStatus.EM_CURSO:
+        raise InvalidStayStateError("Esta reserva não está em curso")
 
-    account_result = await db.execute(
-        select(OpenAccount).where(OpenAccount.booking_id == booking_id, OpenAccount.status == OpenAccountStatus.ABERTA)
-    )
-    account = account_result.scalar_one_or_none()
+    account = await _open_stay_account(db, booking.id)
     if account is not None:
-        await close_account(db, company_id, account.id, checking_out_user, payments)
+        articles = (await db.execute(
+            select(func.count()).select_from(OpenAccountLine).where(
+                OpenAccountLine.account_id == account.id, OpenAccountLine.kitchen_status.is_distinct_from(KITCHEN_CANCELLED),
+            )
+        )).scalar_one()
+        if articles:
+            raise StayHasUnpaidAccountError("A estadia tem uma conta por pagar - o check-out faz-se na Caixa, com o pagamento")
+        account.status = OpenAccountStatus.FECHADA
+        account.closed_at = func.now()
 
     booking.status = BookingStatus.CONCLUIDA
+    await db.commit()
+    await db.refresh(booking)
+    return booking
+
+
+async def extend_stay(db: AsyncSession, company_id: uuid.UUID, booking_id: uuid.UUID, ends_at: datetime) -> Booking:
+    """Moves the end of a stay in progress - the guest stays longer, or leaves earlier - and recomputes the
+    room-rate line of its account with the same rule as at check-in, so the bill always matches the stay.
+    (reschedule_booking refuses a stay in progress: it would change the dates without the bill.)"""
+    booking = await get_booking_or_raise(db, company_id, booking_id)
+    if booking.status != BookingStatus.EM_CURSO:
+        raise InvalidStayStateError("Só uma estadia em curso pode ser prolongada")
+    if ends_at <= booking.starts_at:
+        raise InvalidBookingRangeError("A data/hora de fim deve ser posterior ao início")
+    if await _has_overlap(db, booking.resource_id, booking.starts_at, ends_at, exclude_booking_id=booking.id):
+        raise BookingOverlapError("Este recurso já tem uma reserva neste período")
+
+    booking.ends_at = ends_at
+    account = await _open_stay_account(db, booking.id)
+    if account is not None and booking.service_id is not None:
+        service = (await db.execute(select(Service).where(Service.id == booking.service_id))).scalar_one_or_none()
+        line = (await db.execute(
+            select(OpenAccountLine).where(
+                OpenAccountLine.account_id == account.id, OpenAccountLine.service_id == booking.service_id,
+            ).order_by(OpenAccountLine.added_at).limit(1)
+        )).scalars().first()
+        if service is not None and line is not None:
+            line.quantity = _stay_quantity(service, booking.starts_at, ends_at)
+
     await db.commit()
     await db.refresh(booking)
     return booking

@@ -261,6 +261,12 @@ async def close_account(
     account.pos_id = closing_pos_id  # the till that cashed it
     from sqlalchemy import func as sa_func
     account.closed_at = sa_func.now()
+    if account.booking_id is not None:
+        # A hotel stay is paid here, at the till: the guest has settled, the stay is over and the room is free.
+        from app.models.booking import Booking, BookingStatus
+        booking = await db.get(Booking, account.booking_id)
+        if booking is not None and booking.status == BookingStatus.EM_CURSO:
+            booking.status = BookingStatus.CONCLUIDA
     await db.commit()
     await db.refresh(account)
     return account

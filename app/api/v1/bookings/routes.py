@@ -186,6 +186,8 @@ async def patch_booking_status(
         return await update_booking_status(db, current_user.company_id, booking_id, new_status)
     except BookingNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BookingNotEditableError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
 
 
 @router.patch("/bookings/{booking_id}/reschedule", response_model=BookingResponse)
