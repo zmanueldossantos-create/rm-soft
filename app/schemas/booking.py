@@ -135,6 +135,8 @@ class BookingResponse(BaseModel):
     party_size: int | None = None
     created_by_user_id: uuid.UUID
     created_at: datetime
+    invoice_id: uuid.UUID | None = None  # a prepaid passage: its invoice
+    checked_out_at: datetime | None = None
     # a stay in progress: its open account and what it will cost (listing only)
     stay_account_id: uuid.UUID | None = None
     stay_account_total: float | None = None
@@ -158,3 +160,5 @@ class ResourceStatusResponse(BaseModel):
     booking_status: str | None
     booking_guest_name: str | None = None
     booking_party_size: int | None = None
+    stay_ends_at: datetime | None = None  # a stay in progress: its planned end
+    stay_overdue_minutes: int = 0  # ... and how far beyond it

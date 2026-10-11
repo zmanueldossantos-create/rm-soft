@@ -1,13 +1,16 @@
 import { useState, useEffect } from 'react';
 import DateInput from '../components/DateInput';
-import { CalendarClock, Plus, Loader2, X, CheckCircle2, Pencil, ChevronLeft, ChevronRight } from 'lucide-react';
+import { CalendarClock, Plus, Loader2, X, CheckCircle2, Pencil, ChevronLeft, ChevronRight, DoorOpen } from 'lucide-react';
 import { useCan } from '../utils/permissions';
 import { listActivities } from '../api/activity';
 import { listResources, listBookings, createBooking, updateBookingStatus, rescheduleBooking } from '../api/booking';
 import { listPointsOfSale } from '../api/activity';
 import { listResourceTypes } from '../api/booking';
 import { listCustomers, createCustomer } from '../api/customers';
-import { checkIn, checkOut, extendStay } from '../api/hotel';
+import { checkIn, checkOut, extendStay, walkIn } from '../api/hotel';
+import { listResourceStatuses } from '../api/booking';
+import { listPaymentMethodPreferences } from '../api/tesouraria';
+import { listVatRates } from '../api/vat';
 import { formatKz } from '../utils/format';
 import { listServices } from '../api/services';
 import { extractErrorMessage } from '../utils/errors';
@@ -95,8 +98,18 @@ export default function Reservas() {
 
 // onPayStay(accountId): in the till, the check-out of a stay with something to pay - the till opens its account for
 // the payment (closing it concludes the stay). Without it (the manager's page) that check-out is done at the till.
-export function ReservasPanel({ posId = null, activityId = null, onPayStay = null }) {
+// onSale(invoiceId): in the till, a passage sold at the entry - the till shows and prints its document.
+export function ReservasPanel({ posId = null, activityId = null, onPayStay = null, onSale = null }) {
   const embedded = !!posId;
+  // Entrada: a prepaid passage (hotel_service.walk_in) - a free room, a timed service, paid now at this till.
+  const [walkInOpen, setWalkInOpen] = useState(false);
+  const [walkInForm, setWalkInForm] = useState({ resourceId: '', serviceId: '', customerId: '', guestName: '', partySize: '' });
+  const [walkInRooms, setWalkInRooms] = useState([]);
+  const [walkInMethods, setWalkInMethods] = useState([]);
+  const [walkInPayments, setWalkInPayments] = useState({});
+  const [vatRates, setVatRates] = useState([]);
+  const [walkInError, setWalkInError] = useState('');
+  const [walkInSaving, setWalkInSaving] = useState(false);
   const [extendBooking, setExtendBooking] = useState(null);
   const [extendForm, setExtendForm] = useState({ date: '', time: '' });
   const [extendError, setExtendError] = useState('');
@@ -464,6 +477,87 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
     }
   }
 
+  async function openWalkIn() {
+    setWalkInForm({ resourceId: '', serviceId: '', customerId: '', guestName: '', partySize: '' });
+    setWalkInPayments({});
+    setWalkInError('');
+    setWalkInOpen(true);
+    try {
+      const [statuses, methods, rates] = await Promise.all([
+        listResourceStatuses(selectedActivityId), listPaymentMethodPreferences(), listVatRates(),
+      ]);
+      setWalkInRooms(statuses.filter((s) => s.status === 'LIVRE'));
+      setWalkInMethods(methods.filter((m) => m.available_at_pos && m.allows_receipt));
+      setVatRates(rates);
+    } catch (err) {
+      setWalkInError(extractErrorMessage(err, 'Erro ao carregar os quartos livres'));
+    }
+  }
+
+  // the timed services of the chosen room's type (a night is a booking, not a passage)
+  const walkInRoom = resources.find((r) => r.id === walkInForm.resourceId);
+  const walkInServices = services.filter((s) => s.duration_minutes && (!s.resource_type_id || s.resource_type_id === walkInRoom?.resource_type_id));
+  const walkInService = services.find((s) => s.id === walkInForm.serviceId);
+  // the price before VAT, plus its rate - rounded as the invoice does (create_invoice)
+  const walkInTotal = (() => {
+    if (!walkInService) return 0;
+    const subtotal = Math.round(Number(walkInService.price || 0) * 100) / 100;
+    const rate = Number(vatRates.find((v) => v.id === walkInService.vat_id)?.rate || 0);
+    return Math.round((subtotal + Math.round(subtotal * rate) / 100) * 100) / 100;
+  })();
+  const walkInPaid = Object.values(walkInPayments).reduce((sum, v) => sum + (Number(v) || 0), 0);
+  const walkInRemaining = Math.round((walkInTotal - walkInPaid) * 100) / 100;
+
+  // As in the till's Fechar conta: nothing chosen for the reception - ticking a method puts the rest on it.
+  function chooseWalkInService(serviceId) {
+    setWalkInForm((p) => ({ ...p, serviceId }));
+    setWalkInPayments({});
+  }
+
+  function toggleWalkInPayment(methodId) {
+    setWalkInPayments((prev) => {
+      if (methodId in prev) {
+        const next = { ...prev };
+        delete next[methodId];
+        return next;
+      }
+      const paid = Object.values(prev).reduce((sum, v) => sum + (Number(v) || 0), 0);
+      return { ...prev, [methodId]: Math.max(Math.round((walkInTotal - paid) * 100) / 100, 0) };
+    });
+  }
+
+  async function handleWalkInSubmit(e) {
+    e.preventDefault();
+    if (!walkInForm.resourceId || !walkInForm.serviceId) {
+      setWalkInError('Escolha o quarto e o serviço');
+      return;
+    }
+    if (Math.abs(walkInPaid - walkInTotal) > 0.009) {
+      setWalkInError('O pagamento (' + formatKz(walkInPaid) + ' Kz) deve ser igual ao total (' + formatKz(walkInTotal) + ' Kz)');
+      return;
+    }
+    setWalkInSaving(true);
+    setWalkInError('');
+    try {
+      const result = await walkIn({
+        resource_id: walkInForm.resourceId,
+        service_id: walkInForm.serviceId,
+        pos_id: posId,
+        payments: Object.entries(walkInPayments).filter(([, v]) => Number(v) > 0).map(([id, v]) => ({ payment_method_id: id, amount: Number(v) })),
+        customer_id: walkInForm.customerId || null,  // none: Consumidor final
+        guest_name: walkInForm.guestName.trim() || null,
+        party_size: walkInForm.partySize ? parseInt(walkInForm.partySize, 10) : null,
+      });
+      setWalkInOpen(false);
+      await loadBookings();
+      if (onSale) await onSale(result.invoice_id);
+    } catch (err) {
+      setWalkInError(extractErrorMessage(err, 'Erro ao registar a entrada'));
+    } finally {
+      setWalkInSaving(false);
+    }
+  }
+
   function openCustomerModal() {
     setCustomerForm({ name: '', phoneNumber: '', nif: '' });
     setCustomerFormError('');
@@ -482,7 +576,8 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
         is_final_consumer: !customerForm.nif,
       });
       setCustomers((prev) => [...prev, created]);
-      setForm((p) => ({ ...p, customerId: created.id }));
+      if (walkInOpen) setWalkInForm((p) => ({ ...p, customerId: created.id }));
+      else setForm((p) => ({ ...p, customerId: created.id }));
       setCustomerModalOpen(false);
     } catch (err) {
       setCustomerFormError(extractErrorMessage(err, 'Erro ao criar cliente'));
@@ -709,10 +804,21 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
           Reservas
         </h2>
         )}
+        {embedded && (
+          <button
+            onClick={openWalkIn}
+            disabled={resources.length === 0 || !can('hotel:checkin')}
+            title="Passagem paga já: quarto livre, serviço com duração"
+            className="ml-auto flex items-center gap-2 border border-accent text-accent hover:bg-accent/10 disabled:opacity-50 font-medium text-sm px-4 py-2 rounded-md transition-colors cursor-pointer"
+          >
+            <DoorOpen size={16} />
+            Entrada
+          </button>
+        )}
         <button
           onClick={openCreateForm}
           disabled={resources.length === 0 || !can('bookings:create')}
-          className="ml-auto flex items-center gap-2 bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-medium text-sm px-4 py-2 rounded-md transition-colors cursor-pointer"
+          className={(embedded ? '' : 'ml-auto ') + 'flex items-center gap-2 bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-medium text-sm px-4 py-2 rounded-md transition-colors cursor-pointer'}
         >
           <Plus size={16} />
           Nova reserva
@@ -800,6 +906,9 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
               <div>
                 <p className="text-text-primary font-medium text-sm">{resourceName(b.resource_id)}</p>
                 <p className="text-text-muted text-[12px] font-mono mt-0.5">{formatDateTime(b.starts_at)} - {formatDateTime(b.ends_at)}</p>
+                {b.status === 'EM_CURSO' && new Date(b.ends_at) < new Date() && (
+                  <p className="text-danger text-[12px] font-semibold mt-0.5">Excedido {Math.floor((Date.now() - new Date(b.ends_at).getTime()) / 60000)} min</p>
+                )}
                 {(b.guest_name || b.party_size) && (
                   <p className="text-text-primary text-[12px] mt-0.5">{b.guest_name}{b.party_size ? (b.guest_name ? ' - ' : '') + b.party_size + ' pax' : ''}</p>
                 )}
@@ -841,7 +950,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
                         className="flex items-center gap-1.5 bg-accent hover:bg-accent-hover text-white text-[12px] font-medium px-3 py-1.5 rounded-md transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         <CheckCircle2 size={13} />
-                        Check-out
+                        {b.invoice_id ? 'Saída' : 'Check-out'}
                       </button>
                     )}
                   </>
@@ -880,6 +989,86 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
           ))}
         </div>
       )}
+
+      <Modal open={walkInOpen} onClose={() => setWalkInOpen(false)} title="Entrada - passagem paga" maxWidthClass="max-w-xl">
+        <form onSubmit={handleWalkInSubmit} className="flex flex-col gap-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Quarto livre *</label>
+              <Select
+                value={walkInForm.resourceId}
+                onChange={(v) => { setWalkInForm((p) => ({ ...p, resourceId: v, serviceId: '' })); setWalkInPayments({}); }}
+                options={walkInRooms.map((r) => ({ value: r.resource_id, label: r.name }))}
+                placeholder={walkInRooms.length ? 'Selecionar' : 'Nenhum quarto livre'}
+              />
+            </div>
+            <div>
+              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Serviço *</label>
+              <Select
+                value={walkInForm.serviceId}
+                onChange={chooseWalkInService}
+                options={walkInServices.map((s) => ({ value: s.id, label: s.name + ' (' + s.duration_minutes + ' min)' }))}
+                placeholder={walkInForm.resourceId ? 'Selecionar' : 'Escolha o quarto'}
+              />
+            </div>
+          </div>
+          <div>
+            <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Cliente da fatura (opcional - sem cliente: Consumidor final)</label>
+            <div className="flex items-center gap-1.5">
+              <div className="flex-1">
+                <Select
+                  value={walkInForm.customerId}
+                  onChange={(v) => setWalkInForm((p) => ({ ...p, customerId: v }))}
+                  options={[{ value: '', label: 'Consumidor final' }, ...customers.map((c) => ({ value: c.id, label: c.name + (c.nif ? ' - NIF ' + c.nif : '') }))]}
+                  placeholder="Consumidor final"
+                />
+              </div>
+              <button type="button" onClick={openCustomerModal} disabled={!can('customers:create')} title="Novo cliente (nome e NIF)" className="flex items-center justify-center w-10 h-10 rounded-md border border-border text-text-muted hover:text-accent hover:border-accent transition-colors cursor-pointer shrink-0 disabled:opacity-40 disabled:cursor-not-allowed">
+                <Plus size={15} />
+              </button>
+            </div>
+          </div>
+          <div className="grid grid-cols-4 gap-3">
+            <div className="col-span-3">
+              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Nome do hóspede (opcional)</label>
+              <input value={walkInForm.guestName} onChange={(e) => setWalkInForm((p) => ({ ...p, guestName: e.target.value }))} maxLength={150} className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
+            </div>
+            <div>
+              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">N.º de pessoas</label>
+              <input type="number" min="1" step="1" value={walkInForm.partySize} onChange={(e) => setWalkInForm((p) => ({ ...p, partySize: e.target.value }))} className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
+            </div>
+          </div>
+          {walkInService && (
+            <div className="bg-bg-inset border border-border rounded-md p-3.5 flex flex-col gap-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-text-muted text-[13px]">Total a pagar (IVA incluído) - até {new Date(Date.now() + walkInService.duration_minutes * 60000).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Luanda' })}</span>
+                <span className="font-mono text-text-primary font-semibold">{formatKz(walkInTotal)} Kz</span>
+              </div>
+              {walkInMethods.map((m) => (
+                <div key={m.id} className="flex items-center justify-between gap-3">
+                  <label className="flex items-center gap-2 flex-1 cursor-pointer select-none">
+                    <input type="checkbox" checked={m.id in walkInPayments} onChange={() => toggleWalkInPayment(m.id)} className="w-4 h-4 accent-accent cursor-pointer" />
+                    <span className="text-[13px] text-text-primary">{m.short_label || m.name}</span>
+                  </label>
+                  {m.id in walkInPayments && (
+                    <input type="number" min="0" step="0.01" value={walkInPayments[m.id]} onChange={(e) => setWalkInPayments((p) => ({ ...p, [m.id]: e.target.value }))} className="w-36 bg-bg-elevated border border-border rounded-md px-3 py-2 text-sm text-right font-mono text-text-primary outline-none focus:border-accent transition-colors" />
+                  )}
+                </div>
+              ))}
+              <div className={'text-[12px] px-3 py-2 rounded-r border-l-2 ' + (walkInRemaining === 0 ? 'bg-success/10 border-success text-success' : walkInRemaining > 0 ? 'bg-accent/10 border-accent text-accent' : 'bg-danger/10 border-danger text-danger')}>
+                {walkInRemaining === 0 ? 'Valor exato' : walkInRemaining > 0 ? `Falta ${formatKz(walkInRemaining)} Kz` : `Excede em ${formatKz(Math.abs(walkInRemaining))} Kz`}
+              </div>
+            </div>
+          )}
+          {walkInError && (
+            <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{walkInError}</div>
+          )}
+          <button type="submit" disabled={walkInSaving || !walkInService || walkInTotal <= 0 || walkInRemaining !== 0} className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer">
+            {walkInSaving ? <Loader2 size={17} className="animate-spin" /> : <DoorOpen size={17} />}
+            {walkInSaving ? 'A registar...' : 'Receber e dar entrada'}
+          </button>
+        </form>
+      </Modal>
 
       <Modal open={!!extendBooking} onClose={() => setExtendBooking(null)} title={'Prolongar estadia' + (extendBooking ? ' - ' + resourceName(extendBooking.resource_id) : '')} maxWidthClass="max-w-md">
         {extendBooking && (

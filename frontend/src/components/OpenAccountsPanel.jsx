@@ -499,8 +499,9 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
   const filteredProducts = products.filter((p) => (!itemCategory || p.category_id === itemCategory) && (!searchText
     || p.name.toLowerCase().includes(searchText) || (p.code || '').toLowerCase().includes(searchText)
     || (p.barcode || '').includes(searchText) || (p.sale_units || []).some((u) => (u.barcode || '').includes(searchText))));
-  const filteredServices = services.filter((s) => !searchText || s.name.toLowerCase().includes(searchText)
-    || (s.code || '').toLowerCase().includes(searchText));
+  // a room rate goes on a stay's account only (hotel check-in); a table's or counter's account never offers it
+  const filteredServices = services.filter((s) => (!s.is_stay_rate || detailAccount?.booking_id) && (!searchText || s.name.toLowerCase().includes(searchText)
+    || (s.code || '').toLowerCase().includes(searchText)));
   const usedCategories = categories.filter((c) => products.some((p) => p.category_id === c.id));
 
   return (
@@ -615,6 +616,11 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
                 )}
                 {tb.status === 'OCUPADA' && tb.opened_at && (
                   <p className="text-text-muted text-[11px] font-mono">desde {formatTime(tb.opened_at)}</p>
+                )}
+                {tb.stay_ends_at && (
+                  tb.stay_overdue_minutes > 0
+                    ? <p className="text-danger text-[11px] font-semibold mt-1">Excedido {tb.stay_overdue_minutes} min</p>
+                    : <p className="text-text-muted text-[11px] font-mono mt-1">até {formatTime(tb.stay_ends_at)}</p>
                 )}
                 {tb.ready_dishes > 0 && (
                   <p className="text-success text-[11px] font-semibold mt-1">{tb.ready_dishes} prato(s) pronto(s)</p>

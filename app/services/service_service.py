@@ -96,8 +96,15 @@ async def list_services(db: AsyncSession, company_id: uuid.UUID) -> list[Service
     codes = dict((await db.execute(
         select(UnitOfMeasureCatalog.id, UnitOfMeasureCatalog.code).where(UnitOfMeasureCatalog.id.in_(unit_ids))
     )).all()) if unit_ids else {}
+    # A room rate (its resource type requires a service) is sold with its room only: the Caixa keeps it out of the cart.
+    from app.models.resource_type_catalog import ResourceTypeCatalog
+    type_ids = {a.resource_type_id for a in services if a.resource_type_id}
+    stay_types = set((await db.execute(
+        select(ResourceTypeCatalog.id).where(ResourceTypeCatalog.id.in_(type_ids), ResourceTypeCatalog.requires_service.is_(True))
+    )).scalars().all()) if type_ids else set()
     for a in services:
         a.unit_of_measure_code = codes.get(a.unit_of_measure_id)
+        a.is_stay_rate = a.resource_type_id in stay_types
     return services
 
 

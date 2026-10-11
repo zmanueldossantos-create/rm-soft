@@ -116,6 +116,7 @@ async def test_paying_the_stay_at_the_till_concludes_the_booking(db, company_wit
     await db.refresh(booking)
     assert account.invoice_id is not None
     assert booking.status == BookingStatus.CONCLUIDA
+    assert booking.checked_out_at is not None  # the real departure
 
 
 @pytest.mark.asyncio
@@ -186,8 +187,12 @@ async def test_a_room_account_opens_only_at_check_in(db, company_with_essentials
 async def test_lines_are_never_moved_onto_a_room(db, company_with_essentials):
     ctx = company_with_essentials
     room, night, _ = await _hotel(db, ctx)
+    laundry = Service(company_id=ctx["company"].id, code="HTL-LAV", name="Lavandaria", price=2000, vat_id=ctx["vat_nor"].id,
+                      unit_of_measure_id=ctx["unit_un"].id)  # an ordinary service: a room rate never goes on a counter tab
+    db.add(laundry)
+    await db.commit()
     tab = await open_account(db, ctx["company"].id, ctx["activity"].id, ctx["pos"].id, ctx["gestor"].id, "Balcão")
-    line = await add_line(db, ctx["company"].id, tab.id, ctx["gestor"].id, 1, service_id=night.id)
+    line = await add_line(db, ctx["company"].id, tab.id, ctx["gestor"].id, 1, service_id=laundry.id)
     with pytest.raises(InvalidTransferError, match="check-in"):
         await transfer_lines(db, ctx["company"].id, tab.id, ctx["gestor"].id, [{"line_id": line.id, "quantity": 1}],
                              target_resource_id=room.id)

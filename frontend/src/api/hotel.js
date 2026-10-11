@@ -12,6 +12,12 @@ export async function checkOut(bookingId) {
   return res.data;
 }
 
+// A prepaid passage: { resource_id, service_id, pos_id, payments: [{ payment_method_id, amount }], guest_name, party_size }
+export async function walkIn(payload) {
+  const res = await apiClient.post('/hotel/walk-in', payload);
+  return res.data;
+}
+
 // New end of a stay in progress - the room-rate line of its account follows.
 export async function extendStay(bookingId, endsAt) {
   const res = await apiClient.post('/hotel/bookings/' + bookingId + '/extend', { ends_at: endsAt });

@@ -142,6 +142,12 @@ async def add_line(
         item = result.scalar_one_or_none()
         if item is None:
             raise ItemNotFoundError("Servico nao encontrado")
+        if account.booking_id is None and item.resource_type_id is not None:
+            # a room rate goes on its stay's account only (closed as a stay sale) - see pos_service._ensure_no_stay_rate
+            from app.models.resource_type_catalog import ResourceTypeCatalog
+            room_type = await db.get(ResourceTypeCatalog, item.resource_type_id)
+            if room_type is not None and room_type.requires_service:
+                raise InvalidLineError(f"{item.name} vende-se pela Entrada ou pela reserva do quarto")
         name_snapshot, unit_price = item.name, float(item.price or 0)
         unit_factor, line_sale_unit_id, unit_code = 1.0, None, None
         kitchen_status = None
@@ -288,6 +294,7 @@ async def close_account(
     invoice = await checkout(
         db, company_id, closing_pos_id, closing_user, customer_id or account.customer_id, lines_input, payments,
         invoice_type=invoice_type, discount_global_percent=discount_global_percent, payment_term_id=payment_term_id,
+        stay_sale=account.booking_id is not None,
     )
     if customer_id is not None:
         account.customer_id = customer_id  # the customer the account was invoiced to
@@ -302,7 +309,9 @@ async def close_account(
         from app.models.booking import Booking, BookingStatus
         booking = await db.get(Booking, account.booking_id)
         if booking is not None and booking.status == BookingStatus.EM_CURSO:
+            from datetime import datetime, timezone
             booking.status = BookingStatus.CONCLUIDA
+            booking.checked_out_at = datetime.now(timezone.utc)
     await db.commit()
     await db.refresh(account)
     return account

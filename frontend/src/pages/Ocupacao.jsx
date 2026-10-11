@@ -13,6 +13,11 @@ function todayIso() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function formatOverstay(minutes) {
+  if (!minutes) return '-';
+  return minutes >= 60 ? Math.floor(minutes / 60) + ' h ' + String(minutes % 60).padStart(2, '0') + ' min' : minutes + ' min';
+}
+
 function formatDate(iso) {
   return new Date(iso).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Luanda' });
 }
@@ -153,7 +158,9 @@ export default function Ocupacao() {
                   <th className="text-left px-4 py-2.5">Quarto</th>
                   <th className="text-left px-4 py-2.5">Hóspede</th>
                   <th className="text-left px-4 py-2.5">Entrada</th>
-                  <th className="text-left px-4 py-2.5">Saída</th>
+                  <th className="text-left px-4 py-2.5">Saída prevista</th>
+                  <th className="text-left px-4 py-2.5">Saída real</th>
+                  <th className="text-left px-4 py-2.5">Excedido</th>
                   <th className="text-left px-4 py-2.5">Estado</th>
                   <th className="text-left px-4 py-2.5">Fatura</th>
                   <th className="text-right px-4 py-2.5">Total</th>
@@ -163,9 +170,11 @@ export default function Ocupacao() {
                 {entries.map((e) => (
                   <tr key={e.booking_id} className="border-b border-border last:border-0 hover:bg-bg-inset/40 transition-colors">
                     <td className="px-4 py-2.5 text-text-primary font-medium">{e.resource_name}</td>
-                    <td className="px-4 py-2.5 text-text-muted">{e.customer_name || '-'}</td>
+                    <td className="px-4 py-2.5 text-text-muted">{e.guest_name || e.customer_name || '-'}</td>
                     <td className="px-4 py-2.5 font-mono text-[12px] text-text-muted">{formatDate(e.starts_at)}</td>
                     <td className="px-4 py-2.5 font-mono text-[12px] text-text-muted">{formatDate(e.ends_at)}</td>
+                    <td className="px-4 py-2.5 font-mono text-[12px] text-text-muted">{e.checked_out_at ? formatDate(e.checked_out_at) : '-'}</td>
+                    <td className={'px-4 py-2.5 font-mono text-[12px] ' + (e.overstay_minutes > 0 ? 'text-danger font-semibold' : 'text-text-muted')}>{formatOverstay(e.overstay_minutes)}</td>
                     <td className="px-4 py-2.5">
                       <span className={'text-[11px] font-semibold px-2.5 py-1 rounded-full ' + (STATUS_COLORS[e.status] || '')}>{STATUS_LABELS[e.status] || e.status}</span>
                     </td>

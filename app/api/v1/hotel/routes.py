@@ -7,13 +7,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.api.deps import require_permission
 from app.models.user import User
-from app.schemas.hotel import CheckInResponse, OccupancyHistoryEntry, StayExtendRequest
+from app.schemas.hotel import CheckInResponse, OccupancyHistoryEntry, StayExtendRequest, WalkInRequest, WalkInResponse
 from app.schemas.booking import BookingResponse
 from app.services.hotel_service import (
-    check_in, check_out, extend_stay, get_occupancy_history,
+    check_in, check_out, extend_stay, get_occupancy_history, walk_in,
     NoDefaultPosError, AlreadyCheckedInError, AmbiguousOpenSessionError, InvalidStayStateError, StayHasUnpaidAccountError,
+    InvalidWalkInError,
 )
-from app.services.booking_service import BookingNotFoundError, BookingOverlapError, InvalidBookingRangeError
+from app.services.booking_service import (
+    BookingNotFoundError, BookingOverlapError, InvalidBookingRangeError, IncompatibleServiceError,
+)
+from app.services.fiscal_period_service import PeriodClosedError
+from app.services.invoice_service import (
+    CustomerNotFoundError, DocumentTypeNotConfiguredError, PaymentAmountMismatchError, SeriesNotConfiguredError,
+)
+from app.services.pos_service import NoOpenSessionError
 from app.services.resource_service import ResourceNotFoundError
 
 router = APIRouter(prefix="/api/v1/hotel", tags=["hotel"])
@@ -62,6 +70,30 @@ async def post_check_out(
     except InvalidStayStateError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except StayHasUnpaidAccountError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+
+
+@router.post("/walk-in", response_model=WalkInResponse, status_code=status.HTTP_201_CREATED)
+async def post_walk_in(
+    payload: WalkInRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("hotel:checkin")),
+):
+    """A prepaid passage: the sale at the till, then the room occupied from now for the service's duration."""
+    try:
+        booking, invoice = await walk_in(
+            db, current_user.company_id, payload.resource_id, payload.service_id, current_user, payload.pos_id,
+            [{"payment_method_id": p.payment_method_id, "amount": p.amount} for p in payload.payments],
+            payload.customer_id, payload.guest_name, payload.party_size,
+        )
+        return {"booking": booking, "invoice_id": invoice.id}
+    except ResourceNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except CustomerNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (InvalidWalkInError, IncompatibleServiceError, PaymentAmountMismatchError, DocumentTypeNotConfiguredError) as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    except (BookingOverlapError, NoDefaultPosError, NoOpenSessionError, PeriodClosedError, SeriesNotConfiguredError) as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
 
 

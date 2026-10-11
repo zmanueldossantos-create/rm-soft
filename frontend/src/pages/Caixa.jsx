@@ -244,7 +244,8 @@ export default function Caixa() {
       setProducts(productsData.filter((p) => p.is_active && !p.is_raw_material && !p.not_available_pos && !p.internal_use_only));
       const [categoriesData, servicesData, vatData, withholdingData, termsData, methodsData, bankData] = await catalogStep;
       setCategories(categoriesData.filter((c) => c.is_active));
-      setServices(servicesData.filter((s) => s.is_active && !s.not_available_pos));
+      // a room rate is sold with its room (Reservas: Entrada or the stay's account), never alone in the cart
+      setServices(servicesData.filter((s) => s.is_active && !s.not_available_pos && !s.is_stay_rate));
       setVatRates(vatData);
       setWithholdingTaxes(withholdingData);
       setPaymentTerms(termsData.filter((t) => t.is_active));
@@ -1167,6 +1168,21 @@ export default function Caixa() {
     setReservasModalOpen(false);
     setStayAccountId(null);
   }
+  // A document issued outside the cart (an account closed, a passage sold at the entry) ends like a direct sale:
+  // the balance, the Documento gerado window and the printing of the till.
+  async function showIssuedDocument(invoiceId) {
+    refreshBalance(selectedPosId);
+    if (!invoiceId) return;
+    try {
+      const invoice = await getInvoiceDetail(invoiceId);
+      setLastInvoice(invoice);
+      setSuccessModalOpen(true);
+      afterSalePrint(invoice);
+    } catch {
+      // the invoice exists all the same: Consultar documentos still shows it
+    }
+  }
+
   function toggleSideDrawer(key, open) {
     const wasActive = activeSideDrawer === key;
     closeSideDrawers();
@@ -2414,6 +2430,11 @@ export default function Caixa() {
           <ReservasPanel
             posId={selectedPosId}
             activityId={pointsOfSale.find((p) => p.id === selectedPosId)?.activity_id}
+            onSale={async (invoiceId) => {
+              // a passage sold at the entry: shown and printed like any sale of this till
+              setReservasModalOpen(false);
+              await showIssuedDocument(invoiceId);
+            }}
             onPayStay={(accountId) => {
               // the check-out of a stay with something to pay: its account, opened in Contas abertas, closed with the payment
               setReservasModalOpen(false);
@@ -2442,17 +2463,8 @@ export default function Caixa() {
             }}
             onClosed={async (account) => {
               // An account closed at the till ends like a direct sale: balance, stock, Documento gerado, printing.
-              refreshBalance(selectedPosId);
               refreshPosStock(selectedPosId);
-              if (!account?.invoice_id) return;
-              try {
-                const invoice = await getInvoiceDetail(account.invoice_id);
-                setLastInvoice(invoice);
-                setSuccessModalOpen(true);
-                afterSalePrint(invoice);
-              } catch {
-                // the invoice exists all the same: Consultar documentos still shows it
-              }
+              await showIssuedDocument(account?.invoice_id);
             }}
           />
         )}

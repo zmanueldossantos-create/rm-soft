@@ -68,6 +68,7 @@ class ServiceResponse(BaseModel):
     unit_of_measure_code: str | None = None  # attached by the list: the unit's code (UN, CX...)
     price: float | None
     duration_minutes: int | None = None
+    is_stay_rate: bool = False  # attached by the list: a room rate, sold with its room only (never in the cart)
     brand: str | None
     withholding_tax_id: uuid.UUID | None
     not_available_pos: bool

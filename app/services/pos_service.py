@@ -37,6 +37,24 @@ async def _ensure_sellable_at_pos(db: AsyncSession, company_id: uuid.UUID, lines
             raise ProductNotFoundError(f"{name} nao esta disponivel para venda na caixa")
 
 
+async def _ensure_no_stay_rate(db: AsyncSession, company_id: uuid.UUID, lines_input: list[dict]) -> None:
+    """A room rate (a service of a resource type that requires one: Quarto) is sold with its room - the Entrada of a
+    passage or the account of a stay - never alone in the cart, where no room would be occupied, no exit recorded."""
+    from sqlalchemy import select
+    from app.models.resource_type_catalog import ResourceTypeCatalog
+    from app.models.service import Service
+    from app.services.invoice_service import ProductNotFoundError
+    ids = {uuid.UUID(str(l["service_id"])) for l in lines_input if l.get("service_id")}
+    if not ids:
+        return
+    name = (await db.execute(
+        select(Service.name).join(ResourceTypeCatalog, ResourceTypeCatalog.id == Service.resource_type_id)
+        .where(Service.id.in_(ids), Service.company_id == company_id, ResourceTypeCatalog.requires_service.is_(True))
+    )).scalars().first()
+    if name:
+        raise ProductNotFoundError(f"{name} vende-se pela Entrada ou pela reserva do quarto")
+
+
 async def checkout(
     db: AsyncSession,
     company_id: uuid.UUID,
@@ -51,8 +69,12 @@ async def checkout(
     payment_method_id: uuid.UUID | None = None,
     bank_account_id: uuid.UUID | None = None,
     due_date=None,
+    stay_sale: bool = False,
 ) -> Invoice:
     """
+    stay_sale: the sale of a room with its rate (hotel_service.walk_in, or a stay's account closed) - the only sales
+    where a room rate may appear (see _ensure_no_stay_rate).
+
     Completes a POS sale: requires an open CashSession for this specific POS
     (see cash_session_service.open_session) - activity_id for the invoice is
     taken from the session (denormalized from the POS at open time, see
@@ -70,6 +92,8 @@ async def checkout(
     if session is None:
         raise NoOpenSessionError("Nao ha nenhuma sessao de caixa aberta para este ponto de venda - abra a caixa antes de vender")
     await _ensure_sellable_at_pos(db, company_id, lines_input)
+    if not stay_sale:
+        await _ensure_no_stay_rate(db, company_id, lines_input)
 
     invoice = await create_invoice(
         db, company_id, session.activity_id, customer_id, invoice_type=invoice_type,

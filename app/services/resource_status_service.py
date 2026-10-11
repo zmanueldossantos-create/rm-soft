@@ -7,8 +7,10 @@ screen. Nothing is stored: the status is computed on demand from what already ex
               overlaps [now, now + window): running now or starting soon
   LIVRE     - otherwise
 
-OCUPADA wins over RESERVADA. A hotel room with a checked-in stay has an open account
-linked to its booking, so it shows as OCUPADA too. The soonest overlapping booking is
+OCUPADA wins over RESERVADA. A stay in progress (EM_CURSO booking) makes the room OCUPADA
+too, whatever its dates - a prepaid passage has no open account, and a guest still inside
+after the planned end must never show as a free room; stay_ends_at / stay_overdue_minutes
+tell until when, or by how much it is overdue. The soonest overlapping booking is
 always reported (even when the resource is OCUPADA) so the screen can warn about it.
 """
 import uuid
@@ -79,6 +81,13 @@ async def list_resource_statuses(
     for booking in bookings_result.scalars().all():
         soonest_booking.setdefault(booking.resource_id, booking)
 
+    stays_result = await db.execute(
+        select(Booking).where(
+            Booking.company_id == company_id, Booking.resource_id.in_(resource_ids), Booking.status == BookingStatus.EM_CURSO,
+        )
+    )
+    stays = {stay.resource_id: stay for stay in stays_result.scalars().all()}
+
     rows = []
     for resource in resources:
         open_accounts, open_total, opened_at = tabs.get(resource.id, (0, 0.0, None))
@@ -88,7 +97,8 @@ async def list_resource_statuses(
             open_total = await open_total_of_resource(db, resource.id)
             ready_dishes = await ready_dishes_of_resource(db, resource.id)  # dishes waiting to be served
         booking = soonest_booking.get(resource.id)
-        if open_accounts > 0:
+        stay = stays.get(resource.id)
+        if open_accounts > 0 or stay is not None:
             status = STATUS_OCUPADA
         elif booking is not None:
             status = STATUS_RESERVADA
@@ -109,5 +119,7 @@ async def list_resource_statuses(
             "booking_status": booking.status.value if booking else None,
             "booking_guest_name": booking.guest_name if booking else None,
             "booking_party_size": booking.party_size if booking else None,
+            "stay_ends_at": stay.ends_at if stay else None,
+            "stay_overdue_minutes": max(int((now - stay.ends_at).total_seconds() // 60), 0) if stay else 0,
         })
     return rows

@@ -84,6 +84,9 @@ async def _validate_service_for_resource(db: AsyncSession, company_id: uuid.UUID
         service = service_result.scalar_one_or_none()
         if service is not None and service.resource_type_id is not None and service.resource_type_id != resource.resource_type_id:
             raise IncompatibleServiceError("O servico selecionado nao e valido para este tipo de recurso")
+        # the rate of a stay: without a price the check-in would add no line and the stay would cost nothing
+        if service is not None and resource_type is not None and resource_type.requires_service and service.price is None:
+            raise ServiceRequiredError(f"O serviço {service.code} não tem preço - defina-o na ficha do serviço")
 
 
 async def create_booking(

@@ -43,8 +43,11 @@ from app.models.resource import Resource
 from app.models.customer import Customer
 from app.models.invoice import Invoice
 from app.services.booking_service import (
-    get_booking_or_raise, _has_overlap, BookingOverlapError, InvalidBookingRangeError,
+    get_booking_or_raise, _clean_guest_name, _has_overlap, _validate_service_for_resource,
+    BookingOverlapError, InvalidBookingRangeError,
 )
+from app.services.document_rules import default_paid_on_issue_type
+from app.services.pos_service import checkout
 from app.services.resource_service import get_resource_or_raise
 from app.services.open_account_service import open_account, add_line, KITCHEN_CANCELLED
 
@@ -73,10 +76,22 @@ class StayHasUnpaidAccountError(Exception):
     """The stay's account still holds articles: it is paid at the till, which concludes the booking."""
 
 
+class InvalidWalkInError(Exception):
+    """A passage needs an active service with a duration (30 min, 1 hora...)."""
+
+
 def _nights_between(starts_at: datetime, ends_at: datetime) -> int:
     """Nights between two moments, on Luanda's calendar - at least one (a short stay is charged one night)."""
     nights = (ends_at.astimezone(LUANDA).date() - starts_at.astimezone(LUANDA).date()).days
     return max(nights, 1)
+
+
+def _overstay_minutes(booking: Booking, now: datetime) -> int:
+    """Minutes beyond the planned end: at the real departure, or so far for a stay still in progress."""
+    end = booking.checked_out_at or (now if booking.status == BookingStatus.EM_CURSO else None)
+    if end is None or end <= booking.ends_at:
+        return 0
+    return int((end - booking.ends_at).total_seconds() // 60)
 
 
 def _stay_quantity(service: Service, starts_at: datetime, ends_at: datetime) -> int:
@@ -186,9 +201,61 @@ async def check_out(db: AsyncSession, company_id: uuid.UUID, booking_id: uuid.UU
         account.closed_at = func.now()
 
     booking.status = BookingStatus.CONCLUIDA
+    booking.checked_out_at = datetime.now(timezone.utc)
     await db.commit()
     await db.refresh(booking)
     return booking
+
+
+async def walk_in(
+    db: AsyncSession, company_id: uuid.UUID, resource_id: uuid.UUID, service_id: uuid.UUID, selling_user: "User",
+    pos_id: uuid.UUID, payments: list[dict], customer_id: uuid.UUID | None = None,
+    guest_name: str | None = None, party_size: int | None = None, now: datetime | None = None,
+) -> tuple[Booking, Invoice]:
+    """A passage (30 min, 1 hora, 2 horas...), paid before going in. Everything is checked first - the room free
+    for the whole duration and not still occupied, a timed service of its type, a till of its activity - so nothing is
+    ever cashed for a room the guest cannot have. The sale is an ordinary till sale (pos_service.checkout: series,
+    VAT, payments, session), then the room is occupied from now for the service's duration, the booking linked to
+    its invoice. Its exit (check_out) has nothing left to pay."""
+    resource = await get_resource_or_raise(db, company_id, resource_id)
+    service = (await db.execute(
+        select(Service).where(Service.id == service_id, Service.company_id == company_id)
+    )).scalar_one_or_none()
+    if service is None or not service.is_active:
+        raise InvalidWalkInError("Serviço não encontrado ou inativo")
+    if not service.duration_minutes:
+        raise InvalidWalkInError("Uma entrada imediata precisa de um serviço com duração (30 min, 1 hora...) - uma diária faz-se por reserva")
+    await _validate_service_for_resource(db, company_id, resource, service.id)
+    pos = (await db.execute(
+        select(PointOfSale).where(PointOfSale.id == pos_id, PointOfSale.activity_id == resource.activity_id)
+    )).scalar_one_or_none()
+    if pos is None:
+        raise NoDefaultPosError("Este ponto de venda não pertence à atividade do quarto")
+
+    starts_at = now or datetime.now(timezone.utc)
+    ends_at = starts_at + timedelta(minutes=service.duration_minutes)
+    still_occupied = (await db.execute(
+        select(Booking.id).where(Booking.resource_id == resource.id, Booking.status == BookingStatus.EM_CURSO).limit(1)
+    )).first()
+    if still_occupied is not None:
+        raise BookingOverlapError(f"{resource.name} ainda está ocupado - registe a saída antes de uma nova entrada")
+    if await _has_overlap(db, resource.id, starts_at, ends_at):
+        raise BookingOverlapError(f"{resource.name} tem uma reserva neste período")
+
+    invoice = await checkout(
+        db, company_id, pos.id, selling_user, customer_id,
+        [{"product_id": None, "service_id": str(service.id), "quantity": 1.0, "sale_unit_id": None}],
+        payments, invoice_type=await default_paid_on_issue_type(db), stay_sale=True,
+    )
+    booking = Booking(
+        company_id=company_id, resource_id=resource.id, customer_id=customer_id, service_id=service.id,
+        starts_at=starts_at, ends_at=ends_at, status=BookingStatus.EM_CURSO, created_by_user_id=selling_user.id,
+        guest_name=_clean_guest_name(guest_name), party_size=party_size, invoice_id=invoice.id,
+    )
+    db.add(booking)
+    await db.commit()
+    await db.refresh(booking)
+    return booking, invoice
 
 
 async def extend_stay(db: AsyncSession, company_id: uuid.UUID, booking_id: uuid.UUID, ends_at: datetime) -> Booking:
@@ -238,7 +305,8 @@ async def get_occupancy_history(
         .join(Resource, Resource.id == Booking.resource_id)
         .outerjoin(Customer, Customer.id == Booking.customer_id)
         .outerjoin(OpenAccount, OpenAccount.booking_id == Booking.id)
-        .outerjoin(Invoice, Invoice.id == OpenAccount.invoice_id)
+        # the stay's account invoice (a night), or the passage's own invoice (paid at the entry)
+        .outerjoin(Invoice, Invoice.id == func.coalesce(OpenAccount.invoice_id, Booking.invoice_id))
         .where(Booking.company_id == company_id, Booking.status.in_([BookingStatus.CONCLUIDA, BookingStatus.EM_CURSO]))
         .order_by(Booking.starts_at.desc())
     )
@@ -251,13 +319,17 @@ async def get_occupancy_history(
 
     result = await db.execute(query)
     rows = result.all()
+    now = datetime.now(timezone.utc)
     return [
         {
             "booking_id": booking.id,
             "resource_name": resource_name,
             "customer_name": customer_name,
+            "guest_name": booking.guest_name,
             "starts_at": booking.starts_at,
             "ends_at": booking.ends_at,
+            "checked_out_at": booking.checked_out_at,
+            "overstay_minutes": _overstay_minutes(booking, now),
             "status": booking.status,
             "invoice_series": series,
             "invoice_number": number,
