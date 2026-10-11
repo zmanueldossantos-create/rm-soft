@@ -15,7 +15,7 @@ function NavLink({ to, icon: Icon, label, active }) {
     <Link
       to={to}
       className={
-        'flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-md transition-colors cursor-pointer shrink-0 ' +
+        'flex items-center gap-1.5 text-[13px] font-semibold uppercase tracking-wide px-3 py-2 rounded-md transition-colors cursor-pointer shrink-0 ' +
         (active
           ? 'text-accent bg-accent/10'
           : 'text-text-muted hover:text-text-primary hover:bg-bg-inset')
@@ -63,7 +63,7 @@ function NavGroup({ icon: Icon, label, items, isActive }) {
         type="button"
         onClick={toggleOpen}
         className={
-          'flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-md transition-colors cursor-pointer shrink-0 ' +
+          'flex items-center gap-1.5 text-[13px] font-semibold uppercase tracking-wide px-3 py-2 rounded-md transition-colors cursor-pointer shrink-0 ' +
           (anyActive ? 'text-accent bg-accent/10' : 'text-text-muted hover:text-text-primary hover:bg-bg-inset')
         }
       >
@@ -83,7 +83,7 @@ function NavGroup({ icon: Icon, label, items, isActive }) {
               to={item.to}
               onClick={() => setOpen(false)}
               className={
-                'flex items-center gap-2 px-3.5 py-2.5 text-sm transition-colors ' +
+                'flex items-center gap-2 px-3.5 py-2.5 text-[12.5px] font-medium uppercase tracking-wide transition-colors ' +
                 (isActive(item.to) ? 'text-accent bg-accent/10' : 'text-text-primary hover:bg-bg-inset')
               }
             >
@@ -146,51 +146,84 @@ export default function Layout() {
     navigate('/login');
   }
 
+  // The menu of the company's users, in 7 groups - each entry is shown only to who may open it (show), a group with
+  // a single visible entry is a plain link, a group with none is not shown (a sector without bookings has no Reservas).
+  const visible = (items) => items.filter((item) => item.show);
+  const menuGroups = [
+    {
+      key: 'vendas', icon: Receipt, label: 'Vendas', items: visible([
+        { to: '/caixa', icon: Wallet, label: 'Caixa', show: can('pos:view') },
+        { to: '/invoices', icon: Receipt, label: 'Faturas', show: user?.role === 'GESTOR' && can('invoices:view') },
+        { to: '/customers', icon: Users, label: 'Clientes', show: can('customers:manage') },
+        { to: '/contas-abertas', icon: Wallet2, label: 'Contas Abertas', show: can('open_accounts:view') },
+        { to: '/cozinha', icon: ChefHat, label: 'Cozinha - pedidos em curso', show: can('kitchen:view') },
+        { to: '/cozinha/historico', icon: KitchenHistoryIcon, label: 'Cozinha - histórico', show: can('kitchen:history') },
+      ]),
+    },
+    {
+      key: 'catalogo', icon: Package, label: 'Catálogo', items: visible([
+        { to: '/products', icon: Package, label: 'Produtos', show: can('products:manage') },
+        { to: '/services', icon: Wrench, label: 'Serviços', show: can('services:manage') },
+        { to: '/materia-prima', icon: Wheat, label: 'Matéria-prima', show: can('products:manage') && can('recipes:view') },
+        { to: '/producao', icon: Factory, label: 'Produtos configurados', show: can('recipes:view') },
+        { to: '/producao/historico', icon: ClipboardList, label: 'Resumo de Produção', show: can('recipes:view') },
+      ]),
+    },
+    {
+      key: 'stock', icon: Package2, label: 'Stock', items: visible([
+        { to: '/stock/dashboard', icon: Gauge, label: 'Resumo de Stock', show: can('stock:view') },
+        { to: '/stock', icon: Package2, label: 'Armazéns e Stock', show: can('warehouses:view') },
+        { to: '/stock-movements', icon: History, label: 'Histórico de Movimentos', show: can('stock:view') },
+        { to: '/consumo-interno', icon: PackageMinus, label: 'Consumo Interno', show: can('internal_consumption:view') },
+        { to: '/fornecedores', icon: Truck, label: 'Fornecedores', show: can('suppliers:manage') },
+      ]),
+    },
+    {
+      key: 'reservas', icon: CalendarClock, label: 'Reservas', items: visible([
+        { to: '/recursos', icon: Boxes, label: 'Recursos', show: can('resources:manage') },
+        { to: '/reservas', icon: CalendarClock, label: 'Reservas', show: can('bookings:view') },
+        { to: '/ocupacao', icon: History, label: 'Ocupação', show: can('hotel:occupancy_view') },
+      ]),
+    },
+    {
+      key: 'financas', icon: Landmark, label: 'Finanças', items: visible([
+        { to: '/tesouraria', icon: PiggyBank, label: 'Tesouraria', show: can('tesouraria:reasons_manage') },
+        { to: '/fiscal-periods', icon: Calendar, label: 'Períodos/Exercício', show: can('fiscal_periods:view') },
+        { to: '/saf-t', icon: FileText, label: 'SAF-T', show: can('saf_t:export') },
+      ]),
+    },
+    {
+      key: 'administracao', icon: Cog, label: 'Administração', items: visible([
+        { to: '/company-settings', icon: Building2, label: 'Empresa', show: can('company:view') },
+        { to: '/categorias', icon: Tags, label: 'Catálogos', show: can.any(['product_categories:manage', 'service_types:manage', 'tesouraria:reasons_manage', 'resource_types:manage', 'consumption_reasons:manage', 'tesouraria:payment_prefs_manage']) },
+        { to: '/users', icon: UserCog, label: 'Utilizadores', show: user?.role === 'GESTOR' },
+        { to: '/permissoes', icon: ShieldCheck, label: 'Permissões', show: user?.role === 'GESTOR' },
+      ]),
+    },
+  ];
+
   // A menu entry is active on its own page and its sub-pages, unless a more precise entry matches better:
   // /stock must not light up on /stock/dashboard, and /stock-movements is not a sub-page of /stock.
   function isActive(path) {
     const here = location.pathname;
     const matches = (p) => here === p || here.startsWith(p + '/');
     if (!matches(path)) return false;
-    const groupPaths = [...stockItems, ...productionItems, ...settingsItems, ...accountingItems].map((i) => i.to);
+    const groupPaths = menuGroups.flatMap((g) => g.items).map((i) => i.to);
     return !groupPaths.some((p) => p !== path && p.length > path.length && matches(p));
   }
-
-  // Menu groups - each item is shown only if the user holds its permission.
-  const productionItems = [
-    { to: '/producao', icon: Factory, label: 'Produtos configurados', perm: 'recipes:view' },
-    { to: '/producao/historico', icon: ClipboardList, label: 'Resumo de Produção', perm: 'recipes:view' },
-  ].filter((item) => (item.perms ? can.any(item.perms) : can(item.perm)));
-
-  const kitchenItems = [
-    { to: '/cozinha', icon: ChefHat, label: 'Pedidos em curso', perm: 'kitchen:view' },
-    { to: '/cozinha/historico', icon: KitchenHistoryIcon, label: 'Historico', perm: 'kitchen:history' },
-  ].filter((item) => (item.perms ? can.any(item.perms) : can(item.perm)));
-
-  const stockItems = [
-    { to: '/stock/dashboard', icon: Gauge, label: 'Resumo de Stock', perm: 'stock:view' },
-    { to: '/stock', icon: Package2, label: 'Armazéns e Stock', perm: 'warehouses:view' },
-    { to: '/stock-movements', icon: History, label: 'Histórico de Movimentos', perm: 'stock:view' },
-  ].filter((item) => (item.perms ? can.any(item.perms) : can(item.perm)));
-
-  const settingsItems = [
-    { to: '/company-settings', icon: Building2, label: 'Empresa', perm: 'company:view' },
-    { to: '/categorias', icon: Tags, label: 'Catálogos', perms: ['product_categories:manage', 'service_types:manage', 'tesouraria:reasons_manage', 'resource_types:manage', 'consumption_reasons:manage', 'tesouraria:payment_prefs_manage'] },
-  ].filter((item) => (item.perms ? can.any(item.perms) : can(item.perm)));
-
-  const accountingItems = [
-    { to: '/fiscal-periods', icon: Calendar, label: 'Periodos/Exercicio', perm: 'fiscal_periods:view' },
-  ].filter((item) => (item.perms ? can.any(item.perms) : can(item.perm)));
 
   return (
     <div className="min-h-screen bg-bg-primary">
       <nav className="fixed top-0 inset-x-0 z-50 h-14 bg-bg-elevated border-b border-border px-4 sm:px-7 flex items-center gap-3">
-        <span className="font-display font-bold text-base text-accent shrink-0">
+        <span className="font-display font-extrabold text-xl sm:text-2xl tracking-wide text-accent shrink-0">
           RM SOFT
         </span>
 
         <div className="relative flex-1 min-w-0 h-full">
-          <div ref={navScrollRef} onWheel={handleNavWheel} className="flex items-center gap-1 sm:gap-2 overflow-x-auto scrollbar-hover-thin h-full">
+          {/* the menu centred: a row as wide as its items, in the middle of the scroll area (mx-auto) - when it is
+              wider than the bar it starts at the left edge and scrolls, nothing is cut on the left */}
+          <div ref={navScrollRef} onWheel={handleNavWheel} className="flex overflow-x-auto scrollbar-hover-thin h-full">
+          <div className="flex items-center gap-1 sm:gap-2 w-max mx-auto h-full">
             {user?.role === 'CAIXA' ? (
               // The cashier works from the till only: everything else is in its side panels
               // (documents, articles, moedeiro, operations, daily report, open accounts).
@@ -209,85 +242,16 @@ export default function Layout() {
             {user?.role === 'SUPER_ADMIN' && (
               <NavLink to="/visao-global" icon={LayoutGrid} label="Visao global" active={isActive('/visao-global')} />
             )}
-            {(can('products:manage') || can('services:manage')) && (
-              <>
-                <div className="w-px h-5 bg-border mx-1 shrink-0 self-center" />
-                {can('products:manage') && (
-                  <NavLink to="/products" icon={Package} label="Produtos" active={isActive('/products')} />
-                )}
-                {can('services:manage') && (
-                  <NavLink to="/services" icon={Wrench} label="Serviços" active={isActive('/services')} />
-                )}
-              </>
-            )}
-            {can('products:manage') && can('recipes:view') && (
-              <NavLink to="/materia-prima" icon={Wheat} label="Matéria-prima" active={isActive('/materia-prima')} />
-            )}
-            {productionItems.length > 0 && (
-              <>
-                <NavGroup icon={Factory} label="Produção" isActive={isActive} items={productionItems} />
-                <div className="w-px h-5 bg-border mx-1 shrink-0 self-center" />
-              </>
-            )}
-            {can('customers:manage') && (
-              <NavLink to="/customers" icon={Users} label="Clientes" active={isActive('/customers')} />
-            )}
-            {can('pos:view') && (
-              <NavLink to="/caixa" icon={Wallet} label="Caixa" active={isActive('/caixa')} />
-            )}
-            {user?.role === 'GESTOR' && can('invoices:view') && (
-              <NavLink to="/invoices" icon={Receipt} label="Faturas" active={isActive('/invoices')} />
-            )}
-            {stockItems.length > 0 && (
-              <>
-                <div className="w-px h-5 bg-border mx-1 shrink-0 self-center" />
-                <NavGroup icon={Package2} label="Gestão de Stocks" isActive={isActive} items={stockItems} />
-                <div className="w-px h-5 bg-border mx-1 shrink-0 self-center" />
-              </>
-            )}
-            {user?.role === 'GESTOR' && (
-              <NavLink to="/users" icon={UserCog} label="Utilizadores" active={isActive('/users')} />
-            )}
-            {settingsItems.length > 0 && (
-              <NavGroup icon={Cog} label="Configurações" isActive={isActive} items={settingsItems} />
-            )}
-            {accountingItems.length > 0 && (
-              <NavGroup icon={Calculator} label="Contabilidade" isActive={isActive} items={accountingItems} />
-            )}
-            {can('tesouraria:reasons_manage') && (
-              <NavLink to="/tesouraria" icon={PiggyBank} label="Tesouraria" active={isActive('/tesouraria')} />
-            )}
-            {can('resources:manage') && (
-              <NavLink to="/recursos" icon={Boxes} label="Recursos" active={isActive('/recursos')} />
-            )}
-            {can('bookings:view') && (
-              <NavLink to="/reservas" icon={CalendarClock} label="Reservas" active={isActive('/reservas')} />
-            )}
-            {can('hotel:occupancy_view') && (
-              <NavLink to="/ocupacao" icon={History} label="Ocupação" active={isActive('/ocupacao')} />
-            )}
-            {can('internal_consumption:view') && (
-              <NavLink to="/consumo-interno" icon={PackageMinus} label="Consumo Interno" active={isActive('/consumo-interno')} />
-            )}
-            {can('suppliers:manage') && (
-              <NavLink to="/fornecedores" icon={Truck} label="Fornecedores" active={isActive('/fornecedores')} />
-            )}
-            {user?.role === 'GESTOR' && (
-              <NavLink to="/permissoes" icon={ShieldCheck} label="Permissoes" active={isActive('/permissoes')} />
-            )}
-            {can('open_accounts:view') && (
-              <NavLink to="/contas-abertas" icon={Wallet2} label="Contas Abertas" active={isActive('/contas-abertas')} />
-            )}
-            {/* Cozinha: a group when both screens are allowed, a plain link otherwise (a cook without the history) */}
-            {kitchenItems.length > 1 && <NavGroup icon={ChefHat} label="Cozinha" isActive={isActive} items={kitchenItems} />}
-            {kitchenItems.length === 1 && (
-              <NavLink to={kitchenItems[0].to} icon={ChefHat} label="Cozinha" active={isActive(kitchenItems[0].to)} />
-            )}
-            {can('saf_t:export') && (
-              <NavLink to="/saf-t" icon={FileText} label="SAF-T" active={isActive('/saf-t')} />
-            )}
+            {menuGroups.map((group) => (
+              group.items.length > 1 ? (
+                <NavGroup key={group.key} icon={group.icon} label={group.label} isActive={isActive} items={group.items} />
+              ) : group.items.length === 1 ? (
+                <NavLink key={group.key} to={group.items[0].to} icon={group.items[0].icon} label={group.items[0].label} active={isActive(group.items[0].to)} />
+              ) : null
+            ))}
             </>
             )}
+          </div>
           </div>
           <div className="pointer-events-none absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-bg-elevated to-transparent" />
           <div className="pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-bg-elevated to-transparent" />
