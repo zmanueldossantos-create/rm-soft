@@ -94,7 +94,7 @@ async def export_saf_t_for_period(db: AsyncSession, company_id: uuid.UUID, year:
     company_result = await db.execute(select(Company).where(Company.id == company_id))
     company = company_result.scalar_one_or_none()
     if company is None:
-        raise CompanyNotFoundError("Empresa nao encontrada")
+        raise CompanyNotFoundError("Empresa não encontrada")
 
     start_date = date(year, month, 1)
     end_date = date(year, month, monthrange(year, month)[1])

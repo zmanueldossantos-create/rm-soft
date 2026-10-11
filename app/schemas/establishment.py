@@ -14,7 +14,7 @@ class EstablishmentRequest(BaseModel):
     def validate_code(cls, v: str) -> str:
         cleaned = " ".join(v.split())
         if not cleaned:
-            raise ValueError("Codigo do estabelecimento nao pode estar vazio")
+            raise ValueError("Código do estabelecimento não pode estar vazio")
         return cleaned
 
     @field_validator("name")
@@ -22,7 +22,7 @@ class EstablishmentRequest(BaseModel):
     def validate_name(cls, v: str) -> str:
         cleaned = " ".join(v.split())
         if not cleaned:
-            raise ValueError("Nome do estabelecimento nao pode estar vazio")
+            raise ValueError("Nome do estabelecimento não pode estar vazio")
         return cleaned
 
 

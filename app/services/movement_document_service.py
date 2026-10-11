@@ -92,22 +92,22 @@ async def create_stock_movement_document(
     from app.services.fiscal_period_service import MONTH_NAMES_PT, PeriodClosedError
     period_year = (await db.execute(select(FiscalYear.year).where(FiscalYear.id == posting_period.fiscal_year_id))).scalar_one()
     if movement_date > date.today():
-        raise PeriodClosedError("A data do movimento nao pode ser futura")
+        raise PeriodClosedError("A data do movimento não pode ser futura")
     if movement_date < date(period_year, posting_period.month, 1):
         raise PeriodClosedError(
-            f"A data do movimento ({movement_date.strftime('%d/%m/%Y')}) e anterior ao periodo escolhido "
+            f"A data do movimento ({movement_date.strftime('%d/%m/%Y')}) e anterior ao período escolhido "
             f"({MONTH_NAMES_PT[posting_period.month]} de {period_year})"
         )
 
     type_result = await db.execute(select(MovementTypeCatalog).where(MovementTypeCatalog.id == movement_type_id))
     movement_type = type_result.scalar_one_or_none()
     if movement_type is None or not movement_type.is_active:
-        raise MovementTypeNotConfiguredError("Tipo de movimento nao encontrado ou inativo")
+        raise MovementTypeNotConfiguredError("Tipo de movimento não encontrado ou inativo")
 
     warehouse_result = await db.execute(select(Warehouse).where(Warehouse.id == warehouse_id, Warehouse.company_id == company_id))
     warehouse = warehouse_result.scalar_one_or_none()
     if warehouse is None:
-        raise MovementWarehouseNotFoundError("Armazem nao encontrado")
+        raise MovementWarehouseNotFoundError("Armazem não encontrado")
 
     if not lines_input:
         raise EmptyMovementError("O movimento deve ter pelo menos uma linha")
@@ -125,7 +125,7 @@ async def create_stock_movement_document(
         product_result = await db.execute(select(Product).where(Product.id == line_input["product_id"], Product.company_id == company_id))
         product = product_result.scalar_one_or_none()
         if product is None:
-            raise MovementProductNotFoundError("Produto nao encontrado")
+            raise MovementProductNotFoundError("Produto não encontrado")
 
         quantity = float(line_input["quantity"])
         # A line may be entered in one of the product's units (10 SC): its quantity and prices are per that unit, the stock
@@ -213,7 +213,7 @@ async def get_movement_document_with_lines(db: AsyncSession, company_id: uuid.UU
     doc_result = await db.execute(select(StockMovementDocument).where(StockMovementDocument.id == document_id, StockMovementDocument.company_id == company_id))
     document = doc_result.scalar_one_or_none()
     if document is None:
-        raise MovementDocumentNotFoundError("Movimento nao encontrado")
+        raise MovementDocumentNotFoundError("Movimento não encontrado")
     lines_result = await db.execute(select(StockMovementDocumentLine).where(StockMovementDocumentLine.document_id == document_id))
     lines = list(lines_result.scalars().all())
     return document, lines
@@ -234,7 +234,7 @@ class InvalidExcelFileError(Exception):
 
 
 # "Unidade" (optional): the code of one of the product's units (SC...) - empty = its base unit; older 4-column files stay valid.
-EXCEL_HEADERS = ["Codigo", "Quantidade", "Preco Compra", "Preco Venda", "Unidade"]
+EXCEL_HEADERS = ["Código", "Quantidade", "Preço Compra", "Preço Venda", "Unidade"]
 
 
 def generate_movement_excel_template() -> bytes:

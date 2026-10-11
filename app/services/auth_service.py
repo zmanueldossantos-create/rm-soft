@@ -46,7 +46,7 @@ async def create_user(
         select(User).where(User.company_id == company_id, User.phone_number == phone_number)
     )
     if existing.scalar_one_or_none() is not None:
-        raise UserAlreadyExistsError("Ja existe um utilizador registado com este numero de telefone nesta empresa")
+        raise UserAlreadyExistsError("Já existe um utilizador registado com este número de telefone nesta empresa")
 
     user = User(
         company_id=company_id,
@@ -74,13 +74,13 @@ async def update_user(
     result = await db.execute(select(User).where(User.id == user_id, User.company_id == company_id))
     user = result.scalar_one_or_none()
     if user is None:
-        raise UserNotFoundError("Utilizador nao encontrado")
+        raise UserNotFoundError("Utilizador não encontrado")
 
     existing = await db.execute(
         select(User).where(User.company_id == company_id, User.phone_number == phone_number, User.id != user_id)
     )
     if existing.scalar_one_or_none() is not None:
-        raise UserAlreadyExistsError("Ja existe um utilizador registado com este numero de telefone nesta empresa")
+        raise UserAlreadyExistsError("Já existe um utilizador registado com este número de telefone nesta empresa")
 
     user.full_name = full_name
     user.phone_number = phone_number
@@ -105,7 +105,7 @@ async def authenticate_user(db: AsyncSession, phone_number: str, password: str) 
     for user in users:
         if verify_password(password, user.password_hash):
             return user
-    raise AuthenticationError("Numero de telefone ou palavra-passe incorretos")
+    raise AuthenticationError("Número de telefone ou palavra-passe incorretos")
 
 
 def generate_token_pair(user: User) -> tuple[str, str]:
@@ -136,12 +136,12 @@ async def toggle_user_status(db: AsyncSession, company_id: uuid.UUID, user_id: u
     A GESTOR cannot deactivate their own account (would lock them out).
     """
     if user_id == acting_user_id:
-        raise ValueError("Nao pode desativar a sua propria conta")
+        raise ValueError("Não pode desativar a sua propria conta")
 
     result = await db.execute(select(User).where(User.id == user_id, User.company_id == company_id))
     user = result.scalar_one_or_none()
     if user is None:
-        raise UserNotFoundError("Utilizador nao encontrado")
+        raise UserNotFoundError("Utilizador não encontrado")
 
     user.is_active = not user.is_active
     await db.commit()
@@ -166,16 +166,16 @@ async def reset_user_password(
     result = await db.execute(select(User).where(User.id == target_user_id))
     target = result.scalar_one_or_none()
     if target is None:
-        raise UserNotFoundError("Utilizador nao encontrado")
+        raise UserNotFoundError("Utilizador não encontrado")
 
     if acting_user.role == UserRole.SUPER_ADMIN:
         if target.role != UserRole.GESTOR:
-            raise PasswordResetNotAllowedError("O SUPER_ADMIN so pode redefinir a palavra-passe do GESTOR")
+            raise PasswordResetNotAllowedError("O SUPER_ADMIN só pode redefinir a palavra-passe do GESTOR")
     elif acting_user.role == UserRole.GESTOR:
         if target.company_id != acting_user.company_id or target.role == UserRole.GESTOR:
             raise PasswordResetNotAllowedError("So pode redefinir a palavra-passe da sua propria equipa")
     else:
-        raise PasswordResetNotAllowedError("Sem permissao para redefinir palavras-passe")
+        raise PasswordResetNotAllowedError("Sem permissão para redefinir palavras-passe")
 
     target.password_hash = hash_password(new_password)
     await db.commit()

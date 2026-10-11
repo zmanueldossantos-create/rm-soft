@@ -10,12 +10,12 @@ from sqlalchemy import select
 
 
 async def test_regime_exclusao_seeds_only_ise_vat(db, legal_vat_rates):
-    regime = FiscalRegime(name="Regime de Exclusao (teste)", allows_nor=False, allows_red=False, allows_ise=True)
+    regime = FiscalRegime(name="Regime de Exclusão (teste)", allows_nor=False, allows_red=False, allows_ise=True)
     db.add(regime)
     await db.flush()
 
     company = await create_company(
-        db, name="Empresa Exclusao Teste", nif="5111111111", email="exclusao@teste.co.ao",
+        db, name="Empresa Exclusão Teste", nif="5111111111", email="exclusão@teste.co.ao",
         phone_number="+244911111111", gestor_full_name="Gestor Teste",
         gestor_phone_number="+244922222222", gestor_password="Teste@2026",
         fiscal_regime_id=regime.id,

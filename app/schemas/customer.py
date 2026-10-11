@@ -17,16 +17,16 @@ EMAIL_PATTERN = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 def _validate_name(v: str) -> str:
     cleaned = " ".join(v.split())
     if not cleaned:
-        raise ValueError("Nome do cliente nao pode estar vazio")
+        raise ValueError("Nome do cliente não pode estar vazio")
     return cleaned
 
 
 def _validate_nif(v: str) -> str:
     cleaned = v.strip().upper()
     if not re.match(r"^[A-Z0-9]+$", cleaned):
-        raise ValueError("NIF invalido - deve conter apenas letras e digitos")
+        raise ValueError("NIF inválido - deve conter apenas letras e digitos")
     if len(cleaned) < 9:
-        raise ValueError("NIF invalido - deve ter pelo menos 9 caracteres")
+        raise ValueError("NIF inválido - deve ter pelo menos 9 caracteres")
     return cleaned
 
 
@@ -35,20 +35,20 @@ def _validate_email(v: str | None) -> str | None:
         return None
     cleaned = v.strip()
     if not EMAIL_PATTERN.match(cleaned):
-        raise ValueError("Email invalido - formato esperado: nome@dominio.com")
+        raise ValueError("Email inválido - formato esperado: nome@dominio.com")
     return cleaned.lower()
 
 
 def _validate_phone_required(v: str) -> str:
     if not v:
-        raise ValueError("Numero de telefone e obrigatorio")
+        raise ValueError("Número de telefone é obrigatório")
     try:
         parsed = phonenumbers.parse(v, None)
         if not phonenumbers.is_valid_number(parsed):
-            raise ValueError("Numero de telefone invalido")
+            raise ValueError("Número de telefone inválido")
         return phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164)
     except phonenumbers.NumberParseException:
-        raise ValueError("Formato de numero de telefone invalido (esperado: +244923456789)")
+        raise ValueError("Formato de número de telefone inválido (esperado: +244923456789)")
 
 
 def _validate_phone(v: str | None) -> str | None:
@@ -57,10 +57,10 @@ def _validate_phone(v: str | None) -> str | None:
     try:
         parsed = phonenumbers.parse(v, None)
         if not phonenumbers.is_valid_number(parsed):
-            raise ValueError("Numero de telefone invalido")
+            raise ValueError("Número de telefone inválido")
         return phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164)
     except phonenumbers.NumberParseException:
-        raise ValueError("Formato de numero de telefone invalido (esperado: +244923456789)")
+        raise ValueError("Formato de número de telefone inválido (esperado: +244923456789)")
 
 
 class CustomerCreateRequest(BaseModel):

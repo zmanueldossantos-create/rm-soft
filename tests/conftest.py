@@ -165,8 +165,8 @@ async def company_with_essentials(db):
     vat_nor = VAT(company_id=company.id, name="Taxa normal", rate=14, tax_category="NOR")
     db.add_all([vat_ise, vat_red, vat_nor])
 
-    pm_numerario = PaymentMethodCatalog(code="NU", name="Numerario", is_cash=True)
-    pm_mb = PaymentMethodCatalog(code="MB", name="Referencia Multicaixa", is_cash=False)
+    pm_numerario = PaymentMethodCatalog(code="NU", name="Numerário", is_cash=True)
+    pm_mb = PaymentMethodCatalog(code="MB", name="Referência Multicaixa", is_cash=False)
     db.add_all([pm_numerario, pm_mb])
     await db.flush()
     db.add_all([
@@ -224,10 +224,10 @@ async def company_with_essentials(db):
         db.add(DocumentType(code="FR", name="Fatura/Recibo", area="FACTURACAO", electronic_eligible=True, **DOCUMENT_TYPE_RULES["FR"]))
     existing_nc = (await db.execute(select(DocumentType).where(DocumentType.code == "NC"))).scalar_one_or_none()
     if existing_nc is None:
-        db.add(DocumentType(code="NC", name="Nota de Credito", area="FACTURACAO", electronic_eligible=True, **DOCUMENT_TYPE_RULES["NC"]))
+        db.add(DocumentType(code="NC", name="Nota de Crédito", area="FACTURACAO", electronic_eligible=True, **DOCUMENT_TYPE_RULES["NC"]))
     existing_nd = (await db.execute(select(DocumentType).where(DocumentType.code == "ND"))).scalar_one_or_none()
     if existing_nd is None:
-        db.add(DocumentType(code="ND", name="Nota de Debito", area="FACTURACAO", electronic_eligible=True, **DOCUMENT_TYPE_RULES["ND"]))
+        db.add(DocumentType(code="ND", name="Nota de Débito", area="FACTURACAO", electronic_eligible=True, **DOCUMENT_TYPE_RULES["ND"]))
     existing_rc = (await db.execute(select(DocumentType).where(DocumentType.code == "RC"))).scalar_one_or_none()
     if existing_rc is None:
         db.add(DocumentType(code="RC", name="Recibo", area="TESOURARIA", electronic_eligible=True, **DOCUMENT_TYPE_RULES["RC"]))

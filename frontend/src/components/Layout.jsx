@@ -240,7 +240,7 @@ export default function Layout() {
               <NavLink to="/configuracoes" icon={SlidersHorizontal} label="Configurações" active={isActive('/configuracoes')} />
             )}
             {user?.role === 'SUPER_ADMIN' && (
-              <NavLink to="/visao-global" icon={LayoutGrid} label="Visao global" active={isActive('/visao-global')} />
+              <NavLink to="/visao-global" icon={LayoutGrid} label="Visão global" active={isActive('/visao-global')} />
             )}
             {menuGroups.map((group) => (
               group.items.length > 1 ? (

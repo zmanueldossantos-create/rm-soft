@@ -95,7 +95,7 @@ async def get_account_or_raise(db: AsyncSession, company_id: uuid.UUID, account_
     result = await db.execute(select(OpenAccount).where(OpenAccount.id == account_id, OpenAccount.company_id == company_id))
     account = result.scalar_one_or_none()
     if account is None:
-        raise OpenAccountNotFoundError("Conta nao encontrada")
+        raise OpenAccountNotFoundError("Conta não encontrada")
     return account
 
 
@@ -121,7 +121,7 @@ async def add_line(
         raise InvalidLineError("A quantidade deve ser superior a zero")
     account = await get_account_or_raise(db, company_id, account_id)
     if account.status == OpenAccountStatus.FECHADA:
-        raise AccountAlreadyClosedError("Esta conta ja esta fechada")
+        raise AccountAlreadyClosedError("Esta conta já está fechada")
     # stay_rate: only the check-in itself puts the room rate on a stay's account
     if service_id is not None and not stay_rate and service_id == await _stay_rate_service_id(db, account):
         raise InvalidLineError(STAY_RATE_LOCKED)
@@ -130,9 +130,9 @@ async def add_line(
         result = await db.execute(select(Product).where(Product.id == product_id, Product.company_id == company_id))
         item = result.scalar_one_or_none()
         if item is None:
-            raise ItemNotFoundError("Produto nao encontrado")
+            raise ItemNotFoundError("Produto não encontrado")
         if item.is_raw_material:
-            raise ItemNotFoundError("Materia-prima nao pode ser adicionada a uma conta")
+            raise ItemNotFoundError("Materia-prima não pode ser adicionada a uma conta")
         # Sold in its base unit or one of its sale units (a CX of 24 at its own price), exactly as in the till.
         unit_price, unit_factor, line_sale_unit_id, unit_code = await _resolve_unit(db, company_id, item, sale_unit_id, quantity)
         name_snapshot = item.name
@@ -141,7 +141,7 @@ async def add_line(
         result = await db.execute(select(Service).where(Service.id == service_id, Service.company_id == company_id))
         item = result.scalar_one_or_none()
         if item is None:
-            raise ItemNotFoundError("Servico nao encontrado")
+            raise ItemNotFoundError("Serviço não encontrado")
         if account.booking_id is None and item.resource_type_id is not None:
             # a room rate goes on its stay's account only (closed as a stay sale) - see pos_service._ensure_no_stay_rate
             from app.models.resource_type_catalog import ResourceTypeCatalog
@@ -152,7 +152,7 @@ async def add_line(
         unit_factor, line_sale_unit_id, unit_code = 1.0, None, None
         kitchen_status = None
     else:
-        raise ItemNotFoundError("Indique um produto ou servico")
+        raise ItemNotFoundError("Indique um produto ou serviço")
 
     if product_id is not None:
         await _ensure_stock(db, company_id, account, item, float(quantity) * unit_factor)
@@ -201,7 +201,7 @@ async def update_line_quantity(
     None in that case."""
     account = await get_account_or_raise(db, company_id, account_id)
     if account.status == OpenAccountStatus.FECHADA:
-        raise AccountAlreadyClosedError("Esta conta ja esta fechada")
+        raise AccountAlreadyClosedError("Esta conta já está fechada")
 
     result = await db.execute(select(OpenAccountLine).where(OpenAccountLine.id == line_id, OpenAccountLine.account_id == account_id))
     line = result.scalar_one_or_none()
@@ -215,7 +215,7 @@ async def update_line_quantity(
     if line.kitchen_status == KITCHEN_WAITING:
         # sent, not started yet: the room may lower it (the kitchen sees 'Modificado') or cancel it - never raise it
         if float(quantity) - float(line.quantity) > _QTY_EPS:
-            raise InvalidLineError("Este prato ja foi enviado para a cozinha - adicione-o de novo, segue no proximo envio")
+            raise InvalidLineError("Este prato já foi enviado para a cozinha - adicione-o de novo, segue no próximo envio")
         if quantity <= 0:
             _cancel_line(line, "Anulado pela sala", user_id)
         else:
@@ -246,7 +246,7 @@ async def update_line_quantity(
 async def remove_line(db: AsyncSession, company_id: uuid.UUID, account_id: uuid.UUID, line_id: uuid.UUID, user_id: uuid.UUID | None = None) -> None:
     account = await get_account_or_raise(db, company_id, account_id)
     if account.status == OpenAccountStatus.FECHADA:
-        raise AccountAlreadyClosedError("Esta conta ja esta fechada")
+        raise AccountAlreadyClosedError("Esta conta já está fechada")
     result = await db.execute(select(OpenAccountLine).where(OpenAccountLine.id == line_id, OpenAccountLine.account_id == account_id))
     line = result.scalar_one_or_none()
     if line is None:
@@ -271,12 +271,12 @@ async def close_account(
     then marks the account FECHADA and links the resulting invoice."""
     account = await get_account_or_raise(db, company_id, account_id)
     if account.status == OpenAccountStatus.FECHADA:
-        raise AccountAlreadyClosedError("Esta conta ja esta fechada")
+        raise AccountAlreadyClosedError("Esta conta já está fechada")
 
     lines = await list_account_lines(db, account_id)
     lines = [l for l in lines if l.kitchen_status != KITCHEN_CANCELLED]  # a cancelled dish is never invoiced
     if not lines:
-        raise EmptyAccountError("Nao e possivel fechar uma conta sem artigos")
+        raise EmptyAccountError("Não é possível fechar uma conta sem artigos")
 
     lines_input = [
         {"product_id": str(l.product_id) if l.product_id else None, "service_id": str(l.service_id) if l.service_id else None, "quantity": float(l.quantity),
@@ -354,9 +354,9 @@ async def transfer_lines(
     """
     source = await get_account_or_raise(db, company_id, source_account_id)
     if source.status == OpenAccountStatus.FECHADA:
-        raise AccountAlreadyClosedError("Esta conta ja esta fechada")
+        raise AccountAlreadyClosedError("Esta conta já está fechada")
     if source.booking_id is not None:
-        raise InvalidTransferError("Contas de estadia de hotel nao permitem transferencia de linhas")
+        raise InvalidTransferError("Contas de estadia de hotel não permitem transferência de linhas")
     if not items:
         raise InvalidTransferError("Selecione pelo menos um artigo para transferir")
 
@@ -374,21 +374,21 @@ async def transfer_lines(
     )
     lines = {l.id: l for l in lines_result.scalars().all()}
     if len(lines) != len(wanted):
-        raise ItemNotFoundError("Linha nao encontrada nesta conta")
+        raise ItemNotFoundError("Linha não encontrada nesta conta")
     for line_id, quantity in wanted.items():
         if quantity - float(lines[line_id].quantity) > _QTY_EPS:
             raise InvalidTransferError("Quantidade a transferir superior a quantidade existente na conta")
         if lines[line_id].kitchen_status == KITCHEN_CANCELLED:
-            raise InvalidTransferError("Uma linha anulada nao se transfere")
+            raise InvalidTransferError("Uma linha anulada não se transfere")
 
     if target_account_id is not None:
         if target_account_id == source.id:
             raise InvalidTransferError("A conta de destino deve ser diferente da conta de origem")
         target = await get_account_or_raise(db, company_id, target_account_id)
         if target.status == OpenAccountStatus.FECHADA:
-            raise AccountAlreadyClosedError("A conta de destino ja esta fechada")
+            raise AccountAlreadyClosedError("A conta de destino já está fechada")
         if target.booking_id is not None:
-            raise InvalidTransferError("Contas de estadia de hotel nao permitem transferencia de linhas")
+            raise InvalidTransferError("Contas de estadia de hotel não permitem transferência de linhas")
         if target.activity_id != source.activity_id:
             raise InvalidTransferError("As contas devem pertencer a mesma atividade")
     else:
@@ -474,7 +474,7 @@ async def _product_or_raise(db: AsyncSession, company_id: uuid.UUID, product_id:
         select(Product).where(Product.id == product_id, Product.company_id == company_id)
     )).scalar_one_or_none()
     if product is None:
-        raise ItemNotFoundError("Produto nao encontrado")
+        raise ItemNotFoundError("Produto não encontrado")
     return product
 
 
@@ -484,7 +484,7 @@ async def _resolve_unit(
     """Price, factor, sale unit and unit code of a product line - the till's own rule (resolve_line_unit):
     an internal-use article is never sold, a decimal quantity only in a fractional unit (KG, L)."""
     if getattr(product, "internal_use_only", False):
-        raise InvalidLineError(f"{product.name} e de uso interno e nao pode ser vendido")
+        raise InvalidLineError(f"{product.name} e de uso interno e não pode ser vendido")
     from app.services.product_sale_unit_service import SaleUnitInvalidError, resolve_line_unit
     try:
         price, factor, su_id, code = await resolve_line_unit(db, company_id, product, sale_unit_id, quantity)
@@ -528,13 +528,13 @@ async def _ensure_stock(
     if pos_stock["warehouse_id"] is None:
         return
     if pos_stock["exits_blocked"]:
-        raise InsufficientStockError("Saidas bloqueadas no armazem deste ponto de venda")
+        raise InsufficientStockError("Saídas bloqueadas no armazem deste ponto de venda")
     if pos_stock["allow_negative_stock"]:
         return
     available = float(pos_stock["stock"].get(str(product.id), 0.0))
     if extra_base - available > _QTY_EPS:
         _, _, _, base_code = await _resolve_unit(db, company_id, product, None, None)
-        raise InsufficientStockError(f"Stock insuficiente: {_fmt_qty(max(available, 0.0))} {base_code or 'UN'} disponivel")
+        raise InsufficientStockError(f"Stock insuficiente: {_fmt_qty(max(available, 0.0))} {base_code or 'UN'} disponível")
 
 
 async def change_line_unit(
@@ -544,16 +544,16 @@ async def change_line_unit(
     unit, a bigger unit must fit in the stock."""
     account = await get_account_or_raise(db, company_id, account_id)
     if account.status == OpenAccountStatus.FECHADA:
-        raise AccountAlreadyClosedError("Esta conta ja esta fechada")
+        raise AccountAlreadyClosedError("Esta conta já está fechada")
     line = (await db.execute(
         select(OpenAccountLine).where(OpenAccountLine.id == line_id, OpenAccountLine.account_id == account_id)
     )).scalar_one_or_none()
     if line is None:
-        raise ItemNotFoundError("Linha nao encontrada nesta conta")
+        raise ItemNotFoundError("Linha não encontrada nesta conta")
     if line.product_id is None:
-        raise InvalidLineError("Um servico nao tem outras unidades")
+        raise InvalidLineError("Um serviço não tem outras unidades")
     if line.kitchen_status not in (None, KITCHEN_NOT_SENT):
-        raise InvalidLineError("Este prato ja foi enviado para a cozinha")
+        raise InvalidLineError("Este prato já foi enviado para a cozinha")
     product = await _product_or_raise(db, company_id, line.product_id)
     price, factor, su_id, code = await _resolve_unit(db, company_id, product, sale_unit_id, float(line.quantity))
     delta = float(line.quantity) * (factor - float(line.unit_factor or 1))
@@ -653,7 +653,7 @@ async def cancel_empty_account(db: AsyncSession, company_id: uuid.UUID, account_
     cancelled here: it closes at check-out."""
     account = await get_account_or_raise(db, company_id, account_id)
     if account.status == OpenAccountStatus.FECHADA:
-        raise AccountAlreadyClosedError("Esta conta ja esta fechada")
+        raise AccountAlreadyClosedError("Esta conta já está fechada")
     if account.booking_id is not None:
         raise InvalidLineError("Uma conta de estadia fecha-se no check-out")
     lines = (await db.execute(
@@ -683,8 +683,8 @@ KITCHEN_READY = "PRONTO"
 KITCHEN_CANCELLED = "ANULADO"
 KITCHEN_LOCKED = (KITCHEN_PREPARING, KITCHEN_READY, KITCHEN_CANCELLED)
 _LOCKED_MESSAGE = {
-    KITCHEN_PREPARING: "A cozinha ja esta a preparar este prato",
-    KITCHEN_READY: "Este prato ja esta pronto",
+    KITCHEN_PREPARING: "A cozinha já está a preparar este prato",
+    KITCHEN_READY: "Este prato já está pronto",
     KITCHEN_CANCELLED: "Esta linha esta anulada",
 }
 
@@ -722,14 +722,14 @@ async def send_to_kitchen(
     from app.models.kitchen_order import KitchenOrder
     account = await get_account_or_raise(db, company_id, account_id)
     if account.status == OpenAccountStatus.FECHADA:
-        raise AccountAlreadyClosedError("Esta conta ja esta fechada")
+        raise AccountAlreadyClosedError("Esta conta já está fechada")
     lines = (await db.execute(
         select(OpenAccountLine).where(
             OpenAccountLine.account_id == account.id, OpenAccountLine.kitchen_status == KITCHEN_NOT_SENT,
         ).with_for_update()
     )).scalars().all()
     if not lines:
-        raise InvalidLineError("Nao ha pratos por enviar para a cozinha")
+        raise InvalidLineError("Não há pratos por enviar para a cozinha")
     today = date.today()
     # one numbering at a time per company and day: two tables sent at once never get the same number
     await db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:key))"), {"key": f"kitchen:{company_id}:{today}"})
@@ -761,7 +761,7 @@ async def _default_pos_of(db: AsyncSession, company_id: uuid.UUID, activity_id: 
         ).order_by(PointOfSale.is_default.desc(), PointOfSale.created_at)
     )).scalars().first()
     if pos_id is None:
-        raise InvalidLineError("Esta atividade nao tem nenhum ponto de venda ativo")
+        raise InvalidLineError("Esta atividade não tem nenhum ponto de venda ativo")
     return pos_id
 
 

@@ -28,7 +28,7 @@ async def create_resource_type(
         select(ResourceTypeCatalog).where(ResourceTypeCatalog.company_id == company_id, ResourceTypeCatalog.name == name)
     )
     if existing_result.scalar_one_or_none() is not None:
-        raise ResourceTypeAlreadyExistsError(f"Ja existe um tipo de recurso chamado '{name}'")
+        raise ResourceTypeAlreadyExistsError(f"Já existe um tipo de recurso chamado '{name}'")
 
     resource_type = ResourceTypeCatalog(
         company_id=company_id, name=name, requires_service=requires_service,
@@ -46,7 +46,7 @@ async def get_resource_type_or_raise(db: AsyncSession, company_id: uuid.UUID, re
     )
     resource_type = result.scalar_one_or_none()
     if resource_type is None:
-        raise ResourceTypeNotFoundError("Tipo de recurso nao encontrado")
+        raise ResourceTypeNotFoundError("Tipo de recurso não encontrado")
     return resource_type
 
 
@@ -66,7 +66,7 @@ async def update_resource_type(
             select(ResourceTypeCatalog).where(ResourceTypeCatalog.company_id == company_id, ResourceTypeCatalog.name == name, ResourceTypeCatalog.id != resource_type_id)
         )
         if existing_result.scalar_one_or_none() is not None:
-            raise ResourceTypeAlreadyExistsError(f"Ja existe um tipo de recurso chamado '{name}'")
+            raise ResourceTypeAlreadyExistsError(f"Já existe um tipo de recurso chamado '{name}'")
     resource_type.name = name
     resource_type.requires_service = requires_service
     resource_type.default_start_time = default_start_time

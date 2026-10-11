@@ -46,8 +46,8 @@ export default function RequirePermission({ perm, anyOf, allowSuperAdmin = false
   return (
     <div className="flex flex-col items-center justify-center py-24 text-center gap-3">
       <Lock size={28} className="text-text-muted" />
-      <p className="text-text-primary font-medium">Sem acesso a esta pagina</p>
-      <p className="text-text-muted text-sm">O seu perfil nao tem permissao para ver este ecra. Contacte o gestor.</p>
+      <p className="text-text-primary font-medium">Sem acesso a esta página</p>
+      <p className="text-text-muted text-sm">O seu perfil não tem permissão para ver este ecrã. Contacte o gestor.</p>
     </div>
   );
 }

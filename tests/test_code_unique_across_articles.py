@@ -23,5 +23,5 @@ async def test_a_product_cannot_take_a_services_code(db, company_with_essentials
     cid = ctx["company"].id
     db.add(Service(company_id=cid, code="DUP-2", name="Consulta", vat_id=ctx["vat_ise"].id, price=1000))
     await db.commit()
-    with pytest.raises(product_service.ProductAlreadyExistsError, match="servico registado"):
+    with pytest.raises(product_service.ProductAlreadyExistsError, match="serviço registado"):
         await product_service._check_all_fields_available(db, cid, "DUP-2", "Outro nome", None)

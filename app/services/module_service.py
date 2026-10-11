@@ -30,7 +30,7 @@ async def get_module_or_raise(db: AsyncSession, module_id: uuid.UUID) -> Module:
     result = await db.execute(select(Module).where(Module.id == module_id))
     module = result.scalar_one_or_none()
     if module is None:
-        raise ModuleNotFoundError("Modulo nao encontrado")
+        raise ModuleNotFoundError("Modulo não encontrado")
     return module
 
 

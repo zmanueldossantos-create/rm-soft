@@ -70,7 +70,7 @@ export default function ConsumoInterno() {
       if (dateTo) filters.dateTo = dateTo + 'T23:59:59';
       setEntries(await listInternalConsumption(filters));
     } catch (err) {
-      setError(extractErrorMessage(err, 'Erro ao carregar historico'));
+      setError(extractErrorMessage(err, 'Erro ao carregar histórico'));
     } finally {
       setLoading(false);
     }
@@ -91,7 +91,7 @@ export default function ConsumoInterno() {
     e.preventDefault();
     setFormError('');
     if (!form.productId || !form.quantity || !form.reasonId) {
-      setFormError('Preencha os campos obrigatorios');
+      setFormError('Preencha os campos obrigatórios');
       return;
     }
     setSaving(true);
@@ -154,7 +154,7 @@ export default function ConsumoInterno() {
           <DateInput value={dateFrom} onChange={(e) => handleDateFromChange(e.target.value)} className="bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
         </div>
         <div>
-          <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Ate</label>
+          <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Até</label>
           <DateInput value={dateTo} min={dateFrom || undefined} onChange={(e) => setDateTo(e.target.value)} className="bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
         </div>
       </div>
@@ -171,7 +171,7 @@ export default function ConsumoInterno() {
       ) : entries.length === 0 ? (
         <div className="bg-bg-elevated border border-border rounded-lg p-10 text-center">
           <PackageMinus size={28} className="text-text-muted mx-auto mb-3" />
-          <p className="text-text-primary font-medium mb-1">Nenhum consumo registado neste periodo</p>
+          <p className="text-text-primary font-medium mb-1">Nenhum consumo registado neste período</p>
         </div>
       ) : (
         <div className="bg-bg-elevated border border-border rounded-lg overflow-hidden">
@@ -232,7 +232,7 @@ export default function ConsumoInterno() {
                 placeholder="Selecionar"
               />
               {reasons.length === 0 && (
-                <p className="text-[12px] text-text-muted mt-1.5">Nenhum motivo disponivel - crie um em Configuracoes {'>'} Catalogos {'>'} Motivos de Consumo Interno.</p>
+                <p className="text-[12px] text-text-muted mt-1.5">Nenhum motivo disponível - crie um em Configurações {'>'} Catalogos {'>'} Motivos de Consumo Interno.</p>
               )}
             </div>
             <div className="flex-1">

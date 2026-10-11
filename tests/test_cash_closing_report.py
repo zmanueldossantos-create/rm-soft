@@ -20,7 +20,7 @@ async def test_the_closing_report_matches_the_closing_and_never_moves(db, compan
     ctx = company_with_essentials
     company_id, gestor, pos_id = ctx["company"].id, ctx["gestor"], ctx["pos"].id
     multicaixa_id = (await db.execute(text("SELECT id FROM payment_method_catalog WHERE code = 'MB'"))).scalar_one()
-    service = Service(company_id=company_id, code="SRV-REP", name="Servico relatorio", price=1000.0, vat_id=ctx["vat_nor"].id)
+    service = Service(company_id=company_id, code="SRV-REP", name="Serviço relatório", price=1000.0, vat_id=ctx["vat_nor"].id)
     db.add(service)
     await db.commit()
 

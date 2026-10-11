@@ -15,7 +15,7 @@ class ServiceTypeRequest(BaseModel):
     def validate_name(cls, v: str) -> str:
         cleaned = " ".join(v.split())
         if not cleaned:
-            raise ValueError("Nome do tipo de servico nao pode estar vazio")
+            raise ValueError("Nome do tipo de serviço não pode estar vazio")
         return cleaned
 
 

@@ -24,7 +24,7 @@ async def export_saf_t(
     - "Modo Fatura" (section 4.2), submitted manually to the AGT portal.
     """
     if month < 1 or month > 12:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Mes invalido")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Mês inválido")
 
     try:
         xml_bytes = await export_saf_t_for_period(db, current_user.company_id, year, month)

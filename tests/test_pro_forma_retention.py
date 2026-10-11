@@ -13,7 +13,7 @@ from app.services.invoice_service import convert_pro_forma_to_invoice, create_pr
 async def test_pro_forma_has_the_withholding_of_the_invoice_it_becomes(db, company_with_essentials):
     ctx = company_with_essentials
     company_id, activity_id = ctx["company"].id, ctx["activity"].id
-    tax = WithholdingTax(name="Retencao PF", rate=6.5, tax_type="II")
+    tax = WithholdingTax(name="Retenção PF", rate=6.5, tax_type="II")
     db.add(tax)
     company_customer = Customer(company_id=company_id, name="Empresa PJ", nif="5000222111", legal_person_type=LegalPersonType.JURIDICA)
     db.add(company_customer)
@@ -21,7 +21,7 @@ async def test_pro_forma_has_the_withholding_of_the_invoice_it_becomes(db, compa
     await db.refresh(tax)
     await db.refresh(company_customer)
     customer_id = company_customer.id
-    service = Service(company_id=company_id, code="SRV-PFR", name="Servico PFR", price=10000.0,
+    service = Service(company_id=company_id, code="SRV-PFR", name="Serviço PFR", price=10000.0,
                       vat_id=ctx["vat_nor"].id, withholding_tax_id=tax.id)
     db.add(service)
     await db.commit()

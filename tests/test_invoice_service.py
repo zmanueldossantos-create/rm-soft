@@ -145,7 +145,7 @@ async def test_create_credit_note_partial_marks_original_rectificado_parcial(db,
 
     credit_note = await create_credit_note(
         db, company.id, setup["activity"].id, reference_invoice_id=invoice.id,
-        credit_note_reason="RTF", credit_note_cause="Devolucao parcial de 1 unidade",
+        credit_note_reason="RTF", credit_note_cause="Devolução parcial de 1 unidade",
         lines_input=[{"invoice_line_id": original_line.id, "quantity": 1}],
     )
 
@@ -161,7 +161,7 @@ async def test_create_invoice_with_service_line_skips_stock_and_calculates_vat(d
     setup = company_with_essentials
     company = setup["company"]
     service = Service(
-        company_id=company.id, code="SRV-TEST", name="Servico de Teste",
+        company_id=company.id, code="SRV-TEST", name="Serviço de Teste",
         price=500.0, vat_id=setup["vat_red"].id,
     )
     db.add(service)
@@ -230,7 +230,7 @@ async def test_create_invoice_applies_retention_for_juridica_customer_service(db
     setup = company_with_essentials
     company = setup["company"]
 
-    wh_tax = WithholdingTax(name="Retencao IRPC 6.5%", rate=6.5)
+    wh_tax = WithholdingTax(name="Retenção IRPC 6.5%", rate=6.5)
     db.add(wh_tax)
     await db.flush()
 
@@ -238,7 +238,7 @@ async def test_create_invoice_applies_retention_for_juridica_customer_service(db
     db.add(customer)
     await db.flush()
 
-    service = Service(company_id=company.id, code="SRV-RET", name="Servico Sujeito a Retencao", price=1000.0, vat_id=setup["vat_nor"].id, withholding_tax_id=wh_tax.id)
+    service = Service(company_id=company.id, code="SRV-RET", name="Serviço Sujeito a Retenção", price=1000.0, vat_id=setup["vat_nor"].id, withholding_tax_id=wh_tax.id)
     db.add(service)
     await db.commit()
     await db.refresh(service)
@@ -256,7 +256,7 @@ async def test_create_invoice_no_retention_for_singular_customer(db, company_wit
     setup = company_with_essentials
     company = setup["company"]
 
-    wh_tax = WithholdingTax(name="Retencao IRPC 6.5%", rate=6.5)
+    wh_tax = WithholdingTax(name="Retenção IRPC 6.5%", rate=6.5)
     db.add(wh_tax)
     await db.flush()
 
@@ -264,7 +264,7 @@ async def test_create_invoice_no_retention_for_singular_customer(db, company_wit
     db.add(customer)
     await db.flush()
 
-    service = Service(company_id=company.id, code="SRV-RET2", name="Servico Sujeito a Retencao", price=1000.0, vat_id=setup["vat_nor"].id, withholding_tax_id=wh_tax.id)
+    service = Service(company_id=company.id, code="SRV-RET2", name="Serviço Sujeito a Retenção", price=1000.0, vat_id=setup["vat_nor"].id, withholding_tax_id=wh_tax.id)
     db.add(service)
     await db.commit()
     await db.refresh(service)

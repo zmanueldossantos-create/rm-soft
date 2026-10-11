@@ -80,7 +80,7 @@ async def get_warehouse_or_raise(db: AsyncSession, company_id: uuid.UUID, wareho
     )
     warehouse = result.scalar_one_or_none()
     if warehouse is None:
-        raise WarehouseNotFoundError("Armazem nao encontrado")
+        raise WarehouseNotFoundError("Armazem não encontrado")
     return warehouse
 
 
@@ -122,7 +122,7 @@ async def update_warehouse(
     warehouse = await get_warehouse_or_raise(db, company_id, warehouse_id)
     central = await get_default_warehouse(db, company_id)
     if warehouse.id == central.id:
-        raise CentralWarehouseNotEditableError("O armazem central nao pode ser editado")
+        raise CentralWarehouseNotEditableError("O armazem central não pode ser editado")
 
     warehouse.name = name
     warehouse.code = code
@@ -143,7 +143,7 @@ async def toggle_warehouse_status(db: AsyncSession, company_id: uuid.UUID, wareh
     warehouse = await get_warehouse_or_raise(db, company_id, warehouse_id)
     central = await get_default_warehouse(db, company_id)
     if warehouse.id == central.id:
-        raise CentralWarehouseNotEditableError("O armazem central nao pode ser desativado")
+        raise CentralWarehouseNotEditableError("O armazem central não pode ser desativado")
     warehouse.is_active = not warehouse.is_active
     await db.commit()
     await db.refresh(warehouse)
@@ -177,7 +177,7 @@ async def _stock_rule(db: AsyncSession, product_id: uuid.UUID, warehouse_id: uui
     product = (await db.execute(select(Product).where(Product.id == product_id))).scalar_one_or_none()
     if product is not None and not product.managed_by_stock:
         if strict:
-            raise StockBlockedError(f"{product.name} nao e gerido por stock")
+            raise StockBlockedError(f"{product.name} não e gerido por stock")
         return False
     warehouse = (await db.execute(select(Warehouse).where(Warehouse.id == warehouse_id))).scalar_one_or_none()
     if warehouse is not None:
@@ -185,7 +185,7 @@ async def _stock_rule(db: AsyncSession, product_id: uuid.UUID, warehouse_id: uui
         if direction == "in" and warehouse.entradas_bloqueadas:
             raise StockBlockedError(f"Entradas bloqueadas no armazem {name}".strip())
         if direction == "out" and warehouse.saidas_bloqueadas:
-            raise StockBlockedError(f"Saidas bloqueadas no armazem {name}".strip())
+            raise StockBlockedError(f"Saídas bloqueadas no armazem {name}".strip())
     return True
 
 
@@ -262,7 +262,7 @@ async def _to_base_quantity(db: AsyncSession, company_id: uuid.UUID, product_id:
         select(Product).where(Product.id == product_id, Product.company_id == company_id)
     )).scalar_one_or_none()
     if product is None:
-        raise StockQuantityError("Produto nao encontrado")
+        raise StockQuantityError("Produto não encontrado")
     try:
         _price, factor, _sale_unit_id, _code = await resolve_line_unit(db, company_id, product, sale_unit_id, quantity)
     except SaleUnitInvalidError as e:
@@ -291,7 +291,7 @@ async def transfer_stock(
     posting_period = await resolve_posting_period(db, company_id, fiscal_period_id)
     quantity = await _to_base_quantity(db, company_id, product_id, quantity, sale_unit_id)
     if from_warehouse_id == to_warehouse_id:
-        raise ValueError("O armazem de origem e destino nao pode ser o mesmo")
+        raise ValueError("O armazem de origem e destino não pode ser o mesmo")
 
     await get_warehouse_or_raise(db, company_id, from_warehouse_id)
     await get_warehouse_or_raise(db, company_id, to_warehouse_id)
@@ -459,7 +459,7 @@ async def return_stock_for_credit_note(
     db.add(StockMovement(
         company_id=company_id, fiscal_period_id=posting_period.id, product_id=product_id, warehouse_id=warehouse_id,
         movement_type=MovementType.RECEPCAO, quantity=quantity, reference=reference,
-        reason="Devolucao - nota de credito",
+        reason="Devolução - nota de crédito",
     ))
 
 
@@ -553,7 +553,7 @@ async def estimate_production_capacity(
     """
     recipe = await _get_recipe_rows(db, company_id, finished_product_id)
     if not recipe:
-        raise NoRecipeError("Este produto nao tem receita definida")
+        raise NoRecipeError("Este produto não tem receita definida")
 
     product_result = await db.execute(select(Product).where(Product.id == finished_product_id))
     product = product_result.scalar_one()
@@ -607,7 +607,7 @@ async def produce_stock(
     quantity_to_produce = await _to_base_quantity(db, company_id, finished_product_id, quantity_to_produce, sale_unit_id)  # 5 CX -> 150 UN
     recipe = await _get_recipe_rows(db, company_id, finished_product_id)
     if not recipe:
-        raise NoRecipeError("Este produto nao tem receita definida")
+        raise NoRecipeError("Este produto não tem receita definida")
 
     await get_warehouse_or_raise(db, company_id, warehouse_id)
     await _stock_rule(db, finished_product_id, warehouse_id, "in", strict=True)
@@ -750,7 +750,7 @@ async def get_stock_dashboard(db: AsyncSession, company_id: uuid.UUID, fiscal_pe
             )
         )).first()
         if chosen is None:
-            raise StockQuantityError("Periodo fiscal invalido")
+            raise StockQuantityError("Período fiscal inválido")
         period, year = chosen
         period_label = f"{MONTH_NAMES_PT[period.month]} {year}"
         end_of_month = _date(year + (1 if period.month == 12 else 0), period.month % 12 + 1, 1)

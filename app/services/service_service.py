@@ -32,19 +32,19 @@ async def _check_fields_available(
     if exclude_id is not None:
         code_query = code_query.where(Service.id != exclude_id)
     if (await db.execute(code_query)).scalar_one_or_none() is not None:
-        raise ServiceAlreadyExistsError("Ja existe um servico registado com este codigo")
+        raise ServiceAlreadyExistsError("Já existe um serviço registado com este código")
     # products and services share one list of codes in the SAF-T (MasterFiles / Product): a code is unique across both
     from app.models.product import Product
     if (await db.execute(
         select(Product.id).where(Product.company_id == company_id, func.lower(Product.code) == code.lower()).limit(1)
     )).scalar_one_or_none() is not None:
-        raise ServiceAlreadyExistsError("Ja existe um produto registado com este codigo")
+        raise ServiceAlreadyExistsError("Já existe um produto registado com este código")
 
     name_query = select(Service).where(Service.company_id == company_id, func.lower(Service.name) == name.lower())
     if exclude_id is not None:
         name_query = name_query.where(Service.id != exclude_id)
     if (await db.execute(name_query)).scalar_one_or_none() is not None:
-        raise ServiceAlreadyExistsError("Ja existe um servico registado com este nome")
+        raise ServiceAlreadyExistsError("Já existe um serviço registado com este nome")
 
 
 async def create_service(
@@ -67,7 +67,7 @@ async def create_service(
 ) -> Service:
     await _check_fields_available(db, company_id, code, name)
     if unit_of_measure_id is None:  # every article has a base unit: the SAF-T and the documents show it
-        raise ArticleUnitRequiredError("A unidade base e obrigatoria")
+        raise ArticleUnitRequiredError("A unidade base é obrigatória")
     exemption_reason_id = await resolve_article_vat(db, company_id, vat_id, exemption_reason_id)
 
     service = Service(
@@ -112,7 +112,7 @@ async def get_service_or_raise(db: AsyncSession, company_id: uuid.UUID, service_
     result = await db.execute(select(Service).where(Service.id == service_id, Service.company_id == company_id))
     service = result.scalar_one_or_none()
     if service is None:
-        raise ServiceNotFoundError("Servico nao encontrado")
+        raise ServiceNotFoundError("Serviço não encontrado")
     return service
 
 
@@ -138,7 +138,7 @@ async def update_service(
     service = await get_service_or_raise(db, company_id, service_id)
     await _check_fields_available(db, company_id, code, name, exclude_id=service_id)
     if unit_of_measure_id is None:  # every article has a base unit: the SAF-T and the documents show it
-        raise ArticleUnitRequiredError("A unidade base e obrigatoria")
+        raise ArticleUnitRequiredError("A unidade base é obrigatória")
     exemption_reason_id = await resolve_article_vat(db, company_id, vat_id, exemption_reason_id)
 
     service.code = code

@@ -91,7 +91,7 @@ async def get_series_or_raise(db: AsyncSession, company_id: uuid.UUID, series_id
     result = await db.execute(select(DocumentSeries).where(DocumentSeries.id == series_id, DocumentSeries.company_id == company_id))
     series = result.scalar_one_or_none()
     if series is None:
-        raise SeriesNotFoundError("Serie nao encontrada")
+        raise SeriesNotFoundError("Serie não encontrada")
     return series
 
 
@@ -128,7 +128,7 @@ async def _create_one_series(
         DocumentSeries.issuance_mode == company.issuance_mode,
     ))
     if existing.scalar_one_or_none() is not None:
-        raise SeriesAlreadyExistsError(f"Ja existe uma serie para {doc_type.code} neste ano neste modo")
+        raise SeriesAlreadyExistsError(f"Já existe uma serie para {doc_type.code} neste ano neste modo")
 
     if company.issuance_mode == "ELETRONICA":
         final_series_code = simulate_agt_series_code(doc_type.code)
@@ -138,7 +138,7 @@ async def _create_one_series(
         final_series_code = f"{doc_type.code}{year}"
     else:
         if not series_code:
-            raise ManualSeriesCodeRequiredError("Codigo de serie obrigatorio quando a serie automatica por ano esta desativada")
+            raise ManualSeriesCodeRequiredError("Código de serie obrigatório quando a serie automática por ano esta desativada")
         final_series_code = series_code
 
     is_fact, is_tes, is_comp = _area_flags_for(doc_type)
@@ -186,11 +186,11 @@ async def create_series(
 
     allowed = allowed_series_years()
     if year not in allowed:
-        raise SeriesYearNotAllowedError("So e possivel criar series para " + " ou ".join(str(y) for y in allowed))
+        raise SeriesYearNotAllowedError("So é possível criar series para " + " ou ".join(str(y) for y in allowed))
 
     if document_type_id is None:
         if company.issuance_mode == "ELETRONICA":
-            raise TodosNotAllowedInElectronicError('"Todos" so esta disponivel em modo Manual')
+            raise TodosNotAllowedInElectronicError('"Todos" só esta disponível em modo Manual')
 
         wanted_areas = []
         if todos_facturacao:
@@ -233,7 +233,7 @@ async def create_series(
     # subset. See DocumentType.is_fiscal / electronic_eligible field docstrings, and the
     # matching frontend fix in CompanySettings.jsx's eligibleTypes filter.
     if company.issuance_mode == "ELETRONICA" and not doc_type.electronic_eligible and doc_type.is_fiscal:
-        raise ElectronicTypeNotEligibleError(f"{doc_type.code} nao esta disponivel para facturacao eletronica")
+        raise ElectronicTypeNotEligibleError(f"{doc_type.code} não está disponível para facturação eletrónica")
 
     series = await _create_one_series(
         db, company, doc_type, year, establishment_id, series_code, description,
@@ -274,7 +274,7 @@ async def get_or_create_current_series(db: AsyncSession, company: Company, docum
         establishments = list(est_result.scalars().all())
         if len(establishments) == 0:
             raise SeriesNotFoundError(
-                "Nenhum estabelecimento ativo configurado - crie pelo menos um (ex: SEDE) antes de faturar em modo eletronico"
+                "Nenhum estabelecimento ativo configurado - crie pelo menos um (ex: SEDE) antes de faturar em modo eletrónico"
             )
         if len(establishments) > 1:
             raise SeriesNotFoundError(
@@ -306,10 +306,10 @@ async def get_or_create_current_series(db: AsyncSession, company: Company, docum
             # constraint includes issuance_mode, so this should be rare, but surface a clear
             # message instead of letting the raw IntegrityError-derived error leak as a 500.
             raise SeriesNotFoundError(
-                "Nao foi possivel criar automaticamente a serie para este modo - configure-a manualmente em Configuracoes"
+                "Não foi possível criar automaticamente a serie para este modo - configure-a manualmente em Configurações"
             )
 
-    raise SeriesNotFoundError("Nenhuma serie configurada para este tipo de documento neste ano - configure-a em Configuracoes")
+    raise SeriesNotFoundError("Nenhuma serie configurada para este tipo de documento neste ano - configure-a em Configurações")
 
 
 async def get_next_number(db: AsyncSession, series: DocumentSeries) -> int:

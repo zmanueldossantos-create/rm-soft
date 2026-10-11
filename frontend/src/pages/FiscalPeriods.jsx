@@ -134,7 +134,7 @@ export default function FiscalPeriods() {
     try {
       await loadYear(year);
     } catch (err) {
-      setError(extractErrorMessage(err, 'Erro ao carregar os periodos'));
+      setError(extractErrorMessage(err, 'Erro ao carregar os períodos'));
     }
   }
 

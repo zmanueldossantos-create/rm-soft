@@ -15,7 +15,7 @@ from app.services.invoice_service import create_invoice, create_receipt
 
 
 async def _service(db, ctx, code, withholding_tax_id=None):
-    service = Service(company_id=ctx["company"].id, code=code, name="Servico " + code, price=1000.0,
+    service = Service(company_id=ctx["company"].id, code=code, name="Serviço " + code, price=1000.0,
                       vat_id=ctx["vat_nor"].id, withholding_tax_id=withholding_tax_id)
     db.add(service)
     await db.commit()
@@ -45,7 +45,7 @@ async def _payments(db, receipt_id):
 async def test_receipt_settles_the_invoice_pro_rata_with_its_withholding(db, company_with_essentials):
     ctx = company_with_essentials
     company_id, activity_id, numerario_id = ctx["company"].id, ctx["activity"].id, ctx["pm_numerario"].id
-    tax = WithholdingTax(name="Retencao RC", rate=6.5, tax_type="II")
+    tax = WithholdingTax(name="Retenção RC", rate=6.5, tax_type="II")
     db.add(tax)
     customer = Customer(company_id=company_id, name="Empresa PJ", nif="5000111555", legal_person_type=LegalPersonType.JURIDICA)
     db.add(customer)

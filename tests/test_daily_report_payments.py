@@ -16,7 +16,7 @@ async def test_journal_lists_the_payments_not_the_documents(db, company_with_ess
     ctx = company_with_essentials
     company_id, activity_id, pos_id, gestor = ctx["company"].id, ctx["activity"].id, ctx["pos"].id, ctx["gestor"]
     multicaixa_id = (await db.execute(text("SELECT id FROM payment_method_catalog WHERE code = 'MB'"))).scalar_one()
-    service = Service(company_id=company_id, code="SRV-JP", name="Servico JP", price=1000.0, vat_id=ctx["vat_nor"].id)
+    service = Service(company_id=company_id, code="SRV-JP", name="Serviço JP", price=1000.0, vat_id=ctx["vat_nor"].id)
     db.add(service)
     await db.commit()
     await db.refresh(service)

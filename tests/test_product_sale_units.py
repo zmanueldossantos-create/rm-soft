@@ -41,17 +41,17 @@ async def test_the_base_unit_or_a_duplicate_unit_is_refused(db, company_with_ess
     with pytest.raises(SaleUnitInvalidError, match="unidade base"):
         await create_sale_unit(db, company_id, product_id, egg_id, 1, 125)
     await create_sale_unit(db, company_id, product_id, pallet_id, 30, 3000)
-    with pytest.raises(SaleUnitInvalidError, match="ja tem esta unidade"):
+    with pytest.raises(SaleUnitInvalidError, match="já tem esta unidade"):
         await create_sale_unit(db, company_id, product_id, pallet_id, 24, 2800)
 
 
 @pytest.mark.asyncio
 async def test_a_barcode_is_unique_across_products_and_sale_units(db, company_with_essentials):
     company_id, product_id, egg_id, pallet_id, box_id = await _setup(db, company_with_essentials)
-    with pytest.raises(SaleUnitInvalidError, match="codigo de barras"):
+    with pytest.raises(SaleUnitInvalidError, match="código de barras"):
         await create_sale_unit(db, company_id, product_id, pallet_id, 30, 3000, "5600000000001")  # the egg's own barcode
     await create_sale_unit(db, company_id, product_id, pallet_id, 30, 3000, "5600000000030")
-    with pytest.raises(SaleUnitInvalidError, match="codigo de barras"):
+    with pytest.raises(SaleUnitInvalidError, match="código de barras"):
         await create_sale_unit(db, company_id, product_id, box_id, 12, 1400, "5600000000030")
 
 
@@ -125,7 +125,7 @@ async def test_below_cost_and_same_factor_are_warned(db, company_with_essentials
     await create_sale_unit(db, company_id, product_id, pallet_id, 30, 3000)
     with pytest.raises(SaleUnitNeedsConfirmationError) as excinfo:
         await create_sale_unit(db, company_id, product_id, box_id, 30, 3000)
-    assert "ja contem 30" in excinfo.value.warnings[0]
+    assert "já contem 30" in excinfo.value.warnings[0]
 
 
 def test_the_sale_unit_travels_from_a_caixa_line_to_the_invoicing_service():

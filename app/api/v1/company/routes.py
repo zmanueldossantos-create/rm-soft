@@ -27,10 +27,10 @@ router = APIRouter(prefix="/api/v1/company", tags=["company"])
 def _duplicate_field_message(error: IntegrityError) -> str:
     detail = str(getattr(error, "orig", error))
     if "ix_companies_email" in detail:
-        return "Ja existe uma empresa registada com este email"
+        return "Já existe uma empresa registada com este email"
     if "ix_companies_phone_number" in detail:
-        return "Ja existe uma empresa registada com este numero de telefone"
-    return "Nao foi possivel guardar - dados ja utilizados por outra empresa"
+        return "Já existe uma empresa registada com este número de telefone"
+    return "Não foi possível guardar - dados já utilizados por outra empresa"
 
 
 @router.get("/me/bank-accounts", response_model=list[BankAccountResponse])
@@ -67,13 +67,13 @@ async def update_my_company_contact(
         select(Company).where(Company.email == payload.email, Company.id != current_user.company_id)
     )
     if email_check.scalar_one_or_none() is not None:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ja existe uma empresa registada com este email")
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Já existe uma empresa registada com este email")
 
     phone_check = await db.execute(
         select(Company).where(Company.phone_number == payload.phone_number, Company.id != current_user.company_id)
     )
     if phone_check.scalar_one_or_none() is not None:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ja existe uma empresa registada com este numero de telefone")
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Já existe uma empresa registada com este número de telefone")
 
     company.email = payload.email
     company.phone_number = payload.phone_number
@@ -121,11 +121,11 @@ async def upload_my_company_logo(
     """Uploads/replaces the caller's own company logo. Stored locally (Phase 1)."""
     ext = os.path.splitext(file.filename or "")[1].lower()
     if ext not in ALLOWED_LOGO_EXTENSIONS:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Formato de imagem invalido - use PNG, JPG ou WEBP")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Formato de imagem inválido - use PNG, JPG ou WEBP")
 
     contents = await file.read()
     if len(contents) > MAX_LOGO_SIZE_BYTES:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Imagem demasiado grande - maximo 2MB")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Imagem demasiado grande - máximo 2MB")
 
     result = await db.execute(select(Company).where(Company.id == current_user.company_id))
     company = result.scalar_one()

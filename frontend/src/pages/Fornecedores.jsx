@@ -163,9 +163,9 @@ export default function Fornecedores() {
                 <th className="text-left px-4 py-2.5">Nome</th>
                 <th className="text-left px-4 py-2.5">NIF</th>
                 <th className="text-left px-4 py-2.5">Telefone</th>
-                <th className="text-left px-4 py-2.5">Condicoes de pagamento</th>
+                <th className="text-left px-4 py-2.5">Condições de pagamento</th>
                 <th className="text-left px-4 py-2.5">Estado</th>
-                <th className="text-right px-4 py-2.5">Acoes</th>
+                <th className="text-right px-4 py-2.5">Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -233,7 +233,7 @@ export default function Fornecedores() {
             className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer"
           >
             {saving ? <Loader2 size={17} className="animate-spin" /> : <Plus size={17} />}
-            {saving ? 'A guardar...' : editingId ? 'Guardar alteracoes' : 'Criar fornecedor'}
+            {saving ? 'A guardar...' : editingId ? 'Guardar alterações' : 'Criar fornecedor'}
           </button>
         </form>
       </Modal>

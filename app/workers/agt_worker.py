@@ -54,7 +54,7 @@ async def _submit_invoice_async(invoice_id: str) -> None:
         await asyncio.sleep(3)
 
         if random.random() < SIMULATED_FAILURE_RATE:
-            raise SimulatedAgtError("Falha simulada na comunicacao com o servidor da AGT")
+            raise SimulatedAgtError("Falha simulada na comunicação com o servidor da AGT")
 
         await _mark_status(invoice_id, InvoiceStatus.ENVIADA)
     finally:

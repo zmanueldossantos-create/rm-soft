@@ -20,7 +20,7 @@ class FiscalRegimeInvalidError(Exception):
 def _check_required_exemption(allows_ise: bool, required_exemption_id) -> None:
     """A regime that imposes an exemption motive must allow exempt (ISE) rates - the motive goes on exempt lines only."""
     if required_exemption_id is not None and not allows_ise:
-        raise FiscalRegimeInvalidError("Um regime com motivo de isencao obrigatorio tem de permitir a taxa ISE (isenta)")
+        raise FiscalRegimeInvalidError("Um regime com motivo de isenção obrigatório tem de permitir a taxa ISE (isenta)")
 
 
 async def list_fiscal_regimes(db: AsyncSession) -> list[FiscalRegime]:
@@ -60,7 +60,7 @@ async def get_fiscal_regime_or_raise(db: AsyncSession, regime_id: uuid.UUID) -> 
     result = await db.execute(select(FiscalRegime).where(FiscalRegime.id == regime_id))
     regime = result.scalar_one_or_none()
     if regime is None:
-        raise FiscalRegimeNotFoundError("Regime fiscal nao encontrado")
+        raise FiscalRegimeNotFoundError("Regime fiscal não encontrado")
     return regime
 
 

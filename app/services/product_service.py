@@ -44,7 +44,7 @@ def _check_vat_rule(vat_id: uuid.UUID | None, is_raw_material: bool) -> None:
     """A raw material is never sold (invoice, POS and open accounts refuse it), so it carries no VAT
     rate. Every other product must have one."""
     if vat_id is None and not is_raw_material:
-        raise VatRequiredError("Taxa de IVA obrigatoria para este produto")
+        raise VatRequiredError("Taxa de IVA obrigatória para este produto")
 
 
 async def _check_all_fields_available(
@@ -64,26 +64,26 @@ async def _check_all_fields_available(
     if exclude_id is not None:
         code_query = code_query.where(Product.id != exclude_id)
     if (await db.execute(code_query)).scalar_one_or_none() is not None:
-        raise ProductAlreadyExistsError("Ja existe um produto registado com este codigo")
+        raise ProductAlreadyExistsError("Já existe um produto registado com este código")
     # products and services share one list of codes in the SAF-T (MasterFiles / Product): a code is unique across both
     from app.models.service import Service
     if (await db.execute(
         select(Service.id).where(Service.company_id == company_id, func.lower(Service.code) == code.lower()).limit(1)
     )).scalar_one_or_none() is not None:
-        raise ProductAlreadyExistsError("Ja existe um servico registado com este codigo")
+        raise ProductAlreadyExistsError("Já existe um serviço registado com este código")
 
     name_query = select(Product).where(Product.company_id == company_id, func.lower(Product.name) == name.lower())
     if exclude_id is not None:
         name_query = name_query.where(Product.id != exclude_id)
     if (await db.execute(name_query)).scalar_one_or_none() is not None:
-        raise ProductAlreadyExistsError("Ja existe um produto registado com este nome")
+        raise ProductAlreadyExistsError("Já existe um produto registado com este nome")
 
     if barcode:
         barcode_query = select(Product).where(Product.company_id == company_id, Product.barcode == barcode)
         if exclude_id is not None:
             barcode_query = barcode_query.where(Product.id != exclude_id)
         if (await db.execute(barcode_query)).scalar_one_or_none() is not None:
-            raise ProductAlreadyExistsError("Ja existe um produto registado com este codigo de barras")
+            raise ProductAlreadyExistsError("Já existe um produto registado com este código de barras")
 
 
 async def create_product(
@@ -115,7 +115,7 @@ async def create_product(
     """Creates a product within the caller's company."""
     await _check_all_fields_available(db, company_id, code, name, barcode)
     if unit_of_measure_id is None:  # every article has a base unit: the SAF-T and the documents show it
-        raise ArticleUnitRequiredError("A unidade base e obrigatoria")
+        raise ArticleUnitRequiredError("A unidade base é obrigatória")
     _check_vat_rule(vat_id, is_raw_material)
     if is_raw_material:
         exemption_reason_id = None  # a raw material is never sold: no exemption to justify
@@ -202,7 +202,7 @@ async def get_product_or_raise(db: AsyncSession, company_id: uuid.UUID, product_
     )
     product = result.scalar_one_or_none()
     if product is None:
-        raise ProductNotFoundError("Produto nao encontrado")
+        raise ProductNotFoundError("Produto não encontrado")
     return product
 
 
@@ -229,8 +229,8 @@ async def ensure_base_unit_can_change(db: AsyncSession, product: Product, new_un
     for model, column, label in checks:
         if (await db.execute(select(model.id).where(column == product.id).limit(1))).first() is not None:
             raise BaseUnitLockedError(
-                f"A unidade base de {product.name} nao pode ser alterada: o produto ja tem {label}. "
-                "Todas as quantidades estao contadas nesta unidade."
+                f"A unidade base de {product.name} não pode ser alterada: o produto já tem {label}. "
+                "Todas as quantidades estão contadas nesta unidade."
             )
 
 
@@ -264,7 +264,7 @@ async def update_product(
     product = await get_product_or_raise(db, company_id, product_id)
     await _check_all_fields_available(db, company_id, code, name, barcode, exclude_id=product_id)
     if unit_of_measure_id is None:  # every article has a base unit: the SAF-T and the documents show it
-        raise ArticleUnitRequiredError("A unidade base e obrigatoria")
+        raise ArticleUnitRequiredError("A unidade base é obrigatória")
     _check_vat_rule(vat_id, is_raw_material)
     if is_raw_material:
         exemption_reason_id = None  # a raw material is never sold: no exemption to justify

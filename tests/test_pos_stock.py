@@ -12,7 +12,7 @@ async def test_the_till_reads_the_stock_of_its_activity_warehouse(db, company_wi
     company_id = ctx["company"].id
     managed = Product(company_id=company_id, code="PS-01", name="Gerido", vat_id=ctx["vat_nor"].id, price=10.0,
                       min_stock_threshold=0, product_type=ProductType.BEM)
-    free = Product(company_id=company_id, code="PS-02", name="Nao gerido", vat_id=ctx["vat_nor"].id, price=10.0,
+    free = Product(company_id=company_id, code="PS-02", name="Não gerido", vat_id=ctx["vat_nor"].id, price=10.0,
                    min_stock_threshold=0, product_type=ProductType.BEM, managed_by_stock=False)
     db.add_all([managed, free])
     await db.commit()

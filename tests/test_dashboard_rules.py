@@ -17,7 +17,7 @@ async def _set_rule(db, code, **values):
 async def test_dashboard_follows_the_revenue_sign_and_sent_to_agt_rules(db, company_with_essentials):
     ctx = company_with_essentials
     company_id, activity_id = ctx["company"].id, ctx["activity"].id
-    service = Service(company_id=company_id, code="SRV-DR", name="Servico DR", price=1000.0, vat_id=ctx["vat_nor"].id)
+    service = Service(company_id=company_id, code="SRV-DR", name="Serviço DR", price=1000.0, vat_id=ctx["vat_nor"].id)
     db.add(service)
     await db.commit()
     await db.refresh(service)

@@ -172,7 +172,7 @@ export default function Users() {
           <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" />
           <input
             type="text"
-            placeholder="Pesquisar por nome ou numero..."
+            placeholder="Pesquisar por nome ou número..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full bg-bg-elevated border border-border rounded-md pl-10 pr-4 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors"
@@ -326,7 +326,7 @@ export default function Users() {
             className="mt-1 bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors"
           >
             {saving ? <Loader2 size={17} className="animate-spin" /> : (editingId ? <Pencil size={17} /> : <Plus size={17} />)}
-            {saving ? 'A guardar...' : (editingId ? 'Guardar alteracoes' : 'Criar utilizador')}
+            {saving ? 'A guardar...' : (editingId ? 'Guardar alterações' : 'Criar utilizador')}
           </button>
         </form>
       </Modal>

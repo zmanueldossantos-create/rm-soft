@@ -13,14 +13,14 @@ from pydantic import BaseModel, field_validator
 def _validate_code(v: str) -> str:
     cleaned = " ".join(v.split())
     if not cleaned:
-        raise ValueError("Codigo do produto nao pode estar vazio")
+        raise ValueError("Código do produto não pode estar vazio")
     return cleaned
 
 
 def _validate_name(v: str) -> str:
     cleaned = " ".join(v.split())
     if not cleaned:
-        raise ValueError("Nome do produto nao pode estar vazio")
+        raise ValueError("Nome do produto não pode estar vazio")
     return cleaned
 
 
@@ -64,21 +64,21 @@ class ProductCreateRequest(BaseModel):
     @classmethod
     def validate_price(cls, v: float) -> float:
         if v < 0:
-            raise ValueError("Preco nao pode ser negativo")
+            raise ValueError("Preço não pode ser negativo")
         return v
 
     @field_validator("purchase_price")
     @classmethod
     def validate_purchase_price(cls, v: float | None) -> float | None:
         if v is not None and v < 0:
-            raise ValueError("Preco de compra nao pode ser negativo")
+            raise ValueError("Preço de compra não pode ser negativo")
         return v
 
     @field_validator("min_stock_threshold")
     @classmethod
     def validate_threshold(cls, v: float) -> float:
         if v < 0:
-            raise ValueError("Limite minimo de stock nao pode ser negativo")
+            raise ValueError("Limite mínimo de stock não pode ser negativo")
         return v
 
 
@@ -122,21 +122,21 @@ class ProductUpdateRequest(BaseModel):
     @classmethod
     def validate_price(cls, v: float) -> float:
         if v < 0:
-            raise ValueError("Preco nao pode ser negativo")
+            raise ValueError("Preço não pode ser negativo")
         return v
 
     @field_validator("purchase_price")
     @classmethod
     def validate_purchase_price(cls, v: float | None) -> float | None:
         if v is not None and v < 0:
-            raise ValueError("Preco de compra nao pode ser negativo")
+            raise ValueError("Preço de compra não pode ser negativo")
         return v
 
     @field_validator("min_stock_threshold")
     @classmethod
     def validate_threshold(cls, v: float) -> float:
         if v < 0:
-            raise ValueError("Limite minimo de stock nao pode ser negativo")
+            raise ValueError("Limite mínimo de stock não pode ser negativo")
         return v
 
 

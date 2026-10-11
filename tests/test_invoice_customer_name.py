@@ -11,7 +11,7 @@ async def test_customer_name_is_attached_and_none_for_a_walk_in(db, company_with
     ctx = company_with_essentials
     company_id, activity_id = ctx["company"].id, ctx["activity"].id
     customer = Customer(company_id=company_id, name="Cliente Teste CN", nif="5000333111", legal_person_type=LegalPersonType.FISICA)
-    service = Service(company_id=company_id, code="SRV-CN", name="Servico CN", price=1000.0, vat_id=ctx["vat_nor"].id)
+    service = Service(company_id=company_id, code="SRV-CN", name="Serviço CN", price=1000.0, vat_id=ctx["vat_nor"].id)
     db.add(customer)
     db.add(service)
     await db.commit()

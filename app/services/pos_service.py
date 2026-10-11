@@ -34,7 +34,7 @@ async def _ensure_sellable_at_pos(db: AsyncSession, company_id: uuid.UUID, lines
             select(model.name).where(model.id.in_(ids), model.company_id == company_id, model.not_available_pos.is_(True))
         )).scalars().first()
         if name:
-            raise ProductNotFoundError(f"{name} nao esta disponivel para venda na caixa")
+            raise ProductNotFoundError(f"{name} não está disponível para venda na caixa")
 
 
 async def _ensure_no_stay_rate(db: AsyncSession, company_id: uuid.UUID, lines_input: list[dict]) -> None:
@@ -92,7 +92,7 @@ async def checkout(
     await require_cash_point_access(db, company_id, selling_user, pos_id)
     session = await get_open_session(db, company_id, pos_id)
     if session is None:
-        raise NoOpenSessionError("Nao ha nenhuma sessao de caixa aberta para este ponto de venda - abra a caixa antes de vender")
+        raise NoOpenSessionError("Não há nenhuma sessão de caixa aberta para este ponto de venda - abra a caixa antes de vender")
     await _ensure_sellable_at_pos(db, company_id, lines_input)
     if not stay_sale:
         await _ensure_no_stay_rate(db, company_id, lines_input)
@@ -132,7 +132,7 @@ async def create_pro_forma_from_pos(
     await require_cash_point_access(db, company_id, selling_user, pos_id)
     session = await get_open_session(db, company_id, pos_id)
     if session is None:
-        raise NoOpenSessionError("Nao ha nenhuma sessao de caixa aberta para este ponto de venda - abra a caixa antes de gerar documentos")
+        raise NoOpenSessionError("Não há nenhuma sessão de caixa aberta para este ponto de venda - abra a caixa antes de gerar documentos")
     await _ensure_sellable_at_pos(db, company_id, lines_input)
 
     pro_forma = await create_pro_forma(
@@ -162,7 +162,7 @@ async def liquidate_pending_invoice(
     """
     session = await get_open_session(db, company_id, pos_id)
     if session is None:
-        raise NoOpenSessionError("Nao ha nenhuma sessao de caixa aberta para este ponto de venda - abra a caixa antes de liquidar")
+        raise NoOpenSessionError("Não há nenhuma sessão de caixa aberta para este ponto de venda - abra a caixa antes de liquidar")
 
     invoice = await convert_pro_forma_to_invoice(
         db, company_id, pro_forma_id, target_invoice_type,

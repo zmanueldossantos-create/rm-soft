@@ -44,7 +44,7 @@ async def test_default_cash_points_are_renamed_and_the_others_are_not(db, compan
     await db.refresh(other)
     other_id = other.id
 
-    await _set(db, pos_id, "Servicos - Caixa Geral", True)
+    await _set(db, pos_id, "Serviços - Caixa Geral", True)
     await db.execute(text(_rename_sql()))
     await db.commit()
     assert await _name(db, pos_id) == "Caixa Geral"
@@ -59,7 +59,7 @@ async def test_a_default_is_not_renamed_when_the_activity_already_has_that_name(
     db.add(taken)
     await db.commit()
 
-    await _set(db, pos_id, "Servicos - Caixa Geral", True)
+    await _set(db, pos_id, "Serviços - Caixa Geral", True)
     await db.execute(text(_rename_sql()))
     await db.commit()
-    assert await _name(db, pos_id) == "Servicos - Caixa Geral"  # no duplicate name inside one activity
+    assert await _name(db, pos_id) == "Serviços - Caixa Geral"  # no duplicate name inside one activity

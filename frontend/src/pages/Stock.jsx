@@ -588,7 +588,7 @@ export default function Stock() {
             <input
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              placeholder="Ex: Reposicao semanal"
+              placeholder="Ex: Reposição semanal"
               className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors"
             />
           </div>
@@ -813,7 +813,7 @@ export default function Stock() {
               />
             </div>
             <div>
-              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Codigo</label>
+              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Código</label>
               <input
                 value={newWarehouseCode}
                 onChange={(e) => setNewWarehouseCode(e.target.value)}
@@ -824,11 +824,11 @@ export default function Stock() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Provincia</label>
+              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Província</label>
               <Select value={newWarehouseProvinceId} onChange={setNewWarehouseProvinceId} options={provinces.map((p) => ({ value: p.id, label: p.name }))} placeholder="Selecionar" />
             </div>
             <div>
-              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Municipio</label>
+              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Município</label>
               <Select value={newWarehouseMunicipalityId} onChange={setNewWarehouseMunicipalityId} options={municipalities.filter((m) => !newWarehouseProvinceId || m.province_id === newWarehouseProvinceId).map((m) => ({ value: m.id, label: m.name }))} placeholder="Selecionar" />
             </div>
           </div>
@@ -853,7 +853,7 @@ export default function Stock() {
             </label>
             <label className="flex items-center gap-2.5 cursor-pointer select-none">
               <input type="checkbox" checked={newWarehouseSaidasBloqueadas} onChange={(e) => setNewWarehouseSaidasBloqueadas(e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
-              <span className="text-sm text-text-primary">Saidas bloqueadas</span>
+              <span className="text-sm text-text-primary">Saídas bloqueadas</span>
             </label>
           </div>
 
@@ -866,7 +866,7 @@ export default function Stock() {
             className="mt-1 bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors"
           >
             {creatingWarehouse ? <Loader2 size={17} className="animate-spin" /> : <Plus size={17} />}
-            {creatingWarehouse ? 'A guardar...' : (editingWarehouseId ? 'Guardar alteracoes' : 'Criar armazem')}
+            {creatingWarehouse ? 'A guardar...' : (editingWarehouseId ? 'Guardar alterações' : 'Criar armazem')}
           </button>
         </form>
       </Modal>

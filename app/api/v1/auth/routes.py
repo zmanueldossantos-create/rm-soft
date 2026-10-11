@@ -45,7 +45,7 @@ async def refresh(payload: RefreshRequest):
     """Refreshes the access token from a valid refresh token."""
     data = decode_token(payload.refresh_token)
     if data is None or data.get("type") != "refresh":
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sessao invalida ou expirada. Por favor, inicie sessao novamente.")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sessão inválida ou expirada. Por favor, inicie sessão novamente.")
     new_access_token = create_access_token(subject=data["sub"], company_id=data["company_id"], role=data.get("role", ""))
     return TokenPair(access_token=new_access_token, refresh_token=payload.refresh_token)
 

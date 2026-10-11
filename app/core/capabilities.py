@@ -38,11 +38,11 @@ CAPABILITIES: dict[str, Capability] = {
             ("/stock", "/stock/dashboard", "/stock-movements", "/fornecedores", "/consumo-interno", "/products", "/materia-prima"),
         ),
         Capability(
-            "PRODUCTION", "Producao", "Receitas e producao (a partir do stock)", ("STOCK",),
+            "PRODUCTION", "Produção", "Receitas e produção (a partir do stock)", ("STOCK",),
             ("production", "recipes"), ("/producao", "/producao/historico"),
         ),
         Capability(
-            "RESOURCES", "Recursos", "Quartos, mesas, praticantes e outros recursos reservaveis", (),
+            "RESOURCES", "Recursos", "Quartos, mesas, praticantes e outros recursos reserváveis", (),
             ("resource_types", "resources"), ("/recursos",),
         ),
         Capability(
@@ -50,15 +50,15 @@ CAPABILITIES: dict[str, Capability] = {
             ("bookings",), ("/reservas",),
         ),
         Capability(
-            "OPEN_ACCOUNTS", "Contas abertas", "Contas em curso, transferencia e divisao, plano de mesas", (),
+            "OPEN_ACCOUNTS", "Contas abertas", "Contas em curso, transferência e divisão, plano de mesas", (),
             ("open_accounts",), ("/contas-abertas",),
         ),
         Capability(
-            "KITCHEN", "Cozinha", "Envio de pratos para a cozinha, ecra da cozinha e historico", ("OPEN_ACCOUNTS",),
+            "KITCHEN", "Cozinha", "Envio de pratos para a cozinha, ecrã da cozinha e histórico", ("OPEN_ACCOUNTS",),
             ("kitchen",), ("/cozinha", "/cozinha/historico"),
         ),
         Capability(
-            "HOTEL_STAY", "Estadia de hotel", "Check-in, check-out e ocupacao", ("BOOKINGS", "OPEN_ACCOUNTS"),
+            "HOTEL_STAY", "Estadia de hotel", "Check-in, check-out e ocupação", ("BOOKINGS", "OPEN_ACCOUNTS"),
             ("hotel",), ("/ocupacao",),
         ),
     )
@@ -109,16 +109,16 @@ class Sector:
 
 SECTORS: tuple[Sector, ...] = (
     Sector("HOTEL", "Hotel", "Alojamento: quartos, reservas, estadias e extras", ("STOCK", "RESOURCES", "BOOKINGS", "OPEN_ACCOUNTS", "HOTEL_STAY")),
-    Sector("RESTAURANTE", "Restaurante", "Mesas, contas abertas, divisao e transferencia, cozinha", ("STOCK", "RESOURCES", "BOOKINGS", "OPEN_ACCOUNTS", "KITCHEN")),
-    Sector("BAR", "Bar", "Venda ao balcao, mesas e contas abertas", ("STOCK", "RESOURCES", "OPEN_ACCOUNTS")),
-    Sector("PADARIA", "Padaria", "Venda ao balcao, stock e producao", ("STOCK", "PRODUCTION")),
-    Sector("SPA_SALAO", "Spa / Salao / Consultorio", "Marcacoes por praticante, duracao dos servicos e agenda", ("RESOURCES", "BOOKINGS")),
-    Sector("COMERCIO", "Comercio geral", "Venda ao balcao e stock", ("STOCK",)),
-    Sector("SERVICOS", "Prestacao de servicos", "Faturacao de servicos", ()),
-    Sector("FARMACIA", "Farmacia", "Venda e stock de medicamentos", ("STOCK",), False, "Em desenvolvimento: falta o controlo de lotes e validades"),
-    Sector("RH", "Recursos Humanos", "Gestao de colaboradores e salarios", (), False, "Em desenvolvimento"),
-    Sector("HOSPITAL", "Hospital", "Pacientes, consultas e faturacao", (), False, "Em desenvolvimento"),
-    Sector("ESCOLA", "Escola", "Alunos, matriculas e propinas", (), False, "Em desenvolvimento"),
+    Sector("RESTAURANTE", "Restaurante", "Mesas, contas abertas, divisão e transferência, cozinha", ("STOCK", "RESOURCES", "BOOKINGS", "OPEN_ACCOUNTS", "KITCHEN")),
+    Sector("BAR", "Bar", "Venda ao balcão, mesas e contas abertas", ("STOCK", "RESOURCES", "OPEN_ACCOUNTS")),
+    Sector("PADARIA", "Padaria", "Venda ao balcão, stock e produção", ("STOCK", "PRODUCTION")),
+    Sector("SPA_SALAO", "Spa / Salão / Consultório", "Marcações por praticante, duração dos serviços e agenda", ("RESOURCES", "BOOKINGS")),
+    Sector("COMERCIO", "Comércio geral", "Venda ao balcão e stock", ("STOCK",)),
+    Sector("SERVICOS", "Prestação de serviços", "Faturação de serviços", ()),
+    Sector("FARMACIA", "Farmácia", "Venda e stock de medicamentos", ("STOCK",), False, "Em desenvolvimento: falta o controlo de lotes e validades"),
+    Sector("RH", "Recursos Humanos", "Gestão de colaboradores e salários", (), False, "Em desenvolvimento"),
+    Sector("HOSPITAL", "Hospital", "Pacientes, consultas e faturação", (), False, "Em desenvolvimento"),
+    Sector("ESCOLA", "Escola", "Alunos, matrículas e propinas", (), False, "Em desenvolvimento"),
 )
 
 SECTORS_BY_CODE: dict[str, Sector] = {s.code: s for s in SECTORS}

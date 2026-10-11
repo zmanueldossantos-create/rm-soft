@@ -6,7 +6,7 @@ import { listActivities } from '../api/activity';
 import { getOccupancyHistory } from '../api/hotel';
 import { extractErrorMessage } from '../utils/errors';
 
-const STATUS_LABELS = { EM_CURSO: 'Em curso', CONCLUIDA: 'Concluida' };
+const STATUS_LABELS = { EM_CURSO: 'Em curso', CONCLUIDA: 'Concluída' };
 const STATUS_COLORS = { EM_CURSO: 'text-accent bg-accent/10', CONCLUIDA: 'text-text-muted bg-bg-inset' };
 
 function todayIso() {
@@ -56,7 +56,7 @@ export default function Ocupacao() {
       if (dateTo) filters.dateTo = dateTo + 'T23:59:59';
       setEntries(await getOccupancyHistory(filters));
     } catch (err) {
-      setError(extractErrorMessage(err, 'Erro ao carregar historico'));
+      setError(extractErrorMessage(err, 'Erro ao carregar histórico'));
     } finally {
       setLoading(false);
     }

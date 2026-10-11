@@ -68,7 +68,7 @@ function addDays(dateStr, days) {
 
 const emptyLine = { item_type: 'product', product_id: '', service_id: '', quantity: '1', discount_percent: '0', sale_unit_id: '' };
 
-const STEP_LABELS = ['Tipo de documento', 'Cliente e datas', 'Produtos e servicos', 'Pagamento', 'Revisao'];
+const STEP_LABELS = ['Tipo de documento', 'Cliente e datas', 'Produtos e serviços', 'Pagamento', 'Revisão'];
 
 export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'create', referenceInvoiceId = null, stacked = false }) {
   const [activities, setActivities] = useState([]);
@@ -476,12 +476,12 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
       const refundAsked = ncRefund && refundableFor(ncEstimatedTotal) > 0.005;
       if (refundAsked) {
         if (!refundMethodId || !(parseFloat(refundAmount) > 0)) {
-          setFormError('Indique o metodo e o valor a devolver');
+          setFormError('Indique o método e o valor a devolver');
           setSaving(false);
           return;
         }
         if (paymentMethods.find((pm) => pm.id === refundMethodId)?.is_cash === true && !refundPosId) {
-          setFormError('Selecione a caixa de onde sai o numerario');
+          setFormError('Selecione a caixa de onde sai o numerário');
           setSaving(false);
           return;
         }
@@ -499,7 +499,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
       onCreated?.();
       onClose();
     } catch (err) {
-      setFormError(extractErrorMessage(err, 'Erro ao emitir nota de credito'));
+      setFormError(extractErrorMessage(err, 'Erro ao emitir nota de crédito'));
     } finally {
       setSaving(false);
     }
@@ -525,7 +525,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
       onCreated?.();
       onClose();
     } catch (err) {
-      setFormError(extractErrorMessage(err, 'Erro ao emitir nota de debito'));
+      setFormError(extractErrorMessage(err, 'Erro ao emitir nota de débito'));
     } finally {
       setSaving(false);
     }
@@ -586,7 +586,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
 
   const currentTypeLabel = invoiceType ? `${INVOICE_TYPE_LABEL[invoiceType]} (${INVOICE_TYPE_CODE[invoiceType]})` : undefined;
   const referenceLabel = referenceInvoice ? `${INVOICE_TYPE_CODE[referenceInvoice.invoice_type] || referenceInvoice.invoice_type} ${referenceInvoice.series}/${referenceInvoice.number}` : '';
-  const modalTitle = mode === 'nc' ? 'Nota de credito' : mode === 'nd' ? 'Nota de debito' : 'Nova fatura';
+  const modalTitle = mode === 'nc' ? 'Nota de crédito' : mode === 'nd' ? 'Nota de débito' : 'Nova fatura';
   const modalSubtitle = mode === 'nc' || mode === 'nd' ? (referenceLabel ? `Referente a ${referenceLabel}` : undefined) : currentTypeLabel;
 
   function stepReached(n) {
@@ -608,7 +608,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
   // Create mode: the products panel is its own tab (3); payment (4) shows a totals strip, review (5) the lines. NC / ND keep both.
   const showLeft = isSingleScreen || step !== 3;
   const showSidePanel = isSingleScreen || step === 3;
-  const submitLabel = mode === 'nc' ? 'Emitir Nota de Credito' : mode === 'nd' ? 'Emitir Nota de Debito' : (invoiceType === 'PRO_FORMA' ? 'Gerar pro-forma' : 'Criar factura');
+  const submitLabel = mode === 'nc' ? 'Emitir Nota de Crédito' : mode === 'nd' ? 'Emitir Nota de Débito' : (invoiceType === 'PRO_FORMA' ? 'Gerar pro-forma' : 'Criar factura');
   const isSubmitDisabled = mode === 'nc' ? (saving || !ncCause || !ncReason) : mode === 'nd' ? (saving || lines.every((l) => !getLineItem(l) || parseFloat(l.quantity) <= 0) || lines.some((l) => getLineItem(l) && computeLine(l).quantityError)) : (saving || !isFormValid);
 
   const footer = (
@@ -691,7 +691,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                     )}
                     <div>
                       <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Motivo *</label>
-                      <Select value={ncReason} onChange={setNcReason} options={[{ value: 'ANL', label: 'Anulacao' }, { value: 'RTF', label: 'Rectificacao' }]} placeholder="Selecionar" />
+                      <Select value={ncReason} onChange={setNcReason} options={[{ value: 'ANL', label: 'Anulação' }, { value: 'RTF', label: 'Rectificação' }]} placeholder="Selecionar" />
                     </div>
                     <div>
                       <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Causa * (max. 60 caracteres)</label>
@@ -725,7 +725,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                           <span className="text-sm text-text-primary">
                             Devolver valor ao cliente
                             <span className="block text-[12px] text-text-muted mt-0.5">
-                              {'Reembolsavel (estimado): ' + formatMoney(refundableFor(ncEstimatedTotal)) + ' - pago: ' + formatMoney(refundInfo.collected)
+                              {'Reembolsável (estimado): ' + formatMoney(refundableFor(ncEstimatedTotal)) + ' - pago: ' + formatMoney(refundInfo.collected)
                                 + (refundInfo.refunded > 0 ? ' - ja devolvido: ' + formatMoney(refundInfo.refunded) : '')}
                             </span>
                           </span>
@@ -733,7 +733,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                         {ncRefund && (
                           <div className="grid grid-cols-2 gap-3">
                             <div>
-                              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Metodo *</label>
+                              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Método *</label>
                               <Select value={refundMethodId} onChange={setRefundMethodId} options={paymentMethods.filter((pm) => pm.allows_payment !== false).map((pm) => ({ value: pm.id, label: pm.name }))} placeholder="Selecionar" />
                             </div>
                             <div>
@@ -742,9 +742,9 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                             </div>
                             {paymentMethods.find((pm) => pm.id === refundMethodId)?.is_cash === true && (
                               <div className="col-span-2">
-                                <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Caixa de saida *</label>
+                                <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Caixa de saída *</label>
                                 {refundInfo.cash_points.length === 0 ? (
-                                  <p className="text-[12px] text-danger">Nenhuma caixa com sessao aberta - abra uma caixa para devolver em numerario</p>
+                                  <p className="text-[12px] text-danger">Nenhuma caixa com sessão aberta - abra uma caixa para devolver em numerário</p>
                                 ) : (
                                   <Select
                                     value={refundPosId}
@@ -769,11 +769,11 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                   <div className="flex flex-col gap-3">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
-                        <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Referencia</label>
+                        <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Referência</label>
                         <input value={documentReference} disabled className={inputClass + ' opacity-60 cursor-not-allowed'} />
                       </div>
                       <div>
-                        <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Observacoes</label>
+                        <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Observações</label>
                         <input value={observations} onChange={(e) => setObservations(e.target.value)} className={inputClass} placeholder="Opcional" />
                       </div>
                     </div>
@@ -801,7 +801,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                     ))}
                     </div>
                     {issuableTypeCards.length === 0 && (
-                      <p className="text-[13px] text-text-muted">Nenhum tipo de documento disponivel para emissao aqui.</p>
+                      <p className="text-[13px] text-text-muted">Nenhum tipo de documento disponível para emissão aqui.</p>
                     )}
                   </div>
                 )}
@@ -814,7 +814,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                     </div>
                     <div>
                       <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Cliente</label>
-                      <Select value={customerId} onChange={handleCustomerChange} options={[{ value: '', label: 'Sem cliente (venda ao balcao)' }, ...customers.map((c) => ({ value: c.id, label: c.name + ' - ' + c.nif }))]} placeholder="Selecionar cliente" />
+                      <Select value={customerId} onChange={handleCustomerChange} options={[{ value: '', label: 'Sem cliente (venda ao balcão)' }, ...customers.map((c) => ({ value: c.id, label: c.name + ' - ' + c.nif }))]} placeholder="Selecionar cliente" />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
@@ -823,7 +823,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                       </div>
                       <div>
                         <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Documento (No)</label>
-                        <input value={documentPreview ? documentPreview.label : 'Serie nao configurada'} disabled className={inputClass + ' opacity-60 cursor-not-allowed'} />
+                        <input value={documentPreview ? documentPreview.label : 'Serie não configurada'} disabled className={inputClass + ' opacity-60 cursor-not-allowed'} />
                       </div>
                     </div>
                   </div>
@@ -834,12 +834,12 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                 <div className="grid grid-cols-4 gap-3 border border-border rounded-md px-4 py-3">
                   <div><p className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Total</p><p className="font-mono text-[13px] text-text-primary">{formatMoney(totals.total)}</p></div>
                   <div><p className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">IVA</p><p className="font-mono text-[13px] text-text-primary">{formatMoney(totals.totalIva)}</p></div>
-                  <div><p className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Retencao</p><p className="font-mono text-[13px] text-text-primary">{formatMoney(totals.totalRetencao)}</p></div>
+                  <div><p className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Retenção</p><p className="font-mono text-[13px] text-text-primary">{formatMoney(totals.totalRetencao)}</p></div>
                   <div><p className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">A pagar</p><p className="font-mono text-[13px] text-accent font-medium">{formatMoney(totals.valorAPagar)}</p></div>
                 </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div className={lockCls(paidOnIssue)}>
-                        <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Condicao de pagamento{requiresPaymentTerm && !paidOnIssue ? ' *' : ''}</label>
+                        <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Condição de pagamento{requiresPaymentTerm && !paidOnIssue ? ' *' : ''}</label>
                         <Select value={paymentTermId} onChange={applyPaymentTerm} options={paymentTerms.map((t) => ({ value: t.id, label: t.name }))} placeholder="Selecionar" />
                       </div>
                       <div>
@@ -859,17 +859,17 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div className={lockCls(!collectsPayment)}>
-                        <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Metodo de pagamento</label>
-                        <Select value={paymentMethodId} onChange={setPaymentMethodId} options={paymentMethods.filter((m) => m.allows_receipt !== false).map((m) => ({ value: m.id, label: m.name }))} placeholder="Numerario" />
+                        <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Método de pagamento</label>
+                        <Select value={paymentMethodId} onChange={setPaymentMethodId} options={paymentMethods.filter((m) => m.allows_receipt !== false).map((m) => ({ value: m.id, label: m.name }))} placeholder="Numerário" />
                       </div>
                       <div className={lockCls(!collectsPayment || !methodUsesBank)}>
-                        <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Conta bancaria</label>
+                        <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Conta bancária</label>
                         <Select value={bankAccountId} onChange={setBankAccountId} options={bankAccounts.map((b) => ({ value: b.id, label: (bankById[b.bank_id]?.acronym || '?') + ' - ' + b.account_number }))} placeholder="Selecionar" />
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Referencia</label>
+                        <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Referência</label>
                         <input value={documentReference} onChange={(e) => setDocumentReference(e.target.value)} placeholder="Ex: PO-2026-004" className={inputClass} />
                       </div>
                       <div>
@@ -880,9 +880,9 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                     <div className={lockCls(!collectsCash)}>
                       <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Caixa de entrada{collectsCash ? ' *' : ''}</label>
                       {collectsCash && cashPoints.length === 0 ? (
-                        <p className="text-[12px] text-danger">Nenhuma caixa com sessao aberta - abra uma caixa para receber em numerario</p>
+                        <p className="text-[12px] text-danger">Nenhuma caixa com sessão aberta - abra uma caixa para receber em numerário</p>
                       ) : (
-                        <Select value={collectsCash ? cashPosId : ''} onChange={setCashPosId} options={cashPoints.map((cp) => ({ value: cp.pos_id, label: cp.name }))} placeholder={collectsCash ? 'Selecionar' : 'Sem recebimento em numerario'} />
+                        <Select value={collectsCash ? cashPosId : ''} onChange={setCashPosId} options={cashPoints.map((cp) => ({ value: cp.pos_id, label: cp.name }))} placeholder={collectsCash ? 'Selecionar' : 'Sem recebimento em numerário'} />
                       )}
                     </div>
                   </div>
@@ -891,7 +891,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                 {!isSingleScreen && step === 5 && (
                   <div className="flex flex-col gap-4">
                     <div>
-                      <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Observacoes</label>
+                      <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Observações</label>
                       <textarea value={observations} onChange={(e) => setObservations(e.target.value)} rows={3} className={inputClass + ' resize-none'} placeholder="Opcional" />
                     </div>
                     <div className="border border-border rounded-md p-3.5">
@@ -913,7 +913,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                                 <th className="text-left font-medium py-1.5 pr-2">Artigo</th>
                                 <th className="text-right font-medium py-1.5 px-2">Qtd</th>
 <th className="text-left font-medium py-1.5 px-2">Unid.</th>
-                                <th className="text-right font-medium py-1.5 px-2">Preco</th>
+                                <th className="text-right font-medium py-1.5 px-2">Preço</th>
                                 <th className="text-right font-medium py-1.5 px-2">Desc %</th>
                                 <th className="text-right font-medium py-1.5 px-2">IVA</th>
                                 <th className="text-right font-medium py-1.5 pl-2">Total</th>
@@ -943,7 +943,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                             <div className="flex justify-between"><span className="text-text-muted">Total iliquido</span><span className="font-mono">{formatMoney(totals.totalIliquido)}</span></div>
                             {totals.totalDescontos > 0 && <div className="flex justify-between"><span className="text-text-muted">Descontos</span><span className="font-mono">{formatMoney(totals.totalDescontos)}</span></div>}
                             <div className="flex justify-between"><span className="text-text-muted">IVA</span><span className="font-mono">{formatMoney(totals.totalIva)}</span></div>
-                            {totals.totalRetencao > 0 && <div className="flex justify-between"><span className="text-text-muted">Retencoes</span><span className="font-mono">{formatMoney(totals.totalRetencao)}</span></div>}
+                            {totals.totalRetencao > 0 && <div className="flex justify-between"><span className="text-text-muted">Retenções</span><span className="font-mono">{formatMoney(totals.totalRetencao)}</span></div>}
                             <div className="flex justify-between pt-1.5 mt-1 border-t border-border font-medium"><span>Total</span><span className="font-mono text-accent">{formatMoney(totals.total)}</span></div>
                             <div className="flex justify-between"><span className="text-text-muted">Valor a pagar</span><span className="font-mono">{formatMoney(totals.valorAPagar)}</span></div>
                           </div>
@@ -958,7 +958,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
               <div className={'flex flex-col border border-border rounded-lg overflow-hidden h-full' + (showSidePanel ? '' : ' hidden')}>
                 <div className="p-4 flex-1 overflow-y-auto scrollbar-thin min-h-0">
                   <div className="flex items-center justify-between mb-3">
-                    <p className="text-[13px] font-medium text-text-primary">{mode === 'nc' ? 'Linhas da fatura original' : 'Produtos e servicos'}</p>
+                    <p className="text-[13px] font-medium text-text-primary">{mode === 'nc' ? 'Linhas da fatura original' : 'Produtos e serviços'}</p>
                     {mode !== 'nc' && (
                       <button type="button" onClick={addLine} className="flex items-center gap-1.5 border border-dashed border-accent/60 hover:border-accent hover:bg-accent/5 text-accent text-[13px] font-medium rounded-md px-3.5 py-2 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
                         <Plus size={13} /> Linha
@@ -981,7 +981,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                             onChange={(e) => setNcLines((prev) => prev.map((x) => x.invoice_line_id === l.invoice_line_id ? { ...x, quantity: e.target.value } : x))}
                             className="w-16 bg-bg-inset border border-border rounded px-1.5 py-1 text-[11px] text-text-primary font-mono outline-none focus:border-accent disabled:opacity-50"
                           />
-                          <span className="text-[10.5px] text-text-muted shrink-0">{l.remaining_quantity <= 0.0005 ? 'ja creditado' : 'restante ' + l.remaining_quantity + ' / ' + l.original_quantity}</span>
+                          <span className="text-[10.5px] text-text-muted shrink-0">{l.remaining_quantity <= 0.0005 ? 'já creditado' : 'restante ' + l.remaining_quantity + ' / ' + l.original_quantity}</span>
                         </div>
                       ))}
                     </div>
@@ -993,7 +993,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                           {canViewProducts && <th className="text-left font-medium py-2 pr-2 w-[104px]">Tipo</th>}
                           <th className="text-left font-medium py-2 pr-2">Artigo</th>
                           <th className="text-right font-medium py-2 px-2 w-[96px]">Qtd</th>
-                          <th className="text-right font-medium py-2 px-2 w-[110px]">Preco</th>
+                          <th className="text-right font-medium py-2 px-2 w-[110px]">Preço</th>
                           <th className="text-right font-medium py-2 px-2 w-[96px]">Desc %</th>
                           <th className="text-right font-medium py-2 px-2 w-[64px]">IVA</th>
                           <th className="text-right font-medium py-2 px-2 w-[120px]">Total</th>
@@ -1015,7 +1015,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                               )}
                               <td className="py-2 pr-2 min-w-[240px]">
                                 {line.item_type === 'service' ? (
-                                  <Select value={line.service_id} onChange={(v) => updateLine(idx, 'service_id', v)} options={services.map((s) => ({ value: s.id, label: s.code + ' - ' + s.name }))} placeholder="Selecionar servico" />
+                                  <Select value={line.service_id} onChange={(v) => updateLine(idx, 'service_id', v)} options={services.map((s) => ({ value: s.id, label: s.code + ' - ' + s.name }))} placeholder="Selecionar serviço" />
                                 ) : (
                                   <div className="flex items-center gap-1.5"><div className="flex-1 min-w-0"><Select value={line.product_id} onChange={(v) => updateLine(idx, 'product_id', v)} options={products.map((pr) => ({ value: pr.id, label: pr.code + ' - ' + pr.name }))} placeholder="Selecionar produto" /></div>{(productById[line.product_id]?.sale_units || []).length > 0 && (<div className="w-28 shrink-0"><Select value={line.sale_unit_id || 'base'} onChange={(v) => updateLine(idx, 'sale_unit_id', v === 'base' ? '' : v)} options={[{ value: 'base', label: productById[line.product_id]?.unit_of_measure_code || 'Unidade base' }, ...productById[line.product_id].sale_units.map((u) => ({ value: u.id, label: u.unit_of_measure_code + ' (' + u.factor + ')' }))]} /></div>)}</div>
                                 )}
@@ -1065,7 +1065,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                       <div className="flex justify-between"><span className="text-text-muted">Descontos</span><span className="font-mono text-text-primary">{formatMoney(totals.totalDescontos)}</span></div>
                     )}
                     {totals.totalRetencao > 0 && (
-                      <div className="flex justify-between"><span className="text-text-muted">Retencoes</span><span className="font-mono text-text-primary">{formatMoney(totals.totalRetencao)}</span></div>
+                      <div className="flex justify-between"><span className="text-text-muted">Retenções</span><span className="font-mono text-text-primary">{formatMoney(totals.totalRetencao)}</span></div>
                     )}
                     <div className="flex justify-between pt-1.5 mt-1 border-t border-border text-[13.5px] font-medium">
                       <span className="text-text-primary">Total</span><span className="font-mono text-accent">{formatMoney(totals.total)}</span>
@@ -1122,7 +1122,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
             <tbody>
               <tr className="text-left align-top">
                 <td className="py-1.5 pr-4">
-                  <p className="font-semibold text-[11px]">Data de emissao</p>
+                  <p className="font-semibold text-[11px]">Data de emissão</p>
                   <p>{businessDate || '-'}</p>
                 </td>
                 <td className="py-1.5 pr-4">
@@ -1134,7 +1134,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                   <p>{paymentMethods.find((m) => m.id === paymentMethodId)?.name || '-'}</p>
                 </td>
                 <td className="py-1.5">
-                  <p className="font-semibold text-[11px]">Condicao de pagamento</p>
+                  <p className="font-semibold text-[11px]">Condição de pagamento</p>
                   <p>{paymentTerms.find((t) => t.id === paymentTermId)?.name || '-'}</p>
                 </td>
               </tr>
@@ -1144,11 +1144,11 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
           <table className="w-full mb-3">
             <thead>
               <tr className="border-b border-gray-300 text-left text-[11px] font-semibold">
-                <th className="py-1 pr-2">Referencia</th>
-                <th className="py-1 pr-2">Designacao</th>
+                <th className="py-1 pr-2">Referência</th>
+                <th className="py-1 pr-2">Designação</th>
                 <th className="py-1 pr-2 text-right">Qtd</th>
                 <th className="py-1 pr-2">Un</th>
-                <th className="py-1 pr-2 text-right">Preco</th>
+                <th className="py-1 pr-2 text-right">Preço</th>
                 <th className="py-1 pr-2 text-right">Desc</th>
                 <th className="py-1 pr-2 text-right">Taxa(%)</th>
                 <th className="py-1 text-right">Total</th>
@@ -1190,7 +1190,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                   <tr className="border-b border-gray-300 text-left font-semibold">
                     <th className="py-1 pr-2">Imposto</th>
                     <th className="py-1 pr-2 text-right">Taxa(%)</th>
-                    <th className="py-1 pr-2 text-right">Incidencia</th>
+                    <th className="py-1 pr-2 text-right">Incidência</th>
                     <th className="py-1 pr-2">Motivo</th>
                     <th className="py-1 text-right">Montante (AKZ)</th>
                   </tr>
@@ -1236,10 +1236,10 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
           </div>
 
           {invoiceType === 'PRO_FORMA' && (
-            <p className="text-[10px] italic text-gray-500 mt-3">Este documento nao serve como factura</p>
+            <p className="text-[10px] italic text-gray-500 mt-3">Este documento não serve como factura</p>
           )}
 
-          <p className="text-[11px] italic mt-4 text-center text-gray-500">O numero definitivo do documento e atribuido ao guardar.</p>
+          <p className="text-[11px] italic mt-4 text-center text-gray-500">O número definitivo do documento e atribuido ao guardar.</p>
         </div>
         <div className="flex justify-end pt-3">
           <button

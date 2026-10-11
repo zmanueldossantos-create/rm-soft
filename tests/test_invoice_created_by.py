@@ -8,7 +8,7 @@ from app.services.invoice_service import create_invoice
 
 
 async def _issue(db, ctx, code):
-    service = Service(company_id=ctx["company"].id, code=code, name="Servico autor", price=1000.0, vat_id=ctx["vat_nor"].id)
+    service = Service(company_id=ctx["company"].id, code=code, name="Serviço autor", price=1000.0, vat_id=ctx["vat_nor"].id)
     db.add(service)
     await db.commit()
     return await create_invoice(db, ctx["company"].id, ctx["activity"].id, customer_id=None, invoice_type="FACTURA",

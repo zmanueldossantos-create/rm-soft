@@ -31,12 +31,12 @@ export default function PostingPeriodSelect({ value, onChange, onChoice, onPerio
 
   return (
     <div className={className + (hasChoice ? '' : ' opacity-60 pointer-events-none')} title={hint}>
-      <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Periodo{hasChoice ? ' *' : ''}</label>
+      <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Período{hasChoice ? ' *' : ''}</label>
       <Select
         value={hasChoice ? value : ''}
         onChange={onChange}
         options={periods.map((p) => ({ value: p.id, label: labelOf(p) }))}
-        placeholder={hasChoice ? 'Selecionar' : (active ? labelOf(active) : 'Sem periodo aberto')}
+        placeholder={hasChoice ? 'Selecionar' : (active ? labelOf(active) : 'Sem período aberto')}
       />
     </div>
   );

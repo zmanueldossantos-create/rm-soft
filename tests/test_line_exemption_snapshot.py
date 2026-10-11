@@ -20,9 +20,9 @@ async def test_exemption_motive_is_copied_on_every_document(db, company_with_ess
     ctx = company_with_essentials
     m11 = ctx["exemption_m11"]
     motive = (m11.code, m11.name)
-    exempt = Service(company_id=ctx["company"].id, code="SRV-EX", name="Servico isento", price=1000.0,
+    exempt = Service(company_id=ctx["company"].id, code="SRV-EX", name="Serviço isento", price=1000.0,
                      vat_id=ctx["vat_ise"].id, exemption_reason_id=m11.id)
-    taxed = Service(company_id=ctx["company"].id, code="SRV-TX", name="Servico taxado", price=1000.0, vat_id=ctx["vat_nor"].id)
+    taxed = Service(company_id=ctx["company"].id, code="SRV-TX", name="Serviço taxado", price=1000.0, vat_id=ctx["vat_nor"].id)
     db.add_all([exempt, taxed])
     await db.commit()
     exempt_id, taxed_id = exempt.id, taxed.id
@@ -39,7 +39,7 @@ async def test_exemption_motive_is_copied_on_every_document(db, company_with_ess
     credit_note = await create_credit_note(
         db, ctx["company"].id, ctx["activity"].id, reference_invoice_id=invoice_id,
         # RTF, not ANL: a full ANL credit note annuls the invoice, and a debit note on an annulled invoice is refused.
-        credit_note_reason="RTF", credit_note_cause="Rectificacao de teste",
+        credit_note_reason="RTF", credit_note_cause="Rectificação de teste",
         lines_input=[{"invoice_line_id": i, "quantity": 1} for i in line_ids],
     )
     assert await _motives(db, credit_note.id) == {exempt_id: motive, taxed_id: (None, None)}

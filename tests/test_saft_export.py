@@ -19,7 +19,7 @@ NS = {"s": "urn:OECD:StandardAuditFile-Tax:AO_1.01_01"}
 async def test_service_invoice_export_lists_the_service_and_numbers_without_zeros(db, company_with_essentials):
     setup = company_with_essentials
     company = setup["company"]
-    service = Service(company_id=company.id, code="SRV-SAFT", name="Servico SAF-T", price=500.0, vat_id=setup["vat_nor"].id)
+    service = Service(company_id=company.id, code="SRV-SAFT", name="Serviço SAF-T", price=500.0, vat_id=setup["vat_nor"].id)
     db.add(service)
     await db.commit()
     await db.refresh(service)

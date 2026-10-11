@@ -194,7 +194,7 @@ async def patch_booking_status(
     try:
         new_status = BookingStatus(payload.status)
     except ValueError:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Estado invalido")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Estado inválido")
     try:
         return await update_booking_status(db, current_user.company_id, booking_id, new_status)
     except BookingNotFoundError as e:

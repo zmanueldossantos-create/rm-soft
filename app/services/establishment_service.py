@@ -33,7 +33,7 @@ async def update_establishment(db: AsyncSession, company_id: uuid.UUID, establis
     result = await db.execute(select(Establishment).where(Establishment.id == establishment_id, Establishment.company_id == company_id))
     establishment = result.scalar_one_or_none()
     if establishment is None:
-        raise EstablishmentNotFoundError("Estabelecimento nao encontrado")
+        raise EstablishmentNotFoundError("Estabelecimento não encontrado")
     establishment.code = code
     establishment.name = name
     establishment.description = description
@@ -46,7 +46,7 @@ async def toggle_establishment(db: AsyncSession, company_id: uuid.UUID, establis
     result = await db.execute(select(Establishment).where(Establishment.id == establishment_id, Establishment.company_id == company_id))
     establishment = result.scalar_one_or_none()
     if establishment is None:
-        raise EstablishmentNotFoundError("Estabelecimento nao encontrado")
+        raise EstablishmentNotFoundError("Estabelecimento não encontrado")
     establishment.is_active = not establishment.is_active
     await db.commit()
     await db.refresh(establishment)

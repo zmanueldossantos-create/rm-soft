@@ -80,7 +80,7 @@ async def create_cash_movement_reason(
         )
     )
     if existing.scalar_one_or_none() is not None:
-        raise InvalidCashMovementError("Ja existe um motivo com este nome")
+        raise InvalidCashMovementError("Já existe um motivo com este nome")
     reason = CashMovementReason(company_id=company_id, name=name, direction=direction)
     db.add(reason)
     await db.commit()
@@ -94,7 +94,7 @@ async def get_reason_or_raise(db: AsyncSession, company_id: uuid.UUID, reason_id
     )
     reason = result.scalar_one_or_none()
     if reason is None:
-        raise ReasonNotFoundError("Motivo de movimento de caixa nao encontrado")
+        raise ReasonNotFoundError("Motivo de movimento de caixa não encontrado")
     return reason
 
 
@@ -136,9 +136,9 @@ async def create_cash_movement(
 
     if movement_type == CashMovementType.TRANSFERENCIA:
         if source_pos_id is None or destination_pos_id is None:
-            raise InvalidCashMovementError("Uma transferencia exige uma origem e um destino")
+            raise InvalidCashMovementError("Uma transferência exige uma origem e um destino")
         if reason_id is not None:
-            raise InvalidCashMovementError("Uma transferencia entre caixas nao deve ter um motivo associado")
+            raise InvalidCashMovementError("Uma transferência entre caixas não deve ter um motivo associado")
     elif movement_type == CashMovementType.ENTRADA_EXTERNA:
         if source_pos_id is not None or destination_pos_id is None:
             raise InvalidCashMovementError("Uma entrada externa exige apenas um destino, sem origem")
@@ -146,9 +146,9 @@ async def create_cash_movement(
             raise InvalidCashMovementError("Uma entrada externa exige um motivo")
     elif movement_type == CashMovementType.SAIDA_EXTERNA:
         if destination_pos_id is not None or source_pos_id is None:
-            raise InvalidCashMovementError("Uma saida externa exige apenas uma origem, sem destino")
+            raise InvalidCashMovementError("Uma saída externa exige apenas uma origem, sem destino")
         if reason_id is None:
-            raise InvalidCashMovementError("Uma saida externa exige um motivo")
+            raise InvalidCashMovementError("Uma saída externa exige um motivo")
 
     if source_pos_id is not None:
         await get_pos_or_raise(db, company_id, source_pos_id)
@@ -157,12 +157,12 @@ async def create_cash_movement(
         # see discussion on the closed-Bar-POS-with-no-funds bug.
         open_session = await get_open_session(db, company_id, source_pos_id)
         if open_session is None:
-            raise SourcePosNotOpenError("Esta caixa nao tem nenhuma sessao aberta - abra a caixa antes de movimentar fundos")
+            raise SourcePosNotOpenError("Esta caixa não tem nenhuma sessão aberta - abra a caixa antes de movimentar fundos")
         # Cannot send/take out more physical cash than the POS currently has -
         # see the "sent 50000 with only 5000 available" bug discussion.
         current_balance = await get_current_expected_cash_balance(db, company_id, source_pos_id, open_session)
         if amount > current_balance:
-            raise InsufficientFundsError(f"Esta caixa so tem {current_balance:.2f} Kz disponiveis - o valor excede o saldo atual")
+            raise InsufficientFundsError(f"Esta caixa só tem {current_balance:.2f} Kz disponíveis - o valor excede o saldo atual")
     if destination_pos_id is not None:
         await get_pos_or_raise(db, company_id, destination_pos_id)
         if movement_type == CashMovementType.TRANSFERENCIA:
@@ -170,7 +170,7 @@ async def create_cash_movement(
             # physically sent but never counted (see get_current_expected_cash_balance: 0.0 with no session).
             destination_open_session = await get_open_session(db, company_id, destination_pos_id)
             if destination_open_session is None:
-                raise DestinationPosNotOpenError("A caixa de destino nao tem nenhuma sessao aberta - peca para a abrirem antes de transferir")
+                raise DestinationPosNotOpenError("A caixa de destino não tem nenhuma sessão aberta - peca para a abrirem antes de transferir")
 
     if reason_id is not None:
         reason = await get_reason_or_raise(db, company_id, reason_id)
@@ -180,7 +180,7 @@ async def create_cash_movement(
         )
         if reason.direction != expected_direction:
             raise ReasonDirectionMismatchError(
-                f"O motivo '{reason.name}' e de {reason.direction.value}, incompativel com este tipo de movimento"
+                f"O motivo '{reason.name}' e de {reason.direction.value}, incompatível com este tipo de movimento"
             )
 
     initial_status = CashMovementStatus.PENDENTE if movement_type == CashMovementType.TRANSFERENCIA else CashMovementStatus.RECEBIDO
@@ -232,11 +232,11 @@ async def receive_cash_movement(
     )
     movement = result.scalar_one_or_none()
     if movement is None:
-        raise MovementNotFoundError("Movimento nao encontrado")
+        raise MovementNotFoundError("Movimento não encontrado")
     if movement.status == CashMovementStatus.RECEBIDO:
-        raise MovementAlreadyReceivedError("Este movimento ja foi recebido")
+        raise MovementAlreadyReceivedError("Este movimento já foi recebido")
     if movement.destination_pos_id != receiving_pos_id:
-        raise MovementNotReceivableAtThisPosError("Este movimento nao se destina a esta caixa")
+        raise MovementNotReceivableAtThisPosError("Este movimento não se destina a esta caixa")
 
     movement.status = CashMovementStatus.RECEBIDO
     movement.received_at = func.now()
@@ -284,11 +284,11 @@ async def cancel_cash_movement(
     )
     movement = result.scalar_one_or_none()
     if movement is None:
-        raise MovementNotFoundError("Movimento nao encontrado")
+        raise MovementNotFoundError("Movimento não encontrado")
     if movement.status == CashMovementStatus.RECEBIDO:
-        raise MovementAlreadyReceivedError("Este movimento ja foi recebido e nao pode ser cancelado")
+        raise MovementAlreadyReceivedError("Este movimento já foi recebido e não pode ser cancelado")
     if movement.source_pos_id != cancelling_pos_id:
-        raise MovementNotReceivableAtThisPosError("Apenas a caixa de origem pode cancelar esta transferencia")
+        raise MovementNotReceivableAtThisPosError("Apenas a caixa de origem pode cancelar esta transferência")
 
     await db.delete(movement)
     await db.commit()

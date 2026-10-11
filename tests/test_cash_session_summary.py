@@ -47,7 +47,7 @@ async def test_sales_are_split_by_payment_method_and_only_cash_goes_to_the_drawe
     ctx = company_with_essentials
     company_id, activity_id = ctx["company"].id, ctx["activity"].id
     multicaixa_id = (await db.execute(text("SELECT id FROM payment_method_catalog WHERE code = 'MB'"))).scalar_one()
-    service = Service(company_id=company_id, code="SRV-SUM", name="Servico resumo", price=1000.0, vat_id=ctx["vat_nor"].id)
+    service = Service(company_id=company_id, code="SRV-SUM", name="Serviço resumo", price=1000.0, vat_id=ctx["vat_nor"].id)
     db.add(service)
     await db.commit()
     session = await open_session(db, company_id, ctx["pos"].id, ctx["gestor"], opening_amount=1000)
@@ -74,7 +74,7 @@ async def test_the_till_shows_the_short_label_and_the_report_keeps_the_official_
     company_id = ctx["company"].id
     await db.execute(text("UPDATE payment_method_catalog SET short_label = 'Multicaixa (referência)' WHERE code = 'MB'"))
     multicaixa_id = (await db.execute(text("SELECT id FROM payment_method_catalog WHERE code = 'MB'"))).scalar_one()
-    service = Service(company_id=company_id, code="SRV-LBL", name="Servico rotulo", price=1000.0, vat_id=ctx["vat_nor"].id)
+    service = Service(company_id=company_id, code="SRV-LBL", name="Serviço rotulo", price=1000.0, vat_id=ctx["vat_nor"].id)
     db.add(service)
     await db.commit()
     session = await open_session(db, company_id, ctx["pos"].id, ctx["gestor"], opening_amount=0)

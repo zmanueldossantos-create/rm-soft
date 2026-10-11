@@ -16,13 +16,13 @@ async def _messages(errors):
 @pytest.mark.asyncio
 async def test_a_bad_quantity_on_a_line_names_the_line_and_the_field():
     msgs = await _messages([{"type": "float_parsing", "loc": ("body", "lines", 0, "quantity"), "msg": "Input should be a valid number", "input": "1,"}])
-    assert msgs == ["Linha 1 - Quantidade: valor numerico invalido"]
+    assert msgs == ["Linha 1 - Quantidade: valor numérico inválido"]
 
 
 @pytest.mark.asyncio
 async def test_bounds_and_our_own_messages():
     msgs = await _messages([
         {"type": "greater_than", "loc": ("body", "factor"), "msg": "Input should be greater than 0", "ctx": {"gt": 0}},
-        {"type": "value_error", "loc": ("body", "price"), "msg": "Value error, O preco nao pode ser negativo"},
+        {"type": "value_error", "loc": ("body", "price"), "msg": "Value error, O preço não pode ser negativo"},
     ])
-    assert msgs == ["Fator: deve ser maior que 0", "Value error, O preco nao pode ser negativo"]
+    assert msgs == ["Fator: deve ser maior que 0", "Value error, O preço não pode ser negativo"]

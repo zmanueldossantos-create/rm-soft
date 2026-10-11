@@ -6,7 +6,7 @@ import { getKitchenHistory } from '../api/kitchen';
 // Kitchen history (point 34d): the orders of a period, and for every dish who started it, who made it ready,
 // who cancelled it and why, and how long it took. Quick periods rather than date fields: the kitchen mostly
 // looks at today, yesterday or the week.
-const STATUS_LABEL = { NAO_ENVIADO: 'Nao enviado', EM_ESPERA: 'Em espera', EM_PREPARACAO: 'Em preparacao', PRONTO: 'Pronto', ANULADO: 'Anulado' };
+const STATUS_LABEL = { NAO_ENVIADO: 'Não enviado', EM_ESPERA: 'Em espera', EM_PREPARACAO: 'Em preparação', PRONTO: 'Pronto', ANULADO: 'Anulado' };
 const STATUS_STYLE = {
   EM_ESPERA: 'text-sky-400 bg-sky-400/10',
   EM_PREPARACAO: 'text-amber-500 bg-amber-500/10',
@@ -70,7 +70,7 @@ export default function KitchenHistory() {
     <main className="max-w-[1600px] mx-auto px-4 sm:px-6 md:px-8 py-6 sm:py-9">
       <h2 className="font-display font-semibold text-[22px] text-text-primary flex items-center gap-2.5 mb-1">
         <History size={22} className="text-accent" />
-        Historico da cozinha
+        Histórico da cozinha
       </h2>
       <p className="text-text-muted text-sm mb-6">Pedidos enviados, quem fez o que em cada prato e quanto tempo demorou</p>
 
@@ -116,7 +116,7 @@ export default function KitchenHistory() {
       ) : orders.length === 0 ? (
         <div className="bg-bg-elevated border border-border rounded-lg p-10 text-center">
           <History size={28} className="text-text-muted mx-auto mb-3" />
-          <p className="text-text-primary font-medium mb-1">Nenhum pedido neste periodo</p>
+          <p className="text-text-primary font-medium mb-1">Nenhum pedido neste período</p>
         </div>
       ) : (
         <div className="bg-bg-elevated border border-border rounded-lg overflow-hidden">
@@ -147,7 +147,7 @@ export default function KitchenHistory() {
                         <span className={'text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ' + (STATUS_STYLE[l.status] || 'text-text-muted')}>{STATUS_LABEL[l.status] || l.status}</span>
                       </div>
                       <p className="text-text-muted font-mono mt-1">
-                        Inicio {formatTime(l.started_at)}{l.started_by_name ? ' (' + l.started_by_name + ')' : ''}
+                        Início {formatTime(l.started_at)}{l.started_by_name ? ' (' + l.started_by_name + ')' : ''}
                         {' - '}Pronto {formatTime(l.ready_at)}{l.ready_by_name ? ' (' + l.ready_by_name + ')' : ''}
                         {' - '}Preparacao {formatMinutes(l.prep_minutes)}{' - '}Espera {formatMinutes(l.wait_minutes)}
                       </p>

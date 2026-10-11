@@ -25,7 +25,7 @@ async def create_consumption_reason(db: AsyncSession, company_id: uuid.UUID, nam
         select(ConsumptionReasonCatalog).where(ConsumptionReasonCatalog.company_id == company_id, ConsumptionReasonCatalog.name == name)
     )
     if existing_result.scalar_one_or_none() is not None:
-        raise ConsumptionReasonAlreadyExistsError(f"Ja existe um motivo chamado '{name}'")
+        raise ConsumptionReasonAlreadyExistsError(f"Já existe um motivo chamado '{name}'")
 
     reason = ConsumptionReasonCatalog(company_id=company_id, name=name)
     db.add(reason)
@@ -40,7 +40,7 @@ async def get_consumption_reason_or_raise(db: AsyncSession, company_id: uuid.UUI
     )
     reason = result.scalar_one_or_none()
     if reason is None:
-        raise ConsumptionReasonNotFoundError("Motivo nao encontrado")
+        raise ConsumptionReasonNotFoundError("Motivo não encontrado")
     return reason
 
 
@@ -56,7 +56,7 @@ async def update_consumption_reason(db: AsyncSession, company_id: uuid.UUID, rea
             select(ConsumptionReasonCatalog).where(ConsumptionReasonCatalog.company_id == company_id, ConsumptionReasonCatalog.name == name, ConsumptionReasonCatalog.id != reason_id)
         )
         if existing_result.scalar_one_or_none() is not None:
-            raise ConsumptionReasonAlreadyExistsError(f"Ja existe um motivo chamado '{name}'")
+            raise ConsumptionReasonAlreadyExistsError(f"Já existe um motivo chamado '{name}'")
     reason.name = name
     await db.commit()
     await db.refresh(reason)

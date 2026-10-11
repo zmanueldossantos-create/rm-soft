@@ -16,7 +16,7 @@ async def ensure_issuable(db: AsyncSession, invoice_type, channel: str) -> None:
     if not allowed:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"O tipo de documento {rules.code} nao pode ser emitido neste ecra",
+            detail=f"O tipo de documento {rules.code} não pode ser emitido neste ecrã",
         )
 
 
@@ -27,4 +27,4 @@ async def ensure_may_bill_later(db: AsyncSession, user, invoice_type) -> None:
     if rules.paid_on_issue:
         return
     if not await has_permission(db, user.company_id, user.role.value, "pos:checkout_ft"):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Nao tem permissao para faturar (FT) na caixa")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Não tem permissão para faturar (FT) na caixa")

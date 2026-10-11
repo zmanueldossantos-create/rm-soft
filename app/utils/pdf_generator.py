@@ -310,7 +310,7 @@ def generate_invoice_pdf_thermal(invoice: dict, lines: list[dict], company: dict
 
     # --- Isencao / tax summary ---
     if vat_groups:
-        left("Isencao" if all(k[0] == 0 for k in vat_groups) else "Resumo de impostos", size=7.5, bold=True)
+        left("Isenção" if all(k[0] == 0 for k in vat_groups) else "Resumo de impostos", size=7.5, bold=True)
         y -= 3.2 * mm
         c.setFillColor(TEXT_MUTED)
         c.setFont("Helvetica-Bold", 6.5)
@@ -978,7 +978,7 @@ def generate_recibo_style_a4(invoice, company, customer):
     c.drawImage(ImageReader(qr_buffer), qr_x, y - qr_size, width=qr_size, height=qr_size)
     y -= qr_size + 10 * mm
 
-    banner_text = "SIMUL - DOCUMENTO PROCESSADO POR PROGRAMA NAO HOMOLOGADO"
+    banner_text = "SIMUL - DOCUMENTO PROCESSADO POR PROGRAMA NÃO HOMOLOGADO"
     banner_h = 10 * mm
     banner_w = page_width - 2 * margin
     banner_x = margin

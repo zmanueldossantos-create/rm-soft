@@ -17,7 +17,7 @@ async def _active_categories(db, company_id):
 @pytest.mark.asyncio
 async def test_a_regime_change_resyncs_the_rates_by_category(db, legal_vat_rates):
     every_rate = FiscalRegime(name="Regime A (todas as taxas)", allows_nor=True, allows_red=True, allows_ise=True)
-    nor_only = FiscalRegime(name="Regime B (so NOR)", allows_nor=True, allows_red=False, allows_ise=False)
+    nor_only = FiscalRegime(name="Regime B (só NOR)", allows_nor=True, allows_red=False, allows_ise=False)
     db.add_all([every_rate, nor_only])
     await db.commit()
     await db.refresh(every_rate)

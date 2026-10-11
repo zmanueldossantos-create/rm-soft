@@ -89,7 +89,7 @@ async def test_restock_returns_the_goods_to_the_sale_warehouse(db, company_with_
 @pytest.mark.asyncio
 async def test_restock_is_refused_when_no_credited_line_holds_stock(db, company_with_essentials):
     ids = _ids(company_with_essentials)
-    service = Service(company_id=ids["company"], code="SRV-NC", name="Servico NC", price=1000.0, vat_id=ids["vat"])
+    service = Service(company_id=ids["company"], code="SRV-NC", name="Serviço NC", price=1000.0, vat_id=ids["vat"])
     db.add(service)
     await db.commit()
     await db.refresh(service)
@@ -282,7 +282,7 @@ async def test_refund_above_the_overpayment_is_refused(db, company_with_essentia
         await _credit_with_refund(
             db, ids, invoice_id, 1, [{"payment_method_id": ctx["pm_numerario"].id, "amount": 2280}], ctx["pos"].id,
         )
-    assert "reembolsavel" in str(excinfo.value)
+    assert "reembolsável" in str(excinfo.value)
     assert await _notes_count(db, invoice_id) == 0
 
 
@@ -510,7 +510,7 @@ async def test_a_closed_cash_point_cannot_take_cash(db, company_with_essentials)
     product_id = await _product_in_stock(db, ids, "PRD-CP3")  # no session opened on the POS
     with pytest.raises(CashPointRequiredError) as excinfo:
         await _fr_from_invoicing_screen(db, ids, product_id, ctx["pos"].id)
-    assert "nao tem sessao aberta" in str(excinfo.value)
+    assert "não tem sessão aberta" in str(excinfo.value)
 
 
 @pytest.mark.asyncio
@@ -542,7 +542,7 @@ async def test_receipt_in_cash_needs_a_cash_point_and_other_methods_do_not(db, c
 async def test_mixed_invoice_credit_note_returns_only_the_products_to_stock(db, company_with_essentials):
     ids = _ids(company_with_essentials)
     product_id = await _product_in_stock(db, ids, "PRD-MX")
-    service = Service(company_id=ids["company"], code="SRV-MX", name="Servico MX", price=500.0, vat_id=ids["vat"])
+    service = Service(company_id=ids["company"], code="SRV-MX", name="Serviço MX", price=500.0, vat_id=ids["vat"])
     db.add(service)
     await db.commit()
     await db.refresh(service)
@@ -607,7 +607,7 @@ async def test_a_fatura_from_invoicing_needs_its_mandatory_payment_term(db, comp
             db, ids["company"], ids["activity"], customer_id=None, invoice_type="FACTURA",
             lines_input=[{"product_id": product_id, "quantity": 1}], enforce_document_rules=True,
         )
-    assert "condicao de pagamento" in str(excinfo.value)
+    assert "condição de pagamento" in str(excinfo.value)
 
 
 @pytest.mark.asyncio
@@ -619,7 +619,7 @@ async def test_a_receipt_on_an_unknown_bank_account_is_refused(db, company_with_
     with pytest.raises(EmptyInvoiceError) as excinfo:
         await create_receipt(db, ids['company'], ids['activity'], reference_invoice_id=invoice_id, amount=100.0,
                              payment_method_id=ctx['pm_mb'].id, bank_account_id=_uuid.uuid4())
-    assert 'Conta bancaria invalida' in str(excinfo.value)
+    assert 'Conta bancária inválida' in str(excinfo.value)
 
 
 from app.models.unit_of_measure_catalog import UnitOfMeasureCatalog  # noqa: E402
@@ -697,7 +697,7 @@ async def test_the_sale_unit_of_another_product_is_refused(db, company_with_esse
     product_id = await _product_in_stock(db, ids, "PRD-SU3")
     other_id = await _product_in_stock(db, ids, "PRD-SU4")
     other_box = await _box_of(db, ids, other_id, "CX7")
-    with pytest.raises(ProductNotFoundError, match="Unidade ou embalagem invalida"):
+    with pytest.raises(ProductNotFoundError, match="Unidade ou embalagem inválida"):
         await _ft_in_box(db, ids, product_id, other_box.id)
 
 

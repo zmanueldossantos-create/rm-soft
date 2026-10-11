@@ -25,7 +25,7 @@ class InvalidRecipeError(Exception):
 async def _check_product_exists(db: AsyncSession, company_id: uuid.UUID, product_id: uuid.UUID) -> None:
     result = await db.execute(select(Product).where(Product.id == product_id, Product.company_id == company_id))
     if result.scalar_one_or_none() is None:
-        raise ProductNotFoundError("Produto nao encontrado")
+        raise ProductNotFoundError("Produto não encontrado")
 
 
 async def get_recipe(db: AsyncSession, company_id: uuid.UUID, finished_product_id: uuid.UUID) -> list[RecipeIngredient]:
@@ -64,9 +64,9 @@ async def set_recipe(
     seen_ingredient_ids = set()
     for ing in ingredients:
         if ing["ingredient_product_id"] == finished_product_id:
-            raise InvalidRecipeError("Um produto nao pode ser ingrediente de si mesmo")
+            raise InvalidRecipeError("Um produto não pode ser ingrediente de si mesmo")
         if ing["ingredient_product_id"] in seen_ingredient_ids:
-            raise InvalidRecipeError("O mesmo ingrediente nao pode aparecer duas vezes na receita")
+            raise InvalidRecipeError("O mesmo ingrediente não pode aparecer duas vezes na receita")
         seen_ingredient_ids.add(ing["ingredient_product_id"])
         await _check_product_exists(db, company_id, ing["ingredient_product_id"])
 

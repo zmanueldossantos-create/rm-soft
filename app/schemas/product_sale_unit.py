@@ -21,7 +21,7 @@ class ProductSaleUnitRequest(BaseModel):
     @classmethod
     def validate_price(cls, v: float) -> float:
         if v < 0:
-            raise ValueError("O preco nao pode ser negativo")
+            raise ValueError("O preço não pode ser negativo")
         return round(v, 2)
 
     @field_validator("barcode")

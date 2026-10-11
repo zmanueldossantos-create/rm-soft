@@ -106,7 +106,7 @@ def _write_lines(parent_el, inv: dict, saft_type: str) -> None:
             # exempt line without one, so a missing motive here is an error - never a guessed M04.
             exemption_code, exemption_reason = line.get("exemption_code"), line.get("exemption_reason")
             if not exemption_code or not exemption_reason:
-                raise ValueError(f"Linha isenta sem motivo de isencao: {line.get('product_code')}")
+                raise ValueError(f"Linha isenta sem motivo de isenção: {line.get('product_code')}")
             _el(line_el, "TaxExemptionReason", exemption_reason)
             _el(line_el, "TaxExemptionCode", exemption_code)
 

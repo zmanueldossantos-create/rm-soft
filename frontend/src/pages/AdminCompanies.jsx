@@ -312,7 +312,7 @@ export default function AdminCompanies() {
       setExistingBankAccounts(data);
       setBankRows([]);
     } catch (err) {
-      setFormError(extractErrorMessage(err, 'Erro ao adicionar conta bancaria'));
+      setFormError(extractErrorMessage(err, 'Erro ao adicionar conta bancária'));
     } finally {
       setBankRowSaving(null);
     }
@@ -325,7 +325,7 @@ export default function AdminCompanies() {
       const data = await listBankAccounts(editingId);
       setExistingBankAccounts(data);
     } catch (err) {
-      setFormError(extractErrorMessage(err, 'Erro ao atualizar conta bancaria'));
+      setFormError(extractErrorMessage(err, 'Erro ao atualizar conta bancária'));
     } finally {
       setBankRowSaving(null);
     }
@@ -675,7 +675,7 @@ export default function AdminCompanies() {
           {activeTab === 'iva' && (
             <div className="flex flex-col gap-4 min-h-[420px]">
               <div className="flex items-center justify-between">
-                <p className="text-[12px] text-text-muted">Alterar ou desativar uma taxa nao afeta faturas ou produtos ja associados a ela.</p>
+                <p className="text-[12px] text-text-muted">Alterar ou desativar uma taxa não afeta faturas ou produtos já associados a ela.</p>
                 <span className="text-[11px] text-text-muted">Definidas pelo regime fiscal e pelas taxas legais</span>
               </div>
 

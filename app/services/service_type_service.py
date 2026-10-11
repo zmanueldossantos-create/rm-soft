@@ -23,7 +23,7 @@ async def _check_name_available(db: AsyncSession, company_id: uuid.UUID, name: s
     if exclude_id is not None:
         query = query.where(ServiceType.id != exclude_id)
     if (await db.execute(query)).scalar_one_or_none() is not None:
-        raise ServiceTypeAlreadyExistsError("Ja existe um tipo de servico com este nome")
+        raise ServiceTypeAlreadyExistsError("Já existe um tipo de serviço com este nome")
 
 
 async def list_service_types(db: AsyncSession, company_id: uuid.UUID) -> list[ServiceType]:
@@ -57,7 +57,7 @@ async def update_service_type(
     result = await db.execute(select(ServiceType).where(ServiceType.id == service_type_id, ServiceType.company_id == company_id))
     service_type = result.scalar_one_or_none()
     if service_type is None:
-        raise ServiceTypeNotFoundError("Tipo de servico nao encontrado")
+        raise ServiceTypeNotFoundError("Tipo de serviço não encontrado")
     await _check_name_available(db, company_id, name, exclude_id=service_type_id)
     service_type.name = name
     service_type.not_available_purchases = not_available_purchases
@@ -72,7 +72,7 @@ async def toggle_service_type(db: AsyncSession, company_id: uuid.UUID, service_t
     result = await db.execute(select(ServiceType).where(ServiceType.id == service_type_id, ServiceType.company_id == company_id))
     service_type = result.scalar_one_or_none()
     if service_type is None:
-        raise ServiceTypeNotFoundError("Tipo de servico nao encontrado")
+        raise ServiceTypeNotFoundError("Tipo de serviço não encontrado")
     service_type.is_active = not service_type.is_active
     await db.commit()
     await db.refresh(service_type)

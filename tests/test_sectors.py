@@ -128,8 +128,8 @@ async def test_create_company_refuses_a_sector_in_development(db):
     pharmacy = await _module(db, "FARMACIA")
     with pytest.raises(ModuleNotAvailableError):
         await create_company(
-            db, name="Farmacia Teste Lda", nif="5000123999", email="farmacia@teste.co.ao", phone_number="+244923000101",
-            gestor_full_name="Gestor Farmacia", gestor_phone_number="+244923000102", gestor_password="Teste@2026",
+            db, name="Farmácia Teste Lda", nif="5000123999", email="farmácia@teste.co.ao", phone_number="+244923000101",
+            gestor_full_name="Gestor Farmácia", gestor_phone_number="+244923000102", gestor_password="Teste@2026",
             module_ids=[pharmacy.id],
         )
     assert (await db.execute(select(func.count()).select_from(Company).where(Company.nif == "5000123999"))).scalar_one() == 0

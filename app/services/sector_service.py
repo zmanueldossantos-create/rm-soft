@@ -62,6 +62,11 @@ async def seed_sector_catalog(db: AsyncSession) -> None:
     uncoded = {_norm(m.name): m for m in modules if not m.code}
     for sector in SECTORS:
         if sector.code in by_code:
+            # the same name with its accents fixed (Spa / Salao -> Spa / Salão): the catalog's spelling wins; a name
+            # the SUPER_ADMIN really changed is kept
+            module = by_code[sector.code]
+            if module.name != sector.name and _norm(module.name) == _norm(sector.name):
+                module.name = sector.name
             continue
         module = uncoded.pop(_norm(sector.name), None)
         if module is not None:
@@ -91,7 +96,7 @@ async def ensure_modules_grantable(db: AsyncSession, module_ids) -> None:
     for module in result.scalars().all():
         sector = SECTORS_BY_CODE.get(module.code) if module.code else None
         if sector is not None and not sector.ready:
-            raise ModuleNotAvailableError(f"O modulo {module.name} ainda esta em desenvolvimento e nao pode ser ativado")
+            raise ModuleNotAvailableError(f"O modulo {module.name} ainda está em desenvolvimento e não pode ser ativado")
 
 
 async def _write_capabilities(db: AsyncSession, module_id: uuid.UUID, enabled: set[str]) -> None:
@@ -111,7 +116,7 @@ async def set_module_capabilities(db: AsyncSession, module_id: uuid.UUID, codes:
     module = await get_module_or_raise(db, module_id)
     unknown = sorted(c for c in codes if c not in CAPABILITIES)
     if unknown:
-        raise UnknownCapabilityError("Funcao desconhecida: " + ", ".join(unknown))
+        raise UnknownCapabilityError("Função desconhecida: " + ", ".join(unknown))
     wanted = expand_dependencies(set(codes))
     await _write_capabilities(db, module.id, wanted)
     await db.commit()
@@ -123,7 +128,7 @@ async def reset_module_capabilities(db: AsyncSession, module_id: uuid.UUID) -> l
     module = await get_module_or_raise(db, module_id)
     sector = SECTORS_BY_CODE.get(module.code) if module.code else None
     if sector is None:
-        raise NoSectorDefaultsError("Este modulo nao tem funcoes padrao")
+        raise NoSectorDefaultsError("Este modulo não tem funções padrão")
     wanted = expand_dependencies(set(sector.capabilities))
     await _write_capabilities(db, module.id, wanted)
     await db.commit()

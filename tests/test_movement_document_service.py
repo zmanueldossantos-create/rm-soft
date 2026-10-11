@@ -139,10 +139,10 @@ async def test_a_movement_date_lies_between_its_period_start_and_today(db, compa
     product = await _make_product(db, setup["company"], setup["vat_nor"], code="MV-DT1")
     entrada = await _make_movement_type(db, "END", MovementDirection.ENTRADA)
     line = [{"product_id": product.id, "quantity": 1, "purchase_price": 0, "sale_price": 0}]
-    with pytest.raises(PeriodClosedError, match="nao pode ser futura"):
+    with pytest.raises(PeriodClosedError, match="não pode ser futura"):
         await create_stock_movement_document(db, setup["company"].id, entrada.id, setup["activity_warehouse"].id,
                                              lines_input=line, movement_date=date.today() + timedelta(days=1))
-    with pytest.raises(PeriodClosedError, match="anterior ao periodo escolhido"):
+    with pytest.raises(PeriodClosedError, match="anterior ao período escolhido"):
         await create_stock_movement_document(db, setup["company"].id, entrada.id, setup["activity_warehouse"].id,
                                              lines_input=line, movement_date=date.today().replace(day=1) - timedelta(days=1))
 

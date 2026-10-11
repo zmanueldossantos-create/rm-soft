@@ -56,14 +56,14 @@ async def assign_user_to_cash_point(
     a POS already held by a different user must be unassigned first."""
     user_result = await db.execute(select(User).where(User.id == user_id, User.company_id == company_id))
     if user_result.scalar_one_or_none() is None:
-        raise UserNotFoundError("Utilizador nao encontrado")
+        raise UserNotFoundError("Utilizador não encontrado")
 
     await get_pos_or_raise(db, company_id, pos_id)
 
     pos_holder = await get_access_for_pos(db, company_id, pos_id)
     if pos_holder is not None and pos_holder.user_id != user_id:
         raise PosAlreadyAssignedError(
-            "Esta caixa ja esta associada a outro utilizador - desassocie-o primeiro"
+            "Esta caixa já está associada a outro utilizador - desassocie-o primeiro"
         )
 
     existing = await get_access_for_user(db, company_id, user_id)
@@ -83,7 +83,7 @@ async def assign_user_to_cash_point(
 async def unassign_user(db: AsyncSession, company_id: uuid.UUID, user_id: uuid.UUID) -> None:
     access = await get_access_for_user(db, company_id, user_id)
     if access is None:
-        raise AccessNotFoundError("Este utilizador nao tem nenhuma caixa associada")
+        raise AccessNotFoundError("Este utilizador não tem nenhuma caixa associada")
     await db.delete(access)
     await db.commit()
 
@@ -106,10 +106,10 @@ async def require_cash_point_access(
 
     access = await get_access_for_user(db, company_id, user.id)
     if access is None:
-        raise CashPointAccessDeniedError("Nao tem nenhuma caixa associada - contacte o gestor")
+        raise CashPointAccessDeniedError("Não tem nenhuma caixa associada - contacte o gestor")
 
     if access.pos_id != pos_id:
-        raise CashPointAccessDeniedError("Nao tem acesso a este ponto de venda")
+        raise CashPointAccessDeniedError("Não tem acesso a este ponto de venda")
 
 
 async def require_cash_point_read_access(

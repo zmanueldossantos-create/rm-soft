@@ -209,11 +209,11 @@ async def upload_product_image(
     """Uploads/replaces a product's image. Stored locally (Phase 1), same pattern as the company logo."""
     ext = os.path.splitext(file.filename or "")[1].lower()
     if ext not in ALLOWED_IMAGE_EXTENSIONS:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Formato de imagem invalido - use PNG, JPG ou WEBP")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Formato de imagem inválido - use PNG, JPG ou WEBP")
 
     contents = await file.read()
     if len(contents) > MAX_IMAGE_SIZE_BYTES:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Imagem demasiado grande - maximo 2MB")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Imagem demasiado grande - máximo 2MB")
 
     try:
         product = await get_product_or_raise(db, current_user.company_id, product_id)

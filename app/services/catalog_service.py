@@ -49,7 +49,7 @@ async def update_country(db: AsyncSession, country_id: uuid.UUID, code: str, nam
     result = await db.execute(select(Country).where(Country.id == country_id))
     country = result.scalar_one_or_none()
     if country is None:
-        raise CatalogItemNotFoundError("Pais nao encontrado")
+        raise CatalogItemNotFoundError("País não encontrado")
     country.code = code
     country.name = name
     await db.commit()
@@ -61,7 +61,7 @@ async def toggle_country(db: AsyncSession, country_id: uuid.UUID) -> Country:
     result = await db.execute(select(Country).where(Country.id == country_id))
     country = result.scalar_one_or_none()
     if country is None:
-        raise CatalogItemNotFoundError("Pais nao encontrado")
+        raise CatalogItemNotFoundError("País não encontrado")
     country.is_active = not country.is_active
     await db.commit()
     await db.refresh(country)
@@ -87,7 +87,7 @@ async def update_currency(db: AsyncSession, currency_id: uuid.UUID, code: str, n
     result = await db.execute(select(Currency).where(Currency.id == currency_id))
     currency = result.scalar_one_or_none()
     if currency is None:
-        raise CatalogItemNotFoundError("Moeda nao encontrada")
+        raise CatalogItemNotFoundError("Moeda não encontrada")
     currency.code = code
     currency.name = name
     currency.symbol = symbol
@@ -100,7 +100,7 @@ async def toggle_currency(db: AsyncSession, currency_id: uuid.UUID) -> Currency:
     result = await db.execute(select(Currency).where(Currency.id == currency_id))
     currency = result.scalar_one_or_none()
     if currency is None:
-        raise CatalogItemNotFoundError("Moeda nao encontrada")
+        raise CatalogItemNotFoundError("Moeda não encontrada")
     currency.is_active = not currency.is_active
     await db.commit()
     await db.refresh(currency)
@@ -129,7 +129,7 @@ async def update_province(db: AsyncSession, province_id: uuid.UUID, country_id: 
     result = await db.execute(select(Province).where(Province.id == province_id))
     province = result.scalar_one_or_none()
     if province is None:
-        raise CatalogItemNotFoundError("Provincia nao encontrada")
+        raise CatalogItemNotFoundError("Província não encontrada")
     province.country_id = country_id
     province.name = name
     await db.commit()
@@ -141,7 +141,7 @@ async def toggle_province(db: AsyncSession, province_id: uuid.UUID) -> Province:
     result = await db.execute(select(Province).where(Province.id == province_id))
     province = result.scalar_one_or_none()
     if province is None:
-        raise CatalogItemNotFoundError("Provincia nao encontrada")
+        raise CatalogItemNotFoundError("Província não encontrada")
     province.is_active = not province.is_active
     await db.commit()
     await db.refresh(province)
@@ -170,7 +170,7 @@ async def update_municipality(db: AsyncSession, municipality_id: uuid.UUID, prov
     result = await db.execute(select(Municipality).where(Municipality.id == municipality_id))
     municipality = result.scalar_one_or_none()
     if municipality is None:
-        raise CatalogItemNotFoundError("Municipio nao encontrado")
+        raise CatalogItemNotFoundError("Município não encontrado")
     municipality.province_id = province_id
     municipality.name = name
     await db.commit()
@@ -182,7 +182,7 @@ async def toggle_municipality(db: AsyncSession, municipality_id: uuid.UUID) -> M
     result = await db.execute(select(Municipality).where(Municipality.id == municipality_id))
     municipality = result.scalar_one_or_none()
     if municipality is None:
-        raise CatalogItemNotFoundError("Municipio nao encontrado")
+        raise CatalogItemNotFoundError("Município não encontrado")
     municipality.is_active = not municipality.is_active
     await db.commit()
     await db.refresh(municipality)
@@ -208,7 +208,7 @@ async def update_bank(db: AsyncSession, bank_id: uuid.UUID, acronym: str, full_n
     result = await db.execute(select(Bank).where(Bank.id == bank_id))
     bank = result.scalar_one_or_none()
     if bank is None:
-        raise CatalogItemNotFoundError("Banco nao encontrado")
+        raise CatalogItemNotFoundError("Banco não encontrado")
     bank.acronym = acronym
     bank.full_name = full_name
     await db.commit()
@@ -220,7 +220,7 @@ async def toggle_bank(db: AsyncSession, bank_id: uuid.UUID) -> Bank:
     result = await db.execute(select(Bank).where(Bank.id == bank_id))
     bank = result.scalar_one_or_none()
     if bank is None:
-        raise CatalogItemNotFoundError("Banco nao encontrado")
+        raise CatalogItemNotFoundError("Banco não encontrado")
     bank.is_active = not bank.is_active
     await db.commit()
     await db.refresh(bank)
@@ -241,7 +241,7 @@ async def create_denomination(db: AsyncSession, currency_id: uuid.UUID, value: f
         )
     )
     if existing.scalar_one_or_none() is not None:
-        raise CatalogItemNotFoundError("Esta denominacao ja existe para esta moeda")
+        raise CatalogItemNotFoundError("Esta denominação já existe para esta moeda")
     denomination = Denomination(currency_id=currency_id, value=value, denomination_type=denomination_type)
     db.add(denomination)
     await db.commit()
@@ -253,7 +253,7 @@ async def update_denomination(db: AsyncSession, denomination_id: uuid.UUID, curr
     result = await db.execute(select(Denomination).where(Denomination.id == denomination_id))
     denomination = result.scalar_one_or_none()
     if denomination is None:
-        raise CatalogItemNotFoundError("Denominacao nao encontrada")
+        raise CatalogItemNotFoundError("Denominação não encontrada")
     denomination.currency_id = currency_id
     denomination.value = value
     denomination.denomination_type = denomination_type
@@ -266,7 +266,7 @@ async def toggle_denomination(db: AsyncSession, denomination_id: uuid.UUID) -> D
     result = await db.execute(select(Denomination).where(Denomination.id == denomination_id))
     denomination = result.scalar_one_or_none()
     if denomination is None:
-        raise CatalogItemNotFoundError("Denominacao nao encontrada")
+        raise CatalogItemNotFoundError("Denominação não encontrada")
     denomination.is_active = not denomination.is_active
     await db.commit()
     await db.refresh(denomination)
@@ -292,7 +292,7 @@ async def update_payment_method(db: AsyncSession, method_id: uuid.UUID, code: st
     result = await db.execute(select(PaymentMethodCatalog).where(PaymentMethodCatalog.id == method_id))
     method = result.scalar_one_or_none()
     if method is None:
-        raise CatalogItemNotFoundError("Metodo de pagamento nao encontrado")
+        raise CatalogItemNotFoundError("Método de pagamento não encontrado")
     method.code = code
     method.name = name
     method.allows_payment = allows_payment
@@ -308,7 +308,7 @@ async def toggle_payment_method(db: AsyncSession, method_id: uuid.UUID) -> Payme
     result = await db.execute(select(PaymentMethodCatalog).where(PaymentMethodCatalog.id == method_id))
     method = result.scalar_one_or_none()
     if method is None:
-        raise CatalogItemNotFoundError("Metodo de pagamento nao encontrado")
+        raise CatalogItemNotFoundError("Método de pagamento não encontrado")
     method.is_active = not method.is_active
     await db.commit()
     await db.refresh(method)
@@ -334,7 +334,7 @@ async def update_payment_term(db: AsyncSession, term_id: uuid.UUID, name: str, f
     result = await db.execute(select(PaymentTerm).where(PaymentTerm.id == term_id))
     term = result.scalar_one_or_none()
     if term is None:
-        raise CatalogItemNotFoundError("Condicao de pagamento nao encontrada")
+        raise CatalogItemNotFoundError("Condição de pagamento não encontrada")
     term.name = name
     term.fixed_days = fixed_days
     term.days = days
@@ -349,7 +349,7 @@ async def toggle_payment_term(db: AsyncSession, term_id: uuid.UUID) -> PaymentTe
     result = await db.execute(select(PaymentTerm).where(PaymentTerm.id == term_id))
     term = result.scalar_one_or_none()
     if term is None:
-        raise CatalogItemNotFoundError("Condicao de pagamento nao encontrada")
+        raise CatalogItemNotFoundError("Condição de pagamento não encontrada")
     term.is_active = not term.is_active
     await db.commit()
     await db.refresh(term)
@@ -365,9 +365,9 @@ class ExemptionMotiveInvalidError(Exception):
 def check_exemption_motive(code: str | None, name: str | None) -> None:
     """THE SAF-T rule of an exemption motive - the catalog is its only source, copied on each exempt line when issued."""
     if not re.fullmatch(r"M[0-9]{2}", code or ""):
-        raise ExemptionMotiveInvalidError("O codigo do motivo de isencao deve ter o formato M seguido de 2 algarismos (ex.: M11)")
+        raise ExemptionMotiveInvalidError("O código do motivo de isenção deve ter o formato M seguido de 2 algarismos (ex.: M11)")
     if not 6 <= len((name or "").strip()) <= 60:
-        raise ExemptionMotiveInvalidError("A mencao legal do motivo de isencao deve ter entre 6 e 60 caracteres (limite do SAF-T)")
+        raise ExemptionMotiveInvalidError("A menção legal do motivo de isenção deve ter entre 6 e 60 caracteres (limite do SAF-T)")
 
 
 async def list_vat_codes(db: AsyncSession) -> list[VatCode]:
@@ -398,7 +398,7 @@ async def update_vat_code(
     result = await db.execute(select(VatCode).where(VatCode.id == vat_code_id))
     vat_code = result.scalar_one_or_none()
     if vat_code is None:
-        raise CatalogItemNotFoundError("Codigo IVA nao encontrado")
+        raise CatalogItemNotFoundError("Código IVA não encontrado")
     vat_code.code = code
     vat_code.name = name
     vat_code.rate = rate
@@ -415,7 +415,7 @@ async def toggle_vat_code(db: AsyncSession, vat_code_id: uuid.UUID) -> VatCode:
     result = await db.execute(select(VatCode).where(VatCode.id == vat_code_id))
     vat_code = result.scalar_one_or_none()
     if vat_code is None:
-        raise CatalogItemNotFoundError("Codigo IVA nao encontrado")
+        raise CatalogItemNotFoundError("Código IVA não encontrado")
     vat_code.is_active = not vat_code.is_active
     await db.commit()
     await db.refresh(vat_code)
@@ -466,7 +466,7 @@ async def update_document_type(
     )
     item = result.scalar_one_or_none()
     if item is None:
-        raise CatalogItemNotFoundError("Tipo de documento nao encontrado")
+        raise CatalogItemNotFoundError("Tipo de documento não encontrado")
     item.code = code
     item.name = name
     item.description = description
@@ -483,7 +483,7 @@ async def toggle_document_type(db: AsyncSession, item_id: uuid.UUID) -> Document
     result = await db.execute(select(DocumentType).where(DocumentType.id == item_id))
     item = result.scalar_one_or_none()
     if item is None:
-        raise CatalogItemNotFoundError("Tipo de documento nao encontrado")
+        raise CatalogItemNotFoundError("Tipo de documento não encontrado")
     item.is_active = not item.is_active
     await db.commit()
     await db.refresh(item)
@@ -514,7 +514,7 @@ async def update_movement_type(
     result = await db.execute(select(MovementType).where(MovementType.id == item_id))
     item = result.scalar_one_or_none()
     if item is None:
-        raise CatalogItemNotFoundError("Tipo de movimento nao encontrado")
+        raise CatalogItemNotFoundError("Tipo de movimento não encontrado")
     item.code = code
     item.name = name
     item.direction = direction
@@ -529,7 +529,7 @@ async def toggle_movement_type(db: AsyncSession, item_id: uuid.UUID) -> Movement
     result = await db.execute(select(MovementType).where(MovementType.id == item_id))
     item = result.scalar_one_or_none()
     if item is None:
-        raise CatalogItemNotFoundError("Tipo de movimento nao encontrado")
+        raise CatalogItemNotFoundError("Tipo de movimento não encontrado")
     item.is_active = not item.is_active
     await db.commit()
     await db.refresh(item)
@@ -555,7 +555,7 @@ async def update_unit(db: AsyncSession, item_id: uuid.UUID, code: str, name: str
     result = await db.execute(select(UnitOfMeasureCatalog).where(UnitOfMeasureCatalog.id == item_id))
     item = result.scalar_one_or_none()
     if item is None:
-        raise CatalogItemNotFoundError("Unidade nao encontrada")
+        raise CatalogItemNotFoundError("Unidade não encontrada")
     item.code = code
     item.name = name
     item.fixed_factor = fixed_factor if fixed_factor and fixed_factor > 0 else None
@@ -569,7 +569,7 @@ async def toggle_unit(db: AsyncSession, item_id: uuid.UUID) -> UnitOfMeasureCata
     result = await db.execute(select(UnitOfMeasureCatalog).where(UnitOfMeasureCatalog.id == item_id))
     item = result.scalar_one_or_none()
     if item is None:
-        raise CatalogItemNotFoundError("Unidade nao encontrada")
+        raise CatalogItemNotFoundError("Unidade não encontrada")
     item.is_active = not item.is_active
     await db.commit()
     await db.refresh(item)
@@ -595,7 +595,7 @@ async def update_withholding_tax(db: AsyncSession, item_id: uuid.UUID, name: str
     result = await db.execute(select(WithholdingTax).where(WithholdingTax.id == item_id))
     item = result.scalar_one_or_none()
     if item is None:
-        raise CatalogItemNotFoundError("Retencao nao encontrada")
+        raise CatalogItemNotFoundError("Retenção não encontrada")
     item.name = name
     item.rate = rate
     if tax_type is not None:  # a client that does not send the type keeps the one already set
@@ -609,7 +609,7 @@ async def toggle_withholding_tax(db: AsyncSession, item_id: uuid.UUID) -> Withho
     result = await db.execute(select(WithholdingTax).where(WithholdingTax.id == item_id))
     item = result.scalar_one_or_none()
     if item is None:
-        raise CatalogItemNotFoundError("Retencao nao encontrada")
+        raise CatalogItemNotFoundError("Retenção não encontrada")
     item.is_active = not item.is_active
     await db.commit()
     await db.refresh(item)
@@ -638,7 +638,7 @@ async def _legal_vat_rate_or_raise(db: AsyncSession, item_id: uuid.UUID):
     from app.models.legal_vat_rate import LegalVatRate
     item = (await db.execute(select(LegalVatRate).where(LegalVatRate.id == item_id))).scalar_one_or_none()
     if item is None:
-        raise CatalogItemNotFoundError("Taxa legal nao encontrada")
+        raise CatalogItemNotFoundError("Taxa legal não encontrada")
     return item
 
 

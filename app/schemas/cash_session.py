@@ -22,7 +22,7 @@ class OpenSessionRequest(BaseModel):
     @classmethod
     def validate_opening_amount(cls, v: float | None) -> float | None:
         if v is not None and v < 0:
-            raise ValueError("Fundo de caixa nao pode ser negativo")
+            raise ValueError("Fundo de caixa não pode ser negativo")
         return v
 
 
@@ -37,7 +37,7 @@ class CloseSessionRequest(BaseModel):
     @classmethod
     def validate_closing_amount(cls, v: float | None) -> float | None:
         if v is not None and v < 0:
-            raise ValueError("Valor contado nao pode ser negativo")
+            raise ValueError("Valor contado não pode ser negativo")
         return v
 
 
@@ -81,7 +81,7 @@ class CheckoutLineInput(InvoiceLineCreateRequest):
     def validate_exactly_one_item(cls, v, info):
         product_id = info.data.get("product_id")
         if bool(v) == bool(product_id):
-            raise ValueError("Cada linha deve referenciar exatamente um produto OU um servico")
+            raise ValueError("Cada linha deve referenciar exatamente um produto OU um serviço")
         return v
 
 

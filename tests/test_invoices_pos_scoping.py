@@ -21,7 +21,7 @@ async def test_pos_id_scopes_real_invoices_but_not_pro_formas(db, company_with_e
     company_id, activity_id, pos_a, gestor = ctx["company"].id, ctx["activity"].id, ctx["pos"].id, ctx["gestor"]
     pos_b = (await _make_second_pos(db, company_id, activity_id)).id
 
-    service = Service(company_id=company_id, code="SRV-SCOPE", name="Servico Scope", price=1000.0, vat_id=ctx["vat_nor"].id)
+    service = Service(company_id=company_id, code="SRV-SCOPE", name="Serviço Scope", price=1000.0, vat_id=ctx["vat_nor"].id)
     db.add(service)
     await db.commit()
     await db.refresh(service)

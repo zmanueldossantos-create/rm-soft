@@ -8,7 +8,7 @@ from app.services.invoice_service import PaymentMethodNotAllowedError, _ensure_m
 
 
 async def _method(db, allows_payment, allows_receipt):
-    method = PaymentMethodCatalog(code="T" + uuid.uuid4().hex[:3].upper(), name="Metodo teste",
+    method = PaymentMethodCatalog(code="T" + uuid.uuid4().hex[:3].upper(), name="Método teste",
                                   allows_payment=allows_payment, allows_receipt=allows_receipt)
     db.add(method)
     await db.commit()
@@ -27,6 +27,6 @@ async def test_a_method_that_cannot_receive_is_refused_for_money_in(db):
 @pytest.mark.asyncio
 async def test_a_method_that_cannot_pay_is_refused_for_money_out(db):
     method = await _method(db, allows_payment=False, allows_receipt=True)
-    with pytest.raises(PaymentMethodNotAllowedError, match="pagamentos ou devolucoes"):
+    with pytest.raises(PaymentMethodNotAllowedError, match="pagamentos ou devoluções"):
         await _ensure_methods_allowed(db, [method.id], "out")
     await _ensure_methods_allowed(db, [method.id], "in")  # receiving is allowed

@@ -31,24 +31,24 @@ async def resolve_article_vat(
         return None
     vat = (await db.execute(select(VAT).where(VAT.id == vat_id, VAT.company_id == company_id))).scalar_one_or_none()
     if vat is None or not vat.is_active:
-        raise ArticleVatError("Taxa de IVA invalida ou inativa para esta empresa")
+        raise ArticleVatError("Taxa de IVA inválida ou inativa para esta empresa")
     regime = None
     company = (await db.execute(select(Company).where(Company.id == company_id))).scalar_one_or_none()
     if company is not None and company.fiscal_regime_id is not None:
         regime = (await db.execute(select(FiscalRegime).where(FiscalRegime.id == company.fiscal_regime_id))).scalar_one_or_none()
     if regime is not None and not getattr(regime, "allows_" + vat.tax_category.lower(), False):
-        raise ArticleVatError(f"A taxa {vat.name} ({vat.tax_category}) nao e permitida pelo regime {regime.name} da empresa")
+        raise ArticleVatError(f"A taxa {vat.name} ({vat.tax_category}) não é permitida pelo regime {regime.name} da empresa")
     if vat.tax_category != "ISE":
         return None
     if regime is not None and regime.required_exemption_id is not None:
         return regime.required_exemption_id
     if exemption_reason_id is None:
-        raise ArticleVatError("Motivo de isencao obrigatorio para um artigo isento de IVA")
+        raise ArticleVatError("Motivo de isenção obrigatório para um artigo isento de IVA")
     motive = (await db.execute(
         select(VatCode).where(VatCode.id == exemption_reason_id, VatCode.is_active.is_(True))
     )).scalar_one_or_none()
     if motive is None:
-        raise ArticleVatError("Motivo de isencao invalido ou inativo")
+        raise ArticleVatError("Motivo de isenção inválido ou inativo")
     return exemption_reason_id
 
 
@@ -104,7 +104,7 @@ async def ensure_article_sellable(db: AsyncSession, article) -> None:
     _, active_rates, _, others = await _company_vat_context(db, article.company_id)
     if _needs_reclassification(article, active_rates, others):
         raise ArticleVatError(
-            f"O artigo {article.name} tem de ser reclassificado (IVA) apos a mudanca de regime da empresa"
+            f"O artigo {article.name} tem de ser reclassificado (IVA) após a mudanca de regime da empresa"
         )
 
 

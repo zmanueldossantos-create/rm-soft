@@ -34,9 +34,9 @@ async def test_guest_name_and_party_size_are_stored_without_a_customer(db, compa
     table = await _table(db, ctx)
     booking = await create_booking(
         db, ctx["company"].id, table.id, ctx["gestor"].id, NOW + timedelta(hours=2), NOW + timedelta(hours=4),
-        guest_name="  Familia Silva  ", party_size=6,
+        guest_name="  Família Silva  ", party_size=6,
     )
-    assert booking.guest_name == "Familia Silva" and booking.party_size == 6 and booking.customer_id is None
+    assert booking.guest_name == "Família Silva" and booking.party_size == 6 and booking.customer_id is None
 
 
 @pytest.mark.asyncio
@@ -72,8 +72,8 @@ async def test_status_reports_the_guest_details_of_the_reserving_booking(db, com
     table = await _table(db, ctx)
     await create_booking(
         db, ctx["company"].id, table.id, ctx["gestor"].id, NOW + timedelta(minutes=30), NOW + timedelta(minutes=120),
-        guest_name="Familia Silva", party_size=6,
+        guest_name="Família Silva", party_size=6,
     )
     rows = await list_resource_statuses(db, ctx["company"].id, ctx["activity"].id, now=NOW, window_minutes=60)
     assert len(rows) == 1 and rows[0]["status"] == "RESERVADA"
-    assert rows[0]["booking_guest_name"] == "Familia Silva" and rows[0]["booking_party_size"] == 6
+    assert rows[0]["booking_guest_name"] == "Família Silva" and rows[0]["booking_party_size"] == 6

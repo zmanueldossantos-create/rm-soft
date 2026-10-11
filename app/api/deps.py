@@ -45,7 +45,7 @@ async def get_current_user(
     if credentials is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Autenticacao necessaria. Por favor, inicie sessao.",
+            detail="Autenticacao necessária. Por favor, inicie sessão.",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -55,7 +55,7 @@ async def get_current_user(
     if payload is None or payload.get("type") != "access":
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Sessao invalida ou expirada. Por favor, inicie sessao novamente.",
+            detail="Sessão inválida ou expirada. Por favor, inicie sessão novamente.",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -64,7 +64,7 @@ async def get_current_user(
     user = result.scalar_one_or_none()
 
     if user is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Utilizador nao encontrado ou desativado")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Utilizador não encontrado ou desativado")
 
     current_user_id.set(user.id)  # who makes this request: every document it creates records it
     return user
@@ -79,7 +79,7 @@ def require_role(*allowed_roles: str):
         if current_user.role.value not in allowed_roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Nao tem permissao para aceder a este recurso",
+                detail="Não tem permissão para aceder a este recurso",
             )
         return current_user
 
@@ -103,7 +103,7 @@ def require_permission(code: str, *, also_allow_roles: tuple[str, ...] = ()):
         if current_user.company_id is None or not await has_permission(db, current_user.company_id, current_user.role.value, code):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Nao tem permissao para aceder a este recurso",
+                detail="Não tem permissão para aceder a este recurso",
             )
         return current_user
 

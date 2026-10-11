@@ -132,7 +132,7 @@ def _fit(c, text: str, font: str, size: float, width: float) -> str:
 def generate_closing_report_pdf(data: dict) -> bytes:
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
-    c.setTitle(f"Relatorio de fecho - {data['pos_name']} - {_when(data['business_date'])}")
+    c.setTitle(f"Relatório de fecho - {data['pos_name']} - {_when(data['business_date'])}")
     p = _Page(c)
     s = data["summary"]
 
@@ -217,7 +217,7 @@ def generate_movements_report_pdf(data: dict) -> bytes:
     c = canvas.Canvas(buffer, pagesize=A4)
     same_day = data["date_from"] == data["date_to"]
     period = _when(data["date_from"]) if same_day else f"{_when(data['date_from'])} a {_when(data['date_to'])}"
-    c.setTitle(f"Relatorio de movimentos - {data['pos_name']} - {period}")
+    c.setTitle(f"Relatório de movimentos - {data['pos_name']} - {period}")
     p = _Page(c)
     _draw_header(p, data["company"], "RELATÓRIO DE MOVIMENTOS DE CAIXA",
                  [f"{data['pos_name']}  ·  {data['activity_name']}", ("Dia " if same_day else "Período ") + period],

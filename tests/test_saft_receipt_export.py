@@ -15,7 +15,7 @@ NS = {"s": "urn:OECD:StandardAuditFile-Tax:AO_1.01_01"}
 async def test_receipt_is_exported_in_payments_with_its_invoice_and_withholding(db, company_with_essentials):
     ctx = company_with_essentials
     company_id, activity_id = ctx["company"].id, ctx["activity"].id
-    tax = WithholdingTax(name="Retencao export", rate=6.5, tax_type="II")
+    tax = WithholdingTax(name="Retenção export", rate=6.5, tax_type="II")
     db.add(tax)
     customer = Customer(company_id=company_id, name="Empresa PJ", nif="5000111777", legal_person_type=LegalPersonType.JURIDICA)
     db.add(customer)
@@ -23,7 +23,7 @@ async def test_receipt_is_exported_in_payments_with_its_invoice_and_withholding(
     await db.refresh(tax)
     await db.refresh(customer)
     customer_id = customer.id
-    service = Service(company_id=company_id, code="SRV-EXP", name="Servico export", price=1000.0,
+    service = Service(company_id=company_id, code="SRV-EXP", name="Serviço export", price=1000.0,
                       vat_id=ctx["vat_nor"].id, withholding_tax_id=tax.id)
     db.add(service)
     await db.commit()

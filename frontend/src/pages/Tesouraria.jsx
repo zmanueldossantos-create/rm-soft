@@ -4,9 +4,9 @@ import { listCashMovements } from '../api/tesouraria';
 import { extractErrorMessage } from '../utils/errors';
 
 const MOVEMENT_TYPES = [
-  { value: 'TRANSFERENCIA', label: 'Transferencia entre caixas' },
+  { value: 'TRANSFERENCIA', label: 'Transferência entre caixas' },
   { value: 'ENTRADA_EXTERNA', label: 'Entrada externa' },
-  { value: 'SAIDA_EXTERNA', label: 'Saida externa' },
+  { value: 'SAIDA_EXTERNA', label: 'Saída externa' },
 ];
 
 export default function Tesouraria() {
@@ -47,7 +47,7 @@ export default function Tesouraria() {
       <div className="bg-bg-elevated border border-border rounded-lg p-6 sm:p-8">
         <div className="flex items-center gap-2 mb-5">
           <ArrowLeftRight size={14} className="text-accent" />
-          <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wide">Historico de movimentos</p>
+          <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wide">Histórico de movimentos</p>
         </div>
         {movementsLoading ? (
           <div className="flex justify-center py-12"><Loader2 size={20} className="animate-spin text-accent" /></div>
@@ -61,7 +61,7 @@ export default function Tesouraria() {
                   <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-3 py-2.5">Data</th>
                   <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-3 py-2.5">Tipo</th>
                   <th className="text-right text-[11px] uppercase tracking-wide text-text-muted font-medium px-3 py-2.5">Valor</th>
-                  <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-3 py-2.5">Descricao</th>
+                  <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-3 py-2.5">Descrição</th>
                 </tr>
               </thead>
               <tbody>

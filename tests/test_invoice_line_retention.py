@@ -15,11 +15,11 @@ from app.services.invoice_service import create_invoice
 
 
 async def _service_with_retention(db, ctx):
-    tax = WithholdingTax(name="Retencao teste", rate=6.5)
+    tax = WithholdingTax(name="Retenção teste", rate=6.5)
     db.add(tax)
     await db.flush()
     service = Service(
-        company_id=ctx["company"].id, code="SRV-RET", name="Servico com retencao", price=1000.0,
+        company_id=ctx["company"].id, code="SRV-RET", name="Serviço com retenção", price=1000.0,
         vat_id=ctx["vat_nor"].id, withholding_tax_id=tax.id,
     )
     db.add(service)
@@ -51,17 +51,17 @@ async def test_line_keeps_the_retention_it_was_issued_with(db, company_with_esse
     assert float(invoice.retention_total) == 130.0  # 6.5% of 2 x 1000
 
     line = await _only_line(db, invoice_id)
-    assert line.retention_name_snapshot == "Retencao teste"
+    assert line.retention_name_snapshot == "Retenção teste"
     assert float(line.retention_rate) == 6.5 and float(line.retention_amount) == 130.0
 
     # The catalog changes later: the issued document must not.
     tax = (await db.execute(select(WithholdingTax).where(WithholdingTax.id == tax_id))).scalar_one()
     tax.rate = 10
-    tax.name = "Outra retencao"
+    tax.name = "Outra retenção"
     await db.commit()
     line = await _only_line(db, invoice_id)
     await db.refresh(line)
-    assert (line.retention_name_snapshot, float(line.retention_rate), float(line.retention_amount)) == ("Retencao teste", 6.5, 130.0)
+    assert (line.retention_name_snapshot, float(line.retention_rate), float(line.retention_amount)) == ("Retenção teste", 6.5, 130.0)
 
 
 @pytest.mark.asyncio

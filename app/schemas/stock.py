@@ -33,7 +33,7 @@ class StockAdjustRequest(BaseModel):
     @classmethod
     def validate_new_quantity(cls, v: float) -> float:
         if v < 0:
-            raise ValueError("Quantidade nao pode ser negativa")
+            raise ValueError("Quantidade não pode ser negativa")
         return v
 
     @field_validator("reason")
@@ -41,7 +41,7 @@ class StockAdjustRequest(BaseModel):
     def validate_reason(cls, v: str) -> str:
         cleaned = v.strip()
         if len(cleaned) < 5:
-            raise ValueError("Motivo obrigatorio - minimo 5 caracteres")
+            raise ValueError("Motivo obrigatório - mínimo 5 caracteres")
         return cleaned
 
 
@@ -83,7 +83,7 @@ class StockLossRequest(BaseModel):
     def validate_loss_category(cls, v: str) -> str:
         allowed = {"EXPIRACAO", "QUEBRA", "ROUBO", "OUTRO"}
         if v not in allowed:
-            raise ValueError(f"Categoria invalida - deve ser uma de: {', '.join(sorted(allowed))}")
+            raise ValueError(f"Categoria inválida - deve ser uma de: {', '.join(sorted(allowed))}")
         return v
 
 

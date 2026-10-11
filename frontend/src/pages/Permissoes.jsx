@@ -22,7 +22,7 @@ export default function Permissoes() {
     try {
       setEntries(await getPermissionMatrix());
     } catch (err) {
-      setError(extractErrorMessage(err, 'Erro ao carregar permissoes'));
+      setError(extractErrorMessage(err, 'Erro ao carregar permissões'));
     } finally {
       setLoading(false);
     }
@@ -44,7 +44,7 @@ export default function Permissoes() {
         return { ...e, granted_roles };
       }));
     } catch (err) {
-      setError(extractErrorMessage(err, 'Erro ao atualizar permissao'));
+      setError(extractErrorMessage(err, 'Erro ao atualizar permissão'));
     } finally {
       setSavingKey(null);
     }
@@ -56,10 +56,10 @@ export default function Permissoes() {
     <main className="max-w-[1600px] mx-auto px-4 sm:px-6 md:px-8 py-6 sm:py-9">
       <h2 className="font-display font-semibold text-[22px] text-text-primary flex items-center gap-2.5 mb-1">
         <ShieldCheck size={22} className="text-accent" />
-        Permissoes
+        Permissões
       </h2>
       <p className="text-text-muted text-sm mb-6">
-        Configure o que cada perfil pode fazer. O perfil Gestor tem sempre todas as permissoes. As alteracoes aplicam-se aos outros utilizadores ao recarregar a pagina ou no proximo inicio de sessao.
+        Configure o que cada perfil pode fazer. O perfil Gestor tem sempre todas as permissões. As alterações aplicam-se aos outros utilizadores ao recarregar a página ou no próximo início de sessão.
       </p>
 
       {error && (
@@ -80,7 +80,7 @@ export default function Permissoes() {
             <table className="w-full text-sm table-fixed">
               <thead>
                 <tr className="border-b border-border text-[11px] uppercase tracking-wide text-text-muted">
-                  <th className="text-left px-4 py-2.5">Permissao</th>
+                  <th className="text-left px-4 py-2.5">Permissão</th>
                   {ROLES.map((role) => (
                     <th key={role} className="text-center px-4 py-2.5 w-32">{ROLE_LABELS[role]}</th>
                   ))}
@@ -103,7 +103,7 @@ export default function Permissoes() {
                               checked={granted}
                               onChange={() => handleToggle(entry, role)}
                               disabled={role === 'GESTOR'}
-                              title={role === 'GESTOR' ? 'O perfil Gestor tem sempre todas as permissoes' : undefined}
+                              title={role === 'GESTOR' ? 'O perfil Gestor tem sempre todas as permissões' : undefined}
                               className={'w-4 h-4 accent-accent ' + (role === 'GESTOR' ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer')}
                             />
                           )}

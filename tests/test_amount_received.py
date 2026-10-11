@@ -17,7 +17,7 @@ async def test_amount_received_follows_the_document_type(db, company_with_essent
     ctx = company_with_essentials
     company_id, activity_id, numerario_id = ctx["company"].id, ctx["activity"].id, ctx["pm_numerario"].id
     multicaixa_id = (await db.execute(text("SELECT id FROM payment_method_catalog WHERE code = 'MB'"))).scalar_one()
-    service = Service(company_id=company_id, code="SRV-AR", name="Servico AR", price=1000.0, vat_id=ctx["vat_nor"].id)
+    service = Service(company_id=company_id, code="SRV-AR", name="Serviço AR", price=1000.0, vat_id=ctx["vat_nor"].id)
     db.add(service)
     await db.commit()
     await db.refresh(service)

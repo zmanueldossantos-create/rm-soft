@@ -14,7 +14,7 @@ from app.services.stock_service import adjust_stock, deduct_stock_for_sale
 async def _setup(db, ctx):
     """A product in stock, the conftest's active period, plus a soft-closed and a closed one in a year of our own."""
     company_id = ctx["company"].id
-    product = Product(company_id=company_id, code="PP-01", name="Produto periodo", vat_id=ctx["vat_nor"].id, price=100.0,
+    product = Product(company_id=company_id, code="PP-01", name="Produto período", vat_id=ctx["vat_nor"].id, price=100.0,
                       min_stock_threshold=0, product_type=ProductType.BEM)
     db.add(product)
     year = FiscalYear(company_id=company_id, year=2090, status="ABERTO")

@@ -89,7 +89,7 @@ async def _line_or_raise(db: AsyncSession, company_id: uuid.UUID, line_id: uuid.
         .with_for_update(of=OpenAccountLine)
     )).first()
     if row is None:
-        raise KitchenItemNotFoundError("Prato nao encontrado na cozinha")
+        raise KitchenItemNotFoundError("Prato não encontrado na cozinha")
     line, account_status = row
     return line, account_status == OpenAccountStatus.FECHADA
 
@@ -109,25 +109,25 @@ def _stamp_ready(line: OpenAccountLine, user_id: uuid.UUID | None) -> None:
 def _apply(line: OpenAccountLine, account_closed: bool, action: str, quantity: float | None = None,
            user_id: uuid.UUID | None = None) -> None:
     if line.kitchen_status not in ACTIVE:
-        raise InvalidLineError("Este prato ja nao esta em preparacao na cozinha")
+        raise InvalidLineError("Este prato já não está em preparação na cozinha")
     if action == "start":
         if line.kitchen_status != KITCHEN_WAITING:
-            raise InvalidLineError("Este prato ja esta em preparacao")
+            raise InvalidLineError("Este prato já está em preparação")
         _stamp_start(line, user_id)
     elif action == "ready":
         _stamp_ready(line, user_id)
     elif action in ("refuse", "quantity"):
         if account_closed:
-            raise InvalidLineError("A conta ja foi fechada - este prato ja foi faturado")
+            raise InvalidLineError("A conta já foi fechada - este prato já foi faturado")
         if action == "refuse":
             _cancel_line(line, "Esgotado - cozinha", user_id)
         else:
             if quantity is None or quantity <= 0 or float(quantity) - float(line.quantity) > -_QTY_EPS:
-                raise InvalidLineError("A cozinha so pode baixar a quantidade de um prato")
+                raise InvalidLineError("A cozinha só pode baixar a quantidade de um prato")
             line.quantity = quantity
             line.kitchen_modified = True
     else:
-        raise InvalidLineError("Acao desconhecida")
+        raise InvalidLineError("Ação desconhecida")
 
 
 async def act_on_line(db: AsyncSession, company_id: uuid.UUID, line_id: uuid.UUID, action: str,
@@ -145,10 +145,10 @@ async def act_on_order(db: AsyncSession, company_id: uuid.UUID, order_id: uuid.U
         select(KitchenOrder).where(KitchenOrder.id == order_id, KitchenOrder.company_id == company_id)
     )).scalar_one_or_none()
     if order is None:
-        raise KitchenItemNotFoundError("Pedido nao encontrado na cozinha")
+        raise KitchenItemNotFoundError("Pedido não encontrado na cozinha")
     wanted = {"start_all": (KITCHEN_WAITING,), "ready_all": ACTIVE}.get(action)
     if wanted is None:
-        raise InvalidLineError("Acao desconhecida")
+        raise InvalidLineError("Ação desconhecida")
     lines = (await db.execute(
         select(OpenAccountLine).where(OpenAccountLine.kitchen_order_id == order.id, OpenAccountLine.kitchen_status.in_(wanted))
         .with_for_update()
@@ -177,9 +177,9 @@ def _minutes(start, end) -> float | None:
 
 async def kitchen_history(db: AsyncSession, company_id: uuid.UUID, date_from: date, date_to: date) -> dict:
     if date_to < date_from:
-        raise InvalidLineError("A data final e anterior a data inicial")
+        raise InvalidLineError("A data final é anterior a data inicial")
     if (date_to - date_from).days >= MAX_HISTORY_DAYS:
-        raise InvalidLineError(f"O periodo nao pode ultrapassar {MAX_HISTORY_DAYS} dias")
+        raise InvalidLineError(f"O período não pode ultrapassar {MAX_HISTORY_DAYS} dias")
     order_ids = (await db.execute(
         select(KitchenOrder.id).where(
             KitchenOrder.company_id == company_id, KitchenOrder.day >= date_from, KitchenOrder.day <= date_to,

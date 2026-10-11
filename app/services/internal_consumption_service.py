@@ -39,14 +39,14 @@ async def record_consumption(
 ) -> InternalConsumption:
     activity = await get_activity_or_raise(db, company_id, activity_id)
     if activity.warehouse_id is None:
-        raise NoWarehouseError("Esta atividade nao tem um armazem associado")
+        raise NoWarehouseError("Esta atividade não tem um armazem associado")
 
     reason = await get_consumption_reason_or_raise(db, company_id, reason_id)
 
     product_result = await db.execute(select(Product).where(Product.id == product_id, Product.company_id == company_id))
     product = product_result.scalar_one_or_none()
     if product is None:
-        raise ProductNotFoundError("Produto nao encontrado")
+        raise ProductNotFoundError("Produto não encontrado")
 
     # Internal entry: booked in the chosen period (active or soft-closed), never in a closed one.
     posting_period = await resolve_posting_period(db, company_id, fiscal_period_id)

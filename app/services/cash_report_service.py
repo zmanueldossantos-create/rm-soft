@@ -51,7 +51,7 @@ def _company_dict(company: Company) -> dict:
 async def get_closing_report_data(db: AsyncSession, company_id: uuid.UUID, session_id: uuid.UUID) -> dict:
     session = await get_session_or_raise(db, company_id, session_id)
     if session.status != CashSessionStatus.FECHADA:
-        raise SessionNotClosedError("O relatorio de fecho so existe para uma sessao de caixa fechada")
+        raise SessionNotClosedError("O relatório de fecho só existe para uma sessão de caixa fechada")
     pos = await get_pos_or_raise(db, company_id, session.pos_id)
     activity = (await db.execute(select(Activity).where(Activity.id == pos.activity_id))).scalar_one()
     company = (await db.execute(select(Company).where(Company.id == company_id))).scalar_one()

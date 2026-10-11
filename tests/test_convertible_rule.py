@@ -19,7 +19,7 @@ async def _set_rule(db, code, **values):
 async def test_conversion_follows_the_convertible_rule(db, company_with_essentials):
     ctx = company_with_essentials
     company_id, activity_id = ctx["company"].id, ctx["activity"].id
-    service = Service(company_id=company_id, code="SRV-CV", name="Servico CV", price=1000.0, vat_id=ctx["vat_nor"].id)
+    service = Service(company_id=company_id, code="SRV-CV", name="Serviço CV", price=1000.0, vat_id=ctx["vat_nor"].id)
     db.add(service)
     await db.commit()
     await db.refresh(service)

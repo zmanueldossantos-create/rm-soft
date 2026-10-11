@@ -7,7 +7,7 @@ import { getKitchenBoard, kitchenLineAction, kitchenOrderAction } from '../api/k
 // The kitchen screen (point 34c): one card per order sent from an open account - number of the day, table, sender,
 // time and minutes elapsed - and its dishes, moved forward dish by dish or card by card. Refreshed every 15 s;
 // a beep announces each new order (switchable, remembered on this device).
-const STATUS_LABEL = { EM_ESPERA: 'Em espera', EM_PREPARACAO: 'Em preparacao', PRONTO: 'Pronto', ANULADO: 'Anulado' };
+const STATUS_LABEL = { EM_ESPERA: 'Em espera', EM_PREPARACAO: 'Em preparação', PRONTO: 'Pronto', ANULADO: 'Anulado' };
 const STATUS_STYLE = {
   EM_ESPERA: 'text-sky-400 bg-sky-400/10',
   EM_PREPARACAO: 'text-amber-500 bg-amber-500/10',

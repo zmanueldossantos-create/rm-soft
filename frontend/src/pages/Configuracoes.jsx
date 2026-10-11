@@ -185,7 +185,7 @@ const RULE_INFO = [
   ['deducts_stock', 'Deduz stock', 'Retira do stock os artigos vendidos', true],
   ['accepts_receipt', 'Aceita recibo', 'Permite emitir recibos sobre este tipo', true],
   ['requires_payment_term', 'Exige condi\u00e7\u00e3o de pagamento', 'Obriga a escolher uma condi\u00e7\u00e3o de pagamento ao emitir este tipo', true],
-  ['requires_customer', 'Exige cliente identificado', 'Obriga a escolher um cliente ao emitir este tipo (nao permite consumidor final)', true],
+  ['requires_customer', 'Exige cliente identificado', 'Obriga a escolher um cliente ao emitir este tipo (não permite consumidor final)', true],
   ['accepts_credit_note', 'Aceita nota de cr\u00e9dito', 'Permite emitir notas de cr\u00e9dito sobre este tipo', true],
   ['accepts_debit_note', 'Aceita nota de d\u00e9bito', 'Permite emitir notas de d\u00e9bito sobre este tipo', true],
   ['convertible', 'Convert\u00edvel em FT/FR', 'Pode ser transformado em fatura (ex.: pro-forma)', false],
@@ -443,7 +443,7 @@ export default function Configuracoes() {
             </label>
             <label className="flex items-center gap-2 text-[13px] text-text-primary cursor-pointer">
               <input type="checkbox" checked={!!form.uses_bank_account} onChange={(e) => updateField('uses_bank_account', e.target.checked)} />
-              Usa conta bancaria
+              Usa conta bancária
             </label>
           </div>
         </>
@@ -494,7 +494,7 @@ export default function Configuracoes() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Field label={'C\u00f3digo *'}><input value={form.code} onChange={(e) => updateField('code', e.target.value)} required className={inputClass} /></Field>
             <Field label="Nome *"><input value={form.name} onChange={(e) => updateField('name', e.target.value)} required className={inputClass} /></Field>
-            <Field label="Descricao (cartao de selecao)" hint="Frase curta mostrada ao escolher o tipo de documento, ex: A pagar mais tarde - emite FT">
+            <Field label="Descrição (cartao de seleção)" hint="Frase curta mostrada ao escolher o tipo de documento, ex: A pagar mais tarde - emite FT">
               <input value={form.description || ''} onChange={(e) => updateField('description', e.target.value)} maxLength={200} className={inputClass} />
             </Field>
             <Field label={'\u00c1rea'}>

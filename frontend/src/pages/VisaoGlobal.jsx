@@ -6,7 +6,7 @@ import { extractErrorMessage } from '../utils/errors';
 const TABS = [
   { key: 'setores', label: 'Setores' },
   { key: 'empresas', label: 'Empresas' },
-  { key: 'funcoes', label: 'Funcoes' },
+  { key: 'funcoes', label: 'Funções' },
   { key: 'impacto', label: 'Impacto' },
 ];
 
@@ -152,7 +152,7 @@ export default function VisaoGlobal() {
                       className="inline-flex items-center gap-1.5 text-[12px] text-text-muted hover:text-accent cursor-pointer disabled:opacity-50"
                     >
                       <RotateCcw size={12} />
-                      Repor padrao
+                      Repor padrão
                     </button>
                   )}
                 </td>
@@ -213,7 +213,7 @@ export default function VisaoGlobal() {
                   }
                   if (cp.inactive_with_data) {
                     return (
-                      <Chip key={cp.code} className={CHIP_ALERT} title="Funcao inativa mas ja tem dados">
+                      <Chip key={cp.code} className={CHIP_ALERT} title="Função inativa mas já tem dados">
                         <AlertTriangle size={11} />
                         {label} - {cp.data_count} registos
                       </Chip>
@@ -246,7 +246,7 @@ export default function VisaoGlobal() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="bg-bg-elevated border border-border rounded-lg p-4 lg:col-span-2">
           <p className="font-display font-semibold text-text-primary mb-1">{overview.core.label} (sempre ativo)</p>
-          <p className="text-text-muted text-[13px] mb-2">Disponivel para todas as empresas, seja qual for o setor.</p>
+          <p className="text-text-muted text-[13px] mb-2">Disponível para todas as empresas, seja qual for o setor.</p>
           <details>
             <summary className="text-[12px] text-text-muted cursor-pointer">{overview.core.permissions.length} permissoes</summary>
             <p className="text-[11px] text-text-muted font-mono mt-1.5 leading-relaxed">{overview.core.permissions.join('  ')}</p>
@@ -292,7 +292,7 @@ export default function VisaoGlobal() {
       return (
         <div className="bg-bg-elevated border border-border rounded-lg p-10 text-center">
           <p className="text-text-primary font-medium mb-1">Nenhum impacto</p>
-          <p className="text-text-muted text-sm">Nenhuma empresa tem dados numa funcao que os seus setores nao incluem.</p>
+          <p className="text-text-muted text-sm">Nenhuma empresa tem dados numa função que os seus setores não incluem.</p>
         </div>
       );
     }
@@ -302,7 +302,7 @@ export default function VisaoGlobal() {
           <thead>
             <tr className="border-b border-border text-[11px] uppercase tracking-wide text-text-muted">
               <th className="text-left px-4 py-2.5">Empresa</th>
-              <th className="text-left px-4 py-2.5">Funcao</th>
+              <th className="text-left px-4 py-2.5">Função</th>
               <th className="text-right px-4 py-2.5">Registos</th>
             </tr>
           </thead>
@@ -317,7 +317,7 @@ export default function VisaoGlobal() {
           </tbody>
         </table>
         <p className="text-text-muted text-[12px] px-4 py-3 border-t border-border">
-          Estas funcoes ficariam indisponiveis ao aplicar a separacao. Os dados nao sao apagados - ative o setor correspondente para os manter acessiveis.
+          Estas funções ficariam indisponíveis ao aplicar a separação. Os dados não são apagados - ative o setor correspondente para os manter acessíveis.
         </p>
       </div>
     );
@@ -328,7 +328,7 @@ export default function VisaoGlobal() {
       <div className="flex items-center justify-between mb-1 flex-wrap gap-3">
         <h2 className="font-display font-semibold text-[22px] text-text-primary flex items-center gap-2.5">
           <LayoutGrid size={22} className="text-accent" />
-          Visao global
+          Visão global
         </h2>
         <button
           type="button"
@@ -339,15 +339,15 @@ export default function VisaoGlobal() {
           Atualizar
         </button>
       </div>
-      <p className="text-text-muted text-sm mb-4">Setores, funcoes e empresas da plataforma</p>
+      <p className="text-text-muted text-sm mb-4">Setores, funções e empresas da plataforma</p>
 
       {overview && overview.enforce_capabilities ? (
         <div className="bg-success/10 border-l-2 border-success text-success px-3.5 py-2.5 text-[13px] rounded-r mb-4">
-          Separacao ativa: cada empresa so ve e usa as funcoes dos setores que tem. Os dados de uma funcao desativada nao sao apagados.
+          Separação ativa: cada empresa só ve e usa as funções dos setores que tem. Os dados de uma função desativada não são apagados.
         </div>
       ) : (
         <div className="bg-accent/10 border-l-2 border-accent text-accent px-3.5 py-2.5 text-[13px] rounded-r mb-4">
-          Separacao nao aplicada: as funcoes ainda nao escondem ecras nem bloqueiam acoes das empresas. Valide primeiro a aba Impacto.
+          Separação não aplicada: as funções ainda não escondem ecras nem bloqueiam ações das empresas. Valide primeiro a aba Impacto.
         </div>
       )}
 

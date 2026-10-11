@@ -16,15 +16,15 @@ async def _active(db, company_id):
 async def test_editing_a_regime_resyncs_its_companies(db, company_with_essentials, legal_vat_rates):
     ctx = company_with_essentials
     company_id = ctx["company"].id
-    regime = await create_fiscal_regime(db, "Regime propagacao", None, True, False, False, False, False)
+    regime = await create_fiscal_regime(db, "Regime propagação", None, True, False, False, False, False)
     regime_id = regime.id
     ctx["company"].fiscal_regime_id = regime_id
     await db.commit()
 
-    await update_fiscal_regime(db, regime_id, "Regime propagacao", None, True, False, False, False, False)
+    await update_fiscal_regime(db, regime_id, "Regime propagação", None, True, False, False, False, False)
     assert await _active(db, company_id) == ["NOR"]
 
-    await update_fiscal_regime(db, regime_id, "Regime propagacao", None, True, True, False, False, False)  # RED ticked
+    await update_fiscal_regime(db, regime_id, "Regime propagação", None, True, True, False, False, False)  # RED ticked
     assert await _active(db, company_id) == ["NOR", "RED"]
 
 

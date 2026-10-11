@@ -147,8 +147,8 @@ export default function Recursos() {
         </button>
       </div>
       <p className="text-text-muted text-sm mb-6">
-        Chambres, praticiens, mesas ou qualquer outro recurso reservavel - a base para o sistema de reservas.
-        Os tipos disponiveis geram-se em Configuracoes {'>'} Catalogos {'>'} Tipos de Recurso.
+        Chambres, praticiens, mesas ou qualquer outro recurso reservável - a base para o sistema de reservas.
+        Os tipos disponíveis geram-se em Configurações {'>'} Catalogos {'>'} Tipos de Recurso.
       </p>
 
       {activities.length > 1 && (
@@ -239,7 +239,7 @@ export default function Recursos() {
                 placeholder="Selecionar tipo"
               />
               {activeResourceTypes.length === 0 && (
-                <p className="text-[12px] text-text-muted mt-1.5">Nenhum tipo disponivel - crie um em Configuracoes {'>'} Catalogos {'>'} Tipos de Recurso.</p>
+                <p className="text-[12px] text-text-muted mt-1.5">Nenhum tipo disponível - crie um em Configurações {'>'} Catalogos {'>'} Tipos de Recurso.</p>
               )}
             </div>
           )}
@@ -272,7 +272,7 @@ export default function Recursos() {
             className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer"
           >
             {saving ? <Loader2 size={17} className="animate-spin" /> : <Plus size={17} />}
-            {saving ? 'A guardar...' : editingId ? 'Guardar alteracoes' : 'Criar recurso'}
+            {saving ? 'A guardar...' : editingId ? 'Guardar alterações' : 'Criar recurso'}
           </button>
         </form>
       </Modal>

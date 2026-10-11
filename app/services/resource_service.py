@@ -34,7 +34,7 @@ async def get_resource_or_raise(db: AsyncSession, company_id: uuid.UUID, resourc
     result = await db.execute(select(Resource).where(Resource.id == resource_id, Resource.company_id == company_id))
     resource = result.scalar_one_or_none()
     if resource is None:
-        raise ResourceNotFoundError("Recurso nao encontrado")
+        raise ResourceNotFoundError("Recurso não encontrado")
     return resource
 
 

@@ -27,7 +27,7 @@ class InvoiceLineCreateRequest(BaseModel):
     def validate_exactly_one_item(cls, v, info):
         product_id = info.data.get("product_id")
         if bool(v) == bool(product_id):
-            raise ValueError("Cada linha deve referenciar exatamente um produto OU um servico")
+            raise ValueError("Cada linha deve referenciar exatamente um produto OU um serviço")
         return v
 
 
@@ -172,7 +172,7 @@ class CreditNoteCreateRequest(BaseModel):
     @classmethod
     def validate_lines(cls, v: list) -> list:
         if not v:
-            raise ValueError("A nota de credito deve ter pelo menos uma linha")
+            raise ValueError("A nota de crédito deve ter pelo menos uma linha")
         return v
 
     @field_validator("credit_note_cause")
@@ -180,9 +180,9 @@ class CreditNoteCreateRequest(BaseModel):
     def validate_cause(cls, v: str) -> str:
         cleaned = " ".join(v.split())
         if not cleaned:
-            raise ValueError("A causa da nota de credito e obrigatoria")
+            raise ValueError("A causa da nota de crédito é obrigatória")
         if len(cleaned) > 60:
-            raise ValueError("A causa da nota de credito deve ter no maximo 60 caracteres")
+            raise ValueError("A causa da nota de crédito deve ter no máximo 60 caracteres")
         return cleaned
 
 
@@ -198,7 +198,7 @@ class DebitNoteCreateRequest(BaseModel):
     @classmethod
     def validate_lines(cls, v: list) -> list:
         if not v:
-            raise ValueError("A nota de debito deve ter pelo menos uma linha")
+            raise ValueError("A nota de débito deve ter pelo menos uma linha")
         return v
 
 

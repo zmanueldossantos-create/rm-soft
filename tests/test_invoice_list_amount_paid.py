@@ -11,7 +11,7 @@ from app.services.invoice_service import create_invoice, list_invoices
 async def test_list_invoices_exposes_the_real_amount_paid(db, company_with_essentials):
     ctx = company_with_essentials
     company_id, activity_id, pos_id, gestor = ctx["company"].id, ctx["activity"].id, ctx["pos"].id, ctx["gestor"]
-    service = Service(company_id=company_id, code="SRV-LI", name="Servico LI", price=1000.0, vat_id=ctx["vat_nor"].id)
+    service = Service(company_id=company_id, code="SRV-LI", name="Serviço LI", price=1000.0, vat_id=ctx["vat_nor"].id)
     db.add(service)
     await db.commit()
     await db.refresh(service)

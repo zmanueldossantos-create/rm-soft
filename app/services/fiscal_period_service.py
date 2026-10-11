@@ -78,7 +78,7 @@ async def open_fiscal_year(db: AsyncSession, company_id: uuid.UUID) -> FiscalYea
     next_year = await get_next_fiscal_year(db, company_id)
     if next_year is None:
         raise InvalidFiscalOperationError(
-            "Ja existe um ano fiscal aberto - feche-o (parcial ou definitivamente) antes de abrir o proximo"
+            "Já existe um ano fiscal aberto - feche-o (parcial ou definitivamente) antes de abrir o próximo"
         )
     fiscal_year = FiscalYear(company_id=company_id, year=next_year, status=ABERTO)
     db.add(fiscal_year)
@@ -100,7 +100,7 @@ async def get_fiscal_year_or_raise(db: AsyncSession, company_id: uuid.UUID, fisc
     )
     fiscal_year = result.scalar_one_or_none()
     if fiscal_year is None:
-        raise FiscalYearNotFoundError("Ano fiscal nao encontrado")
+        raise FiscalYearNotFoundError("Ano fiscal não encontrado")
     return fiscal_year
 
 
@@ -115,7 +115,7 @@ async def partial_close_fiscal_year(db: AsyncSession, company_id: uuid.UUID, fis
     )).scalar_one_or_none()
     if open_period is not None:
         raise InvalidFiscalOperationError(
-            f"Feche (parcial ou definitivamente) o periodo de {MONTH_NAMES_PT[open_period.month]} "
+            f"Feche (parcial ou definitivamente) o período de {MONTH_NAMES_PT[open_period.month]} "
             "antes de fechar parcialmente o ano"
         )
     # A year is soft-closed only to move on to the next one: after December, never mid-year.
@@ -124,7 +124,7 @@ async def partial_close_fiscal_year(db: AsyncSession, company_id: uuid.UUID, fis
     )).scalar_one_or_none()
     if december is None:
         raise InvalidFiscalOperationError(
-            "So e possivel fechar parcialmente o ano depois de Dezembro - feche parcialmente Dezembro primeiro"
+            "So é possível fechar parcialmente o ano depois de Dezembro - feche parcialmente Dezembro primeiro"
         )
     other = (await db.execute(
         select(FiscalYear).where(
@@ -133,7 +133,7 @@ async def partial_close_fiscal_year(db: AsyncSession, company_id: uuid.UUID, fis
     )).scalar_one_or_none()
     if other is not None:
         raise InvalidFiscalOperationError(
-            f"O ano {other.year} ainda esta fechado parcialmente - feche-o definitivamente primeiro"
+            f"O ano {other.year} ainda está fechado parcialmente - feche-o definitivamente primeiro"
         )
     fiscal_year.status = FECHO_PARCIAL
     await db.commit()
@@ -145,7 +145,7 @@ async def close_fiscal_year(db: AsyncSession, company_id: uuid.UUID, fiscal_year
     """Closes a fiscal year for good: every one of its months must be FECHADO."""
     fiscal_year = await get_fiscal_year_or_raise(db, company_id, fiscal_year_id)
     if fiscal_year.status == FECHADO:
-        raise InvalidFiscalOperationError("O ano fiscal ja esta fechado")
+        raise InvalidFiscalOperationError("O ano fiscal já está fechado")
     not_closed = (await db.execute(
         select(func.count(FiscalPeriod.id)).where(
             FiscalPeriod.fiscal_year_id == fiscal_year_id, FiscalPeriod.status != FECHADO,
@@ -153,7 +153,7 @@ async def close_fiscal_year(db: AsyncSession, company_id: uuid.UUID, fiscal_year
     )).scalar_one()
     if not_closed > 0:
         raise InvalidFiscalOperationError(
-            "Nao e possivel fechar o ano enquanto existir um periodo (mes) aberto ou fechado parcialmente"
+            "Não é possível fechar o ano enquanto existir um período (mês) aberto ou fechado parcialmente"
         )
     fiscal_year.status = FECHADO
     await db.commit()
@@ -188,11 +188,11 @@ async def open_fiscal_period(db: AsyncSession, company_id: uuid.UUID, fiscal_yea
     """Opens the next valid month within the year, computed by the system."""
     fiscal_year = await get_fiscal_year_or_raise(db, company_id, fiscal_year_id)
     if fiscal_year.status != ABERTO:
-        raise InvalidFiscalOperationError("Nao e possivel abrir um periodo num ano que nao esta aberto")
+        raise InvalidFiscalOperationError("Não é possível abrir um período num ano que não está aberto")
     next_month = await get_next_fiscal_month(db, fiscal_year_id)
     if next_month is None:
         raise InvalidFiscalOperationError(
-            "Ja existe um periodo aberto neste ano, ou todos os meses ja foram concluidos"
+            "Já existe um período aberto neste ano, ou todos os meses já foram concluidos"
         )
     period = FiscalPeriod(company_id=company_id, fiscal_year_id=fiscal_year_id, month=next_month, status=ABERTO)
     db.add(period)
@@ -215,7 +215,7 @@ async def _period_or_raise(db: AsyncSession, company_id: uuid.UUID, period_id: u
         select(FiscalPeriod).where(FiscalPeriod.id == period_id, FiscalPeriod.company_id == company_id)
     )).scalar_one_or_none()
     if period is None:
-        raise FiscalPeriodNotFoundError("Periodo fiscal nao encontrado")
+        raise FiscalPeriodNotFoundError("Período fiscal não encontrado")
     return period
 
 
@@ -229,8 +229,8 @@ async def _ensure_no_cash_in_flight(db: AsyncSession, company_id: uuid.UUID) -> 
     )).scalar_one()
     if open_sessions_count > 0:
         raise InvalidFiscalOperationError(
-            f"Nao e possivel fechar o periodo - existem {open_sessions_count} caixa(s) ainda aberta(s). "
-            "Feche todas as sessoes de caixa antes de fechar o periodo."
+            f"Não é possível fechar o período - existem {open_sessions_count} caixa(s) ainda aberta(s). "
+            "Feche todas as sessões de caixa antes de fechar o período."
         )
     pending_transfers_count = (await db.execute(
         select(func.count(CashMovement.id)).where(
@@ -239,8 +239,8 @@ async def _ensure_no_cash_in_flight(db: AsyncSession, company_id: uuid.UUID) -> 
     )).scalar_one()
     if pending_transfers_count > 0:
         raise InvalidFiscalOperationError(
-            f"Nao e possivel fechar o periodo - existem {pending_transfers_count} transferencia(s) de caixa "
-            "por receber. Confirme a rececao antes de fechar o periodo."
+            f"Não é possível fechar o período - existem {pending_transfers_count} transferência(s) de caixa "
+            "por receber. Confirme a receção antes de fechar o período."
         )
 
 
@@ -249,7 +249,7 @@ async def partial_close_fiscal_period(db: AsyncSession, company_id: uuid.UUID, p
     Only one period may be soft-closed at a time - the previous one must be closed for good first."""
     period = await _period_or_raise(db, company_id, period_id)
     if period.status != ABERTO:
-        raise InvalidFiscalOperationError("So o periodo aberto pode ser fechado parcialmente")
+        raise InvalidFiscalOperationError("So o período aberto pode ser fechado parcialmente")
     other = (await db.execute(
         select(FiscalPeriod, FiscalYear.year).join(FiscalYear, FiscalYear.id == FiscalPeriod.fiscal_year_id).where(
             FiscalPeriod.company_id == company_id, FiscalPeriod.status == FECHO_PARCIAL, FiscalPeriod.id != period_id,
@@ -258,7 +258,7 @@ async def partial_close_fiscal_period(db: AsyncSession, company_id: uuid.UUID, p
     if other is not None:
         other_period, other_year = other
         raise InvalidFiscalOperationError(
-            f"O periodo de {MONTH_NAMES_PT[other_period.month]} de {other_year} ainda esta fechado parcialmente - "
+            f"O período de {MONTH_NAMES_PT[other_period.month]} de {other_year} ainda está fechado parcialmente - "
             "feche-o definitivamente antes"
         )
     await _ensure_no_cash_in_flight(db, company_id)
@@ -272,7 +272,7 @@ async def close_fiscal_period(db: AsyncSession, company_id: uuid.UUID, period_id
     """Closes a period for good (from ABERTO or FECHO_PARCIAL) - never reopened."""
     period = await _period_or_raise(db, company_id, period_id)
     if period.status == FECHADO:
-        raise InvalidFiscalOperationError("O periodo ja esta fechado")
+        raise InvalidFiscalOperationError("O período já está fechado")
     if period.status == ABERTO:
         await _ensure_no_cash_in_flight(db, company_id)
     period.status = FECHADO
@@ -327,10 +327,10 @@ async def ensure_period_open(db: AsyncSession, company_id: uuid.UUID, check_date
         select(FiscalYear).where(FiscalYear.company_id == company_id, FiscalYear.year == check_date.year)
     )).scalar_one_or_none()
     active = await _period_with_status(db, company_id, ABERTO)
-    active_hint = (f" O periodo aberto de momento e {MONTH_NAMES_PT[active[0].month]} de {active[1]} - "
+    active_hint = (f" O período aberto de momento e {MONTH_NAMES_PT[active[0].month]} de {active[1]} - "
                    "verifique a data do documento.") if active else ""
     if fiscal_year is None or fiscal_year.status != ABERTO:
-        state = "esta fechado parcialmente" if fiscal_year is not None and fiscal_year.status == FECHO_PARCIAL else "nao esta aberto"
+        state = "esta fechado parcialmente" if fiscal_year is not None and fiscal_year.status == FECHO_PARCIAL else "não está aberto"
         raise PeriodClosedError(
             f"O ano fiscal {check_date.year} {state}. Contacte o GESTOR para o abrir antes de continuar.{active_hint}"
         )
@@ -342,16 +342,16 @@ async def ensure_period_open(db: AsyncSession, company_id: uuid.UUID, check_date
     label = f"{MONTH_NAMES_PT[check_date.month]} de {check_date.year}"
     if period is not None and period.status == FECHO_PARCIAL:
         raise PeriodClosedError(
-            f"O periodo de {label} esta fechado parcialmente: so aceita lancamentos internos "
-            f"(entradas de stock, transferencias, perdas, ajustes).{active_hint}"
+            f"O período de {label} esta fechado parcialmente: só aceita lançamentos internos "
+            f"(entradas de stock, transferências, perdas, ajustes).{active_hint}"
         )
     if active is not None:
         hint = active_hint.strip()
     else:
         next_month = await get_next_fiscal_month(db, fiscal_year.id)
-        hint = (f"Contacte o GESTOR para abrir o periodo de {MONTH_NAMES_PT[next_month]} de {fiscal_year.year} antes de continuar."
-                if next_month is not None else "Contacte o GESTOR para abrir o periodo antes de continuar.")
-    raise PeriodClosedError(f"O periodo de {label} nao esta aberto. {hint}")
+        hint = (f"Contacte o GESTOR para abrir o período de {MONTH_NAMES_PT[next_month]} de {fiscal_year.year} antes de continuar."
+                if next_month is not None else "Contacte o GESTOR para abrir o período antes de continuar.")
+    raise PeriodClosedError(f"O período de {label} não está aberto. {hint}")
 
 
 
@@ -365,7 +365,7 @@ async def resolve_posting_period(db: AsyncSession, company_id: uuid.UUID, fiscal
     if fiscal_period_id is None:
         active = await _period_with_status(db, company_id, ABERTO)
         if active is None:
-            raise PeriodClosedError("Nao existe nenhum periodo aberto. Contacte o GESTOR para abrir o periodo.")
+            raise PeriodClosedError("Não existe nenhum período aberto. Contacte o GESTOR para abrir o período.")
         return active[0]
     row = (await db.execute(
         select(FiscalPeriod, FiscalYear.year).join(FiscalYear, FiscalYear.id == FiscalPeriod.fiscal_year_id).where(
@@ -373,10 +373,10 @@ async def resolve_posting_period(db: AsyncSession, company_id: uuid.UUID, fiscal
         )
     )).first()
     if row is None:
-        raise PeriodClosedError("Periodo fiscal invalido")
+        raise PeriodClosedError("Período fiscal inválido")
     period, year = row
     if period.status == FECHADO:
-        raise PeriodClosedError(f"O periodo de {MONTH_NAMES_PT[period.month]} de {year} esta fechado definitivamente")
+        raise PeriodClosedError(f"O período de {MONTH_NAMES_PT[period.month]} de {year} esta fechado definitivamente")
     return period
 
 

@@ -43,7 +43,7 @@ async def test_update_changes_and_clears_the_duration(db, company_with_essential
 
 
 def test_schema_rejects_out_of_range_durations_and_accepts_none():
-    base = dict(code="X-1", name="Servico", vat_id="11111111-1111-4111-8111-111111111111")
+    base = dict(code="X-1", name="Serviço", vat_id="11111111-1111-4111-8111-111111111111")
     for bad in (0, 4, 1441, -30):
         with pytest.raises(ValidationError):
             ServiceCreateRequest(duration_minutes=bad, **base)

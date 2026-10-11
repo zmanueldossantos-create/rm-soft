@@ -20,7 +20,7 @@ async def _set_rule(db, code, **values):
 
 
 async def _service(db, ctx, code):
-    service = Service(company_id=ctx["company"].id, code=code, name="Servico " + code, price=1000.0, vat_id=ctx["vat_nor"].id)
+    service = Service(company_id=ctx["company"].id, code=code, name="Serviço " + code, price=1000.0, vat_id=ctx["vat_nor"].id)
     db.add(service)
     await db.commit()
     await db.refresh(service)

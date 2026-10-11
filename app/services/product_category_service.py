@@ -24,7 +24,7 @@ async def _check_name_available(db: AsyncSession, company_id: uuid.UUID, name: s
     if exclude_id is not None:
         query = query.where(ProductCategory.id != exclude_id)
     if (await db.execute(query)).scalar_one_or_none() is not None:
-        raise ProductCategoryAlreadyExistsError("Ja existe uma categoria com este nome")
+        raise ProductCategoryAlreadyExistsError("Já existe uma categoria com este nome")
 
 
 async def list_product_categories(db: AsyncSession, company_id: uuid.UUID) -> list[ProductCategory]:
@@ -58,7 +58,7 @@ async def update_product_category(
     result = await db.execute(select(ProductCategory).where(ProductCategory.id == category_id, ProductCategory.company_id == company_id))
     category = result.scalar_one_or_none()
     if category is None:
-        raise ProductCategoryNotFoundError("Categoria de produto nao encontrada")
+        raise ProductCategoryNotFoundError("Categoria de produto não encontrada")
     await _check_name_available(db, company_id, name, exclude_id=category_id)
     category.name = name
     category.not_available_purchases = not_available_purchases
@@ -73,7 +73,7 @@ async def toggle_product_category(db: AsyncSession, company_id: uuid.UUID, categ
     result = await db.execute(select(ProductCategory).where(ProductCategory.id == category_id, ProductCategory.company_id == company_id))
     category = result.scalar_one_or_none()
     if category is None:
-        raise ProductCategoryNotFoundError("Categoria de produto nao encontrada")
+        raise ProductCategoryNotFoundError("Categoria de produto não encontrada")
     category.is_active = not category.is_active
     await db.commit()
     await db.refresh(category)

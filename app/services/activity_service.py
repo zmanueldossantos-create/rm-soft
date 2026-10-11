@@ -40,7 +40,7 @@ async def create_activity(
     """Creates an activity of a module the company was granted, with its own point-of-sale warehouse and default
     cash point. Invoice numbering never depends on the activity: it goes through document_series."""
     if not await is_module_granted(db, company_id, module_id):
-        raise ModuleNotGrantedError("A empresa nao tem acesso a este modulo - contacte o administrador da plataforma")
+        raise ModuleNotGrantedError("A empresa não tem acesso a este modulo - contacte o administrador da plataforma")
 
     # Stock is received centrally (Armazem Principal) and internally
     # transferred to this activity's own point-of-sale warehouse before
@@ -76,7 +76,7 @@ async def get_activity_or_raise(db: AsyncSession, company_id: uuid.UUID, activit
     )
     activity = result.scalar_one_or_none()
     if activity is None:
-        raise ActivityNotFoundError("Atividade nao encontrada")
+        raise ActivityNotFoundError("Atividade não encontrada")
     return activity
 
 

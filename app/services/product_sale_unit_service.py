@@ -34,7 +34,7 @@ async def _product(db: AsyncSession, company_id: uuid.UUID, product_id: uuid.UUI
         select(Product).where(Product.id == product_id, Product.company_id == company_id)
     )).scalar_one_or_none()
     if product is None:
-        raise SaleUnitNotFoundError("Produto nao encontrado")
+        raise SaleUnitNotFoundError("Produto não encontrado")
     return product
 
 
@@ -57,10 +57,10 @@ async def _check(
     if abs(factor - 1) < 1e-9:
         raise SaleUnitInvalidError("Um fator de 1 e a propria unidade base do produto")
     if product.unit_of_measure_id and unit_of_measure_id == product.unit_of_measure_id:
-        raise SaleUnitInvalidError("Esta ja e a unidade base do produto")
+        raise SaleUnitInvalidError("Esta já e a unidade base do produto")
     unit = (await db.execute(select(UnitOfMeasureCatalog).where(UnitOfMeasureCatalog.id == unit_of_measure_id))).scalar_one_or_none()
     if unit is None:
-        raise SaleUnitInvalidError("Unidade de medida invalida")
+        raise SaleUnitInvalidError("Unidade de medida inválida")
     base_code = (await db.execute(
         select(UnitOfMeasureCatalog.code).where(UnitOfMeasureCatalog.id == product.unit_of_measure_id)
     )).scalar_one_or_none() or "unidade base"
@@ -73,7 +73,7 @@ async def _check(
     if exclude_id is not None:
         same_unit = same_unit.where(ProductSaleUnit.id != exclude_id)
     if (await db.execute(same_unit)).first() is not None:
-        raise SaleUnitInvalidError("Este produto ja tem esta unidade ou embalagem")
+        raise SaleUnitInvalidError("Este produto já tem esta unidade ou embalagem")
     if barcode:
         # One barcode, one thing to sell, company wide: a product or a sale unit.
         on_product = (await db.execute(
@@ -83,7 +83,7 @@ async def _check(
         if exclude_id is not None:
             on_unit = on_unit.where(ProductSaleUnit.id != exclude_id)
         if on_product is not None or (await db.execute(on_unit)).first() is not None:
-            raise SaleUnitInvalidError("Este codigo de barras ja esta em uso")
+            raise SaleUnitInvalidError("Este código de barras já está em uso")
     if price is not None:
         await _consistency(db, company_id, product, unit.code, base_code, factor, price, exclude_id, confirm)
 
@@ -111,10 +111,10 @@ async def _consistency(
                        f"Cada {base_code} sai a {per_base:.2f} na unidade {unit_code}, mais caro que a unidade base ({base_price:.2f})"))
     if not product.is_raw_material and purchase is not None and per_base < purchase - 0.005:
         issues.append((company.sale_unit_check_below_cost,
-                       f"Venda abaixo do custo: cada {base_code} sai a {per_base:.2f}, preco de compra {purchase:.2f}"))
+                       f"Venda abaixo do custo: cada {base_code} sai a {per_base:.2f}, preço de compra {purchase:.2f}"))
     if same_factor:
         issues.append((company.sale_unit_check_same_factor,
-                       f"Outra unidade ou embalagem deste produto ja contem {factor:g} {base_code}"))
+                       f"Outra unidade ou embalagem deste produto já contem {factor:g} {base_code}"))
     for mode, message in issues:
         if mode == "block":
             raise SaleUnitInvalidError(message)
@@ -157,7 +157,7 @@ async def _sale_unit(db: AsyncSession, company_id: uuid.UUID, product_id: uuid.U
         )
     )).scalar_one_or_none()
     if unit is None:
-        raise SaleUnitNotFoundError("Unidade ou embalagem nao encontrada")
+        raise SaleUnitNotFoundError("Unidade ou embalagem não encontrada")
     return unit
 
 
@@ -203,7 +203,7 @@ async def resolve_line_unit(
             )
         )).scalar_one_or_none()
         if sale_unit is None:
-            raise SaleUnitInvalidError(f"Unidade ou embalagem invalida ou inativa para {product.name}")
+            raise SaleUnitInvalidError(f"Unidade ou embalagem inválida ou inativa para {product.name}")
         unit_id, price, factor, line_sale_unit_id = sale_unit.unit_of_measure_id, float(sale_unit.price), float(sale_unit.factor), sale_unit.id
     else:
         unit_id, price, factor, line_sale_unit_id = product.unit_of_measure_id, float(product.price), 1.0, None

@@ -82,13 +82,13 @@ async def _validate_service_for_resource(db: AsyncSession, company_id: uuid.UUID
     resource_type = type_result.scalar_one_or_none()
 
     if resource_type is not None and resource_type.requires_service and service_id is None:
-        raise ServiceRequiredError(f"Este tipo de recurso ({resource_type.name}) exige um servico associado a reserva")
+        raise ServiceRequiredError(f"Este tipo de recurso ({resource_type.name}) exige um serviço associado a reserva")
 
     if service_id is not None:
         service_result = await db.execute(select(Service).where(Service.id == service_id, Service.company_id == company_id))
         service = service_result.scalar_one_or_none()
         if service is not None and service.resource_type_id is not None and service.resource_type_id != resource.resource_type_id:
-            raise IncompatibleServiceError("O servico selecionado nao e valido para este tipo de recurso")
+            raise IncompatibleServiceError("O serviço selecionado não é válido para este tipo de recurso")
         # the rate of a stay: without a price the check-in would add no line and the stay would cost nothing
         if service is not None and resource_type is not None and resource_type.requires_service and service.price is None:
             raise ServiceRequiredError(f"O serviço {service.code} não tem preço - defina-o na ficha do serviço")
@@ -101,13 +101,13 @@ async def create_booking(
     guest_name: str | None = None, party_size: int | None = None,
 ) -> Booking:
     if ends_at <= starts_at:
-        raise InvalidBookingRangeError("A data/hora de fim deve ser posterior ao inicio")
+        raise InvalidBookingRangeError("A data/hora de fim deve ser posterior ao início")
 
     resource = await get_resource_or_raise(db, company_id, resource_id)
     await _validate_service_for_resource(db, company_id, resource, service_id)
 
     if await _has_overlap(db, resource_id, starts_at, ends_at):
-        raise BookingOverlapError("Este recurso ja tem uma reserva neste periodo")
+        raise BookingOverlapError("Este recurso já tem uma reserva neste período")
 
     booking = Booking(
         company_id=company_id, resource_id=resource_id, customer_id=customer_id, service_id=service_id,
@@ -124,7 +124,7 @@ async def get_booking_or_raise(db: AsyncSession, company_id: uuid.UUID, booking_
     result = await db.execute(select(Booking).where(Booking.id == booking_id, Booking.company_id == company_id))
     booking = result.scalar_one_or_none()
     if booking is None:
-        raise BookingNotFoundError("Reserva nao encontrada")
+        raise BookingNotFoundError("Reserva não encontrada")
     return booking
 
 
@@ -222,17 +222,17 @@ async def reschedule_booking(
     stay's billing from the reservation. Cancel and recreate instead in that case.
     """
     if ends_at <= starts_at:
-        raise InvalidBookingRangeError("A data/hora de fim deve ser posterior ao inicio")
+        raise InvalidBookingRangeError("A data/hora de fim deve ser posterior ao início")
 
     booking = await get_booking_or_raise(db, company_id, booking_id)
     if booking.status in (BookingStatus.EM_CURSO, BookingStatus.CONCLUIDA):
-        raise BookingNotEditableError("Esta reserva ja tem check-in e nao pode ser editada")
+        raise BookingNotEditableError("Esta reserva já tem check-in e não pode ser editada")
 
     resource = await get_resource_or_raise(db, company_id, booking.resource_id)
     await _validate_service_for_resource(db, company_id, resource, service_id)
 
     if await _has_overlap(db, booking.resource_id, starts_at, ends_at, exclude_booking_id=booking_id):
-        raise BookingOverlapError("Este recurso ja tem uma reserva neste periodo")
+        raise BookingOverlapError("Este recurso já tem uma reserva neste período")
 
     booking.starts_at = starts_at
     booking.ends_at = ends_at

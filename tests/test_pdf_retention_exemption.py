@@ -16,9 +16,9 @@ COMPANY = {
     "email": None, "website": None, "logo_path": None, "bank_accounts": [],
 }
 LINES = [
-    {"code": "SRV-1", "unit": "UN", "product_name_snapshot": "Servico taxado", "quantity": 1.0, "unit_price": 100.0,
+    {"code": "SRV-1", "unit": "UN", "product_name_snapshot": "Serviço taxado", "quantity": 1.0, "unit_price": 100.0,
      "discount_percent": 0.0, "vat_rate_snapshot": 14.0, "line_subtotal": 100.0, "line_total": 114.0, "exemption_code": None},
-    {"code": "SRV-2", "unit": "UN", "product_name_snapshot": "Servico isento", "quantity": 1.0, "unit_price": 100.0,
+    {"code": "SRV-2", "unit": "UN", "product_name_snapshot": "Serviço isento", "quantity": 1.0, "unit_price": 100.0,
      "discount_percent": 0.0, "vat_rate_snapshot": 0.0, "line_subtotal": 100.0, "line_total": 100.0, "exemption_code": "M11", "exemption_reason": M11_REASON},
 ]
 

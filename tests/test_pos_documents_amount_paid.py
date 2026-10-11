@@ -11,7 +11,7 @@ from app.services.pos_documents_service import list_pos_documents
 async def test_amount_paid_reflects_real_payments_not_amount_received(db, company_with_essentials):
     ctx = company_with_essentials
     company_id, activity_id, pos_id, gestor = ctx["company"].id, ctx["activity"].id, ctx["pos"].id, ctx["gestor"]
-    service = Service(company_id=company_id, code="SRV-AP", name="Servico AP", price=1000.0, vat_id=ctx["vat_nor"].id)
+    service = Service(company_id=company_id, code="SRV-AP", name="Serviço AP", price=1000.0, vat_id=ctx["vat_nor"].id)
     db.add(service)
     await db.commit()
     await db.refresh(service)

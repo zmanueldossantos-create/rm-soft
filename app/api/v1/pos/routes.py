@@ -189,7 +189,7 @@ async def get_sessions(
     if getattr(current_user.role, "value", current_user.role) == "CAIXA":
         access = await get_access_for_user(db, current_user.company_id, current_user.id)
         if access is None or (pos_id is not None and pos_id != access.pos_id):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Nao tem acesso a este ponto de venda")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Não tem acesso a este ponto de venda")
         pos_id = access.pos_id
     return await list_sessions(db, current_user.company_id, activity_id, pos_id)
 

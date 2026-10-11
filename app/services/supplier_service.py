@@ -28,7 +28,7 @@ async def create_supplier(
         select(Supplier).where(Supplier.company_id == company_id, Supplier.name == name)
     )
     if existing_result.scalar_one_or_none() is not None:
-        raise SupplierAlreadyExistsError(f"Ja existe um fornecedor chamado '{name}'")
+        raise SupplierAlreadyExistsError(f"Já existe um fornecedor chamado '{name}'")
 
     supplier = Supplier(
         company_id=company_id, name=name, nif=nif, phone_number=phone_number,
@@ -44,7 +44,7 @@ async def get_supplier_or_raise(db: AsyncSession, company_id: uuid.UUID, supplie
     result = await db.execute(select(Supplier).where(Supplier.id == supplier_id, Supplier.company_id == company_id))
     supplier = result.scalar_one_or_none()
     if supplier is None:
-        raise SupplierNotFoundError("Fornecedor nao encontrado")
+        raise SupplierNotFoundError("Fornecedor não encontrado")
     return supplier
 
 
@@ -64,7 +64,7 @@ async def update_supplier(
             select(Supplier).where(Supplier.company_id == company_id, Supplier.name == name, Supplier.id != supplier_id)
         )
         if existing_result.scalar_one_or_none() is not None:
-            raise SupplierAlreadyExistsError(f"Ja existe um fornecedor chamado '{name}'")
+            raise SupplierAlreadyExistsError(f"Já existe um fornecedor chamado '{name}'")
 
     supplier.name = name
     supplier.nif = nif

@@ -24,9 +24,9 @@ const STATUS_LABELS = {
   PENDENTE: 'Pendente',
   CONFIRMADA: 'Confirmada',
   EM_CURSO: 'Em curso',
-  CONCLUIDA: 'Concluida',
+  CONCLUIDA: 'Concluída',
   CANCELADA: 'Cancelada',
-  NO_SHOW: 'Nao compareceu',
+  NO_SHOW: 'Não compareceu',
 };
 
 const STATUS_COLORS = {
@@ -351,23 +351,23 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
     e.preventDefault();
     setFormError('');
     if (!form.resourceId || !form.date || !form.endDate || !form.startTime || !form.endTime) {
-      setFormError('Preencha todos os campos obrigatorios');
+      setFormError('Preencha todos os campos obrigatórios');
       return;
     }
     if (form.endDate < form.date) {
-      setFormError('A data de fim deve ser posterior ou igual a data de inicio');
+      setFormError('A data de fim deve ser posterior ou igual a data de início');
       return;
     }
     if (form.endDate === form.date && form.endTime <= form.startTime) {
-      setFormError('No mesmo dia, a hora de saida deve ser posterior a hora de entrada');
+      setFormError('No mesmo dia, a hora de saída deve ser posterior a hora de entrada');
       return;
     }
     if (form.partySize && !(parseInt(form.partySize, 10) >= 1)) {
-      setFormError('O numero de pessoas deve ser pelo menos 1');
+      setFormError('O número de pessoas deve ser pelo menos 1');
       return;
     }
     if (selectedResourceType?.requires_service && !form.serviceId) {
-      setFormError(`Este tipo de recurso (${selectedResourceType.name}) exige um servico associado a reserva`);
+      setFormError(`Este tipo de recurso (${selectedResourceType.name}) exige um serviço associado a reserva`);
       return;
     }
     setSaving(true);
@@ -392,7 +392,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
       setAgendaVersion((v) => v + 1);
       await loadBookings();
     } catch (err) {
-      setFormError(extractErrorMessage(err, editingBookingId ? 'Erro ao guardar alteracoes' : 'Erro ao criar reserva'));
+      setFormError(extractErrorMessage(err, editingBookingId ? 'Erro ao guardar alterações' : 'Erro ao criar reserva'));
     } finally {
       setSaving(false);
     }
@@ -1036,7 +1036,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
           <DateInput value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
         </div>
         <div>
-          <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Ate</label>
+          <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Até</label>
           <DateInput value={dateTo} min={dateFrom || undefined} onChange={(e) => setDateTo(e.target.value)} className="bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
         </div>
           </>
@@ -1055,7 +1055,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
       ) : bookings.length === 0 ? (
         <div className="bg-bg-elevated border border-border rounded-lg p-10 text-center">
           <CalendarClock size={28} className="text-text-muted mx-auto mb-3" />
-          <p className="text-text-primary font-medium mb-1">Nenhuma reserva neste periodo</p>
+          <p className="text-text-primary font-medium mb-1">Nenhuma reserva neste período</p>
         </div>
       ) : (
         <div className="flex flex-col gap-2">

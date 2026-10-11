@@ -15,7 +15,7 @@ class ResourceCreateRequest(BaseModel):
     def validate_name(cls, v: str) -> str:
         cleaned = v.strip()
         if not cleaned:
-            raise ValueError("O nome e obrigatorio")
+            raise ValueError("O nome é obrigatório")
         return cleaned
 
 
@@ -40,7 +40,7 @@ class ResourceTypeCreateRequest(_ResourceTypeHours):
     def validate_name(cls, v: str) -> str:
         cleaned = v.strip()
         if not cleaned:
-            raise ValueError("O nome e obrigatorio")
+            raise ValueError("O nome é obrigatório")
         return cleaned
 
 
@@ -53,7 +53,7 @@ class ResourceTypeUpdateRequest(_ResourceTypeHours):
     def validate_name(cls, v: str) -> str:
         cleaned = v.strip()
         if not cleaned:
-            raise ValueError("O nome e obrigatorio")
+            raise ValueError("O nome é obrigatório")
         return cleaned
 
 
@@ -79,7 +79,7 @@ class ResourceUpdateRequest(BaseModel):
     def validate_name(cls, v: str) -> str:
         cleaned = v.strip()
         if not cleaned:
-            raise ValueError("O nome e obrigatorio")
+            raise ValueError("O nome é obrigatório")
         return cleaned
 
 

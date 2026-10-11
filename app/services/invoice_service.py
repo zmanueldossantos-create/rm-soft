@@ -165,9 +165,9 @@ async def _ensure_methods_allowed(db: AsyncSession, method_ids, direction: str) 
         return
     for method in (await db.execute(select(PaymentMethodCatalog).where(PaymentMethodCatalog.id.in_(ids)))).scalars().all():
         if direction == 'in' and not method.allows_receipt:
-            raise PaymentMethodNotAllowedError(f"O metodo {method.name} nao pode ser usado para recebimentos")
+            raise PaymentMethodNotAllowedError(f"O método {method.name} não pode ser usado para recebimentos")
         if direction == 'out' and not method.allows_payment:
-            raise PaymentMethodNotAllowedError(f"O metodo {method.name} nao pode ser usado para pagamentos ou devolucoes")
+            raise PaymentMethodNotAllowedError(f"O método {method.name} não pode ser usado para pagamentos ou devoluções")
 
 
 class MissingExemptionReasonError(Exception):
@@ -191,7 +191,7 @@ async def _exemption_for(db: AsyncSession, article, tax_code: str) -> tuple[str 
         )).scalar_one_or_none()
     if vat_code is None:
         raise MissingExemptionReasonError(
-            f"O artigo {article.name} esta isento de IVA mas nao tem um motivo de isencao valido - escolha-o na ficha do artigo"
+            f"O artigo {article.name} esta isento de IVA mas não tem um motivo de isenção válido - escolha-o na ficha do artigo"
         )
     return vat_code.code, vat_code.name
 
@@ -214,7 +214,7 @@ async def _sale_unit_for_line(
     unless the line is sold in one of ITS active sale units (a pallet of 30 eggs at 3000). An internal-use article is
     never sold; a decimal quantity (1.250) is only allowed in a fractional unit (KG, L)."""
     if getattr(product, "internal_use_only", False):
-        raise ProductNotFoundError(f"{product.name} e de uso interno e nao pode ser vendido")
+        raise ProductNotFoundError(f"{product.name} e de uso interno e não pode ser vendido")
     from app.services.product_sale_unit_service import SaleUnitInvalidError, resolve_line_unit
     try:
         return await resolve_line_unit(db, company_id, product, sale_unit_id, quantity)
@@ -261,14 +261,14 @@ async def create_invoice(
     company_result = await db.execute(select(Company).where(Company.id == company_id))
     company = company_result.scalar_one()
     if business_date > date.today() and not company.allows_future_sale_date:
-        raise EmptyInvoiceError("Nao e permitido faturar com data futura - active essa opcao em Empresa, se necessario")
+        raise EmptyInvoiceError("Não é permitido faturar com data futura - active essa opção em Empresa, se necessário")
 
     activity_result = await db.execute(
         select(Activity).where(Activity.id == activity_id, Activity.company_id == company_id, Activity.is_active == True)
     )
     activity = activity_result.scalar_one_or_none()
     if activity is None:
-        raise ActivityNotFoundError("Atividade nao encontrada ou inativa")
+        raise ActivityNotFoundError("Atividade não encontrada ou inativa")
 
     await ensure_period_open(db, company_id, business_date)
 
@@ -282,16 +282,16 @@ async def create_invoice(
         )
         customer = customer_result.scalar_one_or_none()
         if customer is None:
-            raise CustomerNotFoundError("Cliente nao encontrado")
+            raise CustomerNotFoundError("Cliente não encontrado")
 
     doc_code = INVOICE_TYPE_TO_DOC_CODE.get(invoice_type)
     if doc_code is None:
-        raise DocumentTypeNotConfiguredError(f"Tipo de fatura '{invoice_type}' nao mapeado a um tipo de documento")
+        raise DocumentTypeNotConfiguredError(f"Tipo de fatura '{invoice_type}' não mapeado a um tipo de documento")
 
     doc_type_result = await db.execute(select(DocumentType).where(DocumentType.code == doc_code))
     doc_type = doc_type_result.scalar_one_or_none()
     if doc_type is None:
-        raise DocumentTypeNotConfiguredError(f"Tipo de documento '{doc_code}' nao existe no catalogo da plataforma")
+        raise DocumentTypeNotConfiguredError(f"Tipo de documento '{doc_code}' não existe no catálogo da plataforma")
     rules = rules_from_row(doc_type)
 
     company_result = await db.execute(select(Company).where(Company.id == company_id))
@@ -330,7 +330,7 @@ async def create_invoice(
             )
             service = service_result.scalar_one_or_none()
             if service is None:
-                raise ProductNotFoundError("Servico nao encontrado ou inativo")
+                raise ProductNotFoundError("Serviço não encontrado ou inativo")
             vat_result = await db.execute(select(VAT).where(VAT.id == service.vat_id))
             vat = vat_result.scalar_one_or_none()
             vat_rate = float(vat.rate) if vat else 0.0
@@ -364,10 +364,10 @@ async def create_invoice(
             )
             product = product_result.scalar_one_or_none()
             if product is None:
-                raise ProductNotFoundError("Produto nao encontrado ou inativo")
+                raise ProductNotFoundError("Produto não encontrado ou inativo")
             if product.is_raw_material:
                 # Raw materials are only ever consumed by production - and carry no VAT rate.
-                raise ProductNotFoundError("Materia-prima nao pode ser vendida ou faturada")
+                raise ProductNotFoundError("Materia-prima não pode ser vendida ou faturada")
             vat_result = await db.execute(select(VAT).where(VAT.id == product.vat_id))
             vat = vat_result.scalar_one_or_none()
             vat_rate = float(vat.rate) if vat else 0.0
@@ -457,7 +457,7 @@ async def create_invoice(
         payments_sum = round(sum(float(p["amount"]) for p in payments), 2)
         if abs(payments_sum - cash_due_total) > 0.01:
             raise PaymentAmountMismatchError(
-                f"A soma dos pagamentos ({payments_sum}) nao corresponde ao montante a pagar ({cash_due_total})"
+                f"A soma dos pagamentos ({payments_sum}) não corresponde ao montante a pagar ({cash_due_total})"
             )
 
     # Amount received on the document. A Fatura/Recibo is paid in full when issued: any other amount is refused.
@@ -497,7 +497,7 @@ async def create_invoice(
     elif enforce_document_rules and not payment_term_id:
         from app.services.company_document_type_service import effective_requires_payment_term
         if (await effective_requires_payment_term(db, company_id)).get(rules.code):
-            raise EmptyInvoiceError("A condicao de pagamento e obrigatoria para este tipo de documento")
+            raise EmptyInvoiceError("A condição de pagamento é obrigatória para este tipo de documento")
 
     # Cash collected here goes into an explicitly chosen cash point (see _cash_point_session).
     cash_session_id = await _cash_point_session(
@@ -754,10 +754,10 @@ async def _cash_point_session(
             select(PointOfSale).where(PointOfSale.id == cash_pos_id, PointOfSale.company_id == company_id)
         )).scalar_one_or_none()
         if pos is None:
-            raise CashPointRequiredError("Caixa nao encontrada")
+            raise CashPointRequiredError("Caixa não encontrada")
         session = await get_open_session(db, company_id, pos.id)
         if session is None:
-            raise CashPointRequiredError(f"A caixa {pos.name} nao tem sessao aberta - abra a caixa antes de receber")
+            raise CashPointRequiredError(f"A caixa {pos.name} não tem sessão aberta - abra a caixa antes de receber")
         return session.id
     ids = [uuid.UUID(str(m)) for m in method_ids if m]
     if require_cash_point and ids:
@@ -767,7 +767,7 @@ async def _cash_point_session(
             )
         )).scalar_one()
         if cash_count:
-            raise CashPointRequiredError("Selecione a caixa onde entra o numerario")
+            raise CashPointRequiredError("Selecione a caixa onde entra o numerário")
     return cash_session_id
 
 
@@ -778,7 +778,7 @@ async def get_credit_note_info(db: AsyncSession, company_id: uuid.UUID, invoice_
         select(Invoice).where(Invoice.id == invoice_id, Invoice.company_id == company_id)
     )).scalar_one_or_none()
     if reference_invoice is None:
-        raise ReferenceInvoiceNotFoundError("Fatura de referencia nao encontrada")
+        raise ReferenceInvoiceNotFoundError("Fatura de referência não encontrada")
     previous_notes = await _previous_credit_notes(db, reference_invoice)
     collected, refunded, due = await _credit_note_refund_figures(db, reference_invoice, previous_notes)
 
@@ -859,34 +859,34 @@ async def create_credit_note(
     )
     activity = activity_result.scalar_one_or_none()
     if activity is None:
-        raise ActivityNotFoundError("Atividade nao encontrada ou inativa")
+        raise ActivityNotFoundError("Atividade não encontrada ou inativa")
 
     await ensure_period_open(db, company_id, business_date)
 
     if not lines_input:
-        raise EmptyInvoiceError("A nota de credito deve ter pelo menos uma linha")
+        raise EmptyInvoiceError("A nota de crédito deve ter pelo menos uma linha")
 
     ref_result = await db.execute(
         select(Invoice).where(Invoice.id == reference_invoice_id, Invoice.company_id == company_id)
     )
     reference_invoice = ref_result.scalar_one_or_none()
     if reference_invoice is None:
-        raise ReferenceInvoiceNotFoundError("Fatura de referencia nao encontrada")
+        raise ReferenceInvoiceNotFoundError("Fatura de referência não encontrada")
 
     reference_rules = await get_document_rules(db, reference_invoice.invoice_type)
     if not reference_rules.accepts_credit_note:
         raise ReferenceInvoiceTypeNotEligibleError(
-            "A nota de credito so pode ser emitida para Factura ou Factura/Recibo"
+            "A nota de crédito só pode ser emitida para Factura ou Factura/Recibo"
         )
 
     if reference_invoice.document_status == DocumentLifecycleStatus.ANULADO:
-        raise ReferenceInvoiceAlreadyCancelledError("A fatura de referencia ja foi anulada")
+        raise ReferenceInvoiceAlreadyCancelledError("A fatura de referência já foi anulada")
 
     # A credit note corrects a document that already exists: it cannot be dated before it (possible only when the
     # original was issued with a future date, allows_future_sale_date).
     if business_date < reference_invoice.business_date:
         raise EmptyInvoiceError(
-            "A nota de credito nao pode ter data anterior a da fatura de referencia "
+            "A nota de crédito não pode ter data anterior a da fatura de referência "
             f"({reference_invoice.business_date.strftime('%d/%m/%Y')})"
         )
 
@@ -907,7 +907,7 @@ async def create_credit_note(
     for line_input in lines_input:
         ref_line = ref_lines_by_id.get(str(line_input["invoice_line_id"]))
         if ref_line is None:
-            raise ReferenceInvoiceNotFoundError("Linha da fatura de referencia nao encontrada")
+            raise ReferenceInvoiceNotFoundError("Linha da fatura de referência não encontrada")
 
         quantity = float(line_input["quantity"])
         if quantity > float(ref_line.quantity):
@@ -981,10 +981,10 @@ async def create_credit_note(
     if previous_total + grand_total > float(reference_invoice.total) + 0.01:
         if previous_total == 0:
             raise CreditNoteExceedsOriginalError(
-                f"O valor da nota de credito ({grand_total}) excede o valor da fatura original ({reference_invoice.total})"
+                f"O valor da nota de crédito ({grand_total}) excede o valor da fatura original ({reference_invoice.total})"
             )
         raise CreditNoteExceedsOriginalError(
-            f"O valor da nota de credito ({grand_total}) excede o valor ainda por creditar da fatura original "
+            f"O valor da nota de crédito ({grand_total}) excede o valor ainda por creditar da fatura original "
             f"({round(max(float(reference_invoice.total) - previous_total, 0), 2)})"
         )
 
@@ -993,9 +993,9 @@ async def create_credit_note(
     restock_warehouse_by_product: dict[str, uuid.UUID] = {}
     if restock:
         if not reference_rules.deducts_stock:
-            raise EmptyInvoiceError("Este tipo de documento nao movimenta stock - nao ha nada a repor")
+            raise EmptyInvoiceError("Este tipo de documento não movimenta stock - não há nada a repor")
         if not restock_candidates:
-            raise EmptyInvoiceError("Nenhuma das linhas creditadas e um produto com stock - nao ha nada a repor")
+            raise EmptyInvoiceError("Nenhuma das linhas creditadas e um produto com stock - não há nada a repor")
         # The goods go back where the sale really took them from: the SAIDA movements written by create_invoice
         # with the original invoice's reference ("{DocType} {series}/{number}"), not the activity's current
         # warehouse, which may have changed since the sale.
@@ -1013,7 +1013,7 @@ async def create_credit_note(
         restock_warehouse_by_product = {str(product_id): warehouse_id for product_id, warehouse_id in sale_rows}
         if any(str(product_id) not in restock_warehouse_by_product for product_id, _ in restock_candidates):
             raise EmptyInvoiceError(
-                "A venda desta fatura nao tem saida de stock registada - nao e possivel repor o stock"
+                "A venda desta fatura não tem saída de stock registada - não é possível repor o stock"
             )
 
     # Explicit money refund, checked BEFORE anything is created: the credit note and its refund exist together or not
@@ -1034,9 +1034,9 @@ async def create_credit_note(
             method = methods.get(uuid.UUID(str(r["payment_method_id"])))
             amount = round(float(r["amount"]), 2)
             if method is None:
-                raise RefundNotAllowedError("Metodo de pagamento invalido ou inativo")
+                raise RefundNotAllowedError("Método de pagamento inválido ou inativo")
             if not method.allows_payment:
-                raise RefundNotAllowedError(f"O metodo {method.name} nao pode ser usado para devolucoes")
+                raise RefundNotAllowedError(f"O método {method.name} não pode ser usado para devoluções")
             if amount <= 0:
                 raise RefundNotAllowedError("O valor a devolver deve ser maior que zero")
             refund_lines.append((method.id, amount, bool(method.is_cash)))
@@ -1048,26 +1048,26 @@ async def create_credit_note(
         refundable = round(max(collected - refunded - max(due_after, 0.0), 0.0), 2)
         if refund_total > refundable + 0.01:
             raise RefundNotAllowedError(
-                f"O valor a devolver ({refund_total:.2f}) excede o valor reembolsavel desta fatura ({refundable:.2f})"
+                f"O valor a devolver ({refund_total:.2f}) excede o valor reembolsável desta fatura ({refundable:.2f})"
             )
 
         cash_total = round(sum(amount for _, amount, is_cash in refund_lines if is_cash), 2)
         if refund_pos_id is None and cash_total > 0:
-            raise RefundNotAllowedError("Selecione a caixa de onde sai o numerario a devolver")
+            raise RefundNotAllowedError("Selecione a caixa de onde sai o numerário a devolver")
         if refund_pos_id is not None:
             pos = (await db.execute(
                 select(PointOfSale).where(PointOfSale.id == refund_pos_id, PointOfSale.company_id == company_id)
             )).scalar_one_or_none()
             if pos is None:
-                raise RefundNotAllowedError("Caixa nao encontrada")
+                raise RefundNotAllowedError("Caixa não encontrada")
             refund_session = await get_open_session(db, company_id, pos.id)
             if refund_session is None:
-                raise RefundNotAllowedError(f"A caixa {pos.name} nao tem sessao aberta - abra a caixa antes de devolver")
+                raise RefundNotAllowedError(f"A caixa {pos.name} não tem sessão aberta - abra a caixa antes de devolver")
             if cash_total > 0:
                 available = await get_current_expected_cash_balance(db, company_id, pos.id, refund_session)
                 if cash_total > available + 0.01:
                     raise RefundNotAllowedError(
-                        f"Numerario insuficiente na caixa {pos.name} (disponivel: {available:.2f})"
+                        f"Numerário insuficiente na caixa {pos.name} (disponivel: {available:.2f})"
                     )
             refund_session_id = refund_session.id
     elif refund_pos_id is not None:
@@ -1076,7 +1076,7 @@ async def create_credit_note(
     doc_type_result = await db.execute(select(DocumentType).where(DocumentType.code == "NC"))
     doc_type = doc_type_result.scalar_one_or_none()
     if doc_type is None:
-        raise DocumentTypeNotConfiguredError("Tipo de documento 'NC' nao existe no catalogo da plataforma")
+        raise DocumentTypeNotConfiguredError("Tipo de documento 'NC' não existe no catálogo da plataforma")
     rules = rules_from_row(doc_type)
 
     company_result = await db.execute(select(Company).where(Company.id == company_id))
@@ -1190,35 +1190,35 @@ async def create_debit_note(
     company_result = await db.execute(select(Company).where(Company.id == company_id))
     company = company_result.scalar_one()
     if business_date > date.today() and not company.allows_future_sale_date:
-        raise EmptyInvoiceError("Nao e permitido faturar com data futura - active essa opcao em Empresa, se necessario")
+        raise EmptyInvoiceError("Não é permitido faturar com data futura - active essa opção em Empresa, se necessário")
 
     activity_result = await db.execute(
         select(Activity).where(Activity.id == activity_id, Activity.company_id == company_id, Activity.is_active == True)
     )
     activity = activity_result.scalar_one_or_none()
     if activity is None:
-        raise ActivityNotFoundError("Atividade nao encontrada ou inativa")
+        raise ActivityNotFoundError("Atividade não encontrada ou inativa")
 
     await ensure_period_open(db, company_id, business_date)
 
     if not lines_input:
-        raise EmptyInvoiceError("A nota de debito deve ter pelo menos uma linha")
+        raise EmptyInvoiceError("A nota de débito deve ter pelo menos uma linha")
 
     ref_result = await db.execute(
         select(Invoice).where(Invoice.id == reference_invoice_id, Invoice.company_id == company_id)
     )
     reference_invoice = ref_result.scalar_one_or_none()
     if reference_invoice is None:
-        raise ReferenceInvoiceNotFoundError("Fatura de referencia nao encontrada")
+        raise ReferenceInvoiceNotFoundError("Fatura de referência não encontrada")
 
     reference_rules = await get_document_rules(db, reference_invoice.invoice_type)
     if not reference_rules.accepts_debit_note:
         raise ReferenceInvoiceTypeNotEligibleError(
-            "A nota de debito so pode ser emitida para Factura ou Factura/Recibo"
+            "A nota de débito só pode ser emitida para Factura ou Factura/Recibo"
         )
 
     if reference_invoice.document_status == DocumentLifecycleStatus.ANULADO:
-        raise ReferenceInvoiceAlreadyCancelledError("A fatura de referencia ja foi anulada")
+        raise ReferenceInvoiceAlreadyCancelledError("A fatura de referência já foi anulada")
 
     customer = None
     if customer_id is not None:
@@ -1227,12 +1227,12 @@ async def create_debit_note(
         )
         customer = customer_result.scalar_one_or_none()
         if customer is None:
-            raise CustomerNotFoundError("Cliente nao encontrado")
+            raise CustomerNotFoundError("Cliente não encontrado")
 
     doc_type_result = await db.execute(select(DocumentType).where(DocumentType.code == "ND"))
     doc_type = doc_type_result.scalar_one_or_none()
     if doc_type is None:
-        raise DocumentTypeNotConfiguredError("Tipo de documento 'ND' nao existe no catalogo da plataforma")
+        raise DocumentTypeNotConfiguredError("Tipo de documento 'ND' não existe no catálogo da plataforma")
     rules = rules_from_row(doc_type)
 
     try:
@@ -1265,7 +1265,7 @@ async def create_debit_note(
             )
             service = service_result.scalar_one_or_none()
             if service is None:
-                raise ProductNotFoundError("Servico nao encontrado ou inativo")
+                raise ProductNotFoundError("Serviço não encontrado ou inativo")
             vat_result = await db.execute(select(VAT).where(VAT.id == service.vat_id))
             vat = vat_result.scalar_one_or_none()
             vat_rate = float(vat.rate) if vat else 0.0
@@ -1292,10 +1292,10 @@ async def create_debit_note(
             )
             product = product_result.scalar_one_or_none()
             if product is None:
-                raise ProductNotFoundError("Produto nao encontrado ou inativo")
+                raise ProductNotFoundError("Produto não encontrado ou inativo")
             if product.is_raw_material:
                 # Raw materials are only ever consumed by production - and carry no VAT rate.
-                raise ProductNotFoundError("Materia-prima nao pode ser vendida ou faturada")
+                raise ProductNotFoundError("Materia-prima não pode ser vendida ou faturada")
             vat_result = await db.execute(select(VAT).where(VAT.id == product.vat_id))
             vat = vat_result.scalar_one_or_none()
             vat_rate = float(vat.rate) if vat else 0.0
@@ -1432,14 +1432,14 @@ async def create_receipt(
     company_result = await db.execute(select(Company).where(Company.id == company_id))
     company = company_result.scalar_one()
     if business_date > date.today() and not company.allows_future_sale_date:
-        raise EmptyInvoiceError("Nao e permitido faturar com data futura - active essa opcao em Empresa, se necessario")
+        raise EmptyInvoiceError("Não é permitido faturar com data futura - active essa opção em Empresa, se necessário")
 
     activity_result = await db.execute(
         select(Activity).where(Activity.id == activity_id, Activity.company_id == company_id, Activity.is_active == True)
     )
     activity = activity_result.scalar_one_or_none()
     if activity is None:
-        raise ActivityNotFoundError("Atividade nao encontrada ou inativa")
+        raise ActivityNotFoundError("Atividade não encontrada ou inativa")
 
     await ensure_period_open(db, company_id, business_date)
 
@@ -1451,17 +1451,17 @@ async def create_receipt(
     )
     reference_invoice = ref_result.scalar_one_or_none()
     if reference_invoice is None:
-        raise ReferenceInvoiceNotFoundError("Fatura de referencia nao encontrada")
+        raise ReferenceInvoiceNotFoundError("Fatura de referência não encontrada")
 
     reference_rules = await get_document_rules(db, reference_invoice.invoice_type)
     if not reference_rules.accepts_receipt:
         # A Fatura/Recibo is paid when it is issued: a receipt on top would collect the same money twice.
         raise ReferenceInvoiceTypeNotEligibleError(
-            "O recibo so pode ser emitido para uma Factura (a Factura/Recibo ja esta paga)"
+            "O recibo só pode ser emitido para uma Factura (a Factura/Recibo já está paga)"
         )
 
     if reference_invoice.document_status == DocumentLifecycleStatus.ANULADO:
-        raise ReferenceInvoiceAlreadyCancelledError("A fatura de referencia ja foi anulada")
+        raise ReferenceInvoiceAlreadyCancelledError("A fatura de referência já foi anulada")
 
     already_received = float(reference_invoice.amount_received or 0)
     # What is really still owed: the credit notes on the invoice (and what they refunded) count.
@@ -1475,7 +1475,7 @@ async def create_receipt(
     doc_type_result = await db.execute(select(DocumentType).where(DocumentType.code == "RC"))
     doc_type = doc_type_result.scalar_one_or_none()
     if doc_type is None:
-        raise DocumentTypeNotConfiguredError("Tipo de documento 'RC' nao existe no catalogo da plataforma")
+        raise DocumentTypeNotConfiguredError("Tipo de documento 'RC' não existe no catálogo da plataforma")
     rules = rules_from_row(doc_type)
 
     try:
@@ -1509,7 +1509,7 @@ async def create_receipt(
     if payment_method_id is not None:
         known = (await db.execute(select(PaymentMethodCatalog.id).where(PaymentMethodCatalog.id == payment_method_id))).scalar_one_or_none()
         if known is None:
-            raise EmptyInvoiceError("Metodo de pagamento invalido")
+            raise EmptyInvoiceError("Método de pagamento inválido")
     if method_id is None:
         method_id = (await db.execute(select(PaymentMethodCatalog.id).where(PaymentMethodCatalog.code == "NU"))).scalar_one_or_none()
     await _ensure_methods_allowed(db, [method_id], "in")
@@ -1526,7 +1526,7 @@ async def create_receipt(
             )
         )).scalar_one_or_none()
         if known_account is None:
-            raise EmptyInvoiceError("Conta bancaria invalida")
+            raise EmptyInvoiceError("Conta bancária inválida")
 
     receipt = Invoice(
         company_id=company_id,
@@ -1602,7 +1602,7 @@ async def create_pro_forma(
     )
     activity = activity_result.scalar_one_or_none()
     if activity is None:
-        raise ActivityNotFoundError("Atividade nao encontrada ou inativa")
+        raise ActivityNotFoundError("Atividade não encontrada ou inativa")
 
     if not lines_input:
         raise EmptyInvoiceError("A pro-forma deve ter pelo menos uma linha")
@@ -1614,12 +1614,12 @@ async def create_pro_forma(
         )
         customer = customer_result.scalar_one_or_none()
         if customer is None:
-            raise CustomerNotFoundError("Cliente nao encontrado")
+            raise CustomerNotFoundError("Cliente não encontrado")
 
     doc_type_result = await db.execute(select(DocumentType).where(DocumentType.code == "FP"))
     doc_type = doc_type_result.scalar_one_or_none()
     if doc_type is None:
-        raise DocumentTypeNotConfiguredError("Tipo de documento 'FP' nao existe no catalogo da plataforma")
+        raise DocumentTypeNotConfiguredError("Tipo de documento 'FP' não existe no catálogo da plataforma")
 
     try:
         series_row = await get_or_create_current_series(db, company, doc_type.id)
@@ -1648,7 +1648,7 @@ async def create_pro_forma(
             )
             service = service_result.scalar_one_or_none()
             if service is None:
-                raise ProductNotFoundError("Servico nao encontrado ou inativo")
+                raise ProductNotFoundError("Serviço não encontrado ou inativo")
             vat_result = await db.execute(select(VAT).where(VAT.id == service.vat_id))
             vat = vat_result.scalar_one_or_none()
             vat_rate = float(vat.rate) if vat else 0.0
@@ -1674,10 +1674,10 @@ async def create_pro_forma(
             )
             product = product_result.scalar_one_or_none()
             if product is None:
-                raise ProductNotFoundError("Produto nao encontrado ou inativo")
+                raise ProductNotFoundError("Produto não encontrado ou inativo")
             if product.is_raw_material:
                 # Raw materials are only ever consumed by production - and carry no VAT rate.
-                raise ProductNotFoundError("Materia-prima nao pode ser vendida ou faturada")
+                raise ProductNotFoundError("Materia-prima não pode ser vendida ou faturada")
             vat_result = await db.execute(select(VAT).where(VAT.id == product.vat_id))
             vat = vat_result.scalar_one_or_none()
             vat_rate = float(vat.rate) if vat else 0.0
@@ -1826,16 +1826,16 @@ async def convert_pro_forma_to_invoice(
     pro_forma = pf_result.scalar_one_or_none()
     # The source must be a document the catalog says can be converted (a pro-forma); the target a plain invoice.
     if pro_forma is None or not (await get_document_rules(db, pro_forma.invoice_type)).convertible:
-        raise ProFormaNotFoundError("Documento nao encontrado ou nao convertivel")
+        raise ProFormaNotFoundError("Documento não encontrado ou não convertível")
     try:
         target_rules = await get_document_rules(db, target_invoice_type)
     except DocumentRulesNotFoundError:
-        raise ReferenceInvoiceTypeNotEligibleError("O tipo de documento de destino nao e valido para uma conversao")
+        raise ReferenceInvoiceTypeNotEligibleError("O tipo de documento de destino não é válido para uma conversão")
     if target_rules.saft_section != "INVOICES" or target_rules.requires_origin:
-        raise ReferenceInvoiceTypeNotEligibleError("O tipo de documento de destino nao e valido para uma conversao")
+        raise ReferenceInvoiceTypeNotEligibleError("O tipo de documento de destino não é válido para uma conversão")
 
     if pro_forma.converted_to_invoice_id is not None:
-        raise ProFormaAlreadyConvertedError("Esta pro-forma ja foi convertida numa fatura")
+        raise ProFormaAlreadyConvertedError("Esta pro-forma já foi convertida numa fatura")
 
     lines_result = await db.execute(select(InvoiceLine).where(InvoiceLine.invoice_id == pro_forma.id))
     pf_lines = lines_result.scalars().all()
@@ -1984,7 +1984,7 @@ async def get_invoice_with_lines(db: AsyncSession, company_id: uuid.UUID, invoic
     )
     invoice = result.scalar_one_or_none()
     if invoice is None:
-        raise InvoiceNotFoundError("Fatura nao encontrada")
+        raise InvoiceNotFoundError("Fatura não encontrada")
 
     lines_result = await db.execute(select(InvoiceLine).where(InvoiceLine.invoice_id == invoice_id))
     lines = list(lines_result.scalars().all())

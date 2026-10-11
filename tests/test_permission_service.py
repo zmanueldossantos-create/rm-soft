@@ -84,7 +84,7 @@ async def test_new_catalog_code_is_distributed_once(db, company_with_essentials,
 
     new_code = "test_module:action"
     monkeypatch.setattr(permission_service, "PERMISSION_CATALOG",
-                        PERMISSION_CATALOG + [(new_code, "Acao de teste", "Teste", ["CAIXA"])])
+                        PERMISSION_CATALOG + [(new_code, "Ação de teste", "Teste", ["CAIXA"])])
     await _seed(db, company_id)
     assert await has_permission(db, company_id, "CAIXA", new_code) is True
 
@@ -99,9 +99,9 @@ async def test_create_company_seeds_default_permissions(db):
     until the next restart."""
     company = await create_company(
         db,
-        name="Empresa Permissoes Lda",
+        name="Empresa Permissões Lda",
         nif="5000123456",
-        email="permissoes@teste.co.ao",
+        email="permissões@teste.co.ao",
         phone_number="+244923000001",
         gestor_full_name="Gestor Novo",
         gestor_phone_number="+244923000002",

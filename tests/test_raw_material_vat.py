@@ -39,7 +39,7 @@ async def test_a_normal_product_still_needs_a_vat_and_an_exemption_reason_at_zer
     with pytest.raises(ExemptionReasonRequiredError) as exc_info:
         await _create(db, ctx, "P-1", None)
     assert "Taxa de IVA" in str(exc_info.value)
-    with pytest.raises(ArticleVatError, match="obrigatorio"):
+    with pytest.raises(ArticleVatError, match="obrigatório"):
         await _create(db, ctx, "P-2", ctx["vat_ise"].id)  # exempt without a motive: refused by THE article VAT rule
     assert (await _create(db, ctx, "P-3", ctx["vat_nor"].id)).vat_id == ctx["vat_nor"].id
 

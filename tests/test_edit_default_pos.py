@@ -13,7 +13,7 @@ from app.services.point_of_sale_service import DefaultPosNotModifiableError
 @pytest.mark.asyncio
 async def test_editing_the_default_pos_answers_409(monkeypatch):
     async def refuse(*args, **kwargs):
-        raise DefaultPosNotModifiableError("A caixa por defeito da atividade nao pode ser renomeada")
+        raise DefaultPosNotModifiableError("A caixa por defeito da atividade não pode ser renomeada")
 
     monkeypatch.setattr(routes, "update_point_of_sale", refuse)
     with pytest.raises(HTTPException) as refused:

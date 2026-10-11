@@ -286,7 +286,7 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
   }
 
   // ---- Kitchen (point 34b): what was sent, by whom, and what the room may still change ----
-  const KITCHEN_LABEL = { NAO_ENVIADO: 'Nao enviado', EM_ESPERA: 'Em espera', EM_PREPARACAO: 'Em preparacao', PRONTO: 'Pronto', ANULADO: 'Anulado' };
+  const KITCHEN_LABEL = { NAO_ENVIADO: 'Não enviado', EM_ESPERA: 'Em espera', EM_PREPARACAO: 'Em preparação', PRONTO: 'Pronto', ANULADO: 'Anulado' };
   const KITCHEN_STYLE = { NAO_ENVIADO: 'text-text-muted', EM_ESPERA: 'text-sky-400', EM_PREPARACAO: 'text-amber-500', PRONTO: 'text-success', ANULADO: 'text-danger' };
   const unsentDishes = detailLines.filter((l) => l.kitchen_status === 'NAO_ENVIADO').length;
   const dishesInKitchen = detailLines.filter((l) => ['NAO_ENVIADO', 'EM_ESPERA', 'EM_PREPARACAO'].includes(l.kitchen_status)).length;
@@ -476,7 +476,7 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
       return;
     }
     if (items.some((i) => !(i.quantity > 0) || i.quantity > i.available + 1e-9)) {
-      setTransferError('Indique quantidades validas (superiores a zero e nao superiores as existentes)');
+      setTransferError('Indique quantidades validas (superiores a zero e não superiores as existentes)');
       return;
     }
     const payload = { items: items.map((i) => ({ line_id: i.line_id, quantity: i.quantity })) };
@@ -733,7 +733,7 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
                 <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
                 <input
                   type="text"
-                  placeholder="Pesquisar por nome, codigo ou codigo de barras..."
+                  placeholder="Pesquisar por nome, código ou código de barras..."
                   value={itemSearch}
                   onChange={(e) => setItemSearch(e.target.value)}
                   className="w-full bg-bg-inset border border-border rounded-md pl-9 pr-3 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors"
@@ -741,7 +741,7 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
               </div>
               <div className="flex items-center gap-2 flex-wrap">
                 <button type="button" onClick={() => setItemTab('products')} className={'px-3 py-1.5 rounded-md text-[13px] font-medium transition-colors cursor-pointer ' + (itemTab === 'products' ? 'bg-accent text-white' : 'bg-bg-elevated border border-border text-text-muted hover:text-text-primary')}>Produtos</button>
-                <button type="button" onClick={() => setItemTab('services')} className={'px-3 py-1.5 rounded-md text-[13px] font-medium transition-colors cursor-pointer ' + (itemTab === 'services' ? 'bg-accent text-white' : 'bg-bg-elevated border border-border text-text-muted hover:text-text-primary')}>Servicos</button>
+                <button type="button" onClick={() => setItemTab('services')} className={'px-3 py-1.5 rounded-md text-[13px] font-medium transition-colors cursor-pointer ' + (itemTab === 'services' ? 'bg-accent text-white' : 'bg-bg-elevated border border-border text-text-muted hover:text-text-primary')}>Serviços</button>
                 {itemTab === 'products' && usedCategories.length > 0 && (
                   <>
                     <span className="w-px h-5 bg-border mx-1" />

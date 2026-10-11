@@ -16,7 +16,7 @@ class ModuleCreateRequest(BaseModel):
     def validate_name(cls, v: str) -> str:
         cleaned = " ".join(v.split())
         if not cleaned:
-            raise ValueError("Nome do modulo nao pode estar vazio")
+            raise ValueError("Nome do modulo não pode estar vazio")
         return cleaned
 
 
@@ -29,7 +29,7 @@ class ModuleUpdateRequest(BaseModel):
     def validate_name(cls, v: str) -> str:
         cleaned = " ".join(v.split())
         if not cleaned:
-            raise ValueError("Nome do modulo nao pode estar vazio")
+            raise ValueError("Nome do modulo não pode estar vazio")
         return cleaned
 
 

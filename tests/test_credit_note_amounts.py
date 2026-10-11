@@ -15,7 +15,7 @@ from app.services.invoice_service import create_credit_note, create_invoice
 
 async def _service(db, ctx, code, withholding_tax_id=None):
     service = Service(
-        company_id=ctx["company"].id, code=code, name="Servico " + code, price=1000.0,
+        company_id=ctx["company"].id, code=code, name="Serviço " + code, price=1000.0,
         vat_id=ctx["vat_nor"].id, withholding_tax_id=withholding_tax_id,
     )
     db.add(service)
@@ -29,7 +29,7 @@ async def _credit(db, ctx, invoice_id, quantity):
     line_id = line.id
     return await create_credit_note(
         db, ctx["company"].id, ctx["activity"].id, reference_invoice_id=invoice_id,
-        credit_note_reason="RTF", credit_note_cause="Correcao de teste",
+        credit_note_reason="RTF", credit_note_cause="Correção de teste",
         lines_input=[{"invoice_line_id": line_id, "quantity": quantity}],
     )
 
@@ -37,7 +37,7 @@ async def _credit(db, ctx, invoice_id, quantity):
 @pytest.mark.asyncio
 async def test_credit_note_carries_the_withholding_pro_rata(db, company_with_essentials):
     ctx = company_with_essentials
-    tax = WithholdingTax(name="Retencao teste", rate=6.5)
+    tax = WithholdingTax(name="Retenção teste", rate=6.5)
     db.add(tax)
     await db.flush()
     service_id = await _service(db, ctx, "SRV-RN", withholding_tax_id=tax.id)
@@ -59,7 +59,7 @@ async def test_credit_note_carries_the_withholding_pro_rata(db, company_with_ess
     assert float(credit_note.total) == 1140.0
     assert float(credit_note.retention_total) == 65.0
     line = (await db.execute(select(InvoiceLine).where(InvoiceLine.invoice_id == credit_note_id))).scalars().one()
-    assert line.retention_name_snapshot == "Retencao teste"
+    assert line.retention_name_snapshot == "Retenção teste"
     assert float(line.retention_rate) == 6.5 and float(line.retention_amount) == 65.0
 
 

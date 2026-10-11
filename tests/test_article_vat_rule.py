@@ -18,7 +18,7 @@ async def _put_under(db, company, **regime_fields):
 async def test_a_rate_the_regime_does_not_allow_is_refused(db, company_with_essentials):
     ctx = company_with_essentials
     await _put_under(db, ctx["company"], allows_nor=True, allows_red=False, allows_ise=False)
-    with pytest.raises(ArticleVatError, match="nao e permitida pelo regime"):
+    with pytest.raises(ArticleVatError, match="não é permitida pelo regime"):
         await resolve_article_vat(db, ctx["company"].id, ctx["vat_red"].id, None)
 
 
@@ -39,5 +39,5 @@ async def test_a_taxed_article_carries_no_motive(db, company_with_essentials):
 @pytest.mark.asyncio
 async def test_an_exempt_article_needs_a_motive(db, company_with_essentials):
     ctx = company_with_essentials
-    with pytest.raises(ArticleVatError, match="obrigatorio"):
+    with pytest.raises(ArticleVatError, match="obrigatório"):
         await resolve_article_vat(db, ctx["company"].id, ctx["vat_ise"].id, None)

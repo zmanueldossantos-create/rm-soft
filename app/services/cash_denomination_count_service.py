@@ -31,7 +31,7 @@ async def record_denomination_count(
 ) -> tuple[CashDenominationCount, float]:
     """Records a count and returns (count, total_amount) - total is quantity x denomination.value summed."""
     if not lines:
-        raise EmptyCountError("O contagem de billetagem nao pode estar vazia")
+        raise EmptyCountError("O contagem de billetagem não pode estar vazia")
 
     denomination_ids = [line["denomination_id"] for line in lines]
     result = await db.execute(select(Denomination).where(Denomination.id.in_(denomination_ids)))
@@ -48,7 +48,7 @@ async def record_denomination_count(
     for line in lines:
         denomination = denominations_by_id.get(line["denomination_id"])
         if denomination is None:
-            raise DenominationNotFoundError("Uma das denominacoes indicadas nao foi encontrada")
+            raise DenominationNotFoundError("Uma das denominações indicadas não foi encontrada")
         quantity = int(line["quantity"])
         if quantity <= 0:
             continue

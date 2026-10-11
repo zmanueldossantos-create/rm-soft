@@ -125,9 +125,9 @@ export default function ProductSaleUnits({ productId, baseUnitId, units, noPrice
               <tr className="text-[10.5px] uppercase tracking-wide text-text-muted">
                 <th className="text-left font-medium px-3 py-2">Unidade</th>
                 <th className="text-right font-medium px-3 py-2">Contem</th>
-                {!noPrice && <th className="text-right font-medium px-3 py-2">Preco</th>}
-                {!noPrice && <th className="text-right font-medium px-3 py-2">Preco por {baseCode}</th>}
-                <th className="text-left font-medium px-3 py-2">Codigo de barras</th>
+                {!noPrice && <th className="text-right font-medium px-3 py-2">Preço</th>}
+                {!noPrice && <th className="text-right font-medium px-3 py-2">Preço por {baseCode}</th>}
+                <th className="text-left font-medium px-3 py-2">Código de barras</th>
                 <th className="text-left font-medium px-3 py-2">Estado</th>
                 <th className="px-3 py-2"></th>
               </tr>
@@ -170,7 +170,7 @@ export default function ProductSaleUnits({ productId, baseUnitId, units, noPrice
         </div>
         )}
         <div>
-          <label className={labelClass}>Codigo de barras</label>
+          <label className={labelClass}>Código de barras</label>
           <input value={form.barcode} onChange={(e) => update('barcode', e.target.value)} onKeyDown={onEnter} className={inputClass + ' font-mono'} />
         </div>
         <div className="flex gap-1.5">

@@ -116,7 +116,7 @@ async def test_reason_direction_must_match_movement_type(db, company_with_essent
     setup = company_with_essentials
     company = setup["company"]
 
-    reason = await create_cash_movement_reason(db, company.id, "Deposito bancario", MovementDirection.SAIDA)
+    reason = await create_cash_movement_reason(db, company.id, "Deposito bancário", MovementDirection.SAIDA)
 
     with pytest.raises(ReasonDirectionMismatchError):
         await create_cash_movement(
@@ -131,7 +131,7 @@ async def test_transferencia_cannot_have_a_reason(db, company_with_essentials):
     other_pos = await _make_second_pos(db, company, setup["activity"])
     await open_session(db, company.id, setup["pos"].id, setup["gestor"], opening_amount=0)
 
-    reason = await create_cash_movement_reason(db, company.id, "Deposito bancario", MovementDirection.SAIDA)
+    reason = await create_cash_movement_reason(db, company.id, "Deposito bancário", MovementDirection.SAIDA)
 
     with pytest.raises(InvalidCashMovementError):
         await create_cash_movement(

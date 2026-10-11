@@ -20,7 +20,7 @@ def _receipt(number, methods=None, withholding=None, reference="FT S1/1"):
         "subtotal": 2000.0, "vat_total": 280.0, "total": 2280.0, "customer_id": None, "lines": [],
         "reference_invoice_no": reference, "reference_invoice_date": date(2026, 9, 1),
         "payment_methods": [{"code": "NU", "amount": 2150.0}] if methods is None else methods,
-        "withholding": [{"type": "II", "name": "Retencao na fonte(6,5)", "amount": 130.0}] if withholding is None else withholding,
+        "withholding": [{"type": "II", "name": "Retenção na fonte(6,5)", "amount": 130.0}] if withholding is None else withholding,
     }
 
 

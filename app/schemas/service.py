@@ -7,14 +7,14 @@ from pydantic import BaseModel, Field, field_validator
 def _validate_code(v: str) -> str:
     cleaned = " ".join(v.split())
     if not cleaned:
-        raise ValueError("Codigo do servico nao pode estar vazio")
+        raise ValueError("Código do serviço não pode estar vazio")
     return cleaned
 
 
 def _validate_name(v: str) -> str:
     cleaned = " ".join(v.split())
     if not cleaned:
-        raise ValueError("Nome do servico nao pode estar vazio")
+        raise ValueError("Nome do serviço não pode estar vazio")
     return cleaned
 
 
@@ -48,7 +48,7 @@ class ServiceCreateRequest(BaseModel):
     @classmethod
     def validate_price(cls, v: float | None) -> float | None:
         if v is not None and v < 0:
-            raise ValueError("Preco nao pode ser negativo")
+            raise ValueError("Preço não pode ser negativo")
         return v
 
 

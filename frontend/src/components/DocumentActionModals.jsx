@@ -64,11 +64,11 @@ const DocumentActionModals = forwardRef(function DocumentActionModals({ onSucces
     e.preventDefault();
     setRcError('');
     if (!rcAmount || parseFloat(rcAmount) <= 0) {
-      setRcError('Indique um valor valido');
+      setRcError('Indique um valor válido');
       return;
     }
     if (!rcPaymentMethodId) {
-      setRcError('Selecione o metodo de pagamento');
+      setRcError('Selecione o método de pagamento');
       return;
     }
     if (rcIsCash) {
@@ -76,7 +76,7 @@ const DocumentActionModals = forwardRef(function DocumentActionModals({ onSucces
       const points = await getOpenCashPoints().catch(() => []);
       setRcCashPoints(points);
       if (!rcCashPosId || !points.some((p) => p.pos_id === rcCashPosId)) {
-        setRcError(rcFixedPos ? 'Esta caixa nao tem sessao aberta - abra a caixa antes de receber' : 'Selecione uma caixa com sessao aberta');
+        setRcError(rcFixedPos ? 'Esta caixa não tem sessão aberta - abra a caixa antes de receber' : 'Selecione uma caixa com sessão aberta');
         return;
       }
     }
@@ -117,17 +117,17 @@ const DocumentActionModals = forwardRef(function DocumentActionModals({ onSucces
                 <input type="number" step="0.01" min="0.01" value={rcAmount} onChange={(e) => setRcAmount(e.target.value)} required className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent font-mono" />
               </div>
               <div>
-                <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Metodo de pagamento *</label>
+                <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Método de pagamento *</label>
                 <Select value={rcPaymentMethodId} onChange={setRcPaymentMethodId} options={paymentMethods.filter((m) => m.allows_receipt !== false).map((m) => ({ value: m.id, label: m.name }))} placeholder="Selecionar" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className={rcUsesBank ? '' : 'opacity-60 pointer-events-none'}>
-                <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Conta bancaria</label>
-                <Select value={rcUsesBank ? rcBankAccountId : ''} onChange={setRcBankAccountId} options={bankAccounts.map((b) => ({ value: b.id, label: b.account_number }))} placeholder={rcUsesBank ? 'Selecionar' : 'Nao aplicavel a este metodo'} />
+                <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Conta bancária</label>
+                <Select value={rcUsesBank ? rcBankAccountId : ''} onChange={setRcBankAccountId} options={bankAccounts.map((b) => ({ value: b.id, label: b.account_number }))} placeholder={rcUsesBank ? 'Selecionar' : 'Não aplicável a este método'} />
               </div>
               <div>
-                <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Referencia</label>
+                <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Referência</label>
                 <input value={rcDocumentReference} disabled className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent font-mono opacity-70 cursor-not-allowed" />
               </div>
             </div>
@@ -136,13 +136,13 @@ const DocumentActionModals = forwardRef(function DocumentActionModals({ onSucces
               {rcFixedPos ? (
                 <input value={rcIsCash ? (rcCashPoints.find((cp) => cp.pos_id === cashPosId)?.name || 'Caixa sem sessao aberta') : 'Sem recebimento em numerario'} disabled className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent opacity-70 cursor-not-allowed" />
               ) : rcIsCash && rcCashPoints.length === 0 ? (
-                <p className="text-[12px] text-danger">Nenhuma caixa com sessao aberta - abra uma caixa para receber em numerario</p>
+                <p className="text-[12px] text-danger">Nenhuma caixa com sessão aberta - abra uma caixa para receber em numerário</p>
               ) : (
-                <Select value={rcIsCash ? rcCashPosId : ''} onChange={setRcCashPosId} options={rcCashPoints.map((cp) => ({ value: cp.pos_id, label: cp.name }))} placeholder={rcIsCash ? 'Selecionar' : 'Sem recebimento em numerario'} />
+                <Select value={rcIsCash ? rcCashPosId : ''} onChange={setRcCashPosId} options={rcCashPoints.map((cp) => ({ value: cp.pos_id, label: cp.name }))} placeholder={rcIsCash ? 'Selecionar' : 'Sem recebimento em numerário'} />
               )}
             </div>
             <div>
-              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Observacoes</label>
+              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Observações</label>
               <input value={rcObservations} onChange={(e) => setRcObservations(e.target.value)} className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent" />
             </div>
             {rcError && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{rcError}</div>}

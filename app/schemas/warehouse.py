@@ -34,7 +34,7 @@ class WarehouseUpdateRequest(BaseModel):
     def validate_name(cls, v: str) -> str:
         cleaned = " ".join(v.split())
         if not cleaned:
-            raise ValueError("Nome do armazem nao pode estar vazio")
+            raise ValueError("Nome do armazem não pode estar vazio")
         return cleaned
 
 
@@ -46,7 +46,7 @@ class WarehouseCreateRequest(BaseModel):
     def validate_name(cls, v: str) -> str:
         cleaned = " ".join(v.split())
         if not cleaned:
-            raise ValueError("Nome do armazem nao pode estar vazio")
+            raise ValueError("Nome do armazem não pode estar vazio")
         return cleaned
 
 
@@ -65,5 +65,5 @@ class WarehouseCreateFullRequest(BaseModel):
     def validate_name(cls, v: str) -> str:
         cleaned = " ".join(v.split())
         if not cleaned:
-            raise ValueError("Nome do armazem nao pode estar vazio")
+            raise ValueError("Nome do armazem não pode estar vazio")
         return cleaned

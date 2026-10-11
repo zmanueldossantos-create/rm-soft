@@ -601,7 +601,7 @@ async def resubmit_invoice(
     )
     invoice = result.scalar_one_or_none()
     if invoice is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Fatura nao encontrada")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Fatura não encontrada")
 
     invoice.status = InvoiceStatus.PENDENTE
     await db.commit()

@@ -58,14 +58,14 @@ def _duplicate_field_message(error: IntegrityError) -> str:
     """Fallback: inspects the underlying Postgres error if a race condition slips past the pre-checks."""
     detail = str(getattr(error, "orig", error))
     if "ix_companies_name" in detail:
-        return "Ja existe uma empresa registada com este nome"
+        return "Já existe uma empresa registada com este nome"
     if "ix_companies_nif" in detail:
-        return "Ja existe uma empresa registada com este NIF"
+        return "Já existe uma empresa registada com este NIF"
     if "ix_companies_email" in detail:
-        return "Ja existe uma empresa registada com este email"
+        return "Já existe uma empresa registada com este email"
     if "ix_companies_phone_number" in detail:
-        return "Ja existe uma empresa registada com este numero de telefone"
-    return "Ja existe uma empresa registada com estes dados"
+        return "Já existe uma empresa registada com este número de telefone"
+    return "Já existe uma empresa registada com estes dados"
 
 
 async def _legal_rates_for(db: AsyncSession, regime) -> list:
@@ -117,17 +117,17 @@ async def _check_all_fields_available(
         name_query = name_query.where(Company.id != exclude_id)
     name_result = await db.execute(name_query)
     if name_result.scalar_one_or_none() is not None:
-        raise CompanyAlreadyExistsError("Ja existe uma empresa registada com este nome")
+        raise CompanyAlreadyExistsError("Já existe uma empresa registada com este nome")
 
-    await _check_field_available(db, Company.nif, nif, "Ja existe uma empresa registada com este NIF", exclude_id)
-    await _check_field_available(db, Company.email, email, "Ja existe uma empresa registada com este email", exclude_id)
-    await _check_field_available(db, Company.phone_number, phone_number, "Ja existe uma empresa registada com este numero de telefone", exclude_id)
+    await _check_field_available(db, Company.nif, nif, "Já existe uma empresa registada com este NIF", exclude_id)
+    await _check_field_available(db, Company.email, email, "Já existe uma empresa registada com este email", exclude_id)
+    await _check_field_available(db, Company.phone_number, phone_number, "Já existe uma empresa registada com este número de telefone", exclude_id)
 
 
 def _validate_currencies(primary_currency_id: uuid.UUID | None, secondary_currency_id: uuid.UUID | None) -> None:
     """A currency already picked as primary can't also be picked as secondary (Video 1)."""
     if primary_currency_id is not None and secondary_currency_id is not None and primary_currency_id == secondary_currency_id:
-        raise InvalidCurrencySelectionError("A devise secundaria nao pode ser igual a devise principal")
+        raise InvalidCurrencySelectionError("A devise secundária não pode ser igual a devise principal")
 
 
 async def create_company(
@@ -269,7 +269,7 @@ async def get_company_or_raise(db: AsyncSession, company_id: uuid.UUID) -> Compa
     result = await db.execute(select(Company).where(Company.id == company_id))
     company = result.scalar_one_or_none()
     if company is None:
-        raise CompanyNotFoundError("Empresa nao encontrada")
+        raise CompanyNotFoundError("Empresa não encontrada")
     return company
 
 
@@ -311,7 +311,7 @@ async def update_company(
     if fiscal_regime_id is not None:
         regime_result = await db.execute(select(FiscalRegime).where(FiscalRegime.id == fiscal_regime_id))
         if regime_result.scalar_one_or_none() is None:
-            raise FiscalRegimeNotFoundError("Regime fiscal nao encontrado")
+            raise FiscalRegimeNotFoundError("Regime fiscal não encontrado")
 
     await _check_all_fields_available(db, name, nif, email, phone_number, exclude_id=company_id)
     _validate_currencies(primary_currency_id, secondary_currency_id)
@@ -405,7 +405,7 @@ async def update_bank_account(
     result = await db.execute(select(CompanyBankAccount).where(CompanyBankAccount.id == account_id))
     account = result.scalar_one_or_none()
     if account is None:
-        raise BankAccountNotFoundError("Conta bancaria nao encontrada")
+        raise BankAccountNotFoundError("Conta bancária não encontrada")
     account.bank_id = bank_id
     account.account_number = account_number
     account.iban = iban
@@ -419,7 +419,7 @@ async def toggle_bank_account(db: AsyncSession, account_id: uuid.UUID) -> Compan
     result = await db.execute(select(CompanyBankAccount).where(CompanyBankAccount.id == account_id))
     account = result.scalar_one_or_none()
     if account is None:
-        raise BankAccountNotFoundError("Conta bancaria nao encontrada")
+        raise BankAccountNotFoundError("Conta bancária não encontrada")
     account.is_active = not account.is_active
     await db.commit()
     await db.refresh(account)

@@ -294,7 +294,7 @@ export default function Caixa() {
       const initialQuantities = Object.fromEntries(data.map((d) => [d.id, '']));
       setDenominationQuantities(initialQuantities);
     } catch (err) {
-      setMoedeiroError(extractErrorMessage(err, 'Erro ao carregar denominacoes'));
+      setMoedeiroError(extractErrorMessage(err, 'Erro ao carregar denominações'));
     }
   }
 
@@ -395,7 +395,7 @@ export default function Caixa() {
       refreshBalance(selectedPosId);
       refreshPosStock(selectedPosId);
     } catch (err) {
-      setMovementFormError(extractErrorMessage(err, 'Erro ao confirmar recepcao'));
+      setMovementFormError(extractErrorMessage(err, 'Erro ao confirmar receção'));
     } finally {
       setReceivingId(null);
     }
@@ -409,7 +409,7 @@ export default function Caixa() {
       refreshBalance(selectedPosId);
       refreshPosStock(selectedPosId);
     } catch (err) {
-      setMovementFormError(extractErrorMessage(err, 'Erro ao cancelar transferencia'));
+      setMovementFormError(extractErrorMessage(err, 'Erro ao cancelar transferência'));
     } finally {
       setCancellingId(null);
     }
@@ -705,7 +705,7 @@ export default function Caixa() {
     const lines = nextCart.filter((l) => l.productId === productId);
     const requested = lines.reduce((sum, l) => sum + l.quantity * factorOf(l), 0);
     if (requested <= available + 1e-9) return '';
-    return 'Stock insuficiente: ' + Math.max(available, 0).toLocaleString('pt-PT', { maximumFractionDigits: 3 }) + ' ' + (lines[0]?.baseUnit || 'UN') + ' disponiveis';
+    return 'Stock insuficiente: ' + Math.max(available, 0).toLocaleString('pt-PT', { maximumFractionDigits: 3 }) + ' ' + (lines[0]?.baseUnit || 'UN') + ' disponíveis';
   }
 
   function stockRefusal(item, saleUnit) {
@@ -724,7 +724,7 @@ export default function Caixa() {
       }
     }
     if (isService && (item.price === null || item.price === undefined)) {
-      setError('Este servico nao tem preco definido - configure um preco antes de o vender');
+      setError('Este serviço não tem preço definido - configure um preço antes de o vender');
       return;
     }
     const itemKey = (isService ? 'service:' : 'product:') + item.id + (saleUnit ? ':' + saleUnit.id : '');
@@ -1211,7 +1211,7 @@ export default function Caixa() {
         </button>
         <button onClick={() => toggleSideDrawer('movement', openMovementModal)} disabled={!selectedPosId || !can('tesouraria:view')} className={'group relative w-11 h-11 flex items-center justify-center rounded-lg border hover:border-accent hover:bg-accent/5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer ' + (activeSideDrawer === 'movement' ? 'border-accent bg-accent/5' : 'border-accent/20 bg-bg-inset')}>
           <ArrowLeftRight size={18} className="text-accent" />
-          <span className="pointer-events-none absolute left-full ml-2 whitespace-nowrap rounded-md bg-bg-elevated border border-border px-2.5 py-1 text-[12px] text-text-primary shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-50">Operacoes de Caixa</span>
+          <span className="pointer-events-none absolute left-full ml-2 whitespace-nowrap rounded-md bg-bg-elevated border border-border px-2.5 py-1 text-[12px] text-text-primary shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-50">Operações de Caixa</span>
         </button>
         <button onClick={() => toggleSideDrawer('report', openDailyReportModal)} disabled={!selectedPosId || !can('tesouraria:daily_report')} className={'group relative w-11 h-11 flex items-center justify-center rounded-lg border hover:border-accent hover:bg-accent/5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer ' + (activeSideDrawer === 'report' ? 'border-accent bg-accent/5' : 'border-accent/20 bg-bg-inset')}>
           <FileText size={18} className="text-accent" />
@@ -1393,7 +1393,7 @@ export default function Caixa() {
                     onClick={() => setActiveCategoryId('services')}
                     className={'shrink-0 px-3.5 py-1.5 rounded-md text-[13px] font-medium transition-colors cursor-pointer ' + (activeCategoryId === 'services' ? 'bg-accent text-white' : 'bg-bg-elevated border border-border text-text-muted hover:text-text-primary')}
                   >
-                    Servicos
+                    Serviços
                   </button>
                 )}
               </div>
@@ -1497,7 +1497,7 @@ export default function Caixa() {
                       <tr className="text-[10.5px] uppercase tracking-wide text-text-muted">
                         <th className="text-left font-medium px-2.5 py-2">Artigo</th>
                         <th className="text-center font-medium px-1 py-2 w-[92px]">Qtd</th>
-                        <th className="text-right font-medium px-2 py-2 w-[96px]">Preco</th>
+                        <th className="text-right font-medium px-2 py-2 w-[96px]">Preço</th>
                         <th className="text-right font-medium px-2.5 py-2 w-[104px]">Total</th>
                       </tr>
                     </thead>
@@ -1599,7 +1599,7 @@ export default function Caixa() {
                 )}
                 {cartCalculation.retention > 0 && (
                   <div className="flex items-center justify-between">
-                    <span className="text-text-muted text-[12px]">Retencao</span>
+                    <span className="text-text-muted text-[12px]">Retenção</span>
                     <span className="font-mono text-danger text-[12px]">-{formatKz(cartCalculation.retention)} Kz</span>
                   </div>
                 )}
@@ -1629,7 +1629,7 @@ export default function Caixa() {
       <Modal open={openModalOpen} onClose={() => setOpenModalOpen(false)} title="Abrir caixa">
         <form onSubmit={handleOpenSession} className="flex flex-col gap-4">
           <div className="bg-bg-inset border border-border rounded-md px-4 py-3">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1">Fundo reportado da sessao anterior</p>
+            <p className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1">Fundo reportado da sessão anterior</p>
             {carryForwardLoading ? (
               <div className="flex items-center gap-2 text-text-muted text-sm"><Loader2 size={14} className="animate-spin" />A calcular...</div>
             ) : (
@@ -1771,7 +1771,7 @@ export default function Caixa() {
             className="bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer"
           >
             {checkoutSaving ? <Loader2 size={17} className="animate-spin" /> : <CheckCircle2 size={17} />}
-            {checkoutSaving ? 'A finalizar...' : 'Confirmar liquidacao'}
+            {checkoutSaving ? 'A finalizar...' : 'Confirmar liquidação'}
           </button>
         </div>
       </Modal>
@@ -1807,7 +1807,7 @@ export default function Caixa() {
               />
             </div>
             <div className="flex-1">
-              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Ate</label>
+              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Até</label>
               <DateInput
                 value={dailyReportDateTo}
                 min={dailyReportDateFrom || undefined}
@@ -1834,7 +1834,7 @@ export default function Caixa() {
           {dailyReportLoading ? (
             <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin text-accent" /></div>
           ) : dailyReportEntries.length === 0 ? (
-            <p className="text-text-muted text-[13px] text-center py-8">Nenhuma operacao neste periodo</p>
+            <p className="text-text-muted text-[13px] text-center py-8">Nenhuma operação neste período</p>
           ) : (
             <>
               <div className="flex flex-col gap-1.5 max-h-[400px] overflow-y-auto scrollbar-thin">
@@ -1844,16 +1844,16 @@ export default function Caixa() {
                       <p className="text-[12px] text-text-primary">{e.description}</p>
                       <p className="text-[10px] text-text-muted font-mono">{new Date(e.time).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</p>
                     </div>
-                    <span className={'font-mono text-[13px] font-semibold ' + (e.direction === 'saida' ? 'text-danger' : 'text-success')}>
-                      {e.direction === 'saida' ? '-' : '+'}{formatKz(e.amount)} Kz
+                    <span className={'font-mono text-[13px] font-semibold ' + (e.direction === 'saída' ? 'text-danger' : 'text-success')}>
+                      {e.direction === 'saída' ? '-' : '+'}{formatKz(e.amount)} Kz
                     </span>
                   </div>
                 ))}
               </div>
               <div className="flex justify-between border-t border-border pt-3">
-                <span className="text-text-muted text-[13px] font-medium">Total do periodo</span>
+                <span className="text-text-muted text-[13px] font-medium">Total do período</span>
                 <span className="font-mono font-bold text-text-primary text-[15px]">
-                  {formatKz(dailyReportEntries.reduce((sum, e) => sum + (e.direction === 'saida' ? -e.amount : e.amount), 0))} Kz
+                  {formatKz(dailyReportEntries.reduce((sum, e) => sum + (e.direction === 'saída' ? -e.amount : e.amount), 0))} Kz
                 </span>
               </div>
               <button
@@ -1912,7 +1912,7 @@ export default function Caixa() {
         </div>
       </Modal>
 
-      <Modal open={saleConfirmModalOpen} onClose={() => setSaleConfirmModalOpen(false)} title="Confirmar operacao">
+      <Modal open={saleConfirmModalOpen} onClose={() => setSaleConfirmModalOpen(false)} title="Confirmar operação">
         <div className="flex flex-col gap-4">
           <div className="bg-bg-inset border border-border rounded-md px-4 py-3 flex flex-col gap-1.5">
             <div className="flex justify-between text-[13px]">
@@ -1974,7 +1974,7 @@ export default function Caixa() {
           )}
 
           <div className="flex flex-col gap-2.5 mb-4">
-            <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wide">Condicoes de faturacao (FT)</p>
+            <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wide">Condições de faturação (FT)</p>
             <div className={'flex flex-col gap-2.5' + (!billsLater ? ' opacity-40 pointer-events-none' : '')}>
               <Select
                 value={billsLater ? ftPaymentTermId : (paymentTerms.find(isProntoTerm)?.id || '')}
@@ -1984,7 +1984,7 @@ export default function Caixa() {
                   setFtDueDate(term ? dueDateFor(term, new Date().toISOString().slice(0, 10)) : '');
                 }}
                 options={paymentTerms.map((t) => ({ value: t.id, label: t.name }))}
-                placeholder="Condicao de pagamento"
+                placeholder="Condição de pagamento"
               />
               {ftDueDate && (
                 <p className="text-[12px] text-text-muted">Data de vencimento: <span className="font-mono text-text-primary">{ftDueDate}</span></p>
@@ -1993,7 +1993,7 @@ export default function Caixa() {
           </div>
 
 
-          <p className="text-text-muted text-[13px]">Confirma a finalizacao desta operacao?</p>
+          <p className="text-text-muted text-[13px]">Confirma a finalização desta operação?</p>
           <div className="flex gap-2.5">
             <button
               onClick={() => setSaleConfirmModalOpen(false)}
@@ -2022,7 +2022,7 @@ export default function Caixa() {
           <CheckCircle2 size={40} className="text-success" />
           <div>
             <p className="font-display font-semibold text-text-primary">
-              {lastInvoice?.invoice_type === 'PRO_FORMA' ? 'Pro-forma gerada' : lastInvoice?.invoice_type === 'FACTURA' ? 'Fatura emitida' : 'Venda concluida'}
+              {lastInvoice?.invoice_type === 'PRO_FORMA' ? 'Pro-forma gerada' : lastInvoice?.invoice_type === 'FACTURA' ? 'Fatura emitida' : 'Venda concluída'}
             </p>
             {lastInvoice && (
               <>
@@ -2060,7 +2060,7 @@ export default function Caixa() {
               options={[
                 { value: 'ABERTURA', label: 'Abertura de caixa' },
                 { value: 'FECHO', label: 'Fecho de caixa' },
-                { value: 'TROCA_SAIDA', label: 'Troca - saida' },
+                { value: 'TROCA_SAIDA', label: 'Troca - saída' },
                 { value: 'TROCA_ENTRADA', label: 'Troca - entrada' },
               ]}
             />
@@ -2167,7 +2167,7 @@ export default function Caixa() {
         </div>
       </Modal>
 
-      <Modal variant="drawer" drawerLeftClass="left-16" open={movementModalOpen} onClose={() => setMovementModalOpen(false)} title="Operacoes de Caixa">
+      <Modal variant="drawer" drawerLeftClass="left-16" open={movementModalOpen} onClose={() => setMovementModalOpen(false)} title="Operações de Caixa">
         <div className="flex items-center gap-1.5 mb-4 border-b border-border">
           <button
             onClick={() => setMovementModalTab('form')}
@@ -2194,9 +2194,9 @@ export default function Caixa() {
                 value={movementForm.movementType}
                 onChange={(v) => setMovementForm((p) => ({ ...p, movementType: v, otherPosId: '', reasonId: '' }))}
                 options={[
-                  { value: 'TRANSFERENCIA', label: 'Transferencia para outra caixa' },
+                  { value: 'TRANSFERENCIA', label: 'Transferência para outra caixa' },
                   { value: 'ENTRADA_EXTERNA', label: 'Entrada externa' },
-                  { value: 'SAIDA_EXTERNA', label: 'Saida externa' },
+                  { value: 'SAIDA_EXTERNA', label: 'Saída externa' },
                 ]}
               />
             </div>
@@ -2250,7 +2250,7 @@ export default function Caixa() {
             </div>
 
             <div>
-              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Descricao (opcional)</label>
+              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Descrição (opcional)</label>
               <input
                 value={movementForm.description}
                 onChange={(e) => setMovementForm((p) => ({ ...p, description: e.target.value }))}
@@ -2274,17 +2274,17 @@ export default function Caixa() {
         ) : (
           <div className="flex flex-col gap-5">
             <div>
-              <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wide mb-2">Aguardam a sua confirmacao (recebidas)</p>
+              <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wide mb-2">Aguardam a sua confirmação (recebidas)</p>
               {pendingReceptionsLoading ? (
                 <div className="flex justify-center py-4"><Loader2 size={16} className="animate-spin text-accent" /></div>
               ) : pendingReceptions.length === 0 ? (
-                <p className="text-text-muted text-[12px] text-center py-4">Nenhuma transferencia pendente de recepcao</p>
+                <p className="text-text-muted text-[12px] text-center py-4">Nenhuma transferência pendente de receção</p>
               ) : (
                 <div className="flex flex-col gap-1.5 max-h-[200px] overflow-y-auto scrollbar-thin">
                   {pendingReceptions.map((m) => (
                     <div key={m.id} className="flex items-center justify-between bg-bg-inset border border-border rounded-md px-3 py-2">
                       <div>
-                        <p className="text-[12px] text-text-primary">Transferencia recebida</p>
+                        <p className="text-[12px] text-text-primary">Transferência recebida</p>
                         <p className="text-[10px] text-text-muted font-mono">{new Date(m.movement_date).toLocaleDateString('pt-PT')}</p>
                       </div>
                       <div className="flex items-center gap-2">
@@ -2309,13 +2309,13 @@ export default function Caixa() {
               {pendingEmissionsLoading ? (
                 <div className="flex justify-center py-4"><Loader2 size={16} className="animate-spin text-accent" /></div>
               ) : pendingEmissions.length === 0 ? (
-                <p className="text-text-muted text-[12px] text-center py-4">Nenhuma transferencia enviada por confirmar</p>
+                <p className="text-text-muted text-[12px] text-center py-4">Nenhuma transferência enviada por confirmar</p>
               ) : (
                 <div className="flex flex-col gap-1.5 max-h-[200px] overflow-y-auto scrollbar-thin">
                   {pendingEmissions.map((m) => (
                     <div key={m.id} className="flex items-center justify-between bg-bg-inset border border-border rounded-md px-3 py-2">
                       <div>
-                        <p className="text-[12px] text-text-primary">Transferencia enviada</p>
+                        <p className="text-[12px] text-text-primary">Transferência enviada</p>
                         <p className="text-[10px] text-text-muted font-mono">{new Date(m.movement_date).toLocaleDateString('pt-PT')}</p>
                       </div>
                       <div className="flex items-center gap-2">
@@ -2484,7 +2484,7 @@ export default function Caixa() {
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
             <input
               type="text"
-              placeholder="Pesquisar artigo por codigo ou nome..."
+              placeholder="Pesquisar artigo por código ou nome..."
               value={articleSearchQuery}
               onChange={(e) => setArticleSearchQuery(e.target.value)}
               autoFocus
@@ -2527,7 +2527,7 @@ export default function Caixa() {
           ) : proFormaError ? (
             <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{proFormaError}</div>
           ) : pendingProFormas.length === 0 ? (
-            <p className="text-text-muted text-[13px] text-center py-8">Nenhuma pro-forma pendente de liquidacao</p>
+            <p className="text-text-muted text-[13px] text-center py-8">Nenhuma pro-forma pendente de liquidação</p>
           ) : (
             <div>
               <div className="max-h-[calc(100vh-15rem)] overflow-y-auto overflow-x-auto scrollbar-thin">
@@ -2538,8 +2538,8 @@ export default function Caixa() {
                     <th className="text-left px-2.5 py-2">Data</th>
                     <th className="text-left px-2.5 py-2">Cliente</th>
                     <th className="text-right px-2.5 py-2">Total</th>
-                    <th className="text-right px-2.5 py-2">Retencao</th>
-                    <th className="text-right px-2.5 py-2">Acao</th>
+                    <th className="text-right px-2.5 py-2">Retenção</th>
+                    <th className="text-right px-2.5 py-2">Ação</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2582,10 +2582,10 @@ export default function Caixa() {
                       <th className="text-right px-2.5 py-2">Sem IVA</th>
                       <th className="text-right px-2.5 py-2">IVA</th>
                       <th className="text-right px-2.5 py-2">Total</th>
-                      <th className="text-right px-2.5 py-2">Retencao</th>
+                      <th className="text-right px-2.5 py-2">Retenção</th>
                       <th className="text-right px-2.5 py-2">Recebido</th>
                       <th className="text-right px-2.5 py-2">A pagar</th>
-                      <th className="text-right px-2.5 py-2">Acoes</th>
+                      <th className="text-right px-2.5 py-2">Ações</th>
                     </tr>
                   </thead>
                   <tbody>

@@ -12,7 +12,7 @@ from app.services.vat_rule_service import (
 
 
 async def _setup(db, ctx):
-    imposing = FiscalRegime(name="Exclusao (reclass)", allows_nor=False, allows_red=False, allows_ise=True,
+    imposing = FiscalRegime(name="Exclusão (reclass)", allows_nor=False, allows_red=False, allows_ise=True,
                             required_exemption_id=ctx["exemption_m11"].id)
     general = FiscalRegime(name="Geral (reclass)", allows_nor=True, allows_red=True, allows_ise=True)
     product = Product(company_id=ctx["company"].id, code="RC-1", name="Artigo reclass", vat_id=ctx["vat_nor"].id,

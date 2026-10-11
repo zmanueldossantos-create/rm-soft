@@ -55,7 +55,7 @@ async def get_document_rules(db: AsyncSession, invoice_type) -> DocumentRules:
     code = DOC_CODE_BY_INVOICE_TYPE.get(value, value)
     row = (await db.execute(select(DocumentType).where(DocumentType.code == code))).scalar_one_or_none()
     if row is None:
-        raise DocumentRulesNotFoundError(f"Tipo de documento '{code}' nao existe no catalogo")
+        raise DocumentRulesNotFoundError(f"Tipo de documento '{code}' não existe no catálogo")
     return rules_from_row(row)
 
 

@@ -21,7 +21,7 @@ async def test_the_movements_report_totals_the_journal(db, company_with_essentia
     ctx = company_with_essentials
     company_id, gestor, pos_id = ctx["company"].id, ctx["gestor"], ctx["pos"].id
     other_method_id = (await db.execute(text("SELECT id FROM payment_method_catalog WHERE code = 'MB'"))).scalar_one()
-    service = Service(company_id=company_id, code="SRV-MOV", name="Servico movimentos", price=1000.0, vat_id=ctx["vat_nor"].id)
+    service = Service(company_id=company_id, code="SRV-MOV", name="Serviço movimentos", price=1000.0, vat_id=ctx["vat_nor"].id)
     other = PointOfSale(company_id=company_id, activity_id=ctx["activity"].id, name=f"Caixa {uuid.uuid4().hex[:6]}")
     db.add_all([service, other])
     await db.commit()

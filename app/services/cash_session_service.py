@@ -106,7 +106,7 @@ async def open_session(
 
     existing = await get_open_session(db, company_id, pos_id)
     if existing is not None:
-        raise SessionAlreadyOpenError("Ja existe uma sessao de caixa aberta para este ponto de venda")
+        raise SessionAlreadyOpenError("Já existe uma sessão de caixa aberta para este ponto de venda")
 
     if opening_amount is None:
         opening_amount = await get_carry_forward_amount(db, company_id, pos_id)
@@ -129,7 +129,7 @@ async def get_session_or_raise(db: AsyncSession, company_id: uuid.UUID, session_
     result = await db.execute(select(CashSession).where(CashSession.id == session_id, CashSession.company_id == company_id))
     session = result.scalar_one_or_none()
     if session is None:
-        raise SessionNotFoundError("Sessao de caixa nao encontrada")
+        raise SessionNotFoundError("Sessão de caixa não encontrada")
     return session
 
 
@@ -284,7 +284,7 @@ async def close_session(
 ) -> CashSession:
     session = await get_session_or_raise(db, company_id, session_id)
     if session.status == CashSessionStatus.FECHADA:
-        raise SessionAlreadyClosedError("Esta sessao de caixa ja esta fechada")
+        raise SessionAlreadyClosedError("Esta sessão de caixa já está fechada")
 
     pos = await get_pos_or_raise(db, company_id, session.pos_id)
     if pos.billetage_enabled:
@@ -294,23 +294,23 @@ async def close_session(
         fecho_count = await get_latest_count(db, company_id, session_id, DenominationCountType.FECHO)
         if fecho_count is None:
             raise BilletageRequiredError(
-                "Esta caixa exige billetagem - registe a contagem por denominacao antes de fechar"
+                "Esta caixa exige billetagem - registe a contagem por denominação antes de fechar"
             )
         closing_amount_counted = await get_count_total(db, fecho_count.id)
     elif closing_amount_counted is None:
-        raise ValueError("closing_amount_counted e obrigatorio quando a billetagem nao esta ativa")
+        raise ValueError("closing_amount_counted é obrigatório quando a billetagem não está ativa")
 
     expected = await get_current_expected_cash_balance(db, company_id, session.pos_id, session)
     difference = round(closing_amount_counted - expected, 2)
     closing_notes = (closing_notes or "").strip() or None
     if difference != 0 and not pos.accept_closing_difference:
         raise ClosingDifferenceNotAllowedError(
-            f"Esta caixa nao aceita diferencas no fecho: contado {_kz(closing_amount_counted)} Kz, "
-            f"esperado {_kz(expected)} Kz (diferenca de {_kz(difference, True)} Kz)"
+            f"Esta caixa não aceita diferencas no fecho: contado {_kz(closing_amount_counted)} Kz, "
+            f"esperado {_kz(expected)} Kz (diferença de {_kz(difference, True)} Kz)"
         )
     if difference != 0 and closing_notes is None:
         raise ClosingReasonRequiredError(
-            f"Diferenca de {_kz(difference, True)} Kz entre o contado e o esperado - indique o motivo para fechar a caixa"
+            f"Diferença de {_kz(difference, True)} Kz entre o contado e o esperado - indique o motivo para fechar a caixa"
         )
 
     session.closed_by_user_id = closed_by_user_id

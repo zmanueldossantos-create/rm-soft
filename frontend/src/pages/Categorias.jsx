@@ -138,7 +138,7 @@ export default function Categorias() {
     try {
       setPaymentMethods(await listPaymentMethodPreferences());
     } catch (err) {
-      setError(extractErrorMessage(err, 'Erro ao carregar metodos de pagamento'));
+      setError(extractErrorMessage(err, 'Erro ao carregar métodos de pagamento'));
     } finally {
       setPaymentMethodsLoading(false);
     }
@@ -150,7 +150,7 @@ export default function Categorias() {
       await setPaymentMethodPreference(method.id, !method.available_at_pos);
       setPaymentMethods(await listPaymentMethodPreferences());
     } catch (err) {
-      setError(extractErrorMessage(err, 'Erro ao atualizar preferencia'));
+      setError(extractErrorMessage(err, 'Erro ao atualizar preferência'));
     } finally {
       setTogglingPaymentMethodId(null);
     }
@@ -162,7 +162,7 @@ export default function Categorias() {
     try {
       setPaymentTermPrefs(await listDocumentTypePaymentTermPreferences());
     } catch (err) {
-      setError(extractErrorMessage(err, 'Erro ao carregar condicoes de pagamento'));
+      setError(extractErrorMessage(err, 'Erro ao carregar condições de pagamento'));
     } finally {
       setPaymentTermPrefsLoading(false);
     }
@@ -174,7 +174,7 @@ export default function Categorias() {
       await setDocumentTypePaymentTermPreference(docType.id, !docType.requires_payment_term);
       setPaymentTermPrefs(await listDocumentTypePaymentTermPreferences());
     } catch (err) {
-      setError(extractErrorMessage(err, 'Erro ao atualizar preferencia'));
+      setError(extractErrorMessage(err, 'Erro ao atualizar preferência'));
     } finally {
       setTogglingPaymentTermPrefId(null);
     }
@@ -335,9 +335,9 @@ export default function Categorias() {
         </div>
       </Modal>
 
-      <Modal open={paymentMethodsModalOpen} onClose={() => setPaymentMethodsModalOpen(false)} title="Metodos de Pagamento" maxWidthClass="max-w-2xl">
+      <Modal open={paymentMethodsModalOpen} onClose={() => setPaymentMethodsModalOpen(false)} title="Métodos de Pagamento" maxWidthClass="max-w-2xl">
         <div className="flex flex-col gap-4">
-          <p className="text-text-muted text-[13px]">Escolha quais os 12 meios de pagamento oficiais da AGT vao aparecer para seleccao na Caixa</p>
+          <p className="text-text-muted text-[13px]">Escolha quais os 12 meios de pagamento oficiais da AGT vao aparecer para seleção na Caixa</p>
           {paymentMethodsLoading ? (
             <div className="flex items-center justify-center py-8 text-text-muted text-sm">
               <Loader2 size={16} className="animate-spin mr-2" />
@@ -350,7 +350,7 @@ export default function Categorias() {
                   <div className="flex items-center gap-2.5">
                     <span className="font-mono text-[11px] text-text-muted bg-bg-inset px-1.5 py-0.5 rounded">{m.code}</span>
                     <span className="text-[13px] text-text-primary">{m.name}</span>
-                    {m.is_cash && <span className="text-[10px] font-semibold uppercase tracking-wide text-success bg-success/10 px-1.5 py-0.5 rounded">Numerario</span>}
+                    {m.is_cash && <span className="text-[10px] font-semibold uppercase tracking-wide text-success bg-success/10 px-1.5 py-0.5 rounded">Numerário</span>}
                   </div>
                   <ToggleSwitch checked={m.available_at_pos} disabled={togglingPaymentMethodId === m.id || !can('tesouraria:payment_prefs_manage')} onChange={() => handleTogglePaymentMethod(m)} />
                 </div>
@@ -360,7 +360,7 @@ export default function Categorias() {
         </div>
       </Modal>
 
-      <Modal open={paymentTermPrefsModalOpen} onClose={() => setPaymentTermPrefsModalOpen(false)} title="Condicoes de Pagamento Obrigatorias" maxWidthClass="max-w-2xl">
+      <Modal open={paymentTermPrefsModalOpen} onClose={() => setPaymentTermPrefsModalOpen(false)} title="Condições de Pagamento Obrigatorias" maxWidthClass="max-w-2xl">
         <div className="flex flex-col gap-4">
           <p className="text-text-muted text-[13px]">Escolha para quais tipos de documento e obrigatorio escolher uma condicao de pagamento (o catalogo da plataforma define o padrao)</p>
           {paymentTermPrefsLoading ? (

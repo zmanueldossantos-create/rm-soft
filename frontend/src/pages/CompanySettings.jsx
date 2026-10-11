@@ -253,7 +253,7 @@ export default function CompanySettings() {
       associations.forEach((a) => { map[a.pos_id] = a.user_id; });
       setAssocByPos(map);
     } catch (err) {
-      setError(extractErrorMessage(err, 'Erro ao carregar associacoes das caixas'));
+      setError(extractErrorMessage(err, 'Erro ao carregar associações das caixas'));
     }
   }
 
@@ -821,10 +821,10 @@ export default function CompanySettings() {
               <p className="text-[13px] font-medium text-text-primary mb-1">Controlos das unidades e embalagens</p>
               <p className="text-[12px] text-text-muted mb-3">O que o sistema faz quando uma unidade ou embalagem de um produto parece incoerente.</p>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {[['sale_unit_check_above_base', 'Mais cara que a unidade base'], ['sale_unit_check_below_cost', 'Abaixo do preco de compra'], ['sale_unit_check_same_factor', 'Mesmo conteudo que outra unidade']].map(([field, label]) => (
+                {[['sale_unit_check_above_base', 'Mais cara que a unidade base'], ['sale_unit_check_below_cost', 'Abaixo do preço de compra'], ['sale_unit_check_same_factor', 'Mesmo conteudo que outra unidade']].map(([field, label]) => (
                   <div key={field}>
                     <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">{label}</label>
-                    <Select value={saleUnitChecks[field]} onChange={(v) => setSaleUnitChecks((s) => ({ ...s, [field]: v }))} options={[{ value: 'off', label: 'Nao verificar' }, { value: 'warn', label: 'Avisar e pedir confirmacao' }, { value: 'block', label: 'Bloquear' }]} />
+                    <Select value={saleUnitChecks[field]} onChange={(v) => setSaleUnitChecks((s) => ({ ...s, [field]: v }))} options={[{ value: 'off', label: 'Não verificar' }, { value: 'warn', label: 'Avisar e pedir confirmação' }, { value: 'block', label: 'Bloquear' }]} />
                   </div>
                 ))}
               </div>
@@ -930,7 +930,7 @@ export default function CompanySettings() {
                                     <button onClick={() => openEditPos(p)} aria-label="Editar ponto de venda" className="inline-flex items-center justify-center w-7 h-7 rounded-md border border-border text-text-muted hover:text-text-primary hover:border-accent transition-colors cursor-pointer">
                                       <Pencil size={14} />
                                     </button>
-                                    <span title={p.is_default ? 'A caixa por defeito da atividade nao pode ser desativada' : undefined}><ToggleSwitch checked={p.is_active} disabled={posTogglingId === p.id || !!p.is_default} onChange={() => handleTogglePos(p.id, a.id)} /></span>
+                                    <span title={p.is_default ? 'A caixa por defeito da atividade não pode ser desativada' : undefined}><ToggleSwitch checked={p.is_active} disabled={posTogglingId === p.id || !!p.is_default} onChange={() => handleTogglePos(p.id, a.id)} /></span>
                                   </div>
                                 </div>
                               ))}
@@ -1276,12 +1276,12 @@ export default function CompanySettings() {
             className="mt-1 bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors"
           >
             {activitySaving ? <Loader2 size={17} className="animate-spin" /> : <Plus size={17} />}
-            {activitySaving ? 'A guardar...' : editingActivityId ? 'Guardar alteracoes' : 'Configurar atividade'}
+            {activitySaving ? 'A guardar...' : editingActivityId ? 'Guardar alterações' : 'Configurar atividade'}
           </button>
         </form>
       </Modal>
 
-      <Modal open={!!assocPos} onClose={() => setAssocPos(null)} title={'Associacao da caixa - ' + (assocPos?.name || '')}>
+      <Modal open={!!assocPos} onClose={() => setAssocPos(null)} title={'Associação da caixa - ' + (assocPos?.name || '')}>
         <div className="flex flex-col gap-3">
           <p className="text-[13px] text-text-muted">Define qual utilizador esta autorizado a operar esta caixa.</p>
           {assocPos && assocUserName(assocPos.id) ? (
@@ -1312,7 +1312,7 @@ export default function CompanySettings() {
             <input
               value={posForm.name} readOnly={posForm.isDefault} style={posForm.isDefault ? { opacity: 0.6, cursor: 'not-allowed' } : undefined}
               onChange={(e) => setPosForm((p) => ({ ...p, name: e.target.value }))}
-              placeholder="Ex: Caixa 1, Balcao Rua"
+              placeholder="Ex: Caixa 1, Balcão Rua"
               required
               autoFocus
               className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors"
@@ -1372,7 +1372,7 @@ export default function CompanySettings() {
             className="mt-1 bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors"
           >
             {posSaving ? <Loader2 size={17} className="animate-spin" /> : <Plus size={17} />}
-            {posSaving ? 'A guardar...' : editingPosId ? 'Guardar alteracoes' : 'Criar ponto de venda'}
+            {posSaving ? 'A guardar...' : editingPosId ? 'Guardar alterações' : 'Criar ponto de venda'}
           </button>
         </form>
       </Modal>

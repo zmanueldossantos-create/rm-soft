@@ -18,10 +18,10 @@ class PhoneLoginRequest(BaseModel):
         try:
             parsed = phonenumbers.parse(v, None)
             if not phonenumbers.is_valid_number(parsed):
-                raise ValueError("Numero de telefone invalido")
+                raise ValueError("Número de telefone inválido")
             return phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164)
         except phonenumbers.NumberParseException:
-            raise ValueError("Formato de numero de telefone invalido (esperado: +244923456789)")
+            raise ValueError("Formato de número de telefone inválido (esperado: +244923456789)")
 
 
 class TokenPair(BaseModel):
@@ -49,10 +49,10 @@ class UserCreateRequest(BaseModel):
         try:
             parsed = phonenumbers.parse(v, None)
             if not phonenumbers.is_valid_number(parsed):
-                raise ValueError("Numero de telefone invalido")
+                raise ValueError("Número de telefone inválido")
             return phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164)
         except phonenumbers.NumberParseException:
-            raise ValueError("Formato de numero de telefone invalido (esperado: +244923456789)")
+            raise ValueError("Formato de número de telefone inválido (esperado: +244923456789)")
 
 
 class UserUpdateRequest(BaseModel):
@@ -68,10 +68,10 @@ class UserUpdateRequest(BaseModel):
         try:
             parsed = phonenumbers.parse(v, None)
             if not phonenumbers.is_valid_number(parsed):
-                raise ValueError("Numero de telefone invalido")
+                raise ValueError("Número de telefone inválido")
             return phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164)
         except phonenumbers.NumberParseException:
-            raise ValueError("Formato de numero de telefone invalido (esperado: +244923456789)")
+            raise ValueError("Formato de número de telefone inválido (esperado: +244923456789)")
 
 
 class UserResponse(BaseModel):

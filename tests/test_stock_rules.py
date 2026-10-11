@@ -49,7 +49,7 @@ async def test_a_warehouse_with_blocked_exits_refuses_a_sale(db, company_with_es
     ctx = company_with_essentials
     product = await _product(db, ctx, "SAI-BLOQ", stock=10)
     await _freeze(db, ctx, saidas=True)
-    with pytest.raises(StockBlockedError, match="Saidas bloqueadas"):
+    with pytest.raises(StockBlockedError, match="Saídas bloqueadas"):
         await deduct_stock_for_sale(db, company_id=ctx["company"].id, warehouse_id=ctx["activity_warehouse"].id,
                                     product_id=product.id, quantity=1, reference="FT TEST/2")
 
@@ -78,6 +78,6 @@ async def test_an_article_not_available_at_the_pos_is_refused_at_the_caixa(db, c
     ctx = company_with_essentials
     hidden = await _product(db, ctx, "NAO-POS", stock=10, not_available_pos=True)
     normal = await _product(db, ctx, "SIM-POS", stock=10)
-    with pytest.raises(ProductNotFoundError, match="nao esta disponivel"):
+    with pytest.raises(ProductNotFoundError, match="não está disponível"):
         await _ensure_sellable_at_pos(db, ctx["company"].id, [{"product_id": hidden.id, "quantity": 1}])
     await _ensure_sellable_at_pos(db, ctx["company"].id, [{"product_id": str(normal.id), "quantity": 1}])

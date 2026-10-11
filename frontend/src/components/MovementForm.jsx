@@ -68,9 +68,9 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection }) {
           else failed.push(label + ' (' + extractErrorMessage(result.reason, 'erro desconhecido') + ')');
         });
         if (failed.length > 0 && results.every((r) => r.status === 'rejected' && !r.reason?.response)) {
-          setFormError('Servidor inacessivel: nao foi possivel carregar o formulario. Verifique se o servidor esta ativo e volte a abrir.');
+          setFormError('Servidor inacessivel: não foi possível carregar o formulário. Verifique se o servidor esta ativo e volte a abrir.');
         } else if (failed.length > 0) {
-          setFormError('Nao foi possivel carregar: ' + failed.join(', ') + '. Feche e volte a abrir o formulario.');
+          setFormError('Não foi possível carregar: ' + failed.join(', ') + '. Feche e volte a abrir o formulário.');
         }
       } finally {
         setLoaded(true);
@@ -124,7 +124,7 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection }) {
   function handleScan() {
     const found = lookupArticle(scanCode);
     if (!found) {
-      setScanError('Codigo nao encontrado: ' + scanCode);
+      setScanError('Código não encontrado: ' + scanCode);
       return;
     }
     const { product, saleUnit } = found;
@@ -239,7 +239,7 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection }) {
           setExcelError(skippedMessage(notFound));
         }
       } catch {
-        setExcelError('Nao foi possivel ler o ficheiro Excel.');
+        setExcelError('Não foi possível ler o ficheiro Excel.');
       }
     };
     reader.readAsArrayBuffer(file);
@@ -254,7 +254,7 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection }) {
     e.preventDefault();
     setFormError('');
     if (!resolvedMovementType) {
-      setFormError('Nenhum tipo de movimento configurado para esta operacao - contacte o administrador.');
+      setFormError('Nenhum tipo de movimento configurado para esta operação - contacte o administrador.');
       return;
     }
     setSaving(true);
@@ -337,7 +337,7 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection }) {
 
       <div className="flex items-center gap-2 flex-wrap">
         <input ref={excelInputRef} type="file" accept=".xlsx,.xls" onChange={handleExcelFileChange} className="hidden" />
-        <input value={scanCode} onChange={(e) => { setScanCode(e.target.value); setScanError(''); }} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleScan(); } }} autoFocus placeholder="Ler codigo de barras" className="flex-1 min-w-[180px] bg-bg-inset border border-border rounded-md px-3 py-2 text-[13px] text-text-primary font-mono outline-none focus:border-accent" />
+        <input value={scanCode} onChange={(e) => { setScanCode(e.target.value); setScanError(''); }} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleScan(); } }} autoFocus placeholder="Ler código de barras" className="flex-1 min-w-[180px] bg-bg-inset border border-border rounded-md px-3 py-2 text-[13px] text-text-primary font-mono outline-none focus:border-accent" />
 <button type="button" onClick={() => excelInputRef.current?.click()} title="Importar ficheiro Excel" className="flex items-center gap-1.5 border border-border hover:border-accent text-text-primary text-[13px] px-3 py-2 rounded-md transition-colors cursor-pointer">
           <Upload size={15} /> Importar Excel
         </button>
@@ -395,7 +395,7 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection }) {
                     <input type="number" step="0.01" min="0" value={line.purchase_price} onChange={(e) => handleManualLineEdit(idx, 'purchase_price', e.target.value)} className="w-full bg-bg-inset border border-border rounded-md px-2.5 py-1.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors text-right" />
 
                     {isEntrada && parseFloat(line.sale_price) > 0 && parseFloat(line.purchase_price) > parseFloat(line.sale_price) && (
-                      <p className="text-[10.5px] text-amber-500 mt-1">{'Pre\u00e7o de compra acima do pre\u00e7o de venda'}</p>
+                      <p className="text-[10.5px] text-amber-500 mt-1">{'Pré\u00e7o de compra acima do pre\u00e7o de venda'}</p>
                     )}
                   </td>
                   <td className="px-4 py-2.5 w-36">

@@ -22,7 +22,7 @@ class FiscalRegimeCreateRequest(BaseModel):
     def validate_name(cls, v: str) -> str:
         cleaned = " ".join(v.split())
         if not cleaned:
-            raise ValueError("Nome do regime nao pode estar vazio")
+            raise ValueError("Nome do regime não pode estar vazio")
         return cleaned
 
 
@@ -41,7 +41,7 @@ class FiscalRegimeUpdateRequest(BaseModel):
     def validate_name(cls, v: str) -> str:
         cleaned = " ".join(v.split())
         if not cleaned:
-            raise ValueError("Nome do regime nao pode estar vazio")
+            raise ValueError("Nome do regime não pode estar vazio")
         return cleaned
 
 

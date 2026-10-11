@@ -17,7 +17,7 @@ EMAIL_PATTERN = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 def _validate_email(v: str) -> str:
     cleaned = v.strip()
     if not EMAIL_PATTERN.match(cleaned):
-        raise ValueError("Email invalido - formato esperado: nome@dominio.com")
+        raise ValueError("Email inválido - formato esperado: nome@dominio.com")
     return cleaned.lower()
 
 
@@ -25,10 +25,10 @@ def _validate_phone_required(v: str) -> str:
     try:
         parsed = phonenumbers.parse(v, None)
         if not phonenumbers.is_valid_number(parsed):
-            raise ValueError("Numero de telefone invalido")
+            raise ValueError("Número de telefone inválido")
         return phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164)
     except phonenumbers.NumberParseException:
-        raise ValueError("Formato de numero de telefone invalido (esperado: +244923456789)")
+        raise ValueError("Formato de número de telefone inválido (esperado: +244923456789)")
 
 
 def _validate_optional_phone(v: str | None) -> str | None:

@@ -13,7 +13,7 @@ from app.services.invoice_service import create_credit_note, create_invoice
 @pytest.mark.asyncio
 async def test_credit_note_lines_keep_the_service(db, company_with_essentials):
     ctx = company_with_essentials
-    service = Service(company_id=ctx["company"].id, code="SRV-NC", name="Servico NC", price=1000.0, vat_id=ctx["vat_nor"].id)
+    service = Service(company_id=ctx["company"].id, code="SRV-NC", name="Serviço NC", price=1000.0, vat_id=ctx["vat_nor"].id)
     db.add(service)
     await db.commit()
     await db.refresh(service)
@@ -29,7 +29,7 @@ async def test_credit_note_lines_keep_the_service(db, company_with_essentials):
 
     credit_note = await create_credit_note(
         db, ctx["company"].id, ctx["activity"].id, reference_invoice_id=invoice_id,
-        credit_note_reason="ANL", credit_note_cause="Cliente desistiu do servico",
+        credit_note_reason="ANL", credit_note_cause="Cliente desistiu do serviço",
         lines_input=[{"invoice_line_id": original_line_id, "quantity": 2}],
     )
     credit_note_id = credit_note.id

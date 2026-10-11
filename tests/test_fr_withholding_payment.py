@@ -21,7 +21,7 @@ async def _payments(db, invoice_id):
 async def test_fr_with_withholding_is_paid_net_of_the_withholding(db, company_with_essentials):
     ctx = company_with_essentials
     company_id, activity_id, numerario_id = ctx["company"].id, ctx["activity"].id, ctx["pm_numerario"].id
-    tax = WithholdingTax(name="Retencao FR", rate=6.5, tax_type="II")
+    tax = WithholdingTax(name="Retenção FR", rate=6.5, tax_type="II")
     db.add(tax)
     customer = Customer(company_id=company_id, name="Empresa PJ", nif="5000111888", legal_person_type=LegalPersonType.JURIDICA)
     db.add(customer)
@@ -29,7 +29,7 @@ async def test_fr_with_withholding_is_paid_net_of_the_withholding(db, company_wi
     await db.refresh(tax)
     await db.refresh(customer)
     customer_id = customer.id
-    service = Service(company_id=company_id, code="SRV-FRR", name="Servico FR retencao", price=1000.0,
+    service = Service(company_id=company_id, code="SRV-FRR", name="Serviço FR retenção", price=1000.0,
                       vat_id=ctx["vat_nor"].id, withholding_tax_id=tax.id)
     db.add(service)
     await db.commit()

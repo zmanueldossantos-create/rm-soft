@@ -65,7 +65,7 @@ async def test_only_one_soft_closed_period_at_a_time(db, company_with_essentials
     company_id = company_with_essentials["company"].id
     await _close_fixture_periods(db, company_id)
     _, (september, october) = await _own_year(db, company_id, months=[(9, "FECHO_PARCIAL"), (10, "ABERTO")])
-    with pytest.raises(InvalidFiscalOperationError, match="ainda esta fechado parcialmente"):
+    with pytest.raises(InvalidFiscalOperationError, match="ainda está fechado parcialmente"):
         await partial_close_fiscal_period(db, company_id, october.id)
     closed = await close_fiscal_period(db, company_id, september.id)
     assert closed.status == "FECHADO"

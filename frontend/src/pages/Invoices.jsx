@@ -597,7 +597,7 @@ export default function Invoices() {
                       <td className="px-4 py-3 whitespace-nowrap">
                         {inv.invoice_type === 'PRO_FORMA' ? (
                           <span className="text-[11px] font-semibold uppercase tracking-wide px-2.5 py-1 rounded bg-text-muted/10 text-text-muted">
-                            Nao Fiscal
+                            Não Fiscal
                           </span>
                         ) : (
                           <div className="flex items-center gap-2">
@@ -648,8 +648,8 @@ export default function Invoices() {
                             { label: 'Ticket 80mm', icon: <Receipt size={14} />, onClick: () => openPdfViewer(inv.id, 'thermal', 'RM SOFT - ' + inv.series + '-' + inv.number + ' (Ticket)') },
                             { label: 'A4', icon: <Printer size={14} />, onClick: () => openPdfViewer(inv.id, 'a4', 'RM SOFT - ' + inv.series + '-' + inv.number + ' (A4)') },
                             ...((ruleOf(inv.invoice_type, 'accepts_credit_note') || ruleOf(inv.invoice_type, 'accepts_debit_note')) && inv.document_status !== 'ANULADO' ? [
-                              ...(ruleOf(inv.invoice_type, 'accepts_credit_note') && inv.document_status !== 'RECTIFICADO' ? [{ perm: 'invoices:credit_note', label: 'Emitir Nota de Credito', icon: <RotateCcw size={14} />, onClick: () => openNcModalFromRow(inv.id) }] : []),
-                              ...(ruleOf(inv.invoice_type, 'accepts_debit_note') ? [{ perm: 'invoices:debit_note', label: 'Emitir Nota de Debito', icon: <FilePlus size={14} />, onClick: () => openNdModalFromRow(inv.id) }] : []),
+                              ...(ruleOf(inv.invoice_type, 'accepts_credit_note') && inv.document_status !== 'RECTIFICADO' ? [{ perm: 'invoices:credit_note', label: 'Emitir Nota de Crédito', icon: <RotateCcw size={14} />, onClick: () => openNcModalFromRow(inv.id) }] : []),
+                              ...(ruleOf(inv.invoice_type, 'accepts_debit_note') ? [{ perm: 'invoices:debit_note', label: 'Emitir Nota de Débito', icon: <FilePlus size={14} />, onClick: () => openNdModalFromRow(inv.id) }] : []),
                               ...(ruleOf(inv.invoice_type, 'accepts_receipt') && Number(inv.amount_due || 0) > 0.005 ? [{ perm: 'invoices:receipt', label: 'Emitir Recibo', icon: <Receipt size={14} />, onClick: () => openRcModalFromRow(inv.id) }] : []),
                             ] : []),
                             ...(isConvertible(inv.invoice_type) && !inv.converted_to_invoice_id ? [
@@ -871,7 +871,7 @@ export default function Invoices() {
                   disabled={!can('invoices:credit_note')}
                   className="flex items-center gap-1.5 border border-border hover:border-danger text-danger text-sm px-3.5 py-2 rounded-md transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  <RotateCcw size={14} /> Emitir Nota de Credito
+                  <RotateCcw size={14} /> Emitir Nota de Crédito
                 </button>
               )}
               {ruleOf(detailInvoice.invoice_type, 'accepts_debit_note') && detailInvoice.document_status !== 'ANULADO' && (
@@ -881,7 +881,7 @@ export default function Invoices() {
                   disabled={!can('invoices:debit_note')}
                   className="flex items-center gap-1.5 border border-border hover:border-accent text-text-primary text-sm px-3.5 py-2 rounded-md transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  <FilePlus size={14} /> Emitir Nota de Debito
+                  <FilePlus size={14} /> Emitir Nota de Débito
                 </button>
               )}
               {ruleOf(detailInvoice.invoice_type, 'accepts_receipt') && detailInvoice.document_status !== 'ANULADO' && Number(detailInvoice.amount_due || 0) > 0.005 && (

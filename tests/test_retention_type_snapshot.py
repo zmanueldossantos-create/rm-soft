@@ -17,7 +17,7 @@ async def _line(db, invoice_id):
 
 
 async def _issue(db, ctx, customer_id, code, tax):
-    service = Service(company_id=ctx["company"].id, code=code, name="Servico " + code, price=1000.0,
+    service = Service(company_id=ctx["company"].id, code=code, name="Serviço " + code, price=1000.0,
                       vat_id=ctx["vat_nor"].id, withholding_tax_id=tax.id)
     db.add(service)
     await db.commit()
@@ -33,8 +33,8 @@ async def _issue(db, ctx, customer_id, code, tax):
 @pytest.mark.asyncio
 async def test_retention_type_is_copied_on_the_line_and_on_its_credit_note(db, company_with_essentials):
     ctx = company_with_essentials
-    typed = WithholdingTax(name="Retencao com tipo", rate=6.5, tax_type="II")
-    untyped = WithholdingTax(name="Retencao sem tipo", rate=5)
+    typed = WithholdingTax(name="Retenção com tipo", rate=6.5, tax_type="II")
+    untyped = WithholdingTax(name="Retenção sem tipo", rate=5)
     db.add_all([typed, untyped])
     customer = Customer(company_id=ctx["company"].id, name="Empresa PJ", nif="5000111444", legal_person_type=LegalPersonType.JURIDICA)
     db.add(customer)
@@ -51,7 +51,7 @@ async def test_retention_type_is_copied_on_the_line_and_on_its_credit_note(db, c
 
     credit_note = await create_credit_note(
         db, ctx["company"].id, ctx["activity"].id, reference_invoice_id=typed_invoice_id,
-        credit_note_reason="RTF", credit_note_cause="Correcao de teste",
+        credit_note_reason="RTF", credit_note_cause="Correção de teste",
         lines_input=[{"invoice_line_id": line_id, "quantity": 1}],
     )
     credit_note_id = credit_note.id

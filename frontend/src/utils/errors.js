@@ -6,7 +6,7 @@
 export function extractErrorMessage(err, fallback) {
   // No answer at all (server stopped, network down): say so instead of each screen's generic message.
   if (err && !err.response && err.request) {
-    return 'Servidor inacessivel - verifique a ligacao ou se o servidor esta ativo';
+    return 'Servidor inacessível - verifique a ligação ou se o servidor esta ativo';
   }
   const detail = err.response?.data?.detail;
 

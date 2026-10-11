@@ -22,5 +22,5 @@ async def test_a_point_of_sale_with_an_open_session_cannot_be_deactivated(db, co
     company = setup["company"]
     pos = await create_point_of_sale(db, company.id, setup["activity"].id, "Caixa Teste Aberta")
     await open_session(db, company.id, pos.id, setup["gestor"], opening_amount=0)
-    with pytest.raises(PosStateError, match="Feche a sessao"):
+    with pytest.raises(PosStateError, match="Feche a sessão"):
         await toggle_pos_status(db, company.id, pos.id)

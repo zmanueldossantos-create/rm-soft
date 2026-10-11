@@ -46,7 +46,7 @@ async def _check_nif_available(
     if exclude_id is not None:
         nif_query = nif_query.where(Customer.id != exclude_id)
     if (await db.execute(nif_query)).scalar_one_or_none() is not None:
-        raise CustomerAlreadyExistsError("Ja existe um cliente registado com este NIF")
+        raise CustomerAlreadyExistsError("Já existe um cliente registado com este NIF")
 
 
 async def suggest_next_customer_code(db: AsyncSession, company_id: uuid.UUID, prefix: str = "C") -> str:
@@ -127,7 +127,7 @@ async def get_customer_or_raise(db: AsyncSession, company_id: uuid.UUID, custome
     )
     customer = result.scalar_one_or_none()
     if customer is None:
-        raise CustomerNotFoundError("Cliente nao encontrado")
+        raise CustomerNotFoundError("Cliente não encontrado")
     return customer
 
 
@@ -222,7 +222,7 @@ async def add_customer_bank_link(
         )
     )
     if account_result.scalar_one_or_none() is None:
-        raise BankLinkNotFoundError("Conta bancaria nao encontrada")
+        raise BankLinkNotFoundError("Conta bancária não encontrada")
 
     link = CustomerBankAccountLink(customer_id=customer_id, company_bank_account_id=company_bank_account_id)
     db.add(link)
@@ -240,6 +240,6 @@ async def remove_customer_bank_link(db: AsyncSession, company_id: uuid.UUID, lin
     )
     link = result.scalar_one_or_none()
     if link is None:
-        raise BankLinkNotFoundError("Associacao de conta bancaria nao encontrada")
+        raise BankLinkNotFoundError("Associação de conta bancária não encontrada")
     await db.delete(link)
     await db.commit()

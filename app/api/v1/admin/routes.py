@@ -359,7 +359,7 @@ async def get_gestor_for_company(
     """Returns the company's single GESTOR user - used to target a password reset."""
     gestor = await get_company_gestor(db, company_id)
     if gestor is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gestor nao encontrado para esta empresa")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gestor não encontrado para esta empresa")
     return gestor
 
 
