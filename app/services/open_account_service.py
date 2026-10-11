@@ -44,22 +44,38 @@ class ItemNotFoundError(Exception):
 async def open_account(
     db: AsyncSession, company_id: uuid.UUID, activity_id: uuid.UUID, pos_id: uuid.UUID | None, opened_by_user_id: uuid.UUID,
     label: str, resource_id: uuid.UUID | None = None, customer_id: uuid.UUID | None = None,
-    notes: str | None = None,
+    notes: str | None = None, booking_id: uuid.UUID | None = None,
 ) -> OpenAccount:
     # No till is chosen to open an account: it belongs to the activity. pos_id only records where it was opened
     # (the activity's default till when none is given); the till that closes it is the one that cashes it.
+    if resource_id is not None and booking_id is None:
+        await _ensure_not_a_stay_resource(db, company_id, resource_id)
     if pos_id is None:
         pos_id = await _default_pos_of(db, company_id, activity_id)
     else:
         await get_pos_or_raise(db, company_id, pos_id)
     account = OpenAccount(
         company_id=company_id, activity_id=activity_id, pos_id=pos_id, resource_id=resource_id,
-        customer_id=customer_id, label=label, notes=notes, opened_by_user_id=opened_by_user_id,
+        customer_id=customer_id, label=label, notes=notes, opened_by_user_id=opened_by_user_id, booking_id=booking_id,
     )
     db.add(account)
     await db.commit()
     await db.refresh(account)
     return account
+
+
+async def _is_stay_resource(db: AsyncSession, resource) -> bool:
+    """A resource whose type requires a service (a hotel room: the stay always has a rate) is billed through a
+    booking - its account opens at check-in, with the room rate, never as a bare tab."""
+    from app.models.resource_type_catalog import ResourceTypeCatalog
+    resource_type = await db.get(ResourceTypeCatalog, resource.resource_type_id)
+    return bool(resource_type is not None and resource_type.requires_service)
+
+
+async def _ensure_not_a_stay_resource(db: AsyncSession, company_id: uuid.UUID, resource_id: uuid.UUID) -> None:
+    resource = await get_resource_or_raise(db, company_id, resource_id)
+    if await _is_stay_resource(db, resource):
+        raise InvalidLineError(f"{resource.name}: a conta de um quarto abre-se no check-in da reserva")
 
 
 async def get_account_or_raise(db: AsyncSession, company_id: uuid.UUID, account_id: uuid.UUID) -> OpenAccount:
@@ -348,6 +364,8 @@ async def transfer_lines(
                 raise InvalidTransferError("Este recurso esta inativo")
             if resource.activity_id != source.activity_id:
                 raise InvalidTransferError("O recurso de destino pertence a outra atividade")
+            if await _is_stay_resource(db, resource):
+                raise InvalidTransferError(f"{resource.name}: a conta de um quarto abre-se no check-in da reserva")
             resource_id = resource.id
             label = label or resource.name
         if not label:

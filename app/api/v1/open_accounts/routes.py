@@ -40,6 +40,8 @@ async def post_open_account(
         )
     except PosNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except InvalidLineError as e:  # a hotel room: its account opens at check-in
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
 
 
 @router.get("", response_model=list[OpenAccountResponse])

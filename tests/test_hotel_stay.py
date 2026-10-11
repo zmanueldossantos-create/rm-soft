@@ -11,13 +11,15 @@ from app.models.resource import Resource
 from app.models.resource_type_catalog import ResourceTypeCatalog
 from app.models.service import Service
 from app.services.booking_service import (
-    BookingNotEditableError, BookingOverlapError, create_booking, update_booking_status,
+    BookingNotEditableError, BookingOverlapError, create_booking, list_bookings, update_booking_status,
 )
 from app.services.cash_session_service import open_session
 from app.services.hotel_service import (
     LUANDA, InvalidStayStateError, StayHasUnpaidAccountError, check_in, check_out, extend_stay,
 )
-from app.services.open_account_service import close_account, list_account_lines
+from app.services.open_account_service import (
+    InvalidLineError, InvalidTransferError, add_line, close_account, list_account_lines, open_account, transfer_lines,
+)
 
 # Tomorrow 14:00 in Luanda - the usual check-in hour, away from midnight.
 BASE = (datetime.now(LUANDA) + timedelta(days=1)).replace(hour=14, minute=0, second=0, microsecond=0)
@@ -156,3 +158,46 @@ async def test_only_a_pending_or_confirmed_booking_checks_in(db, company_with_es
     await update_booking_status(db, ctx["company"].id, booking.id, BookingStatus.CANCELADA)
     with pytest.raises(InvalidStayStateError):
         await check_in(db, ctx["company"].id, booking.id, ctx["gestor"])
+
+
+@pytest.mark.asyncio
+async def test_a_room_account_opens_only_at_check_in(db, company_with_essentials):
+    """Opening a bare tab on a room would skip the booking and its rate: refused. A table still opens one."""
+    ctx = company_with_essentials
+    room, _, _ = await _hotel(db, ctx)
+    with pytest.raises(InvalidLineError, match="check-in"):
+        await open_account(db, ctx["company"].id, ctx["activity"].id, ctx["pos"].id, ctx["gestor"].id, "Quarto 101",
+                           resource_id=room.id)
+    table_type = ResourceTypeCatalog(company_id=ctx["company"].id, name="Mesa")
+    db.add(table_type)
+    await db.flush()
+    table = Resource(company_id=ctx["company"].id, activity_id=ctx["activity"].id, resource_type_id=table_type.id, name="Mesa 1")
+    db.add(table)
+    await db.commit()
+    account = await open_account(db, ctx["company"].id, ctx["activity"].id, ctx["pos"].id, ctx["gestor"].id, "Mesa 1",
+                                 resource_id=table.id)
+    assert account.status == OpenAccountStatus.ABERTA
+
+
+@pytest.mark.asyncio
+async def test_lines_are_never_moved_onto_a_room(db, company_with_essentials):
+    ctx = company_with_essentials
+    room, night, _ = await _hotel(db, ctx)
+    tab = await open_account(db, ctx["company"].id, ctx["activity"].id, ctx["pos"].id, ctx["gestor"].id, "Balcão")
+    line = await add_line(db, ctx["company"].id, tab.id, ctx["gestor"].id, 1, service_id=night.id)
+    with pytest.raises(InvalidTransferError, match="check-in"):
+        await transfer_lines(db, ctx["company"].id, tab.id, ctx["gestor"].id, [{"line_id": line.id, "quantity": 1}],
+                             target_resource_id=room.id)
+
+
+@pytest.mark.asyncio
+async def test_a_stay_in_progress_is_listed_whatever_the_dates(db, company_with_essentials):
+    """The guest is still in the room after the planned end: the day's list keeps showing the stay."""
+    ctx = company_with_essentials
+    room, night, _ = await _hotel(db, ctx)
+    late, _, _ = await _stay(db, ctx, room, night, BASE - timedelta(days=4), BASE - timedelta(days=3))
+    done = await create_booking(db, ctx["company"].id, room.id, ctx["gestor"].id,
+                                BASE - timedelta(days=6), BASE - timedelta(days=5), service_id=night.id)
+    listed = await list_bookings(db, ctx["company"].id, date_from=BASE, date_to=BASE + timedelta(days=1))
+    assert [b.id for b in listed] == [late.id]
+    assert done.id not in [b.id for b in listed]

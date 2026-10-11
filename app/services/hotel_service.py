@@ -146,11 +146,8 @@ async def check_in(
 
     account = await open_account(
         db, company_id, resource.activity_id, pos.id, checking_in_user.id,
-        label=resource.name, resource_id=resource.id, customer_id=booking.customer_id,
+        label=resource.name, resource_id=resource.id, customer_id=booking.customer_id, booking_id=booking.id,
     )
-    account.booking_id = booking.id
-    await db.commit()
-    await db.refresh(account)
 
     if booking.service_id is not None:
         service_result = await db.execute(select(Service).where(Service.id == booking.service_id))

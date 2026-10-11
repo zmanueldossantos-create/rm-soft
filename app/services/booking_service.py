@@ -124,13 +124,18 @@ async def list_bookings(
     db: AsyncSession, company_id: uuid.UUID, resource_id: uuid.UUID | None = None,
     date_from: datetime | None = None, date_to: datetime | None = None,
 ) -> list[Booking]:
+    """The bookings overlapping [date_from, date_to] - plus every stay in progress (EM_CURSO), whatever its dates:
+    a guest still in the room must never drop out of the day's list because the planned end has passed."""
     query = select(Booking).where(Booking.company_id == company_id)
     if resource_id is not None:
         query = query.where(Booking.resource_id == resource_id)
+    in_range = []
     if date_from is not None:
-        query = query.where(Booking.ends_at >= date_from)
+        in_range.append(Booking.ends_at >= date_from)
     if date_to is not None:
-        query = query.where(Booking.starts_at <= date_to)
+        in_range.append(Booking.starts_at <= date_to)
+    if in_range:
+        query = query.where(or_(and_(*in_range), Booking.status == BookingStatus.EM_CURSO))
     result = await db.execute(query.order_by(Booking.starts_at))
     return list(result.scalars().all())
 

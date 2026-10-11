@@ -16,7 +16,8 @@ import { listPaymentMethodPreferences } from '../api/tesouraria';
 import { Wallet, Plus, Minus, Trash2, Loader2, Search, X, ShoppingCart, LogOut, CheckCircle2, FileSearch, ArrowLeftRight, Coins, Receipt, Printer, FileText } from 'lucide-react';
 import Modal from '../components/Modal';
 import OpenAccountsPanel from '../components/OpenAccountsPanel';
-import { Wallet2 as OpenAccountsIcon } from 'lucide-react';
+import { Wallet2 as OpenAccountsIcon, CalendarClock } from 'lucide-react';
+import { ReservasPanel } from './Reservas';
 import Select from '../components/Select';
 import { listActivities, listPointsOfSale } from '../api/activity';
 import { createCustomer } from '../api/customers';
@@ -681,6 +682,7 @@ export default function Caixa() {
   // refused at once when the warehouse allows no negative stock (the server's rule still decides at checkout).
   const [posStock, setPosStock] = useState(null);
   const [openAccountsModalOpen, setOpenAccountsModalOpen] = useState(false);
+  const [reservasModalOpen, setReservasModalOpen] = useState(false);
   const stockLevels = posStock?.stock || {}; // shown on the product cards
   function refreshPosStock(posId) {
     if (!posId) {
@@ -1152,7 +1154,8 @@ export default function Caixa() {
 
   // Sidebar drawers: one at a time. The open one is the active icon; clicking it again closes it.
   const activeSideDrawer = proFormaModalOpen ? 'docs' : articlesModalOpen ? 'articles' : moedeiroModalOpen ? 'moedeiro'
-    : movementModalOpen ? 'movement' : dailyReportModalOpen ? 'report' : openAccountsModalOpen ? 'accounts' : null;
+    : movementModalOpen ? 'movement' : dailyReportModalOpen ? 'report' : openAccountsModalOpen ? 'accounts'
+    : reservasModalOpen ? 'reservas' : null;
   function closeSideDrawers() {
     setProFormaModalOpen(false);
     setArticlesModalOpen(false);
@@ -1160,6 +1163,7 @@ export default function Caixa() {
     setMovementModalOpen(false);
     setDailyReportModalOpen(false);
     setOpenAccountsModalOpen(false);
+    setReservasModalOpen(false);
   }
   function toggleSideDrawer(key, open) {
     const wasActive = activeSideDrawer === key;
@@ -1196,6 +1200,13 @@ export default function Caixa() {
           <OpenAccountsIcon size={18} className="text-accent" />
           <span className="pointer-events-none absolute left-full ml-2 whitespace-nowrap rounded-md bg-bg-elevated border border-border px-2.5 py-1 text-[12px] text-text-primary shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-50">Contas abertas</span>
         </button>
+        {/* Reservations of the till's activity (hotel reception, spa...): only where the sector has bookings. */}
+        {can('bookings:view') && (
+        <button onClick={() => toggleSideDrawer('reservas', () => setReservasModalOpen(true))} disabled={!selectedPosId} className={'group relative w-11 h-11 flex items-center justify-center rounded-lg border hover:border-accent hover:bg-accent/5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer ' + (activeSideDrawer === 'reservas' ? 'border-accent bg-accent/5' : 'border-accent/20 bg-bg-inset')}>
+          <CalendarClock size={18} className="text-accent" />
+          <span className="pointer-events-none absolute left-full ml-2 whitespace-nowrap rounded-md bg-bg-elevated border border-border px-2.5 py-1 text-[12px] text-text-primary shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-50">Reservas</span>
+        </button>
+        )}
       </aside>
       <div className="flex items-center justify-between mb-1 flex-wrap gap-3">
         <h2 className="font-display font-semibold text-[22px] text-text-primary flex items-center gap-2.5">
@@ -2393,6 +2404,13 @@ export default function Caixa() {
               ))}
           </div>
         </div>
+      </Modal>
+
+      {/* Reservations of this till's activity: book, check in (billed through this till) - see ReservasPanel. */}
+      <Modal variant="drawer" drawerLeftClass="left-16" open={reservasModalOpen} onClose={() => setReservasModalOpen(false)} title="Reservas" maxWidthClass="max-w-5xl">
+        {reservasModalOpen && selectedPosId && (
+          <ReservasPanel posId={selectedPosId} activityId={pointsOfSale.find((p) => p.id === selectedPosId)?.activity_id} />
+        )}
       </Modal>
 
       {/* Open accounts of this till: open, add, transfer and close them without leaving the till. */}

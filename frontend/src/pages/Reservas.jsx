@@ -81,7 +81,19 @@ function formatDayLabel(dateStr) {
   return WEEKDAYS[(dow + 6) % 7] + ' ' + pad2(d) + '/' + pad2(m);
 }
 
+// The reservations - a page for the manager, and a drawer in the till (Caixa) for the reception: same list, same
+// forms, same actions. In the till (posId given) the activity is the till's own and a check-in bills the stay through
+// that till, so there is never a till to pick.
 export default function Reservas() {
+  return (
+    <main className="max-w-[1600px] mx-auto px-4 sm:px-6 md:px-8 py-6 sm:py-9">
+      <ReservasPanel />
+    </main>
+  );
+}
+
+export function ReservasPanel({ posId = null, activityId = null }) {
+  const embedded = !!posId;
   const can = useCan();
   const [activities, setActivities] = useState([]);
   const [selectedActivityId, setSelectedActivityId] = useState('');
@@ -154,8 +166,9 @@ export default function Reservas() {
     listActivities().then((data) => {
       const active = data.filter((a) => a.is_active);
       setActivities(active);
-      // One active activity: selected for the user. Otherwise the choice stays free.
-      if (active.length === 1) setSelectedActivityId(active[0].id);
+      // In the till: the till's own activity. Otherwise one active activity is selected for the user, else the choice stays free.
+      if (activityId) setSelectedActivityId(activityId);
+      else if (active.length === 1) setSelectedActivityId(active[0].id);
     }).catch((err) => setError(extractErrorMessage(err, 'Erro ao carregar atividades')));
     listServices().then((data) => setServices(data.filter((s) => s.is_active))).catch(() => {});
     listResourceTypes().then(setResourceTypesCatalog).catch(() => {});
@@ -341,7 +354,7 @@ export default function Reservas() {
     setCheckActionId(bookingId);
     setError('');
     try {
-      await checkIn(bookingId);
+      await checkIn(bookingId, posId);
       await loadBookings();
     } catch (err) {
       if (err.response?.status === 409 && (err.response?.data?.detail || '').includes('mais de uma caixa aberta')) {
@@ -640,24 +653,26 @@ export default function Reservas() {
   }
 
   return (
-    <main className="max-w-[1600px] mx-auto px-4 sm:px-6 md:px-8 py-6 sm:py-9">
-      <div className="flex items-center justify-between mb-1 flex-wrap gap-3">
+    <div>
+      <div className={'flex items-center justify-between flex-wrap gap-3 ' + (embedded ? 'mb-4' : 'mb-1')}>
+        {!embedded && (
         <h2 className="font-display font-semibold text-[22px] text-text-primary flex items-center gap-2.5">
           <CalendarClock size={22} className="text-accent" />
           Reservas
         </h2>
+        )}
         <button
           onClick={openCreateForm}
           disabled={resources.length === 0 || !can('bookings:create')}
-          className="flex items-center gap-2 bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-medium text-sm px-4 py-2 rounded-md transition-colors cursor-pointer"
+          className="ml-auto flex items-center gap-2 bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-medium text-sm px-4 py-2 rounded-md transition-colors cursor-pointer"
         >
           <Plus size={16} />
           Nova reserva
         </button>
       </div>
-      <p className="text-text-muted text-sm mb-6">Gerir reservas de quartos, praticiens, mesas ou qualquer outro recurso</p>
+      {!embedded && <p className="text-text-muted text-sm mb-6">Gerir reservas de quartos, praticiens, mesas ou qualquer outro recurso</p>}
 
-      {activities.length > 1 && (
+      {activities.length > 1 && !activityId && (
         <div className="flex items-center gap-2 mb-4 flex-wrap">
           {activities.map((a) => (
             <button
@@ -688,7 +703,7 @@ export default function Reservas() {
         </button>
       </div>
 
-      {!selectedActivityId && activities.length > 1 && (
+      {!selectedActivityId && activities.length > 1 && !activityId && (
         <p className="text-text-muted text-[13px] mb-4">Selecione uma atividade para ver os recursos e as reservas</p>
       )}
 
@@ -959,6 +974,6 @@ export default function Reservas() {
           </button>
         </form>
       </Modal>
-    </main>
+    </div>
   );
 }
