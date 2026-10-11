@@ -1,6 +1,7 @@
 """Hotel stay (point 2, part A): the room rate charged as long as the stay lasts, the money only at the till
 (closing the stay's account concludes the booking), the check-out only for a stay with nothing to pay, the
 extension of a stay in progress, and no manual status change that would free a room with an unpaid account."""
+import uuid
 from datetime import datetime, timedelta
 
 import pytest
@@ -17,8 +18,10 @@ from app.services.cash_session_service import open_session
 from app.services.hotel_service import (
     LUANDA, InvalidStayStateError, StayHasUnpaidAccountError, check_in, check_out, extend_stay,
 )
+from app.schemas.booking import BookingResponse
 from app.services.open_account_service import (
-    InvalidLineError, InvalidTransferError, add_line, close_account, list_account_lines, open_account, transfer_lines,
+    InvalidLineError, InvalidTransferError, add_line, close_account, list_account_lines, open_account, remove_line,
+    transfer_lines, update_line_quantity,
 )
 
 # Tomorrow 14:00 in Luanda - the usual check-in hour, away from midnight.
@@ -121,7 +124,7 @@ async def test_extending_a_stay_recomputes_its_room_rate_line(db, company_with_e
     room, night, _ = await _hotel(db, ctx)
     booking, account, quantity = await _stay(db, ctx, room, night, BASE, BASE + timedelta(days=1))
     assert quantity == 1
-    booking = await extend_stay(db, ctx["company"].id, booking.id, BASE + timedelta(days=3))
+    booking = await extend_stay(db, ctx["company"].id, booking.id, (BASE + timedelta(days=3)).replace(tzinfo=None))  # as the screen sends it
     lines = await list_account_lines(db, account.id)
     assert float(lines[0].quantity) == 3
     assert booking.ends_at == BASE + timedelta(days=3)
@@ -201,3 +204,51 @@ async def test_a_stay_in_progress_is_listed_whatever_the_dates(db, company_with_
     listed = await list_bookings(db, ctx["company"].id, date_from=BASE, date_to=BASE + timedelta(days=1))
     assert [b.id for b in listed] == [late.id]
     assert done.id not in [b.id for b in listed]
+
+
+@pytest.mark.asyncio
+async def test_the_room_rate_line_follows_the_stay_never_a_hand(db, company_with_essentials):
+    """A 3-night stay can never be cashed as one: the room-rate line is not raised, lowered, removed or re-added by
+    hand - only the stay's dates move it (extend_stay). Other lines stay free."""
+    ctx = company_with_essentials
+    cid, uid = ctx["company"].id, ctx["gestor"].id
+    room, night, hour = await _hotel(db, ctx)
+    _, account, _ = await _stay(db, ctx, room, night, BASE, BASE + timedelta(days=3))
+    rate_line = (await list_account_lines(db, account.id))[0]
+    assert rate_line.is_stay_rate is True
+    with pytest.raises(InvalidLineError, match="Prolongar"):
+        await update_line_quantity(db, cid, account.id, rate_line.id, 1)
+    with pytest.raises(InvalidLineError, match="Prolongar"):
+        await remove_line(db, cid, account.id, rate_line.id)
+    with pytest.raises(InvalidLineError, match="Prolongar"):
+        await add_line(db, cid, account.id, uid, 1, service_id=night.id)
+    extra = await add_line(db, cid, account.id, uid, 1, service_id=hour.id)  # another service is a normal extra
+    assert float((await update_line_quantity(db, cid, account.id, extra.id, 2)).quantity) == 2
+    lines = await list_account_lines(db, account.id)
+    assert [float(l.quantity) for l in lines if l.is_stay_rate] == [3]
+
+
+@pytest.mark.asyncio
+async def test_a_listed_stay_carries_its_account_and_what_is_due(db, company_with_essentials):
+    ctx = company_with_essentials
+    room, night, _ = await _hotel(db, ctx)
+    booking, account, _ = await _stay(db, ctx, room, night, BASE, BASE + timedelta(days=1))
+    waiting = await create_booking(db, ctx["company"].id, room.id, ctx["gestor"].id,
+                                   BASE + timedelta(days=2), BASE + timedelta(days=3), service_id=night.id)
+    listed = {b.id: b for b in await list_bookings(db, ctx["company"].id)}
+    assert listed[booking.id].stay_account_id == account.id
+    assert listed[booking.id].stay_account_total == 28500.0  # 25 000 + 14 %
+    assert listed[waiting.id].stay_account_id is None
+
+
+def test_a_booking_returned_outside_the_listing_answers_with_the_defaults():
+    """Creation, check-in... return a Booking without the listing's extra attributes: the response still builds."""
+    from types import SimpleNamespace
+    now = datetime.now(LUANDA)
+    booking = SimpleNamespace(
+        id=uuid.uuid4(), company_id=uuid.uuid4(), resource_id=uuid.uuid4(), customer_id=None, service_id=None,
+        starts_at=now, ends_at=now, status="PENDENTE", notes=None, guest_name=None, party_size=None,
+        created_by_user_id=uuid.uuid4(), created_at=now,
+    )
+    response = BookingResponse.model_validate(booking)
+    assert response.stay_account_id is None and response.stay_account_total is None

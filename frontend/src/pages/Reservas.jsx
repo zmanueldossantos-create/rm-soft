@@ -7,7 +7,8 @@ import { listResources, listBookings, createBooking, updateBookingStatus, resche
 import { listPointsOfSale } from '../api/activity';
 import { listResourceTypes } from '../api/booking';
 import { listCustomers, createCustomer } from '../api/customers';
-import { checkIn, checkOut } from '../api/hotel';
+import { checkIn, checkOut, extendStay } from '../api/hotel';
+import { formatKz } from '../utils/format';
 import { listServices } from '../api/services';
 import { extractErrorMessage } from '../utils/errors';
 import Modal from '../components/Modal';
@@ -92,8 +93,14 @@ export default function Reservas() {
   );
 }
 
-export function ReservasPanel({ posId = null, activityId = null }) {
+// onPayStay(accountId): in the till, the check-out of a stay with something to pay - the till opens its account for
+// the payment (closing it concludes the stay). Without it (the manager's page) that check-out is done at the till.
+export function ReservasPanel({ posId = null, activityId = null, onPayStay = null }) {
   const embedded = !!posId;
+  const [extendBooking, setExtendBooking] = useState(null);
+  const [extendForm, setExtendForm] = useState({ date: '', time: '' });
+  const [extendError, setExtendError] = useState('');
+  const [extendSaving, setExtendSaving] = useState(false);
   const can = useCan();
   const [activities, setActivities] = useState([]);
   const [selectedActivityId, setSelectedActivityId] = useState('');
@@ -413,6 +420,33 @@ export function ReservasPanel({ posId = null, activityId = null }) {
       setError(extractErrorMessage(err, 'Erro ao fazer check-out'));
     } finally {
       setCheckActionId(null);
+    }
+  }
+
+  // Prolongar: a new end for a stay in progress - the room-rate line of its account follows (hotel_service.extend_stay).
+  function openExtendForm(b) {
+    const ends = luandaDateParts(b.ends_at);
+    setExtendBooking(b);
+    setExtendForm({ date: ends.date, time: ends.time });
+    setExtendError('');
+  }
+
+  async function handleExtendSubmit(e) {
+    e.preventDefault();
+    if (!extendForm.date || !extendForm.time) {
+      setExtendError('Indique a nova data e hora de saída');
+      return;
+    }
+    setExtendSaving(true);
+    setExtendError('');
+    try {
+      await extendStay(extendBooking.id, extendForm.date + 'T' + extendForm.time + ':00');
+      setExtendBooking(null);
+      await loadBookings();
+    } catch (err) {
+      setExtendError(extractErrorMessage(err, 'Erro ao prolongar a estadia'));
+    } finally {
+      setExtendSaving(false);
     }
   }
 
@@ -762,14 +796,41 @@ export function ReservasPanel({ posId = null, activityId = null }) {
                 {checkActionId === b.id || statusUpdatingId === b.id ? (
                   <Loader2 size={16} className="animate-spin text-accent" />
                 ) : b.status === 'EM_CURSO' ? (
-                  <button
-                    onClick={() => handleCheckOut(b.id)}
-                    disabled={!can('hotel:checkout')}
-                    className="flex items-center gap-1.5 bg-accent hover:bg-accent-hover text-white text-[12px] font-medium px-3 py-1.5 rounded-md transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    <CheckCircle2 size={13} />
-                    Check-out
-                  </button>
+                  <>
+                    {b.stay_account_total > 0 && (
+                      <span className="text-[12px] font-mono text-text-primary whitespace-nowrap" title="Conta da estadia (IVA incluído)">{formatKz(b.stay_account_total)} Kz</span>
+                    )}
+                    <button
+                      onClick={() => openExtendForm(b)}
+                      disabled={!can('bookings:update')}
+                      className="flex items-center gap-1.5 border border-border hover:border-accent text-text-primary text-[12px] font-medium px-3 py-1.5 rounded-md transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <CalendarClock size={12} />
+                      Prolongar
+                    </button>
+                    {b.stay_account_total > 0 ? (
+                      // Something to pay: the check-out is the payment of the stay's account, at the till.
+                      <span title={onPayStay ? 'Pagar a conta da estadia e terminar' : 'O check-out faz-se na Caixa, com o pagamento'}>
+                        <button
+                          onClick={() => onPayStay(b.stay_account_id)}
+                          disabled={!onPayStay || !can('open_accounts:close')}
+                          className="flex items-center gap-1.5 bg-accent hover:bg-accent-hover text-white text-[12px] font-medium px-3 py-1.5 rounded-md transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          <CheckCircle2 size={13} />
+                          Check-out
+                        </button>
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => handleCheckOut(b.id)}
+                        disabled={!can('hotel:checkout')}
+                        className="flex items-center gap-1.5 bg-accent hover:bg-accent-hover text-white text-[12px] font-medium px-3 py-1.5 rounded-md transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        <CheckCircle2 size={13} />
+                        Check-out
+                      </button>
+                    )}
+                  </>
                 ) : (b.status === 'PENDENTE' || b.status === 'CONFIRMADA') ? (
                   <>
                     <button
@@ -805,6 +866,31 @@ export function ReservasPanel({ posId = null, activityId = null }) {
           ))}
         </div>
       )}
+
+      <Modal open={!!extendBooking} onClose={() => setExtendBooking(null)} title={'Prolongar estadia' + (extendBooking ? ' - ' + resourceName(extendBooking.resource_id) : '')} maxWidthClass="max-w-md">
+        {extendBooking && (
+          <form onSubmit={handleExtendSubmit} className="flex flex-col gap-4">
+            <p className="text-text-muted text-[13px]">Entrada {formatDateTime(extendBooking.starts_at)} - saída prevista {formatDateTime(extendBooking.ends_at)}. A diária da conta segue a nova data.</p>
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Nova data de saída *</label>
+                <DateInput value={extendForm.date} onChange={(e) => setExtendForm((p) => ({ ...p, date: e.target.value }))} required className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
+              </div>
+              <div className="w-36">
+                <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Hora *</label>
+                <input type="time" value={extendForm.time} onChange={(e) => setExtendForm((p) => ({ ...p, time: e.target.value }))} required className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
+              </div>
+            </div>
+            {extendError && (
+              <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{extendError}</div>
+            )}
+            <button type="submit" disabled={extendSaving} className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer">
+              {extendSaving ? <Loader2 size={17} className="animate-spin" /> : <CalendarClock size={17} />}
+              {extendSaving ? 'A guardar...' : 'Prolongar'}
+            </button>
+          </form>
+        )}
+      </Modal>
 
       <Modal open={formOpen} onClose={() => setFormOpen(false)} title={editingBookingId ? "Editar reserva" : "Nova reserva"} maxWidthClass="max-w-xl">
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">

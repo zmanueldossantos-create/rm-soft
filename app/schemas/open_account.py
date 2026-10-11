@@ -77,6 +77,8 @@ class OpenAccountLineResponse(BaseModel):
     kitchen_order_number: int | None = None
     sent_at: datetime | None = None
     sent_by_name: str | None = None
+    # the room rate of a hotel stay: it follows the stay's dates, never edited by hand
+    is_stay_rate: bool = False
     added_by_user_id: uuid.UUID
     added_at: datetime
 

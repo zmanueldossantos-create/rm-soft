@@ -137,7 +137,30 @@ async def list_bookings(
     if in_range:
         query = query.where(or_(and_(*in_range), Booking.status == BookingStatus.EM_CURSO))
     result = await db.execute(query.order_by(Booking.starts_at))
-    return list(result.scalars().all())
+    bookings = list(result.scalars().all())
+    await _attach_stay_accounts(db, bookings)
+    return bookings
+
+
+async def _attach_stay_accounts(db: AsyncSession, bookings: list[Booking]) -> None:
+    """Each stay in progress carries its open account and what it will cost (VAT included, as the invoice): the
+    reception sees what is due, and the check-out goes to the till's payment when something is."""
+    from app.models.open_account import OpenAccount, OpenAccountStatus
+    from app.services.open_account_service import _account_totals
+    in_progress = {b.id: b for b in bookings if b.status == BookingStatus.EM_CURSO}
+    for booking in bookings:
+        booking.stay_account_id, booking.stay_account_total = None, None
+    if not in_progress:
+        return
+    accounts = (await db.execute(
+        select(OpenAccount.booking_id, OpenAccount.id).where(
+            OpenAccount.booking_id.in_(list(in_progress)), OpenAccount.status == OpenAccountStatus.ABERTA,
+        )
+    )).all()
+    totals = await _account_totals(db, [account_id for _, account_id in accounts])
+    for booking_id, account_id in accounts:
+        in_progress[booking_id].stay_account_id = account_id
+        in_progress[booking_id].stay_account_total = totals.get(account_id, (0, 0.0, 0.0, 0.0))[3]
 
 
 async def _has_open_stay_account(db: AsyncSession, booking_id: uuid.UUID) -> bool:

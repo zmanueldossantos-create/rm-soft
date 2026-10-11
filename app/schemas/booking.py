@@ -121,6 +121,9 @@ class BookingResponse(BaseModel):
     party_size: int | None = None
     created_by_user_id: uuid.UUID
     created_at: datetime
+    # a stay in progress: its open account and what it will cost (listing only)
+    stay_account_id: uuid.UUID | None = None
+    stay_account_total: float | None = None
 
     class Config:
         from_attributes = True

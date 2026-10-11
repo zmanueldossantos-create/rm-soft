@@ -1,5 +1,5 @@
 import { formatKz } from '../utils/format';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { listProductCategories } from '../api/productCategories';
 import { ChefHat } from 'lucide-react';
 import { Wallet2, Plus, Loader2, X, Trash2, CheckCircle2, Search, Minus, ArrowRightLeft, LayoutGrid, RefreshCw } from 'lucide-react';
@@ -40,8 +40,11 @@ function formatTime(value) {
 // onClosed(account): an account was just closed - the till reloads its balance, as after a direct sale.
 // closeOptions (the till only): its customers, document types, rules and payment terms - closing an account there
 // offers the choices of a direct sale.
-export default function OpenAccountsPanel({ posId = null, activityId = null, onChange = null, onClosed = null, closeOptions = null }) {
+// initialAccountId: an account to open as soon as the list is loaded (the till's Reservas drawer sends a hotel stay
+// here for its check-out: the guest's account, ready to be closed and paid).
+export default function OpenAccountsPanel({ posId = null, activityId = null, onChange = null, onClosed = null, closeOptions = null, initialAccountId = null }) {
   const can = useCan();
+  const initialOpened = useRef(false);
   const [activities, setActivities] = useState([]);
   const [selectedActivityId, setSelectedActivityId] = useState(activityId || '');
   const [pointsOfSale, setPointsOfSale] = useState([]);
@@ -124,7 +127,13 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
     setLoading(true);
     setError('');
     try {
-      setAccounts(await listOpenAccounts(selectedActivityId));
+      const loaded = await listOpenAccounts(selectedActivityId);
+      setAccounts(loaded);
+      const wanted = !initialOpened.current && initialAccountId ? loaded.find((a) => a.id === initialAccountId) : null;
+      if (wanted) {
+        initialOpened.current = true;
+        openDetail(wanted);
+      }
       if (onChange) onChange();
       await loadStatuses();
     } catch (err) {
@@ -772,19 +781,20 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
                               </p>
                             )}
                             <p className="text-[11px] text-text-muted font-mono">{formatKz(l.unit_price)} Kz/{(l.unit_code_snapshot || 'un').toLowerCase()}</p>{unitPicker(l)}
+                            {l.is_stay_rate && <p className="text-[10px] text-text-muted">Segue as datas da estadia - alterar com Prolongar na reserva</p>}
                           </div>
                           <div className="flex items-center gap-2.5">
                             <div className="flex items-center gap-1.5 bg-bg-elevated border border-border rounded-md px-1.5 py-1">
-                              <button onClick={() => handleChangeQuantity(l, -1)} disabled={!can('open_accounts:edit_lines') || !canLower(l)} className="text-text-muted hover:text-accent cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
+                              <button onClick={() => handleChangeQuantity(l, -1)} disabled={!can('open_accounts:edit_lines') || !canLower(l) || l.is_stay_rate} className="text-text-muted hover:text-accent cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
                                 <Minus size={12} />
                               </button>
                               <span className="text-[12px] text-text-primary font-mono w-6 text-center">{l.quantity}</span>
-                              <button onClick={() => handleChangeQuantity(l, 1)} disabled={!can('open_accounts:edit_lines') || !canRaise(l)} className="text-text-muted hover:text-accent cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
+                              <button onClick={() => handleChangeQuantity(l, 1)} disabled={!can('open_accounts:edit_lines') || !canRaise(l) || l.is_stay_rate} className="text-text-muted hover:text-accent cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
                                 <Plus size={12} />
                               </button>
                             </div>
                             <span className="font-mono text-[13px] text-text-primary font-semibold min-w-20 whitespace-nowrap text-right">{formatKz(l.kitchen_status === 'ANULADO' ? 0 : l.unit_price * l.quantity)} Kz</span>
-                            <button onClick={() => handleRemoveLine(l.id)} disabled={!can('open_accounts:edit_lines') || !canLower(l)} className="text-text-muted hover:text-danger cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
+                            <button onClick={() => handleRemoveLine(l.id)} disabled={!can('open_accounts:edit_lines') || !canLower(l) || l.is_stay_rate} className="text-text-muted hover:text-danger cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
                               <Trash2 size={13} />
                             </button>
                           </div>

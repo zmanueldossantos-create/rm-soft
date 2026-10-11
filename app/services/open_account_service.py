@@ -78,6 +78,19 @@ async def _ensure_not_a_stay_resource(db: AsyncSession, company_id: uuid.UUID, r
         raise InvalidLineError(f"{resource.name}: a conta de um quarto abre-se no check-in da reserva")
 
 
+async def _stay_rate_service_id(db: AsyncSession, account: OpenAccount) -> uuid.UUID | None:
+    """The room rate of a hotel stay's account - its booking's service. That line follows the stay's dates (check-in,
+    extend_stay): it is never added, changed or removed by hand, or a 3-night stay could be cashed as one."""
+    if account.booking_id is None:
+        return None
+    from app.models.booking import Booking
+    booking = await db.get(Booking, account.booking_id)
+    return booking.service_id if booking is not None else None
+
+
+STAY_RATE_LOCKED = "A diária segue as datas da estadia - para a alterar, use Prolongar na reserva"
+
+
 async def get_account_or_raise(db: AsyncSession, company_id: uuid.UUID, account_id: uuid.UUID) -> OpenAccount:
     result = await db.execute(select(OpenAccount).where(OpenAccount.id == account_id, OpenAccount.company_id == company_id))
     account = result.scalar_one_or_none()
@@ -102,13 +115,16 @@ async def _list_account_line_rows(db: AsyncSession, account_id: uuid.UUID) -> li
 async def add_line(
     db: AsyncSession, company_id: uuid.UUID, account_id: uuid.UUID, added_by_user_id: uuid.UUID,
     quantity: float, product_id: uuid.UUID | None = None, service_id: uuid.UUID | None = None,
-    sale_unit_id: uuid.UUID | None = None,
+    sale_unit_id: uuid.UUID | None = None, stay_rate: bool = False,
 ) -> OpenAccountLine:
     if float(quantity) <= 0:
         raise InvalidLineError("A quantidade deve ser superior a zero")
     account = await get_account_or_raise(db, company_id, account_id)
     if account.status == OpenAccountStatus.FECHADA:
         raise AccountAlreadyClosedError("Esta conta ja esta fechada")
+    # stay_rate: only the check-in itself puts the room rate on a stay's account
+    if service_id is not None and not stay_rate and service_id == await _stay_rate_service_id(db, account):
+        raise InvalidLineError(STAY_RATE_LOCKED)
 
     if product_id is not None:
         result = await db.execute(select(Product).where(Product.id == product_id, Product.company_id == company_id))
@@ -185,6 +201,8 @@ async def update_line_quantity(
     line = result.scalar_one_or_none()
     if line is None:
         return None
+    if line.service_id is not None and line.service_id == await _stay_rate_service_id(db, account):
+        raise InvalidLineError(STAY_RATE_LOCKED)
 
     if line.kitchen_status in KITCHEN_LOCKED:
         raise InvalidLineError(_LOCKED_MESSAGE[line.kitchen_status])
@@ -227,6 +245,8 @@ async def remove_line(db: AsyncSession, company_id: uuid.UUID, account_id: uuid.
     line = result.scalar_one_or_none()
     if line is None:
         return
+    if line.service_id is not None and line.service_id == await _stay_rate_service_id(db, account):
+        raise InvalidLineError(STAY_RATE_LOCKED)
     if line.kitchen_status in KITCHEN_LOCKED:
         raise InvalidLineError(_LOCKED_MESSAGE[line.kitchen_status])
     if line.kitchen_status == KITCHEN_WAITING:
@@ -590,8 +610,11 @@ async def list_account_lines(db: AsyncSession, account_id: uuid.UUID) -> list[Op
     """The lines of an account, each with its VAT rate and its subtotal, VAT and total (as the invoice will)."""
     lines = await _list_account_line_rows(db, account_id)
     rates = {row[0]: float(row[4]) for row in await _lines_with_vat(db, "id", [l.id for l in lines])}
+    account = await db.get(OpenAccount, account_id)
+    stay_rate_id = await _stay_rate_service_id(db, account) if account is not None else None
     for line in lines:
         line.vat_rate = rates.get(line.id, 0.0)
+        line.is_stay_rate = stay_rate_id is not None and line.service_id == stay_rate_id
         if line.kitchen_status == KITCHEN_CANCELLED:  # struck through, never invoiced
             line.line_subtotal, line.line_vat, line.line_total = 0.0, 0.0, 0.0
         else:

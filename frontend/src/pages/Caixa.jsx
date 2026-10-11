@@ -683,6 +683,7 @@ export default function Caixa() {
   const [posStock, setPosStock] = useState(null);
   const [openAccountsModalOpen, setOpenAccountsModalOpen] = useState(false);
   const [reservasModalOpen, setReservasModalOpen] = useState(false);
+  const [stayAccountId, setStayAccountId] = useState(null); // a hotel stay sent from Reservas to be paid
   const stockLevels = posStock?.stock || {}; // shown on the product cards
   function refreshPosStock(posId) {
     if (!posId) {
@@ -1164,6 +1165,7 @@ export default function Caixa() {
     setDailyReportModalOpen(false);
     setOpenAccountsModalOpen(false);
     setReservasModalOpen(false);
+    setStayAccountId(null);
   }
   function toggleSideDrawer(key, open) {
     const wasActive = activeSideDrawer === key;
@@ -2409,15 +2411,25 @@ export default function Caixa() {
       {/* Reservations of this till's activity: book, check in (billed through this till) - see ReservasPanel. */}
       <Modal variant="drawer" drawerLeftClass="left-16" open={reservasModalOpen} onClose={() => setReservasModalOpen(false)} title="Reservas" maxWidthClass="max-w-5xl">
         {reservasModalOpen && selectedPosId && (
-          <ReservasPanel posId={selectedPosId} activityId={pointsOfSale.find((p) => p.id === selectedPosId)?.activity_id} />
+          <ReservasPanel
+            posId={selectedPosId}
+            activityId={pointsOfSale.find((p) => p.id === selectedPosId)?.activity_id}
+            onPayStay={(accountId) => {
+              // the check-out of a stay with something to pay: its account, opened in Contas abertas, closed with the payment
+              setReservasModalOpen(false);
+              setStayAccountId(accountId);
+              setOpenAccountsModalOpen(true);
+            }}
+          />
         )}
       </Modal>
 
       {/* Open accounts of this till: open, add, transfer and close them without leaving the till. */}
-      <Modal variant="drawer" drawerLeftClass="left-16" open={openAccountsModalOpen} onClose={() => setOpenAccountsModalOpen(false)} title="Contas abertas" maxWidthClass="max-w-5xl">
+      <Modal variant="drawer" drawerLeftClass="left-16" open={openAccountsModalOpen} onClose={() => { setOpenAccountsModalOpen(false); setStayAccountId(null); }} title="Contas abertas" maxWidthClass="max-w-5xl">
         {openAccountsModalOpen && selectedPosId && (
           <OpenAccountsPanel
             posId={selectedPosId}
+            initialAccountId={stayAccountId}
             activityId={pointsOfSale.find((p) => p.id === selectedPosId)?.activity_id}
             onChange={() => refreshPosStock(selectedPosId)}
             closeOptions={{

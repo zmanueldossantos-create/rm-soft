@@ -154,7 +154,8 @@ async def check_in(
         service = service_result.scalar_one_or_none()
         if service is not None and service.price is not None:
             quantity = _stay_quantity(service, booking.starts_at, booking.ends_at)
-            await add_line(db, company_id, account.id, checking_in_user.id, quantity=quantity, service_id=service.id)
+            await add_line(db, company_id, account.id, checking_in_user.id, quantity=quantity, service_id=service.id,
+                           stay_rate=True)
 
     booking.status = BookingStatus.EM_CURSO
     await db.commit()
@@ -194,6 +195,8 @@ async def extend_stay(db: AsyncSession, company_id: uuid.UUID, booking_id: uuid.
     """Moves the end of a stay in progress - the guest stays longer, or leaves earlier - and recomputes the
     room-rate line of its account with the same rule as at check-in, so the bill always matches the stay.
     (reschedule_booking refuses a stay in progress: it would change the dates without the bill.)"""
+    if ends_at.tzinfo is None:  # the screen sends Luanda wall-clock time, as for every booking
+        ends_at = ends_at.replace(tzinfo=LUANDA)
     booking = await get_booking_or_raise(db, company_id, booking_id)
     if booking.status != BookingStatus.EM_CURSO:
         raise InvalidStayStateError("Só uma estadia em curso pode ser prolongada")
