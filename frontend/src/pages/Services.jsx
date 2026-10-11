@@ -329,9 +329,10 @@ export default function Services() {
         )}
       </div>
 
-      <Modal open={modalOpen} onClose={closeModal} title={editingId ? 'Editar serviço' : 'Novo serviço'} maxWidthClass="max-w-3xl">
+      <Modal open={modalOpen} onClose={closeModal} title={editingId ? 'Editar serviço' : 'Novo serviço'} maxWidthClass="max-w-5xl">
         <form onSubmit={handleSubmit} className="flex flex-col gap-4 max-h-[70vh] overflow-y-auto scrollbar-thin pr-1">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {/* 4 fields per line; the status is not edited here - the list's active/inactive switch does it. */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <Field label="Código *">
               <input value={form.code} onChange={(e) => updateField('code', e.target.value)} required className={inputClass} />
             </Field>
@@ -341,12 +342,9 @@ export default function Services() {
             <Field label="Marca">
               <input value={form.brand} onChange={(e) => updateField('brand', e.target.value)} className={inputClass} />
             </Field>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Field label="Tipo de serviço">
               <div className="flex items-center gap-1.5">
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
                   <Select value={form.serviceTypeId} onChange={(v) => updateField('serviceTypeId', v)} options={serviceTypes.map((t) => ({ value: t.id, label: t.name }))} placeholder="Selecionar" />
                 </div>
                 <button type="button" onClick={() => setTypeModalOpen(true)} className="flex items-center justify-center w-10 h-10 rounded-md border border-border text-text-muted hover:text-accent hover:border-accent transition-colors cursor-pointer shrink-0">
@@ -360,42 +358,33 @@ export default function Services() {
             <Field label="IVA *">
               <Select value={form.vatId} onChange={(v) => updateField('vatId', v)} options={vatRates.filter((v) => v.is_active !== false || v.id === form.vatId).map((v) => ({ value: v.id, label: v.name + ' (' + v.rate + '%)' }))} placeholder="Selecionar IVA" />
             </Field>
-          </div>
-
-          {can('resource_types:view') && (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <Field label="Tipo de recurso associado (opcional)">
-                <Select value={form.resourceTypeId} onChange={(v) => updateField('resourceTypeId', v)} options={resourceTypes.map((t) => ({ value: t.id, label: t.name }))} placeholder="Nenhum - servico generico" />
-              </Field>
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Field label="Preço (Kz)">
               <input type="number" step="0.01" min="0" value={form.price} onChange={(e) => updateField('price', e.target.value)} className={inputClass} />
-            </Field>
-            <Field label="Duração (minutos)" hint="Opcional - preenche a hora de fim nas reservas">
-              <input type="number" step="1" min="5" max="1440" value={form.durationMinutes} onChange={(e) => updateField('durationMinutes', e.target.value)} className={inputClass} />
             </Field>
             <Field label="Retenção">
               <Select value={form.withholdingTaxId} onChange={(v) => updateField('withholdingTaxId', v)} options={withholdingTaxes.map((w) => ({ value: w.id, label: w.name }))} placeholder="Sem retenção" />
             </Field>
-            {isExemptVat && (
-              <Field label="Motivo de isenção *">
-                {imposedExemption ? (
-                  <>
-                    <div className={inputClass + ' opacity-80 cursor-not-allowed truncate'}>{imposedExemption.code + ' - ' + imposedExemption.name}</div>
-                    <p className="text-[11px] text-text-muted mt-1">{'Imposto pelo ' + (articleVatRule.regime || 'regime da empresa')}</p>
-                  </>
-                ) : (
-                  <Select value={form.exemptionReasonId} onChange={(v) => updateField('exemptionReasonId', v)} options={vatCodes.map((c) => ({ value: c.id, label: c.code + ' - ' + c.name }))} placeholder="Selecionar motivo" />
-                )}
+            {can('resource_types:view') && (
+              <Field label="Tipo de recurso">
+                <Select value={form.resourceTypeId} onChange={(v) => updateField('resourceTypeId', v)} options={resourceTypes.map((t) => ({ value: t.id, label: t.name }))} placeholder="Nenhum - genérico" />
               </Field>
             )}
-            {editingId && (
-              <Field label="Estado">
-                <Select value={form.status} onChange={(v) => updateField('status', v)} options={[{ value: 'ACTIVO', label: 'Activo' }, { value: 'INACTIVO', label: 'Inactivo' }]} />
-              </Field>
+            <Field label="Duração (min)" hint="Fim automático nas reservas">
+              <input type="number" step="1" min="5" max="1440" value={form.durationMinutes} onChange={(e) => updateField('durationMinutes', e.target.value)} className={inputClass} />
+            </Field>
+            {isExemptVat && (
+              <div className="col-span-2">
+                <Field label="Motivo de isenção *">
+                  {imposedExemption ? (
+                    <>
+                      <div className={inputClass + ' opacity-80 cursor-not-allowed truncate'}>{imposedExemption.code + ' - ' + imposedExemption.name}</div>
+                      <p className="text-[11px] text-text-muted mt-1">{'Imposto pelo ' + (articleVatRule.regime || 'regime da empresa')}</p>
+                    </>
+                  ) : (
+                    <Select value={form.exemptionReasonId} onChange={(v) => updateField('exemptionReasonId', v)} options={vatCodes.map((c) => ({ value: c.id, label: c.code + ' - ' + c.name }))} placeholder="Selecionar motivo" />
+                  )}
+                </Field>
+              </div>
             )}
           </div>
 
