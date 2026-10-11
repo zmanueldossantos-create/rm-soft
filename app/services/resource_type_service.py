@@ -4,6 +4,7 @@ types (Chambre, Praticien, Mesa...). See app.models.resource_type_catalog
 for the full design rationale.
 """
 import uuid
+from datetime import time
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,14 +20,20 @@ class ResourceTypeAlreadyExistsError(Exception):
     pass
 
 
-async def create_resource_type(db: AsyncSession, company_id: uuid.UUID, name: str, requires_service: bool = False) -> ResourceTypeCatalog:
+async def create_resource_type(
+    db: AsyncSession, company_id: uuid.UUID, name: str, requires_service: bool = False,
+    default_start_time: time | None = None, default_end_time: time | None = None,
+) -> ResourceTypeCatalog:
     existing_result = await db.execute(
         select(ResourceTypeCatalog).where(ResourceTypeCatalog.company_id == company_id, ResourceTypeCatalog.name == name)
     )
     if existing_result.scalar_one_or_none() is not None:
         raise ResourceTypeAlreadyExistsError(f"Ja existe um tipo de recurso chamado '{name}'")
 
-    resource_type = ResourceTypeCatalog(company_id=company_id, name=name, requires_service=requires_service)
+    resource_type = ResourceTypeCatalog(
+        company_id=company_id, name=name, requires_service=requires_service,
+        default_start_time=default_start_time, default_end_time=default_end_time,
+    )
     db.add(resource_type)
     await db.commit()
     await db.refresh(resource_type)
@@ -48,7 +55,11 @@ async def list_resource_types(db: AsyncSession, company_id: uuid.UUID) -> list[R
     return list(result.scalars().all())
 
 
-async def update_resource_type(db: AsyncSession, company_id: uuid.UUID, resource_type_id: uuid.UUID, name: str, requires_service: bool = False) -> ResourceTypeCatalog:
+async def update_resource_type(
+    db: AsyncSession, company_id: uuid.UUID, resource_type_id: uuid.UUID, name: str, requires_service: bool = False,
+    default_start_time: time | None = None, default_end_time: time | None = None,
+) -> ResourceTypeCatalog:
+    """Full edit, as the form sends every field: no hour given means the type has none."""
     resource_type = await get_resource_type_or_raise(db, company_id, resource_type_id)
     if name != resource_type.name:
         existing_result = await db.execute(
@@ -58,6 +69,8 @@ async def update_resource_type(db: AsyncSession, company_id: uuid.UUID, resource
             raise ResourceTypeAlreadyExistsError(f"Ja existe um tipo de recurso chamado '{name}'")
     resource_type.name = name
     resource_type.requires_service = requires_service
+    resource_type.default_start_time = default_start_time
+    resource_type.default_end_time = default_end_time
     await db.commit()
     await db.refresh(resource_type)
     return resource_type

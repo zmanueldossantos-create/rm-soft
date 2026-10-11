@@ -7,13 +7,14 @@ export async function listResourceTypes() {
   return res.data;
 }
 
-export async function createResourceType(name, requiresService = false) {
-  const res = await apiClient.post('/resource-types', { name, requires_service: requiresService });
+// hours: { start, end } ('HH:MM') - the usual entry / exit of a booking of this type (a room: 14:00 -> 12:00), or none
+export async function createResourceType(name, requiresService = false, hours = null) {
+  const res = await apiClient.post('/resource-types', { name, requires_service: requiresService, default_start_time: hours?.start || null, default_end_time: hours?.end || null });
   return res.data;
 }
 
-export async function updateResourceType(resourceTypeId, name, requiresService = false) {
-  const res = await apiClient.patch('/resource-types/' + resourceTypeId, { name, requires_service: requiresService });
+export async function updateResourceType(resourceTypeId, name, requiresService = false, hours = null) {
+  const res = await apiClient.patch('/resource-types/' + resourceTypeId, { name, requires_service: requiresService, default_start_time: hours?.start || null, default_end_time: hours?.end || null });
   return res.data;
 }
 

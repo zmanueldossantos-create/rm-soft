@@ -7,9 +7,9 @@ silently created distinct, un-mergeable types). Company-scoped since
 different businesses want different vocabularies.
 """
 import uuid
-from datetime import datetime
+from datetime import datetime, time
 
-from sqlalchemy import String, Boolean, DateTime, ForeignKey, UniqueConstraint, func
+from sqlalchemy import String, Boolean, DateTime, ForeignKey, Time, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import UUID
 
@@ -31,6 +31,10 @@ class ResourceTypeCatalog(Base):
     # Types where billing happens entirely through OpenAccount extras instead
     # (e.g. MESA - a table has no fixed booking-time rate) leave this false.
     requires_service: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # The usual entry and exit hours of a booking of this type, proposed by the booking form (a hotel room:
+    # 14:00 -> 12:00 the next day). Both or neither; empty for a table, booked by the hour.
+    default_start_time: Mapped[time | None] = mapped_column(Time, nullable=True)
+    default_end_time: Mapped[time | None] = mapped_column(Time, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

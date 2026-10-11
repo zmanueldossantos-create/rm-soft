@@ -1,7 +1,7 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, time
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class ResourceCreateRequest(BaseModel):
@@ -19,7 +19,19 @@ class ResourceCreateRequest(BaseModel):
         return cleaned
 
 
-class ResourceTypeCreateRequest(BaseModel):
+class _ResourceTypeHours(BaseModel):
+    """The usual entry / exit hours of a booking of this type (14:00 -> 12:00 for a room): both or neither."""
+    default_start_time: time | None = None
+    default_end_time: time | None = None
+
+    @model_validator(mode="after")
+    def both_or_neither(self):
+        if (self.default_start_time is None) != (self.default_end_time is None):
+            raise ValueError("Indique a hora de entrada e a hora de saída, ou nenhuma")
+        return self
+
+
+class ResourceTypeCreateRequest(_ResourceTypeHours):
     name: str
     requires_service: bool = False
 
@@ -32,7 +44,7 @@ class ResourceTypeCreateRequest(BaseModel):
         return cleaned
 
 
-class ResourceTypeUpdateRequest(BaseModel):
+class ResourceTypeUpdateRequest(_ResourceTypeHours):
     name: str
     requires_service: bool = False
 
@@ -50,6 +62,8 @@ class ResourceTypeResponse(BaseModel):
     company_id: uuid.UUID
     name: str
     requires_service: bool
+    default_start_time: time | None = None
+    default_end_time: time | None = None
     is_active: bool
 
     class Config:

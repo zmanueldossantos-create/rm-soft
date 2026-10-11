@@ -43,7 +43,10 @@ async def post_create_resource_type(
     current_user: User = Depends(require_permission("resource_types:manage")),
 ):
     try:
-        return await create_resource_type(db, current_user.company_id, payload.name, payload.requires_service)
+        return await create_resource_type(
+            db, current_user.company_id, payload.name, payload.requires_service,
+            payload.default_start_time, payload.default_end_time,
+        )
     except ResourceTypeAlreadyExistsError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
 
@@ -64,7 +67,10 @@ async def patch_resource_type(
     current_user: User = Depends(require_permission("resource_types:manage")),
 ):
     try:
-        return await update_resource_type(db, current_user.company_id, resource_type_id, payload.name, payload.requires_service)
+        return await update_resource_type(
+            db, current_user.company_id, resource_type_id, payload.name, payload.requires_service,
+            payload.default_start_time, payload.default_end_time,
+        )
     except ResourceTypeNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ResourceTypeAlreadyExistsError as e:

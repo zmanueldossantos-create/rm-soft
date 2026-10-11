@@ -227,7 +227,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
   function openCreateForm() {
     const today = todayIso();
     setEditingBookingId(null);
-    setForm({ activityId: selectedActivityId, resourceId: '', serviceId: '', customerId: '', date: today, endDate: today, startTime: '14:00', endTime: '12:00', notes: '', guestName: '', partySize: '', endTouched: false });
+    setForm({ activityId: selectedActivityId, resourceId: '', serviceId: '', customerId: '', date: today, endDate: addDays(today, 1), startTime: '14:00', endTime: '12:00', notes: '', guestName: '', partySize: '', endTouched: false });
     setFormError('');
     setFormOpen(true);
   }
@@ -264,8 +264,16 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
       if (editingBookingId) return next;
       const resource = formResources.find((r) => r.id === resourceId);
       const type = resourceTypesCatalog.find((rt) => rt.id === resource?.resource_type_id);
-      const untouched = prev.startTime === '14:00' && prev.endTime === '12:00' && prev.date === prev.endDate;
+      const untouched = !prev.endTouched && prev.startTime === '14:00' && prev.endTime === '12:00';
+      if (type?.default_start_time && type?.default_end_time && untouched) {
+        // the usual hours of this type (Catálogos): a room 14:00 -> 12:00, the night rule below sets the next day
+        next.startTime = type.default_start_time.slice(0, 5);
+        next.endTime = type.default_end_time.slice(0, 5);
+        next.endDate = next.date;
+        return withAutoEnd(next);
+      }
       if (type && !type.requires_service && untouched) {
+        next.endDate = next.date;
         const startHour = prev.date === todayIso() ? Math.min(new Date().getHours() + 1, 21) : 12;
         const pad = (n) => String(n).padStart(2, '0');
         next.startTime = pad(startHour) + ':00';
@@ -279,10 +287,16 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
   // (start + duration, possibly on the next day) until the end is edited by hand.
   // Never applied when editing an existing booking. UTC arithmetic on the naive
   // date/time strings, so browser daylight-saving rules cannot shift the result.
+  // Without a duration (a night), an exit hour not after the entry hour means the next day: 14:00 -> 12:00 tomorrow.
   function withAutoEnd(next) {
-    if (editingBookingId || next.endTouched || !next.serviceId) return next;
-    const service = services.find((s) => s.id === next.serviceId);
-    if (!service || !service.duration_minutes || !next.date || !next.startTime) return next;
+    if (editingBookingId || next.endTouched) return next;
+    const service = next.serviceId ? services.find((s) => s.id === next.serviceId) : null;
+    if (!service || !service.duration_minutes || !next.date || !next.startTime) {
+      if (next.date && next.startTime && next.endTime && next.endTime <= next.startTime && (!next.endDate || next.endDate <= next.date)) {
+        return { ...next, endDate: addDays(next.date, 1) };
+      }
+      return next;
+    }
     const [y, mo, d] = next.date.split('-').map(Number);
     const [hh, mm] = next.startTime.split(':').map(Number);
     const end = new Date(Date.UTC(y, mo - 1, d, hh, mm) + service.duration_minutes * 60000);
@@ -892,21 +906,23 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
         )}
       </Modal>
 
-      <Modal open={formOpen} onClose={() => setFormOpen(false)} title={editingBookingId ? "Editar reserva" : "Nova reserva"} maxWidthClass="max-w-xl">
+      <Modal open={formOpen} onClose={() => setFormOpen(false)} title={editingBookingId ? "Editar reserva" : "Nova reserva"} maxWidthClass="max-w-2xl">
+        {/* A 4-column grid: the dates and hours are narrow (each as wide as N.º de pessoas), 4 on one line; the
+            service, the guest and the notes take the whole width. */}
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <div className="flex gap-3">
+          <div className="grid grid-cols-4 gap-3">
             {!editingBookingId && (
-              <div className="flex-1">
+              <div>
                 <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Atividade *</label>
                 <Select
                   value={form.activityId}
                   onChange={(v) => setForm((p) => ({ ...p, activityId: v, resourceId: '' }))}
                   options={activities.map((a) => ({ value: a.id, label: a.name }))}
-                  placeholder="Selecionar atividade"
+                  placeholder="Selecionar"
                 />
               </div>
             )}
-            <div className="flex-1">
+            <div className={editingBookingId ? 'col-span-3' : 'col-span-2'}>
               <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Recurso *</label>
               <Select
                 value={form.resourceId}
@@ -915,10 +931,21 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
                 placeholder="Selecionar"
               />
             </div>
+            <div>
+              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">N.º de pessoas</label>
+              <input type="number" min="1" step="1" value={form.partySize} onChange={(e) => setForm((p) => ({ ...p, partySize: e.target.value }))} className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
+            </div>
           </div>
-          <div className="flex gap-3">
-            <div className="flex-1">
-              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Data inicio *</label>
+          {(() => {
+            const res = (editingBookingId ? resources : formResources).find((r) => r.id === form.resourceId);
+            const pax = parseInt(form.partySize, 10);
+            return res?.capacity && pax > res.capacity ? (
+              <p className="text-accent text-[12px] -mt-2">Aviso: este recurso tem capacidade para {res.capacity} pessoas</p>
+            ) : null;
+          })()}
+          <div className="grid grid-cols-4 gap-3">
+            <div>
+              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Data início *</label>
               <DateInput
                 value={form.date}
                 min={editingBookingId ? undefined : todayIso()}
@@ -929,24 +956,22 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
                 required className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors"
               />
             </div>
-            <div className="flex-1">
+            <div>
+              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Hora entrada *</label>
+              <input type="time" value={form.startTime} onChange={(e) => setForm((p) => withAutoEnd({ ...p, startTime: e.target.value }))} required className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
+            </div>
+            <div>
               <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Data fim *</label>
               <DateInput value={form.endDate} min={form.date || undefined} onChange={(e) => setForm((p) => ({ ...p, endDate: e.target.value, endTouched: true }))} required className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
             </div>
-          </div>
-          <div className="flex gap-3">
-            <div className="flex-1">
-              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Hora de entrada (no dia de inicio) *</label>
-              <input type="time" value={form.startTime} onChange={(e) => setForm((p) => withAutoEnd({ ...p, startTime: e.target.value }))} required className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
-            </div>
-            <div className="flex-1">
-              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Hora de saida (no dia de fim) *</label>
+            <div>
+              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Hora saída *</label>
               <input type="time" value={form.endTime} onChange={(e) => setForm((p) => ({ ...p, endTime: e.target.value, endTouched: true }))} required className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
             </div>
           </div>
           <div>
             <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">
-              Servico{selectedResourceType?.requires_service ? ' *' : ' (opcional)'}
+              Serviço{selectedResourceType?.requires_service ? ' *' : ' (opcional)'}
             </label>
             <Select
               value={form.serviceId}
@@ -956,7 +981,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
             />
           </div>
           <div>
-            <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Hospede (opcional)</label>
+            <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Hóspede (opcional)</label>
             <div className="flex items-center gap-1.5">
               <div className="flex-1">
                 <Select
@@ -971,23 +996,10 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
               </button>
             </div>
           </div>
-          <div className="flex gap-3">
-            <div className="flex-1">
-              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Nome do hospede (opcional)</label>
-              <input value={form.guestName} onChange={(e) => setForm((p) => ({ ...p, guestName: e.target.value }))} maxLength={150} placeholder="Ex: Familia Silva" className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
-            </div>
-            <div className="w-32">
-              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">N. de pessoas</label>
-              <input type="number" min="1" step="1" value={form.partySize} onChange={(e) => setForm((p) => ({ ...p, partySize: e.target.value }))} className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
-            </div>
+          <div>
+            <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Nome do hóspede (opcional)</label>
+            <input value={form.guestName} onChange={(e) => setForm((p) => ({ ...p, guestName: e.target.value }))} maxLength={150} placeholder="Ex: Família Silva" className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
           </div>
-          {(() => {
-            const res = (editingBookingId ? resources : formResources).find((r) => r.id === form.resourceId);
-            const pax = parseInt(form.partySize, 10);
-            return res?.capacity && pax > res.capacity ? (
-              <p className="text-accent text-[12px] -mt-2">Aviso: este recurso tem capacidade para {res.capacity} pessoas</p>
-            ) : null;
-          })()}
           <div>
             <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Notas (opcional)</label>
             <input value={form.notes} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))} className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
@@ -1001,7 +1013,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
             className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer"
           >
             {saving ? <Loader2 size={17} className="animate-spin" /> : <Plus size={17} />}
-            {saving ? (editingBookingId ? 'A guardar...' : 'A criar...') : (editingBookingId ? 'Guardar alteracoes' : 'Criar reserva')}
+            {saving ? (editingBookingId ? 'A guardar...' : 'A criar...') : (editingBookingId ? 'Guardar alterações' : 'Criar reserva')}
           </button>
         </form>
       </Modal>

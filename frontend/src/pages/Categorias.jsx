@@ -33,8 +33,8 @@ const CATALOGS = [
   } },
   { key: 'resource_types', label: 'Tipos de Recurso', icon: Boxes, api: {
     list: () => listResourceTypes(),
-    create: (p) => createResourceType(p.name, p.requires_service),
-    update: (id, p) => updateResourceType(id, p.name, p.requires_service),
+    create: (p) => createResourceType(p.name, p.requires_service, { start: p.default_start_time, end: p.default_end_time }),
+    update: (id, p) => updateResourceType(id, p.name, p.requires_service, { start: p.default_start_time, end: p.default_end_time }),
     toggle: (id) => toggleResourceTypeStatus(id),
   } },
   { key: 'consumption_reasons', label: 'Motivos de Consumo Interno', icon: PackageMinus, api: {
@@ -56,7 +56,7 @@ const CATALOG_PERMS = {
 };
 
 const emptyForm = { name: '', not_available_purchases: false, not_available_pos: false, not_available_sales: false };
-const emptyNameOnlyForm = { name: '', requires_service: false };
+const emptyNameOnlyForm = { name: '', requires_service: false, default_start_time: '', default_end_time: '' };
 const emptyReasonForm = { name: '', direction: 'SAIDA' };
 
 export default function Categorias() {
@@ -206,7 +206,7 @@ export default function Categorias() {
     if (activeCatalog?.key === 'cash_movement_reasons') {
       setForm({ name: item.name, direction: item.direction });
     } else if (activeCatalog?.key === 'resource_types') {
-      setForm({ name: item.name, requires_service: item.requires_service });
+      setForm({ name: item.name, requires_service: item.requires_service, default_start_time: (item.default_start_time || '').slice(0, 5), default_end_time: (item.default_end_time || '').slice(0, 5) });
     } else if (activeCatalog?.key === 'consumption_reasons') {
       setForm({ name: item.name });
     } else {
@@ -401,10 +401,24 @@ export default function Categorias() {
                 />
               </div>
             ) : activeCatalog?.key === 'resource_types' ? (
-              <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                <input type="checkbox" checked={form.requires_service} onChange={(e) => updateField('requires_service', e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
-                <span className="text-sm text-text-primary">Exige servico na reserva</span>
-              </label>
+              <div className="flex flex-col gap-3">
+                <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                  <input type="checkbox" checked={form.requires_service} onChange={(e) => updateField('requires_service', e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
+                  <span className="text-sm text-text-primary">Exige serviço na reserva</span>
+                </label>
+                {/* The usual hours of a booking of this type, proposed by the booking form - a room: 14:00 -> 12:00 the next day. */}
+                <div className="flex gap-3">
+                  <div className="flex-1">
+                    <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Hora de entrada</label>
+                    <input type="time" value={form.default_start_time} onChange={(e) => updateField('default_start_time', e.target.value)} className={inputClass} />
+                  </div>
+                  <div className="flex-1">
+                    <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Hora de saída</label>
+                    <input type="time" value={form.default_end_time} onChange={(e) => updateField('default_end_time', e.target.value)} className={inputClass} />
+                  </div>
+                </div>
+                <p className="text-[11px] text-text-muted -mt-1">Opcional - propostas na reserva. Saída antes da entrada = dia seguinte (ex.: quarto 14:00 - 12:00).</p>
+              </div>
             ) : activeCatalog?.key === 'consumption_reasons' ? null : (
               <div className="flex flex-col gap-2">
                 <label className="flex items-center gap-2.5 cursor-pointer select-none">
