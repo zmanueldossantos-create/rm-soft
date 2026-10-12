@@ -7,10 +7,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.api.deps import require_permission
 from app.models.user import User
-from app.schemas.hotel import CheckInResponse, OccupancyHistoryEntry, StayExtendRequest, WalkInRequest, WalkInResponse
+from app.schemas.hotel import CheckInResponse, StayExtendRequest, WalkInRequest, WalkInResponse
 from app.schemas.booking import BookingResponse
 from app.services.hotel_service import (
-    check_in, check_out, extend_stay, get_occupancy_history, walk_in,
+    check_in, check_out, extend_stay, walk_in,
     NoDefaultPosError, AlreadyCheckedInError, AmbiguousOpenSessionError, InvalidStayStateError, StayHasUnpaidAccountError,
     InvalidWalkInError,
 )
@@ -115,14 +115,3 @@ async def post_extend_stay(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except InvalidBookingRangeError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
-
-
-@router.get("/occupancy-history", response_model=list[OccupancyHistoryEntry])
-async def get_occupancy_history_route(
-    activity_id: uuid.UUID | None = None,
-    date_from: datetime | None = None,
-    date_to: datetime | None = None,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("hotel:occupancy_view")),
-):
-    return await get_occupancy_history(db, current_user.company_id, activity_id, date_from, date_to)

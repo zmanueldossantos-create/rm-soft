@@ -21,6 +21,8 @@ pay (an account without articles, or none at all).
 extend_stay: moves the end of a stay in progress (the guest stays longer, or
 leaves earlier) and recomputes the room-rate line of its account.
 
+The history of the rooms (stays, passages, revenue) is resource_history_service, common to every sector.
+
 Room status (Livre/Ocupado) is deliberately NOT stored anywhere - it's derived
 on demand from whether a resource currently has an EM_CURSO booking, computed
 by whoever renders the room list (avoids a second source of truth to keep in
@@ -39,8 +41,6 @@ from app.models.open_account_line import OpenAccountLine
 from app.models.point_of_sale import PointOfSale
 from app.models.cash_session import CashSession, CashSessionStatus
 from app.models.service import Service
-from app.models.resource import Resource
-from app.models.customer import Customer
 from app.models.invoice import Invoice
 from app.services.booking_service import (
     get_booking_or_raise, _clean_guest_name, _has_overlap, _validate_service_for_resource,
@@ -85,14 +85,6 @@ def _nights_between(starts_at: datetime, ends_at: datetime) -> int:
     """Nights between two moments, on Luanda's calendar - at least one (a short stay is charged one night)."""
     nights = (ends_at.astimezone(LUANDA).date() - starts_at.astimezone(LUANDA).date()).days
     return max(nights, 1)
-
-
-def _overstay_minutes(booking: Booking, now: datetime) -> int:
-    """Minutes beyond the planned end: at the real departure, or so far for a stay still in progress."""
-    end = booking.checked_out_at or (now if booking.status == BookingStatus.EM_CURSO else None)
-    if end is None or end <= booking.ends_at:
-        return 0
-    return int((end - booking.ends_at).total_seconds() // 60)
 
 
 def _stay_quantity(service: Service, starts_at: datetime, ends_at: datetime) -> int:
@@ -289,53 +281,3 @@ async def extend_stay(db: AsyncSession, company_id: uuid.UUID, booking_id: uuid.
     await db.commit()
     await db.refresh(booking)
     return booking
-
-
-async def get_occupancy_history(
-    db: AsyncSession, company_id: uuid.UUID, activity_id: uuid.UUID | None = None,
-    date_from: datetime | None = None, date_to: datetime | None = None,
-) -> list[dict]:
-    """Past and current stays (CONCLUIDA and EM_CURSO bookings) with the room
-    name, guest, dates and the resulting invoice total when the stay has been
-    checked out - purely a read/aggregation over existing data (Booking,
-    Resource, OpenAccount, Invoice, Customer), no new storage of its own. See the
-    Hotel road-map: "Historico das ocupacoes" (point 6).
-    """
-    query = (
-        select(Booking, Resource.name.label("resource_name"), Customer.name.label("customer_name"),
-               Invoice.series, Invoice.number, Invoice.total)
-        .join(Resource, Resource.id == Booking.resource_id)
-        .outerjoin(Customer, Customer.id == Booking.customer_id)
-        .outerjoin(OpenAccount, OpenAccount.booking_id == Booking.id)
-        # the stay's account invoice (a night), or the passage's own invoice (paid at the entry)
-        .outerjoin(Invoice, Invoice.id == func.coalesce(OpenAccount.invoice_id, Booking.invoice_id))
-        .where(Booking.company_id == company_id, Booking.status.in_([BookingStatus.CONCLUIDA, BookingStatus.EM_CURSO]))
-        .order_by(Booking.starts_at.desc())
-    )
-    if activity_id is not None:
-        query = query.where(Resource.activity_id == activity_id)
-    if date_from is not None:
-        query = query.where(Booking.starts_at >= date_from)
-    if date_to is not None:
-        query = query.where(Booking.starts_at <= date_to)
-
-    result = await db.execute(query)
-    rows = result.all()
-    now = datetime.now(timezone.utc)
-    return [
-        {
-            "booking_id": booking.id,
-            "resource_name": resource_name,
-            "customer_name": customer_name,
-            "guest_name": booking.guest_name,
-            "starts_at": booking.starts_at,
-            "ends_at": booking.ends_at,
-            "checked_out_at": booking.checked_out_at,
-            "overstay_minutes": _overstay_minutes(booking, now),
-            "status": booking.status,
-            "invoice_series": series,
-            "invoice_number": number,
-            "invoice_total": float(total) if total is not None else None,
-        }
-        for booking, resource_name, customer_name, series, number, total in rows
-    ]

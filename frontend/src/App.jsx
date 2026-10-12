@@ -22,7 +22,7 @@ import Users from './pages/Users';
 import Tesouraria from './pages/Tesouraria';
 import Recursos from './pages/Recursos';
 import Reservas from './pages/Reservas';
-import Ocupacao from './pages/Ocupacao';
+import HistoricoRecursos from './pages/HistoricoRecursos';
 import ConsumoInterno from './pages/ConsumoInterno';
 import Fornecedores from './pages/Fornecedores';
 import Permissoes from './pages/Permissoes';
@@ -85,7 +85,7 @@ export default function App() {
           <Route path="/tesouraria" element={<RequirePermission perm="tesouraria:reasons_manage"><Tesouraria /></RequirePermission>} />
           <Route path="/recursos" element={<RequirePermission perm="resources:manage"><Recursos /></RequirePermission>} />
           <Route path="/reservas" element={<RequirePermission perm="bookings:view"><Reservas /></RequirePermission>} />
-          <Route path="/ocupacao" element={<RequirePermission perm="hotel:occupancy_view"><Ocupacao /></RequirePermission>} />
+          <Route path="/recursos/historico" element={<RequirePermission perm="resources:history"><HistoricoRecursos /></RequirePermission>} />
           <Route path="/consumo-interno" element={<RequirePermission perm="internal_consumption:view"><ConsumoInterno /></RequirePermission>} />
           <Route path="/fornecedores" element={<RequirePermission perm="suppliers:manage"><Fornecedores /></RequirePermission>} />
           <Route path="/permissoes" element={<GestorRoute><Permissoes /></GestorRoute>} />

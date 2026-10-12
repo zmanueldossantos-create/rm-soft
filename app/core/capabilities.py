@@ -43,7 +43,7 @@ CAPABILITIES: dict[str, Capability] = {
         ),
         Capability(
             "RESOURCES", "Recursos", "Quartos, mesas, praticantes e outros recursos reserváveis", (),
-            ("resource_types", "resources"), ("/recursos",),
+            ("resource_types", "resources"), ("/recursos", "/recursos/historico"),
         ),
         Capability(
             "BOOKINGS", "Reservas", "Reservas e agenda dos recursos", ("RESOURCES",),
@@ -59,7 +59,7 @@ CAPABILITIES: dict[str, Capability] = {
         ),
         Capability(
             "HOTEL_STAY", "Estadia de hotel", "Check-in, check-out e ocupação", ("BOOKINGS", "OPEN_ACCOUNTS"),
-            ("hotel",), ("/ocupacao",),
+            ("hotel",), (),
         ),
     )
 }

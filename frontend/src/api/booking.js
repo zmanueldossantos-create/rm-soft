@@ -86,3 +86,14 @@ export async function listResourceStatuses(activityId, windowMinutes = 60) {
   const res = await apiClient.get('/resources/status', { params: { activity_id: activityId, window_minutes: windowMinutes } });
   return res.data;
 }
+
+// The history of the resources: { entries, summary } - every use over the period and a summary per resource.
+export async function getResourceHistory(filters = {}) {
+  const params = {};
+  if (filters.activityId) params.activity_id = filters.activityId;
+  if (filters.resourceId) params.resource_id = filters.resourceId;
+  if (filters.dateFrom) params.date_from = filters.dateFrom;
+  if (filters.dateTo) params.date_to = filters.dateTo;
+  const res = await apiClient.get('/resources/history', { params });
+  return res.data;
+}

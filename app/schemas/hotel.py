@@ -36,18 +36,3 @@ class WalkInResponse(BaseModel):
 class StayExtendRequest(BaseModel):
     """The new end of a stay in progress (later to stay longer, earlier to leave sooner)."""
     ends_at: datetime
-
-
-class OccupancyHistoryEntry(BaseModel):
-    booking_id: uuid.UUID
-    resource_name: str
-    customer_name: str | None
-    guest_name: str | None = None
-    starts_at: datetime
-    ends_at: datetime
-    checked_out_at: datetime | None = None
-    overstay_minutes: int = 0
-    status: str
-    invoice_series: str | None
-    invoice_number: int | None
-    invoice_total: float | None

@@ -182,7 +182,7 @@ export default function Layout() {
       key: 'reservas', icon: CalendarClock, label: 'Reservas', items: visible([
         { to: '/recursos', icon: Boxes, label: 'Recursos', show: can('resources:manage') },
         { to: '/reservas', icon: CalendarClock, label: 'Reservas', show: can('bookings:view') },
-        { to: '/ocupacao', icon: History, label: 'Ocupação', show: can('hotel:occupancy_view') },
+        { to: '/recursos/historico', icon: History, label: 'Histórico', show: can('resources:history') },
       ]),
     },
     {

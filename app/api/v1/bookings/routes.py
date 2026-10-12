@@ -12,8 +12,9 @@ from app.schemas.booking import (
     ResourceCreateRequest, ResourceUpdateRequest, ResourceResponse,
     ResourceTypeCreateRequest, ResourceTypeUpdateRequest, ResourceTypeResponse,
     BookingCreateRequest, BookingRescheduleRequest, BookingStatusUpdateRequest, BookingResponse,
-    BookingChargeRequest, BookingChargeResponse, ResourceStatusResponse,
+    BookingChargeRequest, BookingChargeResponse, ResourceStatusResponse, ResourceHistoryResponse,
 )
+from app.services.resource_history_service import get_resource_history
 from app.services.booking_charge_service import charge_booking, BookingNotChargeableError
 from app.services.hotel_service import NoDefaultPosError
 from app.services.fiscal_period_service import PeriodClosedError
@@ -251,6 +252,20 @@ async def patch_booking_reschedule(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     except IncompatibleServiceError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.get("/resources/history", response_model=ResourceHistoryResponse)
+async def get_resources_history(
+    activity_id: uuid.UUID | None = None,
+    resource_id: uuid.UUID | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("resources:history")),
+):
+    """Every use of the resources over a period (stays, passages, marcações, reservations, tables' accounts) and a
+    summary per resource: uses, occupied time, revenue (documents minus credit notes), cancellations, no-shows."""
+    return await get_resource_history(db, current_user.company_id, activity_id, resource_id, date_from, date_to)
 
 
 @router.get("/resources/status", response_model=list[ResourceStatusResponse])

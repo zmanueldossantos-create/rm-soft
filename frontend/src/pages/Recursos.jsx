@@ -1,6 +1,8 @@
 import { formatKz } from '../utils/format';
 import { useState, useEffect } from 'react';
-import { Boxes, Plus, Pencil, Loader2 } from 'lucide-react';
+import { Boxes, Plus, Pencil, Loader2, History } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { useCan } from '../utils/permissions';
 import Select from '../components/Select';
 import { listActivities } from '../api/activity';
 import { listResources, createResource, updateResource, toggleResourceStatus, listResourceTypes, listResourceStatuses } from '../api/booking';
@@ -25,6 +27,8 @@ const STATUS_STYLE = {
 };
 
 export default function Recursos() {
+  const can = useCan();
+  const navigate = useNavigate();
   const [activities, setActivities] = useState([]);
   const [selectedActivityId, setSelectedActivityId] = useState('');
   const [resources, setResources] = useState([]);
@@ -207,6 +211,15 @@ export default function Recursos() {
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <ToggleSwitch checked={r.is_active} disabled={togglingId === r.id} onChange={() => handleToggle(r.id)} />
+                {can('resources:history') && (
+                  <button
+                    onClick={() => navigate('/recursos/historico?activity=' + r.activity_id + '&resource=' + r.id)}
+                    title="Histórico deste recurso"
+                    className="flex items-center justify-center w-8 h-8 rounded-md border border-border text-text-muted hover:text-text-primary hover:border-accent transition-colors cursor-pointer"
+                  >
+                    <History size={13} />
+                  </button>
+                )}
                 <button onClick={() => openEditForm(r)} className="flex items-center justify-center w-8 h-8 rounded-md border border-border text-text-muted hover:text-text-primary hover:border-accent transition-colors cursor-pointer">
                   <Pencil size={13} />
                 </button>

@@ -182,3 +182,43 @@ class ResourceStatusResponse(BaseModel):
 
 
 BookingChargeResponse.model_rebuild()
+
+
+class ResourceHistoryEntry(BaseModel):
+    """One use of a resource (see resource_history_service): a stay, a passage, a marcação, a reservation or a
+    table's account - with its document and what it brought in (total minus credit notes)."""
+    kind: str  # ESTADIA | PASSAGEM | MARCACAO | RESERVA | CONTA
+    booking_id: uuid.UUID | None
+    account_id: uuid.UUID | None
+    resource_id: uuid.UUID
+    resource_name: str
+    customer_name: str | None
+    guest_name: str | None
+    party_size: int | None
+    starts_at: datetime
+    ends_at: datetime | None
+    real_end_at: datetime | None
+    overstay_minutes: int
+    occupied_minutes: int
+    status: str
+    invoice_id: uuid.UUID | None
+    invoice_label: str | None
+    invoice_total: float | None
+    credited: float
+    revenue: float
+
+
+class ResourceHistorySummary(BaseModel):
+    resource_id: uuid.UUID
+    resource_name: str
+    uses: int
+    occupied_minutes: int
+    revenue: float
+    cancelled: int
+    no_show: int
+    planned: int  # pending or confirmed reservations: not a use yet
+
+
+class ResourceHistoryResponse(BaseModel):
+    entries: list[ResourceHistoryEntry]
+    summary: list[ResourceHistorySummary]

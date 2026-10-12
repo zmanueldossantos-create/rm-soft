@@ -13,7 +13,8 @@ from app.models.resource_type_catalog import ResourceTypeCatalog
 from app.models.service import Service
 from app.services.booking_service import BookingOverlapError, ServiceRequiredError, create_booking
 from app.services.cash_session_service import open_session
-from app.services.hotel_service import InvalidWalkInError, check_out, get_occupancy_history, walk_in
+from app.services.hotel_service import InvalidWalkInError, check_out, walk_in
+from app.services.resource_history_service import get_resource_history
 from app.services.resource_status_service import list_resource_statuses
 
 
@@ -92,8 +93,9 @@ async def test_the_exit_records_the_time_and_the_overstay_shows_in_the_history(d
     booking, invoice = await _enter(db, ctx, room, hour, now=datetime.now(timezone.utc) - timedelta(hours=2))
     booking = await check_out(db, ctx["company"].id, booking.id)  # prepaid: nothing left to pay
     assert booking.status == BookingStatus.CONCLUIDA and booking.checked_out_at is not None
-    entry = (await get_occupancy_history(db, ctx["company"].id))[0]
-    assert entry["invoice_series"] == invoice.series and entry["invoice_total"] == 5700.0
+    entry = (await get_resource_history(db, ctx["company"].id))["entries"][0]
+    assert entry["kind"] == "PASSAGEM"
+    assert entry["invoice_label"] == f"{invoice.series}/{invoice.number}" and entry["invoice_total"] == 5700.0
     assert entry["guest_name"] == "Passagem"
     assert entry["overstay_minutes"] >= 59
     status = (await list_resource_statuses(db, ctx["company"].id, ctx["activity"].id))[0]
