@@ -82,7 +82,7 @@ export default function App() {
           <Route path="/stock/dashboard" element={<RequirePermission perm="stock:view"><StockDashboard /></RequirePermission>} />
           <Route path="/stock-movements" element={<RequirePermission perm="stock:view"><StockMovements /></RequirePermission>} />
           <Route path="/users" element={<GestorRoute><Users /></GestorRoute>} />
-          <Route path="/tesouraria" element={<RequirePermission perm="tesouraria:reasons_manage"><Tesouraria /></RequirePermission>} />
+          <Route path="/tesouraria" element={<RequirePermission perm="tesouraria:overview"><Tesouraria /></RequirePermission>} />
           <Route path="/recursos" element={<RequirePermission perm="resources:manage"><Recursos /></RequirePermission>} />
           <Route path="/reservas" element={<RequirePermission perm="bookings:view"><Reservas /></RequirePermission>} />
           <Route path="/recursos/historico" element={<RequirePermission perm="resources:history"><HistoricoRecursos /></RequirePermission>} />

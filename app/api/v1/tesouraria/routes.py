@@ -17,7 +17,7 @@ from app.core.database import get_db
 from app.api.deps import require_permission
 from app.models.user import User
 from app.models.movement_type import MovementDirection
-from app.models.cash_movement import CashMovementType
+from app.models.cash_movement import CashMovementStatus, CashMovementType
 from app.schemas.tesouraria import (
     CashMovementReasonCreateRequest,
     CashMovementReasonResponse,
@@ -25,6 +25,9 @@ from app.schemas.tesouraria import (
     CashMovementResponse,
     CashMovementReceiveRequest,
     TransferBilletageLine,
+    TreasuryPositionResponse,
+    TreasuryMovement,
+    TreasuryClosing,
     AssignCashPointRequest,
     UserCashPointAccessResponse,
 )
@@ -87,6 +90,8 @@ from app.services.cash_report_service import get_movements_report_data
 from app.services.user_cash_point_access_service import require_cash_point_read_access
 from app.services.point_of_sale_service import PosNotFoundError
 from app.utils.cash_report_pdf import generate_movements_report_pdf
+
+from app.services.treasury_overview_service import get_treasury_position, list_closings, list_treasury_movements
 
 router = APIRouter(prefix="/api/v1/tesouraria", tags=["tesouraria"])
 
@@ -396,3 +401,34 @@ async def get_pos_daily_report_pdf(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
     return Response(content=generate_movements_report_pdf(data), media_type="application/pdf",
                     headers={"Content-Disposition": f'inline; filename="movimentos-caixa-{date_from}-{date_to}.pdf"'})
+
+
+# ---------- Tesouraria overview: the manager's read of every till (operations stay at the Caixa) ----------
+
+@router.get("/overview/position", response_model=TreasuryPositionResponse)
+async def get_overview_position(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("tesouraria:overview")),
+):
+    return await get_treasury_position(db, current_user.company_id)
+
+
+@router.get("/overview/movements", response_model=list[TreasuryMovement])
+async def get_overview_movements(
+    date_from: date | None = None, date_to: date | None = None, pos_id: uuid.UUID | None = None,
+    movement_type: CashMovementType | None = None, movement_status: CashMovementStatus | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("tesouraria:overview")),
+):
+    return await list_treasury_movements(db, current_user.company_id, date_from, date_to, pos_id, movement_type,
+                                         movement_status)
+
+
+@router.get("/overview/closings", response_model=list[TreasuryClosing])
+async def get_overview_closings(
+    date_from: date | None = None, date_to: date | None = None, pos_id: uuid.UUID | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("tesouraria:overview")),
+):
+    return await list_closings(db, current_user.company_id, date_from, date_to, pos_id)
+

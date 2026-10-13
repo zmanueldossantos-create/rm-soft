@@ -102,3 +102,74 @@ class DailyReportEntry(BaseModel):
     reference: str
     payment_method: str | None = None
     is_cash: bool | None = None
+
+
+# ---------- Tesouraria overview (the manager's view of every till) ----------
+
+class TreasuryTill(BaseModel):
+    pos_id: uuid.UUID
+    pos_name: str
+    activity_name: str
+    is_default: bool
+    billetage_enabled: bool
+    is_open: bool
+    session_id: uuid.UUID | None
+    business_date: date | None
+    opened_at: datetime | None
+    opened_by: str | None
+    last_closed_at: datetime | None
+    cash: float
+    pending_out: float
+    pending_in: float
+
+
+class TreasuryTotals(BaseModel):
+    cash: float
+    in_transit: float
+    open_tills: int
+    tills: int
+
+
+class TreasuryPositionResponse(BaseModel):
+    tills: list[TreasuryTill]
+    totals: TreasuryTotals
+
+
+class TreasuryTillRef(BaseModel):
+    id: uuid.UUID
+    name: str
+    activity_name: str
+
+
+class TreasuryMovement(BaseModel):
+    id: uuid.UUID
+    movement_type: str
+    status: str
+    movement_date: date
+    created_at: datetime
+    amount: float
+    source: TreasuryTillRef | None
+    destination: TreasuryTillRef | None
+    reason: str | None
+    description: str | None
+    created_by: str | None
+    received_by: str | None
+    received_at: datetime | None
+
+
+class TreasuryClosing(BaseModel):
+    session_id: uuid.UUID
+    pos_id: uuid.UUID
+    pos_name: str
+    activity_name: str
+    business_date: date
+    opened_at: datetime
+    opened_by: str | None
+    closed_at: datetime | None
+    closed_by: str | None
+    opening_amount: float | None
+    expected: float | None
+    counted: float | None
+    difference: float | None
+    notes: str | None
+

@@ -123,3 +123,32 @@ export async function fetchDailyReportPdfBlob(posId, dateFrom, dateTo) {
   });
   return URL.createObjectURL(res.data);
 }
+
+// ---------- Tesouraria overview (the manager's view of every till) ----------
+
+export async function getTreasuryPosition() {
+  const res = await apiClient.get('/tesouraria/overview/position');
+  return res.data;
+}
+
+// filters: { dateFrom, dateTo, posId, movementType, status }
+export async function listTreasuryMovements(filters = {}) {
+  const params = {};
+  if (filters.dateFrom) params.date_from = filters.dateFrom;
+  if (filters.dateTo) params.date_to = filters.dateTo;
+  if (filters.posId) params.pos_id = filters.posId;
+  if (filters.movementType) params.movement_type = filters.movementType;
+  if (filters.status) params.movement_status = filters.status;
+  const res = await apiClient.get('/tesouraria/overview/movements', { params });
+  return res.data;
+}
+
+// filters: { dateFrom, dateTo, posId }
+export async function listTreasuryClosings(filters = {}) {
+  const params = {};
+  if (filters.dateFrom) params.date_from = filters.dateFrom;
+  if (filters.dateTo) params.date_to = filters.dateTo;
+  if (filters.posId) params.pos_id = filters.posId;
+  const res = await apiClient.get('/tesouraria/overview/closings', { params });
+  return res.data;
+}

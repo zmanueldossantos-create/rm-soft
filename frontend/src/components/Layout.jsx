@@ -187,7 +187,7 @@ export default function Layout() {
     },
     {
       key: 'financas', icon: Landmark, label: 'Finanças', items: visible([
-        { to: '/tesouraria', icon: PiggyBank, label: 'Tesouraria', show: can('tesouraria:reasons_manage') },
+        { to: '/tesouraria', icon: PiggyBank, label: 'Tesouraria', show: can('tesouraria:overview') },
         { to: '/fiscal-periods', icon: Calendar, label: 'Períodos/Exercício', show: can('fiscal_periods:view') },
         { to: '/saf-t', icon: FileText, label: 'SAF-T', show: can('saf_t:export') },
       ]),
