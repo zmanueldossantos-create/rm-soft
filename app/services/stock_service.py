@@ -229,12 +229,13 @@ async def receive_stock(
 
 
 async def update_average_cost(db: AsyncSession, company_id: uuid.UUID, product: Product, base_quantity: float,
-                              unit_cost: float) -> None:
+                              unit_cost: float) -> tuple[float | None, float]:
     """
     THE weighted average cost (CMP) rule, called before an entry's quantity is added to the stock: the new cost is
     (stock x current cost + quantity x unit cost) / (stock + quantity), on the company's whole stock (every warehouse).
     With no stock (or a negative one) or no known cost yet, the cost is this entry's. Only priced entries call it: a
     line without a price enters at the current cost. Exits never change the unit cost.
+    Returns (cost before, cost after) - written on the entry's ledger row, the history of the cost.
     """
     from sqlalchemy import func as _func
     stock_before = float((await db.execute(
@@ -245,6 +246,7 @@ async def update_average_cost(db: AsyncSession, company_id: uuid.UUID, product: 
         product.average_cost = round(unit_cost, 4)
     else:
         product.average_cost = round((stock_before * current + base_quantity * unit_cost) / (stock_before + base_quantity), 4)
+    return current, float(product.average_cost)
 
 
 class StockQuantityError(Exception):
@@ -653,15 +655,17 @@ async def produce_stock(
             is_production_output=False, unit_cost=ingredient_costs.get(ingredient_product_id),
         ))
 
+    cost_before = cost_after = None
     if produced_unit_cost is not None:  # THE average cost rule, before the quantity made is added (as a reception)
         finished = (await db.execute(select(Product).where(Product.id == finished_product_id))).scalar_one()
-        await update_average_cost(db, company_id, finished, quantity_to_produce, produced_unit_cost)
+        cost_before, cost_after = await update_average_cost(db, company_id, finished, quantity_to_produce, produced_unit_cost)
     finished_stock = await _get_or_create_stock_row(db, company_id, finished_product_id, warehouse_id)
     finished_stock.quantity = float(finished_stock.quantity) + quantity_to_produce
     db.add(StockMovement(
         company_id=company_id, fiscal_period_id=posting_period.id, product_id=finished_product_id, warehouse_id=warehouse_id,
         movement_type=MovementType.PRODUCAO, quantity=quantity_to_produce, reason=reason,
         is_production_output=True, unit_cost=produced_unit_cost,
+        average_cost_before=cost_before, average_cost_after=cost_after,
     ))
 
     await db.commit()

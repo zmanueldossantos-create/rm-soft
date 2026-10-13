@@ -3,6 +3,7 @@ import ProductSaleUnits from '../components/ProductSaleUnits';
 import { useState, useEffect } from 'react';
 import { Wheat, Plus, Loader2, Search, Pencil } from 'lucide-react';
 import Modal from '../components/Modal';
+import CostHistory from '../components/CostHistory';
 import Select from '../components/Select';
 import { listProducts, createProduct, updateProduct, toggleProductStatus } from '../api/products';
 import { unitsApi } from '../api/catalogs';
@@ -38,7 +39,7 @@ export default function MateriaPrima() {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
-  const [sheetTab, setSheetTab] = useState('geral'); // 'geral' | 'embalagens'
+  const [sheetTab, setSheetTab] = useState('geral'); // 'geral' | 'embalagens' | 'custo'
   const [editingMaterial, setEditingMaterial] = useState(null); // its last purchase price and average cost
 
   async function loadData() {
@@ -245,11 +246,11 @@ export default function MateriaPrima() {
         )}
       </div>
 
-      <Modal open={modalOpen} onClose={closeModal} title={editingId ? 'Editar matéria-prima' : 'Nova matéria-prima'} maxWidthClass="max-w-3xl">
+      <Modal open={modalOpen} onClose={closeModal} title={editingId ? 'Editar matéria-prima' : 'Nova matéria-prima'} maxWidthClass="max-w-5xl">
         <div className="flex gap-1 mb-4 border-b border-border">
-          {[['geral', 'Geral'], ['embalagens', 'Embalagens']].map(([key, label]) => (
-            <button key={key} type="button" disabled={key === 'embalagens' && !editingId}
-              title={key === 'embalagens' && !editingId ? 'Crie primeiro a mat\u00e9ria-prima' : undefined}
+          {[['geral', 'Geral'], ['embalagens', 'Embalagens'], ['custo', 'Histórico do custo']].map(([key, label]) => (
+            <button key={key} type="button" disabled={key !== 'geral' && !editingId}
+              title={key !== 'geral' && !editingId ? 'Crie primeiro a mat\u00e9ria-prima' : undefined}
               onClick={() => setSheetTab(key)}
               className={'px-3 py-2 text-[13px] -mb-px border-b-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ' + (sheetTab === key ? 'border-accent text-text-primary font-medium' : 'border-transparent text-text-muted hover:text-text-primary')}>
               {label}
@@ -328,6 +329,7 @@ export default function MateriaPrima() {
               {editingId && sheetTab === 'embalagens' && (
           <ProductSaleUnits productId={editingId} baseUnitId={form.unit_of_measure_id} units={units} noPrice />
         )}
+        {editingId && sheetTab === 'custo' && <CostHistory productId={editingId} />}
         </div>
       </Modal>
     </main>

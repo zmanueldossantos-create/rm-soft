@@ -172,4 +172,3 @@ class TreasuryClosing(BaseModel):
     counted: float | None
     difference: float | None
     notes: str | None
-

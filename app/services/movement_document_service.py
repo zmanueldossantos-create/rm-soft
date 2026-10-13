@@ -151,8 +151,10 @@ async def create_stock_movement_document(
             raise InsufficientStockForMovementError(str(e))
         # A priced entry line moves the weighted average cost (its price per base unit); a line without a price enters
         # at the current cost. Computed BEFORE the quantity is added - see update_average_cost.
+        unit_cost = cost_before = cost_after = None
         if is_entrada and purchase_price > 0:
-            await update_average_cost(db, company_id, product, base_quantity, purchase_price / factor)
+            unit_cost = purchase_price / factor
+            cost_before, cost_after = await update_average_cost(db, company_id, product, base_quantity, unit_cost)
             product.purchase_price = round(purchase_price / factor, 2)  # the last price paid, per base unit
         stock = await _get_or_create_stock_row(db, company_id, product.id, warehouse_id)
         if is_entrada:
@@ -166,6 +168,8 @@ async def create_stock_movement_document(
             company_id=company_id, fiscal_period_id=posting_period.id, product_id=product.id, warehouse_id=warehouse_id,
             movement_type=ledger_type, quantity=base_quantity,
             reason=description, reference=f"{movement_type.code}{movement_date.year}/{next_number}",
+            unit_cost=round(unit_cost, 4) if unit_cost is not None else None,
+            average_cost_before=cost_before, average_cost_after=cost_after,
         ))
 
         line_objects.append(StockMovementDocumentLine(

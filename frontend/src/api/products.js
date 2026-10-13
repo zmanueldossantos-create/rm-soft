@@ -55,3 +55,12 @@ export async function toggleSaleUnit(productId, unitId) {
   const res = await apiClient.patch('/products/' + productId + '/sale-units/' + unitId + '/toggle-status');
   return res.data;
 }
+
+// Histórico do custo: each entry that moved the average cost (priced reception, production) - filters: { dateFrom, dateTo }
+export async function getCostHistory(productId, filters = {}) {
+  const params = {};
+  if (filters.dateFrom) params.date_from = filters.dateFrom;
+  if (filters.dateTo) params.date_to = filters.dateTo;
+  const res = await apiClient.get('/products/' + productId + '/cost-history', { params });
+  return res.data;
+}

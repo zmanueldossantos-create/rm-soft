@@ -363,7 +363,7 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection }) {
               <th className="text-right text-[11px] uppercase tracking-wide text-text-muted font-medium px-4 py-2 w-28">Qtd</th>
               <th className="text-right text-[11px] uppercase tracking-wide text-text-muted font-medium px-4 py-2 w-36">Preço Compra</th>
               <th className="text-right text-[11px] uppercase tracking-wide text-text-muted font-medium px-4 py-2 w-36">Preço Venda</th>
-              <th className="text-right text-[11px] uppercase tracking-wide text-text-muted font-medium px-4 py-2 w-32">Total</th>
+              <th className="text-right text-[11px] uppercase tracking-wide text-text-muted font-medium px-4 py-2 w-44 whitespace-nowrap">Total</th>
               <th className="px-2 py-2 w-10"></th>
             </tr>
           </thead>
@@ -401,7 +401,7 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection }) {
                   <td className="px-4 py-2.5 w-36">
                     <input type="number" step="0.01" min="0" value={line.sale_price} onChange={(e) => handleManualLineEdit(idx, 'sale_price', e.target.value)} className="w-full bg-bg-inset border border-border rounded-md px-2.5 py-1.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors text-right" />
                   </td>
-                  <td className="px-4 py-2.5 text-right font-mono text-text-primary">{formatMoney(lineTotal)}</td>
+                  <td className="px-4 py-2.5 text-right font-mono text-text-primary whitespace-nowrap">{formatMoney(lineTotal)}</td>
                   <td className="px-2 py-2.5 text-center">
                     <button type="button" onClick={() => removeLine(idx)} disabled={lines.length === 1} className="text-text-muted hover:text-danger disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer">
                       <Trash2 size={15} />

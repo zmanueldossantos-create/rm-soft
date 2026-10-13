@@ -431,4 +431,3 @@ async def get_overview_closings(
     current_user: User = Depends(require_permission("tesouraria:overview")),
 ):
     return await list_closings(db, current_user.company_id, date_from, date_to, pos_id)
-

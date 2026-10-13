@@ -4,6 +4,7 @@ Accessible to GESTOR/ADMIN of the company - not restricted to SUPER_ADMIN,
 since each business manages its own catalog (see decision on SUPER_ADMIN scope).
 """
 import uuid
+from datetime import date
 
 import os
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
@@ -37,6 +38,9 @@ from app.services.product_service import (
     ProductNotFoundError,
     ExemptionReasonRequiredError,
 )
+
+from app.schemas.cost_history import CostHistoryResponse
+from app.services.cost_history_service import CostHistoryProductNotFoundError, get_cost_history
 
 router = APIRouter(prefix="/api/v1/products", tags=["products"])
 
@@ -320,3 +324,18 @@ async def patch_sale_unit_status(
         return await toggle_sale_unit(db, current_user.company_id, product_id, unit_id)
     except (SaleUnitNotFoundError, SaleUnitInvalidError, SaleUnitNeedsConfirmationError) as e:
         _sale_unit_error(e)
+
+
+@router.get("/{product_id}/cost-history", response_model=CostHistoryResponse)
+async def get_product_cost_history(
+    product_id: uuid.UUID,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("products:view")),
+):
+    """How the average cost of a product moved: each priced reception or production, with the cost before and after."""
+    try:
+        return await get_cost_history(db, current_user.company_id, product_id, date_from, date_to)
+    except CostHistoryProductNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))

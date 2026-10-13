@@ -6,6 +6,7 @@ import VatReclassify from '../components/VatReclassify';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { Package, Plus, Loader2, Search, Pencil, Barcode, Scale, Upload, X } from 'lucide-react';
 import Modal from '../components/Modal';
+import CostHistory from '../components/CostHistory';
 
 import ProductSaleUnits from '../components/ProductSaleUnits';
 import Select from '../components/Select';
@@ -76,7 +77,7 @@ export default function Products() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editingProduct, setEditingProduct] = useState(null);
-  const [productTab, setProductTab] = useState('geral'); // product sheet tabs: 'geral' | 'unidades'
+  const [productTab, setProductTab] = useState('geral'); // product sheet tabs: 'geral' | 'unidades' | 'custo'
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
@@ -395,12 +396,12 @@ export default function Products() {
         )}
       </div>
 
-      <Modal open={modalOpen} onClose={closeModal} title={editingId ? 'Editar produto' : 'Novo produto'} maxWidthClass="max-w-4xl">
+      <Modal open={modalOpen} onClose={closeModal} title={editingId ? 'Editar produto' : 'Novo produto'} maxWidthClass="max-w-5xl">
         <form onSubmit={handleSubmit} className="flex flex-col gap-4 h-[70vh] overflow-y-auto scrollbar-thin pr-1">
 
           <div className="flex gap-1 border-b border-border -mt-1">
-            {[['geral', 'Geral'], ['unidades', 'Unidades e embalagens']].map(([key, label]) => (
-              <button key={key} type="button" disabled={key === 'unidades' && !editingId} title={key === 'unidades' && !editingId ? 'Guarde o produto primeiro' : undefined} onClick={() => setProductTab(key)} className={'px-3.5 py-2 text-[13px] font-medium border-b-2 -mb-px transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ' + (productTab === key ? 'border-accent text-text-primary' : 'border-transparent text-text-muted hover:text-text-primary')}>
+            {[['geral', 'Geral'], ['unidades', 'Unidades e embalagens'], ['custo', 'Histórico do custo']].map(([key, label]) => (
+              <button key={key} type="button" disabled={key !== 'geral' && !editingId} title={key !== 'geral' && !editingId ? 'Guarde o produto primeiro' : undefined} onClick={() => setProductTab(key)} className={'px-3.5 py-2 text-[13px] font-medium border-b-2 -mb-px transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ' + (productTab === key ? 'border-accent text-text-primary' : 'border-transparent text-text-muted hover:text-text-primary')}>
                 {label}
               </button>
             ))}
@@ -524,6 +525,7 @@ export default function Products() {
 
           </div>
           {editingId && productTab === 'unidades' && <ProductSaleUnits productId={editingId} baseUnitId={form.unitOfMeasureId} units={units} />}
+          {editingId && productTab === 'custo' && <CostHistory productId={editingId} />}
 
           {formError && (
             <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{formError}</div>

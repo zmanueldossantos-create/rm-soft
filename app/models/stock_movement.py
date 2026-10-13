@@ -61,6 +61,10 @@ class StockMovement(Base):
     # Cost per base unit at the time: an ingredient consumed by a production carries its average cost, the
     # product made carries the cost of what was consumed / the quantity made - None there = cost incomplete.
     unit_cost: Mapped[float | None] = mapped_column(Numeric(14, 4), nullable=True)
+    # An entry that moved the weighted average cost (a priced reception, a production with a complete cost): the
+    # product's average cost before and after it - the history of the cost (Histórico do custo). None elsewhere.
+    average_cost_before: Mapped[float | None] = mapped_column(Numeric(14, 4), nullable=True)
+    average_cost_after: Mapped[float | None] = mapped_column(Numeric(14, 4), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
