@@ -47,3 +47,4 @@ class DenominationCountResponse(BaseModel):
     counted_at: datetime
     total: float
     lines: list[DenominationCountLineResponse]
+

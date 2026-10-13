@@ -19,3 +19,4 @@ export async function getLatestDenominationCount(cashSessionId, countType) {
   const res = await apiClient.get('/moedeiro/counts/latest', { params: { cash_session_id: cashSessionId, count_type: countType } });
   return res.data;
 }
+

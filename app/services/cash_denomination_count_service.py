@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.cash_denomination_count import CashDenominationCount, CashDenominationCountLine, DenominationCountType
+from app.models.cash_session import CashSession, CashSessionStatus
 from app.models.denomination import Denomination
 
 
@@ -19,6 +20,10 @@ class EmptyCountError(Exception):
 
 class DenominationNotFoundError(Exception):
     pass
+
+
+class CountSessionNotFoundError(Exception):
+    """The session of a count must be one of the company's, still open: a count is a fact of the drawer in use."""
 
 
 async def record_denomination_count(
@@ -32,6 +37,11 @@ async def record_denomination_count(
     """Records a count and returns (count, total_amount) - total is quantity x denomination.value summed."""
     if not lines:
         raise EmptyCountError("O contagem de billetagem não pode estar vazia")
+    session = (await db.execute(
+        select(CashSession).where(CashSession.id == cash_session_id, CashSession.company_id == company_id)
+    )).scalar_one_or_none()
+    if session is None or session.status != CashSessionStatus.ABERTA:
+        raise CountSessionNotFoundError("Sessão de caixa não encontrada ou já fechada")
 
     denomination_ids = [line["denomination_id"] for line in lines]
     result = await db.execute(select(Denomination).where(Denomination.id.in_(denomination_ids)))
@@ -89,3 +99,16 @@ async def get_count_total(db: AsyncSession, count_id: uuid.UUID) -> float:
 async def get_count_lines(db: AsyncSession, count_id: uuid.UUID) -> list[CashDenominationCountLine]:
     result = await db.execute(select(CashDenominationCountLine).where(CashDenominationCountLine.count_id == count_id))
     return list(result.scalars().all())
+
+
+
+async def get_count_breakdown(db: AsyncSession, count_id: uuid.UUID) -> list[dict]:
+    """The notes and coins of a count, highest value first - the billetage table of the closing report."""
+    rows = (await db.execute(
+        select(CashDenominationCountLine.quantity, Denomination.value, Denomination.denomination_type)
+        .join(Denomination, Denomination.id == CashDenominationCountLine.denomination_id)
+        .where(CashDenominationCountLine.count_id == count_id)
+        .order_by(Denomination.value.desc(), Denomination.denomination_type)
+    )).all()
+    return [{"value": float(value), "type": getattr(kind, "value", kind), "quantity": int(quantity),
+             "amount": round(int(quantity) * float(value), 2)} for quantity, value, kind in rows]

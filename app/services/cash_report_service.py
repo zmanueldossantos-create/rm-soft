@@ -84,7 +84,17 @@ async def get_closing_report_data(db: AsyncSession, company_id: uuid.UUID, sessi
         "counted": round(float(session.closing_amount_counted), 2),
         "difference": round(float(session.closing_difference), 2),
         "notes": session.closing_notes,
+        "billetage": await _closing_billetage(db, company_id, session.id),
     }
+
+
+async def _closing_billetage(db: AsyncSession, company_id: uuid.UUID, session_id: uuid.UUID) -> list[dict]:
+    """The notes and coins counted at the closing (the FECHO count of a till with billetage), for the report - empty
+    when the till closed with a single counted amount."""
+    from app.models.cash_denomination_count import DenominationCountType
+    from app.services.cash_denomination_count_service import get_count_breakdown, get_latest_count
+    count = await get_latest_count(db, company_id, session_id, DenominationCountType.FECHO)
+    return await get_count_breakdown(db, count.id) if count is not None else []
 
 
 async def get_movements_report_data(

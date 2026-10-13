@@ -192,6 +192,15 @@ def generate_closing_report_pdf(data: dict) -> bytes:
         c.drawString(MARGIN + 2 * mm, p.y, f"Transferências por receber (fora da gaveta): {kz(s['pending_in'])}")
         p.y -= 6 * mm
 
+    # the notes and coins counted at the closing (a till with billetage) - what the drawer really holds
+    billetage = data.get("billetage") or []
+    if billetage:
+        _section_title(p, "Billetagem (contagem do fecho)")
+        _table(p, ["Denominação", "Tipo", "Quantidade", "Valor"],
+               [[kz(b["value"]), "Nota" if b["type"] == "NOTA" else "Moeda", str(b["quantity"]), kz(b["amount"])] for b in billetage],
+               [0.30, 0.20, 0.20, 0.30], ["l", "l", "r", "r"],
+               total=["Total contado", "", str(sum(b["quantity"] for b in billetage)), kz(sum(b["amount"] for b in billetage))])
+
     # signatures
     p.need(30 * mm)
     p.y -= 16 * mm

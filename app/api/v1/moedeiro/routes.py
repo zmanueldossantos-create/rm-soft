@@ -24,6 +24,7 @@ from app.services.cash_denomination_count_service import (
     get_count_lines,
     EmptyCountError,
     DenominationNotFoundError,
+    CountSessionNotFoundError,
 )
 
 router = APIRouter(prefix="/api/v1/moedeiro", tags=["moedeiro"])
@@ -53,7 +54,7 @@ async def post_denomination_count(
         )
     except EmptyCountError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
-    except DenominationNotFoundError as e:
+    except (DenominationNotFoundError, CountSessionNotFoundError) as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
     lines = await get_count_lines(db, count.id)
@@ -85,3 +86,4 @@ async def get_latest_denomination_count(
         counted_at=count.counted_at, total=total,
         lines=[{"denomination_id": l.denomination_id, "quantity": l.quantity} for l in lines],
     )
+

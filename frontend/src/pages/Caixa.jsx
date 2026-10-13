@@ -97,7 +97,8 @@ export default function Caixa() {
   const [articleSearchQuery, setArticleSearchQuery] = useState('');
 
   const [moedeiroModalOpen, setMoedeiroModalOpen] = useState(false);
-  const [moedeiroCountType, setMoedeiroCountType] = useState('ABERTURA');
+  // the drawer is counted at the closing (and for an exchange of notes) - the closing report prints that count
+  const [moedeiroCountType, setMoedeiroCountType] = useState('FECHO');
   const [denominations, setDenominations] = useState([]);
   const [denominationQuantities, setDenominationQuantities] = useState({});
   const [moedeiroSaving, setMoedeiroSaving] = useState(false);
@@ -131,7 +132,6 @@ export default function Caixa() {
   const [reportTab, setReportTab] = useState('movimentos'); // Relatórios: the journal, or the closings
   const [reportSessions, setReportSessions] = useState([]);
   const [reportSessionsLoading, setReportSessionsLoading] = useState(false);
-  const [closingViaBilletage, setClosingViaBilletage] = useState(false);
 
   const [session, setSession] = useState(null);
   const [sessionLoading, setSessionLoading] = useState(true);
@@ -275,27 +275,28 @@ export default function Caixa() {
   }, [Array.isArray(permissionsList)]);
 
   async function openMoedeiroModal(countType) {
-    const resolvedType = countType || 'ABERTURA';
+    const resolvedType = countType || 'FECHO';
     setMoedeiroCountType(resolvedType);
     setMoedeiroError('');
     setMoedeiroSavedTotal(null);
+    setClosingNotes('');
     setMoedeiroModalOpen(true);
-    // Ensure the target balance (see moedeiroTarget) is available regardless of
-    // which entry point opened this modal - the "Moedeiro" card jumps straight
-    // here without going through openCloseModal/handlePosChange first.
-    if (resolvedType === 'ABERTURA') {
-      getCarryForwardAmount(selectedPosId).then(setCarryForwardAmount).catch(() => setCarryForwardAmount(0));
-    } else {
-      refreshBalance(selectedPosId);
-    }
+    // the count must match the live expected balance of the drawer (see moedeiroTarget)
+    refreshBalance(selectedPosId);
     try {
       const data = await listDenominations();
       setDenominations(data);
-      const initialQuantities = Object.fromEntries(data.map((d) => [d.id, '']));
-      setDenominationQuantities(initialQuantities);
+      setDenominationQuantities(Object.fromEntries(data.map((d) => [d.id, ''])));
     } catch (err) {
       setMoedeiroError(extractErrorMessage(err, 'Erro ao carregar denominações'));
     }
+  }
+
+  function changeMoedeiroCountType(countType) {
+    setMoedeiroCountType(countType);
+    setMoedeiroSavedTotal(null);  // another type is another count
+    setMoedeiroError('');
+    setDenominationQuantities(Object.fromEntries(denominations.map((d) => [d.id, ''])));
   }
 
   function updateDenominationQuantity(denominationId, value) {
@@ -306,11 +307,9 @@ export default function Caixa() {
     const qty = parseInt(denominationQuantities[d.id] || '0', 10);
     return sum + qty * Number(d.value);
   }, 0);
-  // Target the count must match: the carried-over float for ABERTURA (before the
-  // session even has sales), or the live expected balance for FECHO (see
-  // get_current_expected_cash_balance) - matching exactly is required to submit,
-  // per the "button only activates when the breakdown matches" requirement.
-  const moedeiroTarget = moedeiroCountType === 'ABERTURA' ? carryForwardAmount : currentBalance;
+  // Target the count must match: the live expected balance of the drawer (see get_current_expected_cash_balance) -
+  // matching exactly is required to submit, per the "button only activates when the breakdown matches" requirement.
+  const moedeiroTarget = currentBalance;
   const moedeiroMatches = moedeiroTarget !== null && Math.abs(moedeiroTotal - moedeiroTarget) < 0.01;
 
   async function handleMoedeiroSubmit() {
@@ -601,14 +600,12 @@ export default function Caixa() {
     // proactively at close time.
     const selectedPos = allActivePos.find((p) => p.id === selectedPosId);
     if (selectedPos?.billetage_enabled) {
-      setClosingViaBilletage(true);
       setClosingNotes('');
       setCloseError('');
       setCloseResult(null);
       openMoedeiroModal('FECHO');
       return;
     }
-    setClosingViaBilletage(false);
     setClosingAmountCounted('');
     setClosingNotes('');
     setCloseError('');
@@ -1205,7 +1202,7 @@ export default function Caixa() {
           <ShoppingCart size={18} className="text-accent" />
           <span className="pointer-events-none absolute left-full ml-2 whitespace-nowrap rounded-md bg-bg-elevated border border-border px-2.5 py-1 text-[12px] text-text-primary shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-50">Consultar artigos</span>
         </button>
-        <button onClick={() => toggleSideDrawer('moedeiro', () => openMoedeiroModal('ABERTURA'))} disabled={!session || !can('moedeiro:record')} className={'group relative w-11 h-11 flex items-center justify-center rounded-lg border hover:border-accent hover:bg-accent/5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer ' + (activeSideDrawer === 'moedeiro' ? 'border-accent bg-accent/5' : 'border-accent/20 bg-bg-inset')}>
+        <button onClick={() => toggleSideDrawer('moedeiro', () => openMoedeiroModal('FECHO'))} disabled={!session || !can('moedeiro:record')} className={'group relative w-11 h-11 flex items-center justify-center rounded-lg border hover:border-accent hover:bg-accent/5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer ' + (activeSideDrawer === 'moedeiro' ? 'border-accent bg-accent/5' : 'border-accent/20 bg-bg-inset')}>
           <Coins size={18} className="text-accent" />
           <span className="pointer-events-none absolute left-full ml-2 whitespace-nowrap rounded-md bg-bg-elevated border border-border px-2.5 py-1 text-[12px] text-text-primary shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-50">Moedeiro</span>
         </button>
@@ -2056,9 +2053,8 @@ export default function Caixa() {
             <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Tipo de contagem</label>
             <Select
               value={moedeiroCountType}
-              onChange={(v) => setMoedeiroCountType(v)}
+              onChange={changeMoedeiroCountType}
               options={[
-                { value: 'ABERTURA', label: 'Abertura de caixa' },
                 { value: 'FECHO', label: 'Fecho de caixa' },
                 { value: 'TROCA_SAIDA', label: 'Troca - saída' },
                 { value: 'TROCA_ENTRADA', label: 'Troca - entrada' },
@@ -2072,7 +2068,8 @@ export default function Caixa() {
                 <CheckCircle2 size={16} />
                 Contagem registada: {formatKz(moedeiroSavedTotal)} Kz
               </div>
-              {closingViaBilletage && (
+              {/* a closing count, from Fechar caixa or from the Moedeiro button, goes on to the closing */}
+              {moedeiroCountType === 'FECHO' && (
                 <>
                   {/* a difference between the count and the expected is always explained (never blocking) */}
                   <div>
