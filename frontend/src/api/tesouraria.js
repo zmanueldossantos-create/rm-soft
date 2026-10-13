@@ -44,8 +44,16 @@ export async function listPendingReceptions(posId) {
   return res.data;
 }
 
-export async function receiveCashMovement(movementId, posId) {
-  const res = await apiClient.post('/tesouraria/movements/' + movementId + '/receive', null, { params: { pos_id: posId } });
+// lines: the notes and coins received ([{denomination_id, quantity}]) - a receiving till with billetage only
+export async function receiveCashMovement(movementId, posId, lines = null) {
+  const body = lines ? { denomination_lines: lines } : null;
+  const res = await apiClient.post('/tesouraria/movements/' + movementId + '/receive', body, { params: { pos_id: posId } });
+  return res.data;
+}
+
+// The notes and coins the sending till gave for a transfer - proposed at the reception.
+export async function getTransferBilletage(movementId) {
+  const res = await apiClient.get('/tesouraria/movements/' + movementId + '/billetage');
   return res.data;
 }
 

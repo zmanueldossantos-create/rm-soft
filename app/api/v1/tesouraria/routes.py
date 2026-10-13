@@ -23,6 +23,8 @@ from app.schemas.tesouraria import (
     CashMovementReasonResponse,
     CashMovementCreateRequest,
     CashMovementResponse,
+    CashMovementReceiveRequest,
+    TransferBilletageLine,
     AssignCashPointRequest,
     UserCashPointAccessResponse,
 )
@@ -46,7 +48,25 @@ from app.services.cash_movement_service import (
     MovementAlreadyReceivedError,
     MovementNotReceivableAtThisPosError,
     InsufficientFundsError,
+    TransferBilletageRequiredError,
+    get_transfer_billetage,
 )
+from app.services.cash_denomination_count_service import (
+    CountSessionNotFoundError, CountTotalMismatchError, DenominationNotFoundError, EmptyCountError,
+)
+
+# the notes and coins of a transfer: what is wrong with them, and the status it answers with
+BILLETAGE_ERRORS = {
+    TransferBilletageRequiredError: status.HTTP_422_UNPROCESSABLE_ENTITY,
+    CountTotalMismatchError: status.HTTP_422_UNPROCESSABLE_ENTITY,
+    EmptyCountError: status.HTTP_422_UNPROCESSABLE_ENTITY,
+    DenominationNotFoundError: status.HTTP_404_NOT_FOUND,
+    CountSessionNotFoundError: status.HTTP_409_CONFLICT,
+}
+
+
+def _lines(lines) -> list[dict] | None:
+    return [line.model_dump() for line in lines] if lines else None
 from app.services.user_cash_point_access_service import CashPointAccessDeniedError
 from app.services.point_of_sale_service import PosNotFoundError
 from app.services.user_cash_point_access_service import (
@@ -146,7 +166,10 @@ async def post_cash_movement(
             reason_id=payload.reason_id,
             movement_date=payload.movement_date,
             description=payload.description,
+            denomination_lines=_lines(payload.denomination_lines),
         )
+    except tuple(BILLETAGE_ERRORS) as e:
+        raise HTTPException(status_code=BILLETAGE_ERRORS[type(e)], detail=str(e))
     except InvalidCashMovementError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     except ReasonNotFoundError as e:
@@ -282,17 +305,36 @@ async def get_pending_receptions(
 async def post_receive_movement(
     movement_id: uuid.UUID,
     pos_id: uuid.UUID,
+    payload: CashMovementReceiveRequest | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("tesouraria:receive")),
 ):
     try:
-        return await receive_cash_movement(db, current_user.company_id, movement_id, pos_id, current_user.id)
+        return await receive_cash_movement(db, current_user.company_id, movement_id, pos_id, current_user.id,
+                                           denomination_lines=_lines(payload.denomination_lines) if payload else None)
+    except tuple(BILLETAGE_ERRORS) as e:
+        raise HTTPException(status_code=BILLETAGE_ERRORS[type(e)], detail=str(e))
+    except DestinationPosNotOpenError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except MovementNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except MovementAlreadyReceivedError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except MovementNotReceivableAtThisPosError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+
+
+@router.get("/movements/{movement_id}/billetage", response_model=list[TransferBilletageLine])
+async def get_movement_billetage(
+    movement_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("tesouraria:view")),
+):
+    """The notes and coins the sending till gave - proposed to the receiving till at the reception."""
+    try:
+        return await get_transfer_billetage(db, current_user.company_id, movement_id)
+    except MovementNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
 @router.get("/pending-emissions/{pos_id}", response_model=list[CashMovementResponse])

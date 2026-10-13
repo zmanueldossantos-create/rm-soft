@@ -11,6 +11,11 @@ count_type meanings:
   mix without changing the total (e.g. breaking a 5000 note into five 1000
   notes). Net amount is always 0 by construction, tracked via two linked
   counts (out/in) rather than a single one - see cash_denomination_service.
+- TRANSF_SAIDA / TRANSF_ENTRADA: the notes and coins of a transfer between two
+  tills (cash_movement_id set) - entered by the sending till (its total is the
+  amount sent), then confirmed by the receiving till at the reception (the
+  sender's mix proposed). Only for a till with billetage_enabled. Printed in
+  each till's closing report - see cash_movement_service.
 """
 import enum
 import uuid
@@ -28,6 +33,11 @@ class DenominationCountType(str, enum.Enum):
     FECHO = "FECHO"
     TROCA_SAIDA = "TROCA_SAIDA"
     TROCA_ENTRADA = "TROCA_ENTRADA"
+    TRANSF_SAIDA = "TRANSF_SAIDA"
+    TRANSF_ENTRADA = "TRANSF_ENTRADA"
+
+
+TRANSFER_COUNT_TYPES = (DenominationCountType.TRANSF_SAIDA, DenominationCountType.TRANSF_ENTRADA)
 
 
 class CashDenominationCount(Base):
@@ -38,6 +48,10 @@ class CashDenominationCount(Base):
     cash_session_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("cash_sessions.id"), nullable=False, index=True)
     count_type: Mapped[DenominationCountType] = mapped_column(Enum(DenominationCountType), nullable=False)
     counted_by_user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    # the transfer whose notes and coins these are (TRANSF_SAIDA / TRANSF_ENTRADA only)
+    cash_movement_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("cash_movements.id"), nullable=True, index=True,
+    )
     counted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     def __repr__(self) -> str:

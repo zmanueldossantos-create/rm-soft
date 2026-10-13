@@ -7,6 +7,8 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, field_validator
 
+from app.schemas.moedeiro import DenominationCountLineInput
+
 
 class CashMovementReasonCreateRequest(BaseModel):
     name: str
@@ -32,6 +34,8 @@ class CashMovementCreateRequest(BaseModel):
     reason_id: uuid.UUID | None = None
     movement_date: date | None = None
     description: str | None = None
+    # the notes and coins sent - a transfer from a till with billetage only
+    denomination_lines: list[DenominationCountLineInput] | None = None
 
     @field_validator("amount")
     @classmethod
@@ -39,6 +43,19 @@ class CashMovementCreateRequest(BaseModel):
         if v <= 0:
             raise ValueError("O valor deve ser maior que zero")
         return v
+
+
+class CashMovementReceiveRequest(BaseModel):
+    """The notes and coins received - a receiving till with billetage only."""
+    denomination_lines: list[DenominationCountLineInput] = []
+
+
+class TransferBilletageLine(BaseModel):
+    denomination_id: uuid.UUID
+    value: float
+    type: str
+    quantity: int
+    amount: float
 
 
 class CashMovementResponse(BaseModel):

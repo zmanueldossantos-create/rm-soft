@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.api.deps import require_permission
 from app.models.user import User
-from app.models.cash_denomination_count import DenominationCountType
+from app.models.cash_denomination_count import TRANSFER_COUNT_TYPES, DenominationCountType
 from app.schemas.moedeiro import (
     DenominationResponse,
     RecordDenominationCountRequest,
@@ -46,6 +46,10 @@ async def post_denomination_count(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("moedeiro:record")),
 ):
+    # a transfer's notes and coins are given with the transfer itself (Tesouraria), never as a loose count
+    if payload.count_type not in {t.value for t in DenominationCountType} or \
+            DenominationCountType(payload.count_type) in TRANSFER_COUNT_TYPES:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Tipo de contagem inválido")
     try:
         count, total = await record_denomination_count(
             db, current_user.company_id, payload.cash_session_id,

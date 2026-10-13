@@ -85,6 +85,7 @@ async def get_closing_report_data(db: AsyncSession, company_id: uuid.UUID, sessi
         "difference": round(float(session.closing_difference), 2),
         "notes": session.closing_notes,
         "billetage": await _closing_billetage(db, company_id, session.id),
+        "transfer_billetage": await _transfer_billetage(db, company_id, session.id),
     }
 
 
@@ -95,6 +96,36 @@ async def _closing_billetage(db: AsyncSession, company_id: uuid.UUID, session_id
     from app.services.cash_denomination_count_service import get_count_breakdown, get_latest_count
     count = await get_latest_count(db, company_id, session_id, DenominationCountType.FECHO)
     return await get_count_breakdown(db, count.id) if count is not None else []
+
+
+async def _transfer_billetage(db: AsyncSession, company_id: uuid.UUID, session_id: uuid.UUID) -> list[dict]:
+    """The notes and coins of the transfers this session sent or received (a till with billetage), in order:
+    [{direction: "Enviada" | "Recebida", counterpart, amount, lines}] - lines as the closing billetage's."""
+    from app.models.cash_denomination_count import CashDenominationCount, DenominationCountType, TRANSFER_COUNT_TYPES
+    from app.models.cash_movement import CashMovement
+    from app.models.point_of_sale import PointOfSale
+    from app.services.cash_denomination_count_service import get_count_breakdown
+    rows = (await db.execute(
+        select(CashDenominationCount, CashMovement)
+        .join(CashMovement, CashMovement.id == CashDenominationCount.cash_movement_id)
+        .where(CashDenominationCount.company_id == company_id, CashDenominationCount.cash_session_id == session_id,
+               CashDenominationCount.count_type.in_(TRANSFER_COUNT_TYPES))
+        .order_by(CashDenominationCount.counted_at)
+    )).all()
+    if not rows:
+        return []
+    pos_ids = {m.source_pos_id for _, m in rows} | {m.destination_pos_id for _, m in rows}
+    names = dict((await db.execute(select(PointOfSale.id, PointOfSale.name).where(PointOfSale.id.in_(pos_ids)))).all())
+    transfers = []
+    for count, movement in rows:
+        sent = count.count_type == DenominationCountType.TRANSF_SAIDA
+        transfers.append({
+            "direction": "Enviada" if sent else "Recebida",
+            "counterpart": names.get(movement.destination_pos_id if sent else movement.source_pos_id, "-"),
+            "amount": round(float(movement.amount), 2),
+            "lines": await get_count_breakdown(db, count.id),
+        })
+    return transfers
 
 
 async def get_movements_report_data(

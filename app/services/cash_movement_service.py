@@ -19,6 +19,11 @@ Validation rules enforced here (not at the DB level):
 - amount must be > 0.
 - Every POS referenced must belong to company_id - cross-tenant references
   are rejected the same way as everywhere else in the codebase.
+- Billetage of a transfer: a sending till with billetage_enabled gives the notes
+  and coins it hands over (their total is the amount, a TRANSF_SAIDA count on its
+  session); a receiving till with billetage_enabled confirms the notes and coins
+  it receives (the same total, a TRANSF_ENTRADA count on its session - the screen
+  proposes the sender's). Both print in the till's closing report.
 """
 import uuid
 from datetime import date
@@ -31,6 +36,11 @@ from app.models.cash_movement_reason import CashMovementReason
 from app.models.movement_type import MovementDirection
 from app.services.point_of_sale_service import get_pos_or_raise
 from app.services.user_cash_point_access_service import require_cash_point_access
+from app.models.cash_denomination_count import CashDenominationCountLine, DenominationCountType
+from app.models.denomination import Denomination
+from app.services.cash_denomination_count_service import (
+    delete_movement_counts, get_movement_count, record_denomination_count,
+)
 from app.services.cash_session_service import get_open_session, get_current_expected_cash_balance
 
 
@@ -130,7 +140,10 @@ async def create_cash_movement(
     reason_id: uuid.UUID | None = None,
     movement_date: date | None = None,
     description: str | None = None,
+    denomination_lines: list[dict] | None = None,
 ) -> CashMovement:
+    """denomination_lines: the notes and coins sent ([{denomination_id, quantity}]) - required for a transfer from a
+    till with billetage, ignored otherwise."""
     if amount <= 0:
         raise InvalidCashMovementError("O valor do movimento deve ser maior que zero")
 
@@ -150,8 +163,9 @@ async def create_cash_movement(
         if reason_id is None:
             raise InvalidCashMovementError("Uma saída externa exige um motivo")
 
+    source_pos, open_session = None, None
     if source_pos_id is not None:
-        await get_pos_or_raise(db, company_id, source_pos_id)
+        source_pos = await get_pos_or_raise(db, company_id, source_pos_id)
         await require_cash_point_access(db, company_id, creating_user, source_pos_id)
         # Funds can only leave a POS whose drawer is currently open and counted -
         # see discussion on the closed-Bar-POS-with-no-funds bug.
@@ -199,9 +213,23 @@ async def create_cash_movement(
         received_by_user_id=None if initial_status == CashMovementStatus.PENDENTE else creating_user.id,
     )
     db.add(movement)
-    await db.commit()
+    if movement_type == CashMovementType.TRANSFERENCIA and source_pos.billetage_enabled:
+        if not denomination_lines:
+            raise TransferBilletageRequiredError("Esta caixa usa billetagem - indique as notas e moedas que envia")
+        await db.flush()
+        # commits the movement with its notes and coins - or nothing, if they do not add up to the amount
+        await record_denomination_count(
+            db, company_id, open_session.id, DenominationCountType.TRANSF_SAIDA, creating_user.id,
+            denomination_lines, cash_movement_id=movement.id, expected_total=amount,
+        )
+    else:
+        await db.commit()
     await db.refresh(movement)
     return movement
+
+
+class TransferBilletageRequiredError(Exception):
+    """A till with billetage gives the notes and coins of a transfer it sends or receives."""
 
 
 class DestinationPosNotOpenError(Exception):
@@ -222,6 +250,7 @@ class MovementNotReceivableAtThisPosError(Exception):
 
 async def receive_cash_movement(
     db: AsyncSession, company_id: uuid.UUID, movement_id: uuid.UUID, receiving_pos_id: uuid.UUID, received_by_user_id: uuid.UUID,
+    denomination_lines: list[dict] | None = None,
 ) -> CashMovement:
     """Confirms receipt of a pending TRANSFERENCIA - only the destination POS
     (receiving_pos_id must match movement.destination_pos_id) can confirm, and
@@ -241,7 +270,20 @@ async def receive_cash_movement(
     movement.status = CashMovementStatus.RECEBIDO
     movement.received_at = func.now()
     movement.received_by_user_id = received_by_user_id
-    await db.commit()
+    destination_pos = await get_pos_or_raise(db, company_id, receiving_pos_id)
+    if destination_pos.billetage_enabled:
+        # the notes and coins received, counted into this till's open session - or nothing is received
+        if not denomination_lines:
+            raise TransferBilletageRequiredError("Esta caixa usa billetagem - confirme as notas e moedas recebidas")
+        destination_session = await get_open_session(db, company_id, receiving_pos_id)
+        if destination_session is None:
+            raise DestinationPosNotOpenError("Esta caixa não tem nenhuma sessão aberta - abra a caixa antes de receber")
+        await record_denomination_count(
+            db, company_id, destination_session.id, DenominationCountType.TRANSF_ENTRADA, received_by_user_id,
+            denomination_lines, cash_movement_id=movement.id, expected_total=float(movement.amount),
+        )
+    else:
+        await db.commit()
     await db.refresh(movement)
     return movement
 
@@ -290,8 +332,32 @@ async def cancel_cash_movement(
     if movement.source_pos_id != cancelling_pos_id:
         raise MovementNotReceivableAtThisPosError("Apenas a caixa de origem pode cancelar esta transferência")
 
+    await delete_movement_counts(db, movement.id)  # the notes and coins sent go back with it
     await db.delete(movement)
     await db.commit()
+
+
+async def get_transfer_billetage(db: AsyncSession, company_id: uuid.UUID, movement_id: uuid.UUID) -> list[dict]:
+    """The notes and coins the sending till gave for a transfer ([{denomination_id, value, type, quantity, amount}],
+    highest value first) - proposed to the receiving till; empty when the sender has no billetage."""
+    movement = (await db.execute(
+        select(CashMovement).where(CashMovement.id == movement_id, CashMovement.company_id == company_id)
+    )).scalar_one_or_none()
+    if movement is None:
+        raise MovementNotFoundError("Movimento não encontrado")
+    count = await get_movement_count(db, company_id, movement.id, DenominationCountType.TRANSF_SAIDA)
+    if count is None:
+        return []
+    rows = (await db.execute(
+        select(CashDenominationCountLine.denomination_id, CashDenominationCountLine.quantity,
+               Denomination.value, Denomination.denomination_type)
+        .join(Denomination, Denomination.id == CashDenominationCountLine.denomination_id)
+        .where(CashDenominationCountLine.count_id == count.id)
+        .order_by(Denomination.value.desc())
+    )).all()
+    return [{"denomination_id": denomination_id, "value": float(value), "type": getattr(kind, "value", kind),
+             "quantity": int(quantity), "amount": round(int(quantity) * float(value), 2)}
+            for denomination_id, quantity, value, kind in rows]
 
 
 async def list_cash_movements(

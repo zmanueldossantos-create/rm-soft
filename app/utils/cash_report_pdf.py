@@ -201,6 +201,24 @@ def generate_closing_report_pdf(data: dict) -> bytes:
                [0.30, 0.20, 0.20, 0.30], ["l", "l", "r", "r"],
                total=["Total contado", "", str(sum(b["quantity"] for b in billetage)), kz(sum(b["amount"] for b in billetage))])
 
+    # the notes and coins of each transfer sent or received by this till (a till with billetage)
+    transfers = data.get("transfer_billetage") or []
+    if transfers:
+        _section_title(p, "Billetagem das transferências")
+        for t in transfers:
+            p.need(14 * mm)
+            c.setFillColor(TEXT_PRIMARY)
+            c.setFont("Helvetica-Bold", 9)
+            way = "para" if t["direction"] == "Enviada" else "de"
+            c.drawString(MARGIN, p.y, f"Transferência {t['direction'].lower()} {way} {t['counterpart']} · {kz(t['amount'])}")
+            p.y -= 3 * mm
+            _table(p, ["Denominação", "Tipo", "Quantidade", "Valor"],
+                   [[kz(b["value"]), "Nota" if b["type"] == "NOTA" else "Moeda", str(b["quantity"]), kz(b["amount"])]
+                    for b in t["lines"]],
+                   [0.30, 0.20, 0.20, 0.30], ["l", "l", "r", "r"],
+                   total=["Total", "", str(sum(b["quantity"] for b in t["lines"])), kz(sum(b["amount"] for b in t["lines"]))])
+            p.y -= 2 * mm
+
     # signatures
     p.need(30 * mm)
     p.y -= 16 * mm

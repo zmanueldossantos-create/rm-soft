@@ -14,8 +14,9 @@ import useDocumentRules, { DOC_CODE_BY_TYPE } from '../utils/documentRules';
 import { getMyCompanyBankAccounts } from '../api/company';
 import { createProFormaFromPos, getPosStock } from '../api/pos';
 import { listPaymentMethodPreferences } from '../api/tesouraria';
-import { Wallet, Plus, Minus, Trash2, Loader2, Search, X, ShoppingCart, LogOut, CheckCircle2, FileSearch, ArrowLeftRight, Coins, Receipt, Printer, FileText } from 'lucide-react';
+import { Wallet, Plus, Minus, Trash2, Loader2, Search, X, ShoppingCart, LogOut, CheckCircle2, FileSearch, ArrowLeftRight, Coins, Receipt, Printer, FileText, ChevronLeft } from 'lucide-react';
 import Modal from '../components/Modal';
+import DenominationGrid, { denominationLines, denominationTotal } from '../components/DenominationGrid';
 import OpenAccountsPanel from '../components/OpenAccountsPanel';
 import { Wallet2 as OpenAccountsIcon, CalendarClock } from 'lucide-react';
 import { ReservasPanel } from './Reservas';
@@ -26,7 +27,7 @@ import { listProducts } from '../api/products';
 import { listCustomers } from '../api/customers';
 import { openCashSession, getOpenCashSession, closeCashSession, checkout, liquidatePendingInvoice, getSessionSummary, listCashSessions, fetchClosingReportPdfBlob, getCarryForwardAmount } from '../api/pos';
 import { listPendingProFormas, listRecentIssuedInvoices, fetchInvoicePdfBlob, getInvoiceDetail } from '../api/invoices';
-import { listPendingReceptions, receiveCashMovement, listPendingEmissions, cancelCashMovement, getDailyReport, fetchDailyReportPdfBlob } from '../api/tesouraria';
+import { listPendingReceptions, receiveCashMovement, listPendingEmissions, cancelCashMovement, getDailyReport, fetchDailyReportPdfBlob, getTransferBilletage } from '../api/tesouraria';
 import DocumentActionModals from '../components/DocumentActionModals';
 import {
   getMyCashPointAssociation, listCashPointAssociations,
@@ -113,6 +114,10 @@ export default function Caixa() {
   const [movementHistory, setMovementHistory] = useState([]);
   const [movementHistoryLoading, setMovementHistoryLoading] = useState(false);
   const [pendingReceptions, setPendingReceptions] = useState([]);
+  // billetage of a transfer: the notes sent (a sending till with billetage), and the reception being confirmed with
+  // its notes (a receiving till with billetage - the sender's proposed)
+  const [transferQuantities, setTransferQuantities] = useState({});
+  const [receptionDraft, setReceptionDraft] = useState(null); // { movement, quantities }
   const [pendingReceptionsLoading, setPendingReceptionsLoading] = useState(false);
   const [receivingId, setReceivingId] = useState(null);
   const [pendingEmissions, setPendingEmissions] = useState([]);
@@ -303,10 +308,7 @@ export default function Caixa() {
     setDenominationQuantities((prev) => ({ ...prev, [denominationId]: value }));
   }
 
-  const moedeiroTotal = denominations.reduce((sum, d) => {
-    const qty = parseInt(denominationQuantities[d.id] || '0', 10);
-    return sum + qty * Number(d.value);
-  }, 0);
+  const moedeiroTotal = denominationTotal(denominations, denominationQuantities);
   // Target the count must match: the live expected balance of the drawer (see get_current_expected_cash_balance) -
   // matching exactly is required to submit, per the "button only activates when the breakdown matches" requirement.
   const moedeiroTarget = currentBalance;
@@ -357,7 +359,10 @@ export default function Caixa() {
     setMovementFormError('');
     setMovementModalOpen(true);
     setMovementModalTab('form');
+    setTransferQuantities({});
+    setReceptionDraft(null);
     listCashMovementReasons().then(setMovementReasons).catch(() => {});
+    if (denominations.length === 0) listDenominations().then(setDenominations).catch(() => {});
     loadPendingReceptionsList();
     loadPendingEmissionsList();
   }
@@ -386,10 +391,27 @@ export default function Caixa() {
     }
   }
 
-  async function handleReceiveMovement(movementId) {
+  // A till with billetage confirms the notes it receives: the sender's are proposed, the cashier corrects them if the
+  // envelope differs (same total). Without billetage, Confirmar receives at once.
+  async function startReception(movement) {
+    if (!allActivePos.find((p) => p.id === selectedPosId)?.billetage_enabled) {
+      handleReceiveMovement(movement.id);
+      return;
+    }
+    setMovementFormError('');
+    try {
+      const sent = await getTransferBilletage(movement.id);
+      setReceptionDraft({ movement, quantities: Object.fromEntries(sent.map((l) => [l.denomination_id, String(l.quantity)])) });
+    } catch (err) {
+      setMovementFormError(extractErrorMessage(err, 'Erro ao carregar a billetagem da transferência'));
+    }
+  }
+
+  async function handleReceiveMovement(movementId, lines = null) {
     setReceivingId(movementId);
     try {
-      await receiveCashMovement(movementId, selectedPosId);
+      await receiveCashMovement(movementId, selectedPosId, lines);
+      setReceptionDraft(null);
       await loadPendingReceptionsList();
       refreshBalance(selectedPosId);
       refreshPosStock(selectedPosId);
@@ -427,6 +449,17 @@ export default function Caixa() {
     }
   }
 
+  // The other till of a transfer, as the selectors name it.
+  function posNameById(posId) {
+    const pos = allActivePos.find((p) => p.id === posId);
+    return pos ? posLabel(pos) : 'outra caixa';
+  }
+
+  // A transfer from a till with billetage: the notes sent make the amount (no amount typed apart).
+  const transferSourcePos = allActivePos.find((p) => p.id === movementForm.sourcePosId);
+  const transferWithBilletage = movementForm.movementType === 'TRANSFERENCIA' && !!transferSourcePos?.billetage_enabled;
+  const transferTotal = denominationTotal(denominations, transferQuantities);
+
   async function handleMovementSubmit(e) {
     e.preventDefault();
     setMovementFormError('');
@@ -434,13 +467,14 @@ export default function Caixa() {
     try {
       const payload = {
         movement_type: movementForm.movementType,
-        amount: parseFloat(movementForm.amount || '0'),
+        amount: transferWithBilletage ? transferTotal : parseFloat(movementForm.amount || '0'),
         reason_id: movementForm.reasonId || null,
         description: movementForm.description || null,
       };
       if (movementForm.movementType === 'TRANSFERENCIA') {
         payload.source_pos_id = movementForm.sourcePosId;
         payload.destination_pos_id = movementForm.otherPosId;
+        if (transferWithBilletage) payload.denomination_lines = denominationLines(denominations, transferQuantities);
       } else if (movementForm.movementType === 'ENTRADA_EXTERNA') {
         payload.destination_pos_id = selectedPosId;
       } else {
@@ -452,6 +486,7 @@ export default function Caixa() {
       loadPendingEmissionsList();
       loadPendingReceptionsList();
       setMovementForm({ movementType: 'TRANSFERENCIA', amount: '', sourcePosId: selectedPosId, otherPosId: '', reasonId: '', description: '' });
+      setTransferQuantities({});
     } catch (err) {
       setMovementFormError(extractErrorMessage(err, 'Erro ao registar movimento'));
     } finally {
@@ -2047,7 +2082,7 @@ export default function Caixa() {
         </div>
       </Modal>
 
-      <Modal variant="drawer" drawerLeftClass="left-16" open={moedeiroModalOpen} onClose={() => setMoedeiroModalOpen(false)} title="Moedeiro (billetagem)" maxWidthClass="max-w-md">
+      <Modal variant="drawer" drawerLeftClass="left-16" open={moedeiroModalOpen} onClose={() => setMoedeiroModalOpen(false)} title="Moedeiro (billetagem)" maxWidthClass="max-w-2xl">
         <div className="flex flex-col gap-4">
           <div>
             <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Tipo de contagem</label>
@@ -2096,40 +2131,7 @@ export default function Caixa() {
             </div>
           ) : (
             <>
-              <div className="max-h-[360px] overflow-y-auto scrollbar-thin flex flex-col gap-2">
-                <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wide">Notas</p>
-                {denominations.filter((d) => d.denomination_type === 'NOTA').map((d) => (
-                  <div key={d.id} className="flex items-center justify-between gap-3">
-                    <span className="text-[13px] text-text-primary font-mono w-24">{formatKz(d.value)} Kz</span>
-                    <input
-                      type="number" min="0" step="1"
-                      value={denominationQuantities[d.id] || ''}
-                      onChange={(e) => updateDenominationQuantity(d.id, e.target.value)}
-                      placeholder="0"
-                      className="w-32 bg-bg-inset border border-border rounded-md px-2.5 py-1.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors"
-                    />
-                    <span className="text-[12px] text-text-muted w-20 text-right">
-                      {formatKz(parseInt(denominationQuantities[d.id] || '0', 10) * Number(d.value))}
-                    </span>
-                  </div>
-                ))}
-                <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wide mt-2">Moedas</p>
-                {denominations.filter((d) => d.denomination_type === 'MOEDA').map((d) => (
-                  <div key={d.id} className="flex items-center justify-between gap-3">
-                    <span className="text-[13px] text-text-primary font-mono w-24">{formatKz(d.value)} Kz</span>
-                    <input
-                      type="number" min="0" step="1"
-                      value={denominationQuantities[d.id] || ''}
-                      onChange={(e) => updateDenominationQuantity(d.id, e.target.value)}
-                      placeholder="0"
-                      className="w-32 bg-bg-inset border border-border rounded-md px-2.5 py-1.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors"
-                    />
-                    <span className="text-[12px] text-text-muted w-20 text-right">
-                      {formatKz(parseInt(denominationQuantities[d.id] || '0', 10) * Number(d.value))}
-                    </span>
-                  </div>
-                ))}
-              </div>
+              <DenominationGrid denominations={denominations} quantities={denominationQuantities} onChange={updateDenominationQuantity} />
 
               <div className="flex flex-col gap-1.5 bg-bg-inset border border-border rounded-md px-4 py-3">
                 <div className="flex justify-between items-center">
@@ -2164,7 +2166,7 @@ export default function Caixa() {
         </div>
       </Modal>
 
-      <Modal variant="drawer" drawerLeftClass="left-16" open={movementModalOpen} onClose={() => setMovementModalOpen(false)} title="Operações de Caixa">
+      <Modal variant="drawer" drawerLeftClass="left-16" open={movementModalOpen} onClose={() => setMovementModalOpen(false)} title="Operações de Caixa" maxWidthClass="max-w-2xl">
         <div className="flex items-center gap-1.5 mb-4 border-b border-border">
           <button
             onClick={() => setMovementModalTab('form')}
@@ -2173,10 +2175,10 @@ export default function Caixa() {
             Novo movimento
           </button>
           <button
-            onClick={() => setMovementModalTab('pending')}
+            onClick={() => { setMovementModalTab('pending'); setReceptionDraft(null); }}
             className={'px-3.5 py-2 text-[13px] font-medium border-b-2 -mb-px transition-colors cursor-pointer flex items-center gap-1.5 ' + (movementModalTab === 'pending' ? 'border-accent text-accent' : 'border-transparent text-text-muted hover:text-text-primary')}
           >
-            Transferencias pendentes
+            Transferências pendentes
             {(pendingReceptions.length + pendingEmissions.length) > 0 && (
               <span className="bg-accent text-white text-[10px] font-semibold px-1.5 py-0.5 rounded-full">{pendingReceptions.length + pendingEmissions.length}</span>
             )}
@@ -2199,7 +2201,7 @@ export default function Caixa() {
             </div>
 
             {movementForm.movementType === 'TRANSFERENCIA' && (
-              <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Caixa de origem *</label>
                   <Select
@@ -2219,7 +2221,7 @@ export default function Caixa() {
                     placeholder="Selecionar"
                   />
                 </div>
-              </>
+              </div>
             )}
             {movementForm.movementType !== 'TRANSFERENCIA' && (
               <div>
@@ -2235,16 +2237,31 @@ export default function Caixa() {
               </div>
             )}
 
-            <div>
-              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Valor *</label>
-              <input
-                type="number" step="0.01" min="0.01"
-                value={movementForm.amount}
-                onChange={(e) => setMovementForm((p) => ({ ...p, amount: e.target.value }))}
-                required
-                className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors"
-              />
-            </div>
+            {transferWithBilletage ? (
+              <div className="flex flex-col gap-2">
+                <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted block">Notas e moedas enviadas *</label>
+                <DenominationGrid
+                  denominations={denominations}
+                  quantities={transferQuantities}
+                  onChange={(id, v) => setTransferQuantities((p) => ({ ...p, [id]: v }))}
+                />
+                <div className="flex justify-between items-center bg-bg-inset border border-border rounded-md px-4 py-2.5">
+                  <span className="text-text-muted text-[13px]">Valor da transferência</span>
+                  <span className="font-mono font-semibold text-lg text-text-primary">{formatKz(transferTotal)} Kz</span>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Valor *</label>
+                <input
+                  type="number" step="0.01" min="0.01"
+                  value={movementForm.amount}
+                  onChange={(e) => setMovementForm((p) => ({ ...p, amount: e.target.value }))}
+                  required
+                  className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors"
+                />
+              </div>
+            )}
 
             <div>
               <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Descrição (opcional)</label>
@@ -2261,13 +2278,74 @@ export default function Caixa() {
 
             <button
               type="submit"
-              disabled={movementSaving || !can('tesouraria:record')}
+              disabled={movementSaving || !can('tesouraria:record') || (transferWithBilletage && transferTotal <= 0)}
               className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer"
             >
               {movementSaving ? <Loader2 size={17} className="animate-spin" /> : <ArrowLeftRight size={17} />}
               {movementSaving ? 'A registar...' : 'Registar movimento'}
             </button>
           </form>
+        ) : receptionDraft ? (
+          // The reception of a transfer by a till with billetage: the whole drawer for it, the sender's notes proposed
+          (() => {
+            const m = receptionDraft.movement;
+            const expected = Number(m.amount);
+            const total = denominationTotal(denominations, receptionDraft.quantities);
+            const gap = total - expected;
+            const matches = Math.abs(gap) < 0.01;
+            return (
+              <div className="flex flex-col gap-4">
+                <button
+                  onClick={() => { setReceptionDraft(null); setMovementFormError(''); }}
+                  className="self-start flex items-center gap-1 text-[12px] text-text-muted hover:text-text-primary cursor-pointer"
+                >
+                  <ChevronLeft size={14} /> Transferências pendentes
+                </button>
+
+                <div className="bg-bg-inset border border-border rounded-md px-4 py-3 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[11px] uppercase tracking-wide text-text-muted">Receção de transferência</p>
+                    <p className="text-[13px] text-text-primary truncate mt-0.5">De {posNameById(m.source_pos_id)}</p>
+                    <p className="text-[11px] text-text-muted font-mono">{new Date(m.movement_date).toLocaleDateString('pt-PT')}</p>
+                  </div>
+                  <span className="font-mono text-lg font-semibold text-text-primary whitespace-nowrap">{formatKz(expected)} Kz</span>
+                </div>
+
+                <p className="text-[12px] text-text-muted">
+                  Conte o que recebeu. As notas e moedas indicadas pela caixa de origem já estão preenchidas - corrija-as se o envelope for diferente.
+                </p>
+
+                <DenominationGrid
+                  denominations={denominations}
+                  quantities={receptionDraft.quantities}
+                  onChange={(id, v) => setReceptionDraft((d) => ({ ...d, quantities: { ...d.quantities, [id]: v } }))}
+                />
+
+                <div className="flex flex-col gap-1.5 bg-bg-inset border border-border rounded-md px-4 py-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-text-muted text-[13px]">Total contado</span>
+                    <span className={'font-mono font-semibold text-lg ' + (matches ? 'text-success' : 'text-text-primary')}>{formatKz(total)} Kz</span>
+                  </div>
+                  <p className={'text-[12px] ' + (matches ? 'text-success' : 'text-danger')}>
+                    {matches ? 'Confere com o valor enviado' : gap > 0 ? `Excede em ${formatKz(gap)} Kz` : `Falta ${formatKz(-gap)} Kz`}
+                  </p>
+                </div>
+
+                {movementFormError && (
+                  <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{movementFormError}</div>
+                )}
+
+                <button
+                  onClick={() => handleReceiveMovement(m.id, denominationLines(denominations, receptionDraft.quantities))}
+                  disabled={!matches || receivingId === m.id}
+                  className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                >
+                  {receivingId === m.id ? <Loader2 size={17} className="animate-spin" /> : <CheckCircle2 size={17} />}
+                  {receivingId === m.id ? 'A confirmar...' : 'Confirmar receção'}
+                </button>
+              </div>
+            );
+          })()
         ) : (
           <div className="flex flex-col gap-5">
             <div>
@@ -2279,15 +2357,15 @@ export default function Caixa() {
               ) : (
                 <div className="flex flex-col gap-1.5 max-h-[200px] overflow-y-auto scrollbar-thin">
                   {pendingReceptions.map((m) => (
-                    <div key={m.id} className="flex items-center justify-between bg-bg-inset border border-border rounded-md px-3 py-2">
-                      <div>
-                        <p className="text-[12px] text-text-primary">Transferência recebida</p>
+                    <div key={m.id} className="flex items-center justify-between gap-2 bg-bg-inset border border-border rounded-md px-3 py-2">
+                      <div className="min-w-0">
+                        <p className="text-[12px] text-text-primary truncate">De {posNameById(m.source_pos_id)}</p>
                         <p className="text-[10px] text-text-muted font-mono">{new Date(m.movement_date).toLocaleDateString('pt-PT')}</p>
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="font-mono text-[12px] text-text-primary font-semibold">{formatKz(m.amount)} Kz</span>
                         <button
-                          onClick={() => handleReceiveMovement(m.id)}
+                          onClick={() => startReception(m)}
                           disabled={receivingId === m.id || !can('tesouraria:receive')}
                           className="flex items-center gap-1 bg-accent hover:bg-accent-hover disabled:opacity-50 text-white text-[11px] font-medium px-2.5 py-1.5 rounded-md cursor-pointer"
                         >
@@ -2310,9 +2388,9 @@ export default function Caixa() {
               ) : (
                 <div className="flex flex-col gap-1.5 max-h-[200px] overflow-y-auto scrollbar-thin">
                   {pendingEmissions.map((m) => (
-                    <div key={m.id} className="flex items-center justify-between bg-bg-inset border border-border rounded-md px-3 py-2">
-                      <div>
-                        <p className="text-[12px] text-text-primary">Transferência enviada</p>
+                    <div key={m.id} className="flex items-center justify-between gap-2 bg-bg-inset border border-border rounded-md px-3 py-2">
+                      <div className="min-w-0">
+                        <p className="text-[12px] text-text-primary truncate">Para {posNameById(m.destination_pos_id)}</p>
                         <p className="text-[10px] text-text-muted font-mono">{new Date(m.movement_date).toLocaleDateString('pt-PT')}</p>
                       </div>
                       <div className="flex items-center gap-2">
