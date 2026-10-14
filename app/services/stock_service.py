@@ -724,6 +724,21 @@ async def list_production_history(
     return sorted(batches.values(), key=lambda b: b["created_at"], reverse=True)
 
 
+def ledger_signed_quantity():
+    """The quantity of a ledger row with its direction: + into the warehouse, - out of it (AJUSTE is stored as the
+    signed difference already) - the one sign rule of the stock reports."""
+    from sqlalchemy import case
+    return case(
+        (StockMovement.movement_type == MovementType.RECEPCAO, StockMovement.quantity),
+        (StockMovement.movement_type == MovementType.AJUSTE, StockMovement.quantity),
+        (StockMovement.movement_type == MovementType.TRANSFERENCIA,
+         case((StockMovement.is_transfer_source.is_(True), -StockMovement.quantity), else_=StockMovement.quantity)),
+        (StockMovement.movement_type == MovementType.PRODUCAO,
+         case((StockMovement.is_production_output.is_(True), StockMovement.quantity), else_=-StockMovement.quantity)),
+        else_=-StockMovement.quantity,  # SAIDA, PERDA
+    )
+
+
 async def get_stock_dashboard(db: AsyncSession, company_id: uuid.UUID, fiscal_period_id: uuid.UUID | None = None) -> dict:
     """
     Aggregated stock overview across all warehouses - per-product total quantity, low-stock flag (vs
@@ -733,7 +748,7 @@ async def get_stock_dashboard(db: AsyncSession, company_id: uuid.UUID, fiscal_pe
     the end of its month) - the ledger is complete, so it adds up to the stock table for the current period.
     """
     from datetime import date as _date
-    from sqlalchemy import and_, case, func, or_
+    from sqlalchemy import and_, func, or_
     from app.models.fiscal_period import FiscalPeriod
     from app.models.fiscal_year import FiscalYear
     from app.models.product_sale_unit import ProductSaleUnit
@@ -758,16 +773,7 @@ async def get_stock_dashboard(db: AsyncSession, company_id: uuid.UUID, fiscal_pe
         period, year = chosen
         period_label = f"{MONTH_NAMES_PT[period.month]} {year}"
         end_of_month = _date(year + (1 if period.month == 12 else 0), period.month % 12 + 1, 1)
-        # Each movement type's sign in the ledger (AJUSTE is stored as the signed difference).
-        signed = case(
-            (StockMovement.movement_type == MovementType.RECEPCAO, StockMovement.quantity),
-            (StockMovement.movement_type == MovementType.AJUSTE, StockMovement.quantity),
-            (StockMovement.movement_type == MovementType.TRANSFERENCIA,
-             case((StockMovement.is_transfer_source.is_(True), -StockMovement.quantity), else_=StockMovement.quantity)),
-            (StockMovement.movement_type == MovementType.PRODUCAO,
-             case((StockMovement.is_production_output.is_(True), StockMovement.quantity), else_=-StockMovement.quantity)),
-            else_=-StockMovement.quantity,  # SAIDA, PERDA
-        )
+        signed = ledger_signed_quantity()
         rows = (await db.execute(
             select(StockMovement.product_id, func.sum(signed))
             .select_from(StockMovement)

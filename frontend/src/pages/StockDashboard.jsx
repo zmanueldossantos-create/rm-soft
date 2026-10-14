@@ -11,6 +11,13 @@ async function getStockDashboard(periodId) {
   return res.data;
 }
 
+// Fecho de stock por período: start, in, out, end and value per product and warehouse - frozen at the final close
+// (company option), else computed from the ledger.
+async function getPeriodClosing(periodId) {
+  const res = await apiClient.get('/stock/period-closing', { params: { fiscal_period_id: periodId } });
+  return res.data;
+}
+
 function formatMoney(v) {
   return Number(v || 0).toLocaleString('pt-AO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' Kz';
 }
@@ -27,6 +34,9 @@ export default function StockDashboard() {
   const [filter, setFilter] = useState('todos'); // todos | baixo | zero
   const [periodId, setPeriodId] = useState(''); // '' = the current stock
   const [periods, setPeriods] = useState([]);
+  const [view, setView] = useState('resumo'); // resumo | movimento (a period only)
+  const [closing, setClosing] = useState(null);
+  const [closingError, setClosingError] = useState('');
 
   useEffect(() => {
     async function load() {
@@ -44,6 +54,21 @@ export default function StockDashboard() {
     }
     load();
   }, [periodId]);
+
+  useEffect(() => {
+    setClosing(null);
+    setClosingError('');
+    if (!periodId) {
+      setView('resumo');
+      return;
+    }
+    if (view !== 'movimento') return;
+    getPeriodClosing(periodId)
+      .then(setClosing)
+      .catch((err) => setClosingError(extractErrorMessage(err, 'Erro ao carregar o movimento do período')));
+  }, [periodId, view]);
+
+  const closingLines = (closing?.lines || []).filter((l) => !search || (l.code + ' ' + l.name).toLowerCase().includes(search.toLowerCase()));
 
   const items = (data?.items || []).filter((item) => {
     if (filter === 'baixo' && !item.is_low) return false;
@@ -128,13 +153,26 @@ export default function StockDashboard() {
                 options={[{ value: 'atual', label: 'Stock atual' }, ...periods.map((p) => ({ value: p.id, label: 'Fim de ' + p.label }))]}
               />
             </div>
-            {filter !== 'todos' && (
+            {periodId && (
+              <div className="flex rounded-md border border-border overflow-hidden">
+                {[['resumo', 'Resumo'], ['movimento', 'Movimento do período']].map(([key, label]) => (
+                  <button key={key} type="button" onClick={() => setView(key)}
+                    className={'px-3.5 py-2 text-[13px] font-medium transition-colors cursor-pointer ' + (view === key ? 'bg-accent text-white' : 'bg-bg-elevated text-text-muted hover:text-text-primary')}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+            {filter !== 'todos' && view === 'resumo' && (
               <button type="button" onClick={() => setFilter('todos')} className="text-[13px] text-text-muted hover:text-text-primary underline transition-colors cursor-pointer">
                 Limpar filtro
               </button>
             )}
           </div>
 
+          {view === 'movimento' && periodId ? (
+            <PeriodMovement closing={closing} lines={closingLines} error={closingError} />
+          ) : (
           <div className="bg-bg-elevated border border-border rounded-lg overflow-hidden">
             {items.length === 0 ? (
               <p className="text-text-muted text-[13px] text-center py-16">Nenhum produto encontrado</p>
@@ -184,8 +222,71 @@ export default function StockDashboard() {
               </div>
             )}
           </div>
+          )}
         </>
       )}
     </main>
+  );
+}
+
+function PeriodMovement({ closing, lines, error }) {
+  if (error) return <div className="px-6 py-4 text-danger text-sm bg-danger/10 rounded-lg">{error}</div>;
+  if (!closing) return <div className="flex justify-center py-12"><Loader2 size={18} className="animate-spin text-accent" /></div>;
+  const th = 'text-[11px] uppercase tracking-wide text-text-muted font-medium px-4 py-3 whitespace-nowrap';
+  const td = 'px-4 py-3 font-mono whitespace-nowrap';
+  const status = closing.frozen
+    ? { cls: 'text-success bg-success/10', text: 'Congelado no fecho definitivo do período' + (closing.frozen_at ? ' (' + new Date(closing.frozen_at).toLocaleDateString('pt-PT') + ')' : '') + ' - não muda mais' }
+    : closing.period_status === 'FECHADO'
+      ? { cls: 'text-text-muted bg-bg-inset', text: 'Calculado pelos movimentos - o período foi fechado sem o fecho de stock ativo' }
+      : { cls: 'text-[#f59e0b] bg-[#f59e0b]/10', text: 'Provisório - o período ainda aceita movimentos' };
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <span className={'text-[12px] font-medium px-2.5 py-1 rounded ' + status.cls}>{status.text}</span>
+        <span className="text-[13px] text-text-muted">
+          Valor do stock no fim de {closing.period_label}: <span className="font-mono font-semibold text-text-primary">{formatMoney(closing.totals.value)}</span>
+          {closing.totals.cost_unknown > 0 && <span className="text-[#f59e0b]"> · {closing.totals.cost_unknown} sem custo</span>}
+        </span>
+      </div>
+      <div className="bg-bg-elevated border border-border rounded-lg overflow-x-auto">
+        {lines.length === 0 ? (
+          <p className="text-text-muted text-[13px] text-center py-16">Nenhum movimento neste período</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border">
+                <th className={th + ' text-left'}>Código</th>
+                <th className={th + ' text-left'}>Nome</th>
+                <th className={th + ' text-left'}>Armazém</th>
+                <th className={th + ' text-right'}>Inicial</th>
+                <th className={th + ' text-right'}>Entradas</th>
+                <th className={th + ' text-right'}>Saídas</th>
+                <th className={th + ' text-right'}>Final</th>
+                <th className={th + ' text-right'}>Custo médio</th>
+                <th className={th + ' text-right'}>Valor</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lines.map((l) => (
+                <tr key={l.product_id + l.warehouse_id} className="border-b border-border last:border-0 hover:bg-bg-inset/40 transition-colors">
+                  <td className={td + ' text-text-muted'}>{l.code}</td>
+                  <td className="px-4 py-3 font-display font-medium text-text-primary">
+                    {l.name}
+                    {l.is_raw_material && <span className="ml-2 text-[10px] font-semibold uppercase tracking-wide text-text-muted bg-bg-inset px-1.5 py-0.5 rounded">MP</span>}
+                  </td>
+                  <td className="px-4 py-3 text-[13px] text-text-muted">{l.warehouse_name}</td>
+                  <td className={td + ' text-right text-text-muted'}>{formatQty(l.opening)}</td>
+                  <td className={td + ' text-right text-success'}>{l.in ? '+' + formatQty(l.in) : '-'}</td>
+                  <td className={td + ' text-right text-danger'}>{l.out ? '-' + formatQty(l.out) : '-'}</td>
+                  <td className={td + ' text-right text-text-primary font-semibold'}>{formatQty(l.closing)} <span className="text-text-muted text-[11px] font-normal">{l.unit_code}</span></td>
+                  <td className={td + ' text-right text-text-muted'}>{l.unit_cost == null ? '-' : formatMoney(l.unit_cost)}</td>
+                  <td className={td + ' text-right text-text-primary'}>{l.value == null ? <span className="text-[11px] font-semibold uppercase tracking-wide text-[#f59e0b] bg-[#f59e0b]/10 px-2 py-1 rounded">Sem custo</span> : formatMoney(l.value)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
   );
 }

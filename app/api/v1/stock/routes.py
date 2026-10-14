@@ -49,6 +49,8 @@ from app.services.stock_service import (
     NoRecipeError,
 )
 
+from app.services.stock_period_closing_service import StockClosingPeriodNotFoundError, get_period_stock_report
+
 router = APIRouter(prefix="/api/v1/stock", tags=["stock"])
 
 
@@ -285,3 +287,18 @@ async def post_produce_stock(
 
     levels = await list_stock_levels(db, current_user.company_id, payload.warehouse_id)
     return next(l for l in levels if l["product_id"] == payload.finished_product_id)
+
+
+@router.get("/period-closing")
+async def get_period_closing(
+    fiscal_period_id: uuid.UUID,
+    warehouse_id: uuid.UUID | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("stock:view")),
+):
+    """Fecho de stock por período: per product and warehouse, the stock at the start, in, out, at the end and its
+    value - frozen at the period's final close (company option), else computed from the ledger."""
+    try:
+        return await get_period_stock_report(db, current_user.company_id, fiscal_period_id, warehouse_id)
+    except StockClosingPeriodNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))

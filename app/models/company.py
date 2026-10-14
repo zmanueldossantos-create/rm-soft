@@ -69,6 +69,9 @@ class Company(Base):
     sale_unit_check_above_base: Mapped[str] = mapped_column(String(5), default="warn", server_default="warn", nullable=False)
     sale_unit_check_below_cost: Mapped[str] = mapped_column(String(5), default="warn", server_default="warn", nullable=False)
     sale_unit_check_same_factor: Mapped[str] = mapped_column(String(5), default="warn", server_default="warn", nullable=False)
+    # Fecho de stock por período: when a fiscal period is closed for good, its stock (start, in, out, end, value at the
+    # average cost of the time) is frozen per product and warehouse - see stock_period_closing_service. Off by default.
+    stock_period_closing: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
 
     # Fiscal issuance mode - electronic mode requires the AGT-issued private
     # key and turns OFF auto_series_year (series are solicited from AGT instead).

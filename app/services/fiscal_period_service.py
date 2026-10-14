@@ -276,6 +276,9 @@ async def close_fiscal_period(db: AsyncSession, company_id: uuid.UUID, period_id
     if period.status == ABERTO:
         await _ensure_no_cash_in_flight(db, company_id)
     period.status = FECHADO
+    # with the company's option: its stock frozen as it stands now that nothing more can be booked in it
+    from app.services.stock_period_closing_service import freeze_period_stock  # local: it imports this module
+    await freeze_period_stock(db, company_id, period.id)
     await db.commit()
     await db.refresh(period)
     return period

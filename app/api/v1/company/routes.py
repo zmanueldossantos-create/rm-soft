@@ -95,6 +95,8 @@ async def update_my_company_contact(
         if value in ("off", "warn", "block"):
             setattr(company, check, value)
     company.suggests_last_document_date = payload.suggests_last_document_date if payload.uses_invoicing else False
+    if payload.stock_period_closing is not None:
+        company.stock_period_closing = payload.stock_period_closing
     company.issuance_mode = payload.issuance_mode
     company.electronic_signature_key = payload.electronic_signature_key if payload.issuance_mode == "ELETRONICA" else None
 
