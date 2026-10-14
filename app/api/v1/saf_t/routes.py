@@ -16,18 +16,20 @@ router = APIRouter(prefix="/api/v1/saf-t", tags=["saf-t"])
 async def export_saf_t(
     year: int,
     month: int,
+    include_purchases: bool = False,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("saf_t:export")),
 ):
     """
     Generates and returns the SAF-T AuditFile XML for one calendar month
-    - "Modo Fatura" (section 4.2), submitted manually to the AGT portal.
+    - "Modo Fatura" (section 4.2), submitted manually to the AGT portal. include_purchases: the purchase invoices
+    of the month too (file type Q).
     """
     if month < 1 or month > 12:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Mês inválido")
 
     try:
-        xml_bytes = await export_saf_t_for_period(db, current_user.company_id, year, month)
+        xml_bytes = await export_saf_t_for_period(db, current_user.company_id, year, month, include_purchases)
     except CompanyNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 

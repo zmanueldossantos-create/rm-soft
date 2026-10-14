@@ -167,3 +167,49 @@ async def test_a_user_document_never_uses_an_automatic_type(db, company_with_ess
     with pytest.raises(MovementTypeNotConfiguredError, match="reservado"):
         await create_stock_movement_document(db, ctx["company"].id, automatic.id, ctx["activity_warehouse"].id,
                                              [{"product_id": flour_id, "quantity": 1, "purchase_price": 0}])
+
+
+@pytest.mark.asyncio
+async def test_a_supplier_credit_note_corrects_its_invoice_and_counts_against_the_deductible_vat(db, company_with_essentials):
+    from app.models.fiscal_period import FiscalPeriod
+    from app.services.saf_t_export_service import export_saf_t_for_period
+    from app.services.vat_return_service import get_vat_return
+    from lxml import etree
+    ctx = company_with_essentials
+    company_id, user_id = ctx["company"].id, ctx["gestor"].id
+    supplier, nor, _ = await _setup(db, ctx, 100)
+    supplier_id, nor_id = supplier.id, nor.id
+
+    with pytest.raises(PurchaseInvoiceError, match="Tipo de documento"):
+        await register_purchase_invoice(db, company_id, user_id, supplier_id, "XX 1", date.today(), [_line(nor)], purchase_type="ZZ")
+    with pytest.raises(PurchaseInvoiceError, match="hash"):
+        await register_purchase_invoice(db, company_id, user_id, supplier_id, "FT N/1", date.today(), [_line(nor)], supplier_hash="ABCDE")
+    invoice = await register_purchase_invoice(db, company_id, user_id, supplier_id, "FT N/1", date.today(),
+                                              [_line(nor)], supplier_hash="Ab1c")
+    invoice_id = invoice.id
+    assert (await get_purchase_invoice(db, company_id, invoice_id))["lines"][0]["deductible_tax_type"] == "OBC"
+    with pytest.raises(PurchaseInvoiceError, match="corrige"):
+        await register_purchase_invoice(db, company_id, user_id, supplier_id, "NC N/1", date.today(),
+                                        [_line(nor, quantity=1)], purchase_type="NC")
+    credit = await register_purchase_invoice(
+        db, company_id, user_id, supplier_id, "NC N/1", date.today(),
+        [{"description": "Devolução", "quantity": 1, "unit_price": 100, "legal_vat_rate_id": nor_id, "deductible_tax_type": "INV"}],
+        purchase_type="NC", reference_invoice_id=invoice_id)
+    credit_id = credit.id
+    assert (await get_purchase_invoice(db, company_id, credit_id))["reference_invoice"] == f"COMP{date.today().year}/1 · FT N/1"
+
+    # 140 deductible on the invoice, 14 back on the credit note
+    period_id = (await db.execute(select(FiscalPeriod.id).where(FiscalPeriod.company_id == company_id))).scalar_one()
+    assert (await get_vat_return(db, company_id, period_id))["deductible_vat"] == 126.0
+
+    # the SAF-T declares both only when asked
+    today = date.today()
+    plain = etree.fromstring(await export_saf_t_for_period(db, company_id, today.year, today.month))
+    assert plain.find(".//{*}PurchaseInvoices") is None
+    full = etree.fromstring(await export_saf_t_for_period(db, company_id, today.year, today.month, include_purchases=True))
+    assert [e.text for e in full.findall(".//{*}PurchaseInvoices/{*}Invoice/{*}InvoiceNo")] == ["FT N/1", "NC N/1"]
+
+    with pytest.raises(PurchaseInvoiceError, match="Anule primeiro"):
+        await cancel_purchase_invoice(db, company_id, invoice_id, user_id, "Erro")
+    await cancel_purchase_invoice(db, company_id, credit_id, user_id, "Erro")
+    await cancel_purchase_invoice(db, company_id, invoice_id, user_id, "Erro")

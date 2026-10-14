@@ -52,6 +52,7 @@ async def post_purchase_invoice(
             db, current_user.company_id, current_user.id, payload.supplier_id, payload.supplier_document,
             payload.document_date, [l.model_dump() for l in payload.lines], payload.fiscal_period_id,
             payload.due_date, payload.description, payload.stock_entry, payload.warehouse_id,
+            payload.purchase_type, payload.supplier_hash, payload.reference_invoice_id,
         )
         return await get_purchase_invoice(db, current_user.company_id, invoice.id)
     except tuple(ERRORS) as e:

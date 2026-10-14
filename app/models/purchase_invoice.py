@@ -10,6 +10,11 @@ the invoice as it was): the rest of the VAT is a cost, added to the line's cost 
 Booked in a period like every internal entry (the active one, or the soft-closed one for a late invoice). Never
 deleted: a mistaken registration is cancelled (ANULADA) with its reason - see purchase_invoice_service.
 
+SAF-T (PurchaseInvoices): the supplier document's type (purchase_type: FT, FR, TV or NC - a supplier's credit note,
+which refers to the invoice it corrects and counts against the deductible VAT), the 4 characters of its printed hash
+(supplier_hash, "0" in the file when empty) and, per line, what the deductible VAT is for (deductible_tax_type: MFI
+fixed assets, INV inventory, OBC other consumables, SERV services, IMPT imports, SCE services contracted abroad).
+
 Stock: an invoice may bring its products into a warehouse (warehouse_id) - the system's automatic entry document
 (stock_entry_document_id, an EA), each product at its line's cost; its cancellation takes them out again (an SA,
 stock_exit_document_id). A product line keeps the unit it was bought in (a sack of 20 kg: unit_factor 20).
@@ -40,6 +45,10 @@ class PurchaseInvoice(Base):
     series: Mapped[str] = mapped_column(String(20), nullable=False)  # COMP2026 - the company's own registration
     number: Mapped[int] = mapped_column(Integer, nullable=False)
     supplier_document: Mapped[str] = mapped_column(String(60), nullable=False)  # "FT A/123", as printed by the supplier
+    purchase_type: Mapped[str] = mapped_column(String(2), nullable=False, default="FT", server_default="FT")
+    supplier_hash: Mapped[str | None] = mapped_column(String(4), nullable=True)
+    # a credit note (NC): the supplier invoice it corrects
+    reference_invoice_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("purchase_invoices.id"), nullable=True)
     document_date: Mapped[date] = mapped_column(Date, nullable=False)
     due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     description: Mapped[str | None] = mapped_column(String(300), nullable=True)
@@ -91,3 +100,4 @@ class PurchaseInvoiceLine(Base):
     vat_deductible: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
     vat_non_deductible: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
     cost: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)  # HT + non-deductible VAT
+    deductible_tax_type: Mapped[str] = mapped_column(String(4), nullable=False, default="OBC", server_default="OBC")

@@ -1,9 +1,11 @@
 // API calls for SAF-T export ("Modo Fatura", section 4.2).
 import apiClient from './client';
 
-export async function downloadSaftFile(year, month) {
+// includePurchases: the purchase invoices of the month too - the file is then of the type Q (acquisitions
+// integrated with the invoicing) instead of F.
+export async function downloadSaftFile(year, month, includePurchases = false) {
   const res = await apiClient.get('/saf-t/export', {
-    params: { year, month },
+    params: { year, month, include_purchases: includePurchases },
     responseType: 'blob',
   });
   const blobUrl = URL.createObjectURL(res.data);

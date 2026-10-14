@@ -18,6 +18,7 @@ export default function SaftExport() {
   const [loading, setLoading] = useState(true);
   const [loadingPeriods, setLoadingPeriods] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [includePurchases, setIncludePurchases] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -50,7 +51,7 @@ export default function SaftExport() {
     setError('');
     setDownloading(true);
     try {
-      await downloadSaftFile(selectedYear.year, parseInt(selectedMonth, 10));
+      await downloadSaftFile(selectedYear.year, parseInt(selectedMonth, 10), includePurchases);
     } catch (err) {
       setError(extractErrorMessage(err, 'Erro ao exportar SAF-T'));
     } finally {
@@ -115,6 +116,15 @@ export default function SaftExport() {
                 />
               )}
             </div>
+
+            {/* the purchases change the file's type (F -> Q): the company's choice, after its accountant's advice */}
+            <label className="flex items-start gap-2.5 cursor-pointer">
+              <input type="checkbox" checked={includePurchases} onChange={(e) => setIncludePurchases(e.target.checked)} className="w-4 h-4 mt-0.5 accent-accent cursor-pointer" />
+              <span className="text-sm text-text-primary">
+                Incluir as faturas de compra
+                <span className="block text-[12px] text-text-muted">Os fornecedores e as faturas de compra do mês - o ficheiro passa do tipo F (faturação) ao tipo Q (aquisições integradas com a faturação).</span>
+              </span>
+            </label>
 
             {error && (
               <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">

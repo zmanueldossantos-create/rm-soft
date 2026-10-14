@@ -89,8 +89,62 @@ async def _receipt_extras(db: AsyncSession, receipt: Invoice) -> dict:
     return extras
 
 
-async def export_saf_t_for_period(db: AsyncSession, company_id: uuid.UUID, year: int, month: int) -> bytes:
-    """Generates the SAF-T AuditFile XML for one calendar month."""
+async def _purchases_for_saft(db: AsyncSession, company_id: uuid.UUID, year: int, month: int, source_codes: dict) -> tuple[list, list]:
+    """
+    The purchase invoices booked in the month (REGISTADA - a cancelled registration is not declared) and their
+    suppliers, for the SAF-T PurchaseInvoices: each document with its totals and its deductible VAT by destination.
+    """
+    from app.models.country import Country
+    from app.models.fiscal_period import FiscalPeriod
+    from app.models.fiscal_year import FiscalYear
+    from app.models.purchase_invoice import PurchaseInvoice, PurchaseInvoiceLine, PurchaseInvoiceStatus
+    from app.models.supplier import Supplier
+    invoices = (await db.execute(
+        select(PurchaseInvoice).join(FiscalPeriod, FiscalPeriod.id == PurchaseInvoice.fiscal_period_id)
+        .join(FiscalYear, FiscalYear.id == FiscalPeriod.fiscal_year_id)
+        .where(PurchaseInvoice.company_id == company_id, PurchaseInvoice.status == PurchaseInvoiceStatus.REGISTADA,
+               FiscalYear.year == year, FiscalPeriod.month == month)
+        .order_by(PurchaseInvoice.series, PurchaseInvoice.number)
+    )).scalars().all()
+    if not invoices:
+        return [], []
+    lines = (await db.execute(select(PurchaseInvoiceLine).where(
+        PurchaseInvoiceLine.purchase_invoice_id.in_([i.id for i in invoices])))).scalars().all()
+    references = {i.id: i for i in (await db.execute(select(PurchaseInvoice).where(
+        PurchaseInvoice.id.in_([i.reference_invoice_id for i in invoices if i.reference_invoice_id])))).scalars().all()}
+    supplier_rows = (await db.execute(
+        select(Supplier, Country.code).outerjoin(Country, Country.id == Supplier.country_id)
+        .where(Supplier.id.in_({i.supplier_id for i in invoices})).order_by(Supplier.name, Supplier.id)
+    )).all()
+    suppliers = [{"id": sup.id, "name": sup.name, "nif": sup.nif, "address": sup.address, "phone_number": sup.phone_number,
+                  "email": sup.email, "country": (country or "AO").upper()} for sup, country in supplier_rows]
+    purchases = []
+    for inv in invoices:
+        deductible: dict[str, dict] = {}
+        for line in (l for l in lines if l.purchase_invoice_id == inv.id):
+            group = deductible.setdefault(line.deductible_tax_type, {"base": 0.0, "amount": 0.0})
+            group["base"] += float(line.line_subtotal)
+            group["amount"] += float(line.vat_deductible)
+        ref = references.get(inv.reference_invoice_id)
+        purchases.append({
+            "invoice_no": inv.supplier_document, "hash": inv.supplier_hash or "0", "purchase_type": inv.purchase_type,
+            "invoice_date": inv.document_date, "period": month, "supplier_id": inv.supplier_id,
+            "source_id": (source_codes.get(inv.created_by_user_id) or "RMSOFT")[:30],
+            "vat_total": float(inv.vat_total), "subtotal": float(inv.subtotal), "total": float(inv.total),
+            "deductible_pct": float(inv.deductible_pct),
+            "deductible": [{"type": t, "base": g["base"], "amount": g["amount"]} for t, g in sorted(deductible.items())],
+            "reference": {"no": ref.supplier_document, "date": ref.document_date} if ref else None,
+        })
+    return suppliers, purchases
+
+
+async def export_saf_t_for_period(db: AsyncSession, company_id: uuid.UUID, year: int, month: int,
+                                  include_purchases: bool = False) -> bytes:
+    """
+    Generates the SAF-T AuditFile XML for one calendar month. include_purchases (the company's choice on the export
+    screen): the purchase invoices of the month and their suppliers too - the file is then of the type Q (acquisitions
+    integrated with the invoicing) instead of F.
+    """
     company_result = await db.execute(select(Company).where(Company.id == company_id))
     company = company_result.scalar_one_or_none()
     if company is None:
@@ -219,6 +273,8 @@ async def export_saf_t_for_period(db: AsyncSession, company_id: uuid.UUID, year:
         _origin = _origin_by_doc.get((_doc.get("series"), _doc.get("number")))
         if _origin:
             _doc["order_reference"], _doc["order_date"] = _origin
+    suppliers_data, purchases_data = (await _purchases_for_saft(db, company_id, year, month, source_codes)) \
+        if include_purchases else ([], None)
     return generate_saf_t_xml(
         company=company_dict,
         platform_settings=platform_dict,
@@ -229,4 +285,6 @@ async def export_saf_t_for_period(db: AsyncSession, company_id: uuid.UUID, year:
         fiscal_year=year,
         start_date=start_date,
         end_date=end_date,
+        suppliers=suppliers_data,
+        purchases=purchases_data,
     )

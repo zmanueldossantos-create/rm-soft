@@ -12,6 +12,9 @@ Faturas de compra (point 12) - the supplier invoices the company registers (see 
   the company really pays), which moves the weighted average cost. A product line is bought in one of the product's
   units (10 SC of 20 kg = 200 KG). Its cancellation takes the same quantities out of that warehouse (an automatic
   exit, SA) - refused when the stock is no longer there. One purchase, one entry: no separate Receção.
+- SAF-T: the supplier document's type (FT, FR, TV; NC - a credit note, which refers to an invoice of the same supplier,
+  never moves the stock and counts against the deductible VAT), its printed hash, and per line what the deductible VAT
+  is for (MFI, INV, OBC, SERV, IMPT, SCE - by default from the line: a product INV, a service SERV, the rest OBC).
 """
 import uuid
 from datetime import date, datetime, timezone
@@ -44,6 +47,13 @@ _STOCK_ERRORS = (EmptyMovementError, InsufficientStockForMovementError, Movement
                  MovementTypeNotConfiguredError, MovementWarehouseNotFoundError)
 
 
+# the supplier documents a purchase may be registered from (SAF-T PurchaseType) and the destinations of the
+# deductible VAT (SAF-T DeductibleTaxType)
+PURCHASE_TYPES = {"FT": "Fatura", "FR": "Fatura-recibo", "TV": "Talão de venda", "NC": "Nota de crédito"}
+DEDUCTIBLE_TAX_TYPES = {"MFI": "Meios fixos e investimentos", "INV": "Existências", "OBC": "Outros bens de consumo",
+                        "SERV": "Serviços", "IMPT": "Importação", "SCE": "Serviços contratados no estrangeiro"}
+
+
 class PurchaseInvoiceError(Exception):
     """A purchase invoice that cannot be registered or changed as asked."""
 
@@ -69,6 +79,7 @@ async def register_purchase_invoice(
     db: AsyncSession, company_id: uuid.UUID, user_id: uuid.UUID, supplier_id: uuid.UUID, supplier_document: str,
     document_date: date, lines: list[dict], fiscal_period_id: uuid.UUID | None = None, due_date: date | None = None,
     description: str | None = None, stock_entry: bool = False, warehouse_id: uuid.UUID | None = None,
+    purchase_type: str = "FT", supplier_hash: str | None = None, reference_invoice_id: uuid.UUID | None = None,
 ) -> PurchaseInvoice:
     """
     lines: [{product_id | service_id | None, sale_unit_id, description, quantity, unit_price, legal_vat_rate_id,
@@ -95,6 +106,24 @@ async def register_purchase_invoice(
     if duplicate is not None:
         raise PurchaseInvoiceError(
             f"O documento {supplier_document} deste fornecedor já está registado ({duplicate[0]}/{duplicate[1]})")
+    if purchase_type not in PURCHASE_TYPES:
+        raise PurchaseInvoiceError("Tipo de documento do fornecedor inválido")
+    supplier_hash = "".join((supplier_hash or "").split()) or None
+    if supplier_hash is not None and len(supplier_hash) > 4:
+        raise PurchaseInvoiceError("O hash do documento tem no máximo 4 caracteres")
+    if purchase_type == "NC":
+        # a credit note corrects a registered invoice of the same supplier - and never moves the stock
+        original = (await db.execute(select(PurchaseInvoice).where(
+            PurchaseInvoice.id == reference_invoice_id, PurchaseInvoice.company_id == company_id,
+            PurchaseInvoice.supplier_id == supplier_id, PurchaseInvoice.status == PurchaseInvoiceStatus.REGISTADA,
+            PurchaseInvoice.purchase_type != "NC",
+        ))).scalar_one_or_none() if reference_invoice_id else None
+        if original is None:
+            raise PurchaseInvoiceError("Indique a fatura deste fornecedor que a nota de crédito corrige")
+        if stock_entry:
+            raise PurchaseInvoiceError("Uma nota de crédito não dá entrada em stock")
+    else:
+        reference_invoice_id = None
 
     # booked like every internal entry; its date is the supplier's, never in the future nor before its period
     period = await resolve_posting_period(db, company_id, fiscal_period_id)
@@ -148,6 +177,9 @@ async def register_purchase_invoice(
             text = text or service.name
         if product_id is None:
             sale_unit_id, unit_code, factor = None, None, 1.0
+        destination = line.get("deductible_tax_type") or ("INV" if product_id else "SERV" if service_id else "OBC")
+        if destination not in DEDUCTIBLE_TAX_TYPES:
+            raise PurchaseInvoiceError(f"Linha {position}: destino do IVA inválido")
         if not text:
             raise PurchaseInvoiceError(f"Linha {position}: indique a descrição")
 
@@ -164,7 +196,7 @@ async def register_purchase_invoice(
             sale_unit_id=sale_unit_id, unit_snapshot=unit_code, unit_factor=factor, quantity=quantity, unit_price=unit_price, legal_vat_rate_id=rate.id, tax_category=rate.tax_category,
             vat_rate=rate.rate, exemption_id=exemption_id, line_subtotal=subtotal, line_vat=vat,
             line_total=_money(subtotal + vat), vat_deductible=deductible, vat_non_deductible=non_deductible,
-            cost=_money(subtotal + non_deductible),
+            cost=_money(subtotal + non_deductible), deductible_tax_type=destination,
         ))
 
     series = f"COMP{year}"
@@ -174,6 +206,7 @@ async def register_purchase_invoice(
     invoice = PurchaseInvoice(
         company_id=company_id, supplier_id=supplier_id, fiscal_period_id=period.id, series=series, number=(last or 0) + 1,
         supplier_document=supplier_document, document_date=document_date, due_date=due_date,
+        purchase_type=purchase_type, supplier_hash=supplier_hash, reference_invoice_id=reference_invoice_id,
         description=(description or None), subtotal=_money(totals["subtotal"]), vat_total=_money(totals["vat"]),
         total=_money(totals["subtotal"] + totals["vat"]), deductible_pct=pct, vat_deductible=_money(totals["deductible"]),
         vat_non_deductible=_money(totals["non_deductible"]), status=PurchaseInvoiceStatus.REGISTADA,
@@ -237,6 +270,11 @@ async def cancel_purchase_invoice(db: AsyncSession, company_id: uuid.UUID, invoi
     reason = " ".join((reason or "").split())
     if not reason:
         raise PurchaseInvoiceError("Indique o motivo da anulação")
+    credit_note = (await db.execute(select(PurchaseInvoice.series, PurchaseInvoice.number).where(
+        PurchaseInvoice.reference_invoice_id == invoice.id, PurchaseInvoice.status == PurchaseInvoiceStatus.REGISTADA,
+    ))).first()
+    if credit_note is not None:
+        raise PurchaseInvoiceError(f"Anule primeiro a nota de crédito {credit_note[0]}/{credit_note[1]} desta fatura")
     if invoice.stock_entry_document_id is not None:
         # its products leave the warehouse they entered - in the active period, today; refused if no longer there
         entry_lines = (await db.execute(
@@ -267,6 +305,7 @@ async def cancel_purchase_invoice(db: AsyncSession, company_id: uuid.UUID, invoi
 def _summary(invoice: PurchaseInvoice, supplier: Supplier, period_label: str) -> dict:
     return {
         "id": invoice.id, "reference": f"{invoice.series}/{invoice.number}", "status": invoice.status.value,
+        "purchase_type": invoice.purchase_type, "supplier_hash": invoice.supplier_hash,
         "supplier_id": supplier.id, "supplier_name": supplier.name, "supplier_nif": supplier.nif,
         "supplier_document": invoice.supplier_document, "document_date": invoice.document_date, "due_date": invoice.due_date,
         "period_label": period_label, "description": invoice.description,
@@ -320,6 +359,10 @@ async def get_purchase_invoice(db: AsyncSession, company_id: uuid.UUID, invoice_
     names = dict((await db.execute(select(User.id, User.full_name).where(
         User.id.in_([u for u in (invoice.created_by_user_id, invoice.cancelled_by_user_id) if u]))
     )).all())
+    reference_label = None
+    if invoice.reference_invoice_id:
+        ref = (await db.execute(select(PurchaseInvoice).where(PurchaseInvoice.id == invoice.reference_invoice_id))).scalar_one()
+        reference_label = f"{ref.series}/{ref.number} · {ref.supplier_document}"
     stock_docs = {d.id: f"{d.series}/{d.number}" for d in (await db.execute(select(StockMovementDocument).where(
         StockMovementDocument.id.in_([d for d in (invoice.stock_entry_document_id, invoice.stock_exit_document_id) if d]))
     )).scalars().all()}
@@ -329,6 +372,7 @@ async def get_purchase_invoice(db: AsyncSession, company_id: uuid.UUID, invoice_
         **_summary(invoice, supplier, labels.get(invoice.fiscal_period_id, "-")),
         "created_by": names.get(invoice.created_by_user_id), "cancelled_by": names.get(invoice.cancelled_by_user_id),
         "cancelled_at": invoice.cancelled_at, "warehouse_name": warehouse_name,
+        "reference_invoice": reference_label,
         "stock_entry_reference": stock_docs.get(invoice.stock_entry_document_id),
         "stock_exit_reference": stock_docs.get(invoice.stock_exit_document_id),
         "lines": [{
@@ -337,5 +381,6 @@ async def get_purchase_invoice(db: AsyncSession, company_id: uuid.UUID, invoice_
             "vat_rate": float(l.vat_rate), "exemption_code": code, "line_subtotal": float(l.line_subtotal),
             "line_vat": float(l.line_vat), "line_total": float(l.line_total), "vat_deductible": float(l.vat_deductible),
             "vat_non_deductible": float(l.vat_non_deductible), "cost": float(l.cost),
+            "deductible_tax_type": l.deductible_tax_type,
         } for l, code in lines],
     }

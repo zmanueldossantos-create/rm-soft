@@ -8,7 +8,7 @@ on its purchases, and the result (to pay, or a credit).
   Every activity of the company (Hotel, Padaria, Bar...) - one NIF, one return. Grouped by tax code, rate and
   exemption motive.
 - IVA dedutível: the purchase invoices booked in the period (REGISTADA), with the deductible share computed when they
-  were registered (the regime of that day). Grouped the same way.
+  were registered (the regime of that day) - a supplier's credit note (NC) counting against. Grouped the same way.
 - The formula follows the company's regime - data of the regime, never code:
       to pay = IVA liquidado + sales base x turnover_vat_pct - IVA dedutível
   Regime Geral (0 %, 100 % deductible): liquidado - dedutível. Simplificado (sales exempt M00, 7 % of the turnover,
@@ -118,18 +118,19 @@ async def get_vat_return(db: AsyncSession, company_id: uuid.UUID, period_id: uui
     purchases: dict[tuple, dict] = {}
     rows = (await db.execute(
         select(PurchaseInvoiceLine.tax_category, PurchaseInvoiceLine.vat_rate, VatCode.code, PurchaseInvoiceLine.line_subtotal,
-               PurchaseInvoiceLine.line_vat, PurchaseInvoiceLine.vat_deductible, PurchaseInvoice.id)
+               PurchaseInvoiceLine.line_vat, PurchaseInvoiceLine.vat_deductible, PurchaseInvoice.id, PurchaseInvoice.purchase_type)
         .join(PurchaseInvoice, PurchaseInvoice.id == PurchaseInvoiceLine.purchase_invoice_id)
         .outerjoin(VatCode, VatCode.id == PurchaseInvoiceLine.exemption_id)
         .where(PurchaseInvoice.company_id == company_id, PurchaseInvoice.fiscal_period_id == period.id,
                PurchaseInvoice.status == PurchaseInvoiceStatus.REGISTADA)
     )).all()
-    for code, rate, exemption, base, vat, deductible, invoice_id in rows:
+    for code, rate, exemption, base, vat, deductible, invoice_id, purchase_type in rows:
+        sign = -1 if purchase_type == "NC" else 1
         group = purchases.setdefault(_group_key(code, float(rate), exemption),
                                      {"base": 0.0, "vat": 0.0, "deductible": 0.0, "documents": set()})
-        group["base"] += float(base)
-        group["vat"] += float(vat)
-        group["deductible"] += float(deductible)
+        group["base"] += sign * float(base)
+        group["vat"] += sign * float(vat)
+        group["deductible"] += sign * float(deductible)
         group["documents"].add(invoice_id)
 
     def lines(groups: dict, with_deductible: bool) -> list[dict]:
@@ -207,9 +208,10 @@ async def list_vat_documents(db: AsyncSession, company_id: uuid.UUID, period_id:
             doc = docs.setdefault(invoice.id, {
                 "id": invoice.id, "reference": f"{invoice.series}/{invoice.number} · {invoice.supplier_document}", "date": invoice.document_date,
                 "party": supplier, "base": 0.0, "vat": 0.0, "deductible": 0.0})
-            doc["base"] += float(base)
-            doc["vat"] += float(vat)
-            doc["deductible"] += float(deductible)
+            sign = -1 if invoice.purchase_type == "NC" else 1
+            doc["base"] += sign * float(base)
+            doc["vat"] += sign * float(vat)
+            doc["deductible"] += sign * float(deductible)
     else:
         raise VatReturnError("Lado inválido")
     out = sorted(docs.values(), key=lambda d: (d["date"], d["reference"]))

@@ -133,6 +133,8 @@ def generate_saf_t_xml(
     fiscal_year: int,
     start_date: date,
     end_date: date,
+    suppliers: list[dict] | None = None,
+    purchases: list[dict] | None = None,
 ) -> bytes:
     """
     Builds the complete AuditFile XML for one fiscal period (typically one
@@ -174,7 +176,9 @@ def generate_saf_t_xml(
     _el(header, "AuditFileVersion", "1.01_01")
     _el(header, "CompanyID", company.get("commercial_registration_number") or company["nif"])
     _el(header, "TaxRegistrationNumber", company["nif"])
-    _el(header, "TaxAccountingBasis", "F")  # Facturacao only - RM SOFT does not do integrated accounting
+    # F: invoicing only. Q: acquisitions integrated with the invoicing - when the purchases are exported (purchases is
+    # then a list, possibly empty; None leaves them out). RM SOFT does not do accounting (no C / I).
+    _el(header, "TaxAccountingBasis", "F" if purchases is None else "Q")
     _el(header, "CompanyName", company["name"])
     _el(header, "BusinessName", company["name"])
 
@@ -250,6 +254,24 @@ def generate_saf_t_xml(
         _el(generic, "Telephone", "Desconhecido")
         _el(generic, "Email", "Desconhecido")
         _el(generic, "SelfBillingIndicator", "0")
+
+    # Suppliers of the exported purchases (XSD: after the customers, before the products), with short sequential IDs
+    supplier_short_id = {s["id"]: f"F{idx + 1}" for idx, s in enumerate(suppliers or [])}
+    for sup in suppliers or []:
+        supplier_el = _el(master_files, "Supplier")
+        _el(supplier_el, "SupplierID", supplier_short_id[sup["id"]])
+        _el(supplier_el, "AccountID", "Desconhecido")
+        _el(supplier_el, "SupplierTaxID", (sup.get("nif") or "Desconhecido")[:20])
+        _el(supplier_el, "CompanyName", sup["name"][:200])
+        billing = _el(supplier_el, "BillingAddress")
+        _el(billing, "AddressDetail", (sup.get("address") or "Desconhecido")[:250])
+        _el(billing, "City", "Desconhecido")
+        _el(billing, "Country", sup.get("country") or "AO")
+        if sup.get("phone_number"):
+            _el(supplier_el, "Telephone", sup["phone_number"][:20])
+        if sup.get("email"):
+            _el(supplier_el, "Email", sup["email"][:255])
+        _el(supplier_el, "SelfBillingIndicator", "0")
 
     for p in products:
         product_el = _el(master_files, "Product")
@@ -407,5 +429,35 @@ def generate_saf_t_xml(
             _el(totals, "NetTotal", _money(rc["subtotal"]))
             _el(totals, "GrossTotal", _money(rc["total"]))
             _write_withholding(payment_el, [(w["type"], w.get("name"), w["amount"]) for w in rc.get("withholding") or []])
+
+    # ---------- SourceDocuments.PurchaseInvoices ----------
+    # The supplier documents registered by the company: their number and hash as printed, their type (a credit note
+    # refers to the invoice it corrects), totals and the deductible VAT by destination (XSD DeductibleTaxes).
+    if purchases is not None:
+        purchases_el = _el(source_documents, "PurchaseInvoices")
+        _el(purchases_el, "NumberOfEntries", len(purchases))
+        for pi in purchases:
+            invoice_el = _el(purchases_el, "Invoice")
+            _el(invoice_el, "InvoiceNo", pi["invoice_no"][:60])
+            if pi.get("reference"):
+                ref_el = _el(invoice_el, "References")
+                _el(ref_el, "Reference", pi["reference"]["no"][:60])
+                _el(ref_el, "InvoiceDate", pi["reference"]["date"].isoformat())
+            _el(invoice_el, "Hash", pi["hash"])
+            _el(invoice_el, "SourceID", pi["source_id"])
+            _el(invoice_el, "Period", pi["period"])
+            _el(invoice_el, "InvoiceDate", pi["invoice_date"].isoformat())
+            _el(invoice_el, "PurchaseType", pi["purchase_type"])
+            _el(invoice_el, "SupplierID", supplier_short_id[pi["supplier_id"]])
+            totals = _el(invoice_el, "DocumentTotals")
+            _el(totals, "TaxPayable", _money(pi["vat_total"]))
+            _el(totals, "NetTotal", _money(pi["subtotal"]))
+            _el(totals, "GrossTotal", _money(pi["total"]))
+            for group in pi["deductible"]:
+                deductible_el = _el(totals, "Deductible")
+                _el(deductible_el, "TaxBase", _money(group["base"]))
+                _el(deductible_el, "DeductibleAmount", _money(group["amount"]))
+                _el(deductible_el, "DeductiblePercentage", _money(pi["deductible_pct"]))
+                _el(deductible_el, "DeductibleTaxType", group["type"])
 
     return etree.tostring(root, xml_declaration=True, encoding="utf-8", pretty_print=True)
