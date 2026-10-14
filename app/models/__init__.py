@@ -77,3 +77,4 @@ from app.models.legal_vat_rate import LegalVatRate  # noqa: E402,F401 - legal VA
 from app.models.company_fiscal_regime import CompanyFiscalRegime  # noqa: E402,F401 - regime history
 from app.models.kitchen_order import KitchenOrder  # noqa: E402,F401 - kitchen sendings (point 34b)
 from app.models.stock_period_closing import StockPeriodClosing  # noqa: E402,F401 - stock frozen at a period's close (point 11)
+from app.models.stock_inventory import StockInventory, StockInventoryLine  # noqa: E402,F401 - inventories (point 11)

@@ -51,6 +51,12 @@ from app.services.stock_service import (
 
 from app.services.stock_period_closing_service import StockClosingPeriodNotFoundError, get_period_stock_report
 
+from app.schemas.stock_inventory import InventoryCountsRequest, InventoryCreateRequest
+from app.services.stock_inventory_service import (
+    InventoryNotFoundError, InventoryStateError, create_inventory, get_inventory, list_inventories, save_counts,
+    validate_inventory,
+)
+
 router = APIRouter(prefix="/api/v1/stock", tags=["stock"])
 
 
@@ -302,3 +308,96 @@ async def get_period_closing(
         return await get_period_stock_report(db, current_user.company_id, fiscal_period_id, warehouse_id)
     except StockClosingPeriodNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+# ---------- Inventário (point 11): count a warehouse, validate the differences into adjustments ----------
+
+INVENTORY_ERRORS = {InventoryNotFoundError: status.HTTP_404_NOT_FOUND, InventoryStateError: status.HTTP_409_CONFLICT,
+                    PeriodClosedError: status.HTTP_409_CONFLICT, WarehouseNotFoundError: status.HTTP_404_NOT_FOUND}
+
+
+def _inventory_http(e: Exception) -> HTTPException:
+    return HTTPException(status_code=INVENTORY_ERRORS[type(e)], detail=str(e))
+
+
+@router.get("/inventories")
+async def get_inventories(
+    warehouse_id: uuid.UUID | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("stock:view")),
+):
+    return await list_inventories(db, current_user.company_id, warehouse_id)
+
+
+@router.post("/inventories", status_code=status.HTTP_201_CREATED)
+async def post_inventory(
+    payload: InventoryCreateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("stock:adjust")),
+):
+    try:
+        inventory = await create_inventory(db, current_user.company_id, payload.warehouse_id, current_user.id,
+                                           payload.fiscal_period_id, payload.description)
+        return await get_inventory(db, current_user.company_id, inventory.id)
+    except tuple(INVENTORY_ERRORS) as e:
+        raise _inventory_http(e)
+
+
+@router.get("/inventories/{inventory_id}")
+async def get_one_inventory(
+    inventory_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("stock:view")),
+):
+    try:
+        return await get_inventory(db, current_user.company_id, inventory_id)
+    except tuple(INVENTORY_ERRORS) as e:
+        raise _inventory_http(e)
+
+
+@router.put("/inventories/{inventory_id}/counts")
+async def put_inventory_counts(
+    inventory_id: uuid.UUID,
+    payload: InventoryCountsRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("stock:adjust")),
+):
+    try:
+        await save_counts(db, current_user.company_id, inventory_id, [c.model_dump() for c in payload.counts])
+        return await get_inventory(db, current_user.company_id, inventory_id)
+    except tuple(INVENTORY_ERRORS) as e:
+        raise _inventory_http(e)
+
+
+@router.post("/inventories/{inventory_id}/validate")
+async def post_validate_inventory(
+    inventory_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("stock:adjust")),
+):
+    try:
+        return await validate_inventory(db, current_user.company_id, inventory_id, current_user.id)
+    except tuple(INVENTORY_ERRORS) as e:
+        raise _inventory_http(e)
+
+
+@router.get("/inventories/{inventory_id}/pdf")
+async def get_inventory_pdf(
+    inventory_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("stock:view")),
+):
+    """The counting sheet of a draft, or the record of a validated inventory."""
+    from fastapi import Response
+    from sqlalchemy import select
+    from app.models.company import Company
+    from app.services.cash_report_service import _company_dict
+    from app.utils.inventory_pdf import generate_inventory_pdf
+    try:
+        data = await get_inventory(db, current_user.company_id, inventory_id)
+    except tuple(INVENTORY_ERRORS) as e:
+        raise _inventory_http(e)
+    company = (await db.execute(select(Company).where(Company.id == current_user.company_id))).scalar_one()
+    pdf = generate_inventory_pdf(data, _company_dict(company))
+    return Response(content=pdf, media_type="application/pdf",
+                    headers={"Content-Disposition": f'inline; filename="{data["reference"].replace("/", "-")}.pdf"'})

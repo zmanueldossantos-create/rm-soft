@@ -275,6 +275,12 @@ async def close_fiscal_period(db: AsyncSession, company_id: uuid.UUID, period_id
         raise InvalidFiscalOperationError("O período já está fechado")
     if period.status == ABERTO:
         await _ensure_no_cash_in_flight(db, company_id)
+    # with the company's option: no final close before the inventory of every warehouse holding stock
+    from app.services.stock_inventory_service import InventoryMissingError, ensure_inventories_before_close
+    try:
+        await ensure_inventories_before_close(db, company_id, period.id)
+    except InventoryMissingError as e:
+        raise InvalidFiscalOperationError(str(e))
     period.status = FECHADO
     # with the company's option: its stock frozen as it stands now that nothing more can be booked in it
     from app.services.stock_period_closing_service import freeze_period_stock  # local: it imports this module

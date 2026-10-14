@@ -95,7 +95,7 @@ async def update_my_company_contact(
         if value in ("off", "warn", "block"):
             setattr(company, check, value)
     company.suggests_last_document_date = payload.suggests_last_document_date if payload.uses_invoicing else False
-    for option in ("stock_period_closing", "stock_check_at_period_end"):  # stock controls: only changed when sent
+    for option in ("stock_period_closing", "stock_check_at_period_end", "inventory_before_close"):  # stock controls: only changed when sent
         if getattr(payload, option) is not None:
             setattr(company, option, getattr(payload, option))
     company.issuance_mode = payload.issuance_mode

@@ -71,6 +71,7 @@ export default function CompanySettings() {
   const [allowsFutureSaleDate, setAllowsFutureSaleDate] = useState(false);
   const [stockPeriodClosing, setStockPeriodClosing] = useState(false); // Fecho de stock por período
   const [stockCheckAtPeriodEnd, setStockCheckAtPeriodEnd] = useState(false); // Stock à data (late exits)
+  const [inventoryBeforeClose, setInventoryBeforeClose] = useState(false); // Inventário obrigatório antes do fecho
   const [saleUnitChecks, setSaleUnitChecks] = useState({ sale_unit_check_above_base: 'warn', sale_unit_check_below_cost: 'warn', sale_unit_check_same_factor: 'warn' });
   const [suggestsLastDocumentDate, setSuggestsLastDocumentDate] = useState(false);
   const [issuanceMode, setIssuanceMode] = useState('MANUAL');
@@ -174,6 +175,7 @@ export default function CompanySettings() {
       setSuggestsLastDocumentDate(data.suggests_last_document_date);
       setStockPeriodClosing(!!data.stock_period_closing);
       setStockCheckAtPeriodEnd(!!data.stock_check_at_period_end);
+      setInventoryBeforeClose(!!data.inventory_before_close);
       setIssuanceMode(data.issuance_mode || 'MANUAL');
       setElectronicSignatureKey(data.electronic_signature_key || '');
     } catch (err) {
@@ -502,6 +504,7 @@ export default function CompanySettings() {
         ...saleUnitChecks,
         stock_period_closing: stockPeriodClosing,
         stock_check_at_period_end: stockCheckAtPeriodEnd,
+        inventory_before_close: inventoryBeforeClose,
         issuance_mode: issuanceMode, electronic_signature_key: issuanceMode === 'ELETRONICA' ? (electronicSignatureKey || null) : null,
       });
       setSaved(true);
@@ -851,6 +854,13 @@ export default function CompanySettings() {
                 <span>
                   <span className="text-sm text-text-primary block">Stock à data nos lançamentos tardios</span>
                   <span className="text-[12px] text-text-muted block">Uma saída lançada no período fechado parcialmente (perda, saída, transferência, ajuste, produção, consumo interno) não pode usar mais do que o stock no fim desse período - nunca o que entrou depois.</span>
+                </span>
+              </label>
+              <label className="flex items-start gap-2.5 cursor-pointer select-none border border-border rounded-md px-3.5 py-3 hover:border-accent transition-colors">
+                <input type="checkbox" checked={inventoryBeforeClose} onChange={(e) => setInventoryBeforeClose(e.target.checked)} className="w-4 h-4 mt-0.5 accent-accent cursor-pointer" />
+                <span>
+                  <span className="text-sm text-text-primary block">Inventário obrigatório antes do fecho</span>
+                  <span className="text-[12px] text-text-muted block">Um período só pode ser fechado definitivamente depois de um inventário validado, nesse período, em cada armazém com stock (Stock → Armazéns e Stock → Inventário).</span>
                 </span>
               </label>
               </div>

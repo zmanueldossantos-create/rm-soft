@@ -115,3 +115,36 @@ export async function getProductionHistory(filters = {}) {
   const res = await apiClient.get('/stock/production-history', { params });
   return res.data;
 }
+
+// ---------- Inventário (count a warehouse, validate the differences into adjustments) ----------
+
+export async function listInventories(warehouseId) {
+  const res = await apiClient.get('/stock/inventories', { params: warehouseId ? { warehouse_id: warehouseId } : {} });
+  return res.data;
+}
+
+export async function createInventory(warehouseId, fiscalPeriodId = null, description = null) {
+  const res = await apiClient.post('/stock/inventories', { warehouse_id: warehouseId, fiscal_period_id: fiscalPeriodId || null, description });
+  return res.data;
+}
+
+export async function getInventory(inventoryId) {
+  const res = await apiClient.get('/stock/inventories/' + inventoryId);
+  return res.data;
+}
+
+// counts: [{ product_id, counted_quantity (base unit, null = not counted), count_detail }]
+export async function saveInventoryCounts(inventoryId, counts) {
+  const res = await apiClient.put('/stock/inventories/' + inventoryId + '/counts', { counts });
+  return res.data;
+}
+
+export async function validateInventory(inventoryId) {
+  const res = await apiClient.post('/stock/inventories/' + inventoryId + '/validate');
+  return res.data;
+}
+
+export async function fetchInventoryPdfBlob(inventoryId) {
+  const res = await apiClient.get('/stock/inventories/' + inventoryId + '/pdf', { responseType: 'blob' });
+  return URL.createObjectURL(res.data);
+}

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Package2, Plus, Loader2, Search, AlertTriangle, ArrowDownToLine, SlidersHorizontal, Warehouse, Pencil, Check, X, ArrowRightLeft, Trash2, Power } from 'lucide-react';
+import { Package2, Plus, Loader2, Search, AlertTriangle, ArrowDownToLine, SlidersHorizontal, Warehouse, Pencil, Check, X, ArrowRightLeft, Trash2, Power, ClipboardCheck } from 'lucide-react';
 import Modal from '../components/Modal';
 import MovementForm from '../components/MovementForm';
+import StockInventory from '../components/StockInventory';
 
 import PostingPeriodSelect from '../components/PostingPeriodSelect';
 import UnitBreakdown from '../components/UnitBreakdown';
@@ -101,6 +102,7 @@ export default function Stock() {
   const [transferModalOpen, setTransferModalOpen] = useState(false);
   const [lossModalOpen, setLossModalOpen] = useState(false);
   const [adjustModalOpen, setAdjustModalOpen] = useState(false);
+  const [inventoryOpen, setInventoryOpen] = useState(false); // Inventário: count a whole warehouse
   const [selectedProductId, setSelectedProductId] = useState('');
   const [quantity, setQuantity] = useState('');
   const [reason, setReason] = useState('');
@@ -431,6 +433,13 @@ export default function Stock() {
           >
             <SlidersHorizontal size={16} />
             Ajustar
+          </button>
+          <button
+            onClick={() => setInventoryOpen(true)}
+            className="flex items-center gap-2 border border-border hover:border-accent text-text-primary font-medium text-sm px-4 py-2.5 rounded-md transition-colors cursor-pointer"
+          >
+            <ClipboardCheck size={16} />
+            Inventário
           </button>
           {isCentralSelected && (
             <button
@@ -870,6 +879,14 @@ export default function Stock() {
           </button>
         </form>
       </Modal>
+      <StockInventory
+        open={inventoryOpen}
+        onClose={() => setInventoryOpen(false)}
+        warehouses={warehouses}
+        warehouseId={selectedWarehouseId}
+        canAdjust={can('stock:adjust')}
+        onValidated={() => loadLevels(selectedWarehouseId)}
+      />
     </main>
   );
 }

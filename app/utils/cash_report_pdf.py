@@ -115,9 +115,14 @@ def _draw_header(p: "_Page", company: dict, title: str, right_lines: list[str], 
         c.setFont("Helvetica-Bold", 9)
         c.drawString(MARGIN + 100 * mm, dy, label + ":")
         c.setFont("Helvetica", 9)
-        c.drawString(MARGIN + 122 * mm, dy, value[:40])
+        # a long value (a date and a full name) goes on as many lines as it needs, never cut
+        for k, part in enumerate(_wrap_to_width(c, value, "Helvetica", 9, CONTENT_W - 122 * mm)):
+            if k:
+                dy -= 4.5 * mm
+            c.drawString(MARGIN + 122 * mm, dy, part)
         dy -= 5.5 * mm
-    p.y -= max(box_h, 20 * mm) + 8 * mm
+    used = (p.y - 6 * mm) - dy
+    p.y -= max(box_h, 20 * mm, used) + 8 * mm
 
 
 def _fit(c, text: str, font: str, size: float, width: float) -> str:

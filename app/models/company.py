@@ -75,6 +75,9 @@ class Company(Base):
     # Stock à data: a late exit booked in the soft-closed period may not take more than the stock at that period's end
     # (not today's stock) - see stock_service.ensure_available_at_period_end. Off by default.
     stock_check_at_period_end: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    # Inventário obrigatório antes do fecho: a period is closed for good only once every warehouse holding stock has a
+    # validated inventory booked in it - see stock_inventory_service.ensure_inventories_before_close. Off by default.
+    inventory_before_close: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
 
     # Fiscal issuance mode - electronic mode requires the AGT-issued private
     # key and turns OFF auto_series_year (series are solicited from AGT instead).
