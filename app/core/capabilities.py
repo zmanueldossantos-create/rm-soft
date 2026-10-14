@@ -34,8 +34,8 @@ CAPABILITIES: dict[str, Capability] = {
     for c in (
         Capability(
             "STOCK", "Stock", "Armazens, movimentos de stock, fornecedores e consumo interno", (),
-            ("stock", "warehouses", "movements", "suppliers", "consumption_reasons", "internal_consumption", "products"),
-            ("/stock", "/stock/dashboard", "/stock-movements", "/fornecedores", "/consumo-interno", "/products", "/materia-prima"),
+            ("stock", "warehouses", "movements", "suppliers", "purchases", "consumption_reasons", "internal_consumption", "products"),
+            ("/stock", "/stock/dashboard", "/stock-movements", "/fornecedores", "/compras", "/consumo-interno", "/products", "/materia-prima"),
         ),
         Capability(
             "PRODUCTION", "Produção", "Receitas e produção (a partir do stock)", ("STOCK",),

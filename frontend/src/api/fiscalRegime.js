@@ -6,7 +6,7 @@ export async function listFiscalRegimes() {
   return res.data;
 }
 
-export async function createFiscalRegime(name, description, allowsNor, allowsRed, allowsIse, allowsInt, allowsOut, requiredExemptionId) {
+export async function createFiscalRegime(name, description, allowsNor, allowsRed, allowsIse, allowsInt, allowsOut, requiredExemptionId, inputVatDeductiblePct) {
   const res = await apiClient.post('/admin/fiscal-regimes', {
     name,
     description: description || null,
@@ -16,11 +16,12 @@ export async function createFiscalRegime(name, description, allowsNor, allowsRed
     allows_int: allowsInt,
     allows_out: allowsOut,
     required_exemption_id: requiredExemptionId || null,
+    input_vat_deductible_pct: inputVatDeductiblePct === '' || inputVatDeductiblePct == null ? 100 : Number(inputVatDeductiblePct),
   });
   return res.data;
 }
 
-export async function updateFiscalRegime(regimeId, name, description, allowsNor, allowsRed, allowsIse, allowsInt, allowsOut, requiredExemptionId) {
+export async function updateFiscalRegime(regimeId, name, description, allowsNor, allowsRed, allowsIse, allowsInt, allowsOut, requiredExemptionId, inputVatDeductiblePct) {
   const res = await apiClient.patch('/admin/fiscal-regimes/' + regimeId, {
     name,
     description: description || null,
@@ -30,6 +31,7 @@ export async function updateFiscalRegime(regimeId, name, description, allowsNor,
     allows_int: allowsInt,
     allows_out: allowsOut,
     required_exemption_id: requiredExemptionId || null,
+    input_vat_deductible_pct: inputVatDeductiblePct === '' || inputVatDeductiblePct == null ? 100 : Number(inputVatDeductiblePct),
   });
   return res.data;
 }

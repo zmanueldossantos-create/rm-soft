@@ -1,0 +1,29 @@
+"""Faturas de compra - requests (the responses are the service's dicts)."""
+import uuid
+from datetime import date
+
+from pydantic import BaseModel
+
+
+class PurchaseInvoiceLineInput(BaseModel):
+    product_id: uuid.UUID | None = None
+    service_id: uuid.UUID | None = None
+    description: str | None = None
+    quantity: float
+    unit_price: float  # without VAT
+    legal_vat_rate_id: uuid.UUID
+    exemption_id: uuid.UUID | None = None  # required on an exempt line
+
+
+class PurchaseInvoiceCreateRequest(BaseModel):
+    supplier_id: uuid.UUID
+    supplier_document: str
+    document_date: date
+    due_date: date | None = None
+    fiscal_period_id: uuid.UUID | None = None
+    description: str | None = None
+    lines: list[PurchaseInvoiceLineInput]
+
+
+class PurchaseInvoiceCancelRequest(BaseModel):
+    reason: str

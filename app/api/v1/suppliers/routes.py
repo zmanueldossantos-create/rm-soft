@@ -8,7 +8,7 @@ from app.api.deps import require_permission
 from app.models.user import User
 from app.schemas.supplier import SupplierCreateRequest, SupplierUpdateRequest, SupplierResponse
 from app.services.supplier_service import (
-    create_supplier, list_suppliers, update_supplier, toggle_supplier_status,
+    create_supplier, list_suppliers, update_supplier, toggle_supplier_status, SupplierNifRequiredError,
     SupplierNotFoundError, SupplierAlreadyExistsError,
 )
 
@@ -30,9 +30,12 @@ async def post_create_supplier(
         return await create_supplier(
             db, current_user.company_id, payload.name, payload.nif, payload.phone_number,
             payload.email, payload.address, payload.payment_terms, payload.notes,
+            trade_name=payload.trade_name, country_id=payload.country_id,
         )
     except SupplierAlreadyExistsError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except SupplierNifRequiredError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
 
 
 @router.get("", response_model=list[SupplierResponse])
@@ -54,7 +57,10 @@ async def patch_supplier(
         return await update_supplier(
             db, current_user.company_id, supplier_id, payload.name, payload.nif, payload.phone_number,
             payload.email, payload.address, payload.payment_terms, payload.notes,
+            trade_name=payload.trade_name, country_id=payload.country_id,
         )
+    except SupplierNifRequiredError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     except SupplierNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except SupplierAlreadyExistsError as e:

@@ -78,3 +78,4 @@ from app.models.company_fiscal_regime import CompanyFiscalRegime  # noqa: E402,F
 from app.models.kitchen_order import KitchenOrder  # noqa: E402,F401 - kitchen sendings (point 34b)
 from app.models.stock_period_closing import StockPeriodClosing  # noqa: E402,F401 - stock frozen at a period's close (point 11)
 from app.models.stock_inventory import StockInventory, StockInventoryLine  # noqa: E402,F401 - inventories (point 11)
+from app.models.purchase_invoice import PurchaseInvoice, PurchaseInvoiceLine  # noqa: E402,F401 - purchase invoices (point 12)

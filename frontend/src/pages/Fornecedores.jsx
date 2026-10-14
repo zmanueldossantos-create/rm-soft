@@ -3,6 +3,8 @@ import { Truck, Plus, Pencil, Loader2, Search } from 'lucide-react';
 import { listSuppliers, createSupplier, updateSupplier, toggleSupplierStatus } from '../api/suppliers';
 import { extractErrorMessage } from '../utils/errors';
 import Modal from '../components/Modal';
+import Select from '../components/Select';
+import { countriesApi } from '../api/catalogs';
 
 function ToggleSwitch({ checked, onChange, disabled }) {
   const trackClass = 'relative w-9 h-5 rounded-full transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ' + (checked ? 'bg-success' : 'bg-border');
@@ -14,7 +16,7 @@ function ToggleSwitch({ checked, onChange, disabled }) {
   );
 }
 
-const emptyForm = { name: '', nif: '', phoneNumber: '', email: '', address: '', paymentTerms: '', notes: '' };
+const emptyForm = { name: '', tradeName: '', countryId: '', nif: '', phoneNumber: '', email: '', address: '', paymentTerms: '', notes: '' };
 
 export default function Fornecedores() {
   const [suppliers, setSuppliers] = useState([]);
@@ -29,9 +31,16 @@ export default function Fornecedores() {
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
 
+  const [countries, setCountries] = useState([]);
+
   useEffect(() => {
     loadSuppliers();
+    countriesApi.list().then((data) => setCountries(data.filter((c) => c.is_active))).catch(() => setCountries([]));
   }, []);
+
+  // a supplier of Angola (or without a country) needs its NIF - the purchase invoices are declared with it
+  const angolaId = countries.find((c) => c.code === 'AO')?.id;
+  const nifRequired = !form.countryId || form.countryId === angolaId;
 
   async function loadSuppliers() {
     setLoading(true);
@@ -63,6 +72,8 @@ export default function Fornecedores() {
     setForm({
       name: supplier.name,
       nif: supplier.nif || '',
+      tradeName: supplier.trade_name || '',
+      countryId: supplier.country_id || '',
       phoneNumber: supplier.phone_number || '',
       email: supplier.email || '',
       address: supplier.address || '',
@@ -81,6 +92,8 @@ export default function Fornecedores() {
       const payload = {
         name: form.name,
         nif: form.nif || null,
+        trade_name: form.tradeName || null,
+        country_id: form.countryId || null,
         phone_number: form.phoneNumber || null,
         email: form.email || null,
         address: form.address || null,
@@ -190,35 +203,44 @@ export default function Fornecedores() {
         </div>
       )}
 
-      <Modal open={formOpen} onClose={() => setFormOpen(false)} title={editingId ? 'Editar fornecedor' : 'Novo fornecedor'} maxWidthClass="max-w-xl">
+      <Modal open={formOpen} onClose={() => setFormOpen(false)} title={editingId ? 'Editar fornecedor' : 'Novo fornecedor'} maxWidthClass="max-w-4xl">
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <div className="flex gap-3">
-            <div className="flex-1">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
               <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Nome *</label>
               <input value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} required autoFocus className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
             </div>
-            <div className="flex-1">
-              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">NIF (opcional)</label>
-              <input value={form.nif} onChange={(e) => setForm((p) => ({ ...p, nif: e.target.value }))} className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
+            <div>
+              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Nome comercial (opcional)</label>
+              <input value={form.tradeName} onChange={(e) => setForm((p) => ({ ...p, tradeName: e.target.value }))} className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
             </div>
-          </div>
-          <div className="flex gap-3">
-            <div className="flex-1">
+            <div>
+              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">País</label>
+              <Select value={form.countryId} onChange={(v) => setForm((p) => ({ ...p, countryId: v }))} placeholder="Angola"
+                options={[{ value: '', label: 'Angola' }, ...countries.filter((c) => c.code !== 'AO').map((c) => ({ value: c.id, label: c.name }))]} />
+            </div>
+            <div>
+              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">{nifRequired ? 'NIF *' : 'NIF (opcional)'}</label>
+              <input value={form.nif} onChange={(e) => setForm((p) => ({ ...p, nif: e.target.value }))} required={nifRequired} className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors font-mono" />
+            </div>
+            <div>
               <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Telefone (opcional)</label>
               <input value={form.phoneNumber} onChange={(e) => setForm((p) => ({ ...p, phoneNumber: e.target.value }))} placeholder="+244..." className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
             </div>
-            <div className="flex-1">
+            <div>
               <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Email (opcional)</label>
               <input type="email" value={form.email} onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))} className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
             </div>
           </div>
-          <div>
-            <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Morada (opcional)</label>
-            <input value={form.address} onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))} className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
-          </div>
-          <div>
-            <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Condicoes de pagamento (opcional)</label>
-            <input value={form.paymentTerms} onChange={(e) => setForm((p) => ({ ...p, paymentTerms: e.target.value }))} placeholder="Ex: 30 dias, a vista" className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Morada (opcional)</label>
+              <input value={form.address} onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))} className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
+            </div>
+            <div>
+              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Condições de pagamento (opcional)</label>
+              <input value={form.paymentTerms} onChange={(e) => setForm((p) => ({ ...p, paymentTerms: e.target.value }))} placeholder="Ex: 30 dias, à vista" className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
+            </div>
           </div>
           <div>
             <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Notas (opcional)</label>

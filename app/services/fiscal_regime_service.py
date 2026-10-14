@@ -23,6 +23,11 @@ def _check_required_exemption(allows_ise: bool, required_exemption_id) -> None:
         raise FiscalRegimeInvalidError("Um regime com motivo de isenção obrigatório tem de permitir a taxa ISE (isenta)")
 
 
+def _check_deductible_pct(pct: float) -> None:
+    if pct < 0 or pct > 100:
+        raise ValueError("A percentagem de IVA dedutível deve estar entre 0 e 100")
+
+
 async def list_fiscal_regimes(db: AsyncSession) -> list[FiscalRegime]:
     result = await db.execute(select(FiscalRegime).order_by(FiscalRegime.name))
     return list(result.scalars().all())
@@ -38,9 +43,12 @@ async def create_fiscal_regime(
     allows_int: bool,
     allows_out: bool,
     required_exemption_id: uuid.UUID | None = None,
+    input_vat_deductible_pct: float = 100,
 ) -> FiscalRegime:
     _check_required_exemption(allows_ise, required_exemption_id)
+    _check_deductible_pct(input_vat_deductible_pct)
     regime = FiscalRegime(
+        input_vat_deductible_pct=input_vat_deductible_pct,
         name=name,
         description=description,
         allows_nor=allows_nor,
@@ -75,9 +83,13 @@ async def update_fiscal_regime(
     allows_int: bool,
     allows_out: bool,
     required_exemption_id: uuid.UUID | None = None,
+    input_vat_deductible_pct: float | None = None,
 ) -> FiscalRegime:
     _check_required_exemption(allows_ise, required_exemption_id)
     regime = await get_fiscal_regime_or_raise(db, regime_id)
+    if input_vat_deductible_pct is not None:
+        _check_deductible_pct(input_vat_deductible_pct)
+        regime.input_vat_deductible_pct = input_vat_deductible_pct
     regime.name = name
     regime.description = description
     regime.allows_nor = allows_nor

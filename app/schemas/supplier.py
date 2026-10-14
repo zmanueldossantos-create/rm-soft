@@ -7,6 +7,8 @@ from pydantic import BaseModel
 class SupplierCreateRequest(BaseModel):
     name: str
     nif: str | None = None
+    trade_name: str | None = None
+    country_id: uuid.UUID | None = None  # Angola when not set
     phone_number: str | None = None
     email: str | None = None
     address: str | None = None
@@ -23,6 +25,8 @@ class SupplierResponse(BaseModel):
     company_id: uuid.UUID
     name: str
     nif: str | None
+    trade_name: str | None = None
+    country_id: uuid.UUID | None = None
     phone_number: str | None
     email: str | None
     address: str | None

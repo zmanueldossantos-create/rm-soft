@@ -6,10 +6,9 @@ regulated MovementType per the SAF-T Angola XSD - only GR/GT/GA/GD
 outbound movements are - see the "Guia de Entrada e documento fiscal?"
 discussion), so none of Customer's fiscal-compliance fields apply here.
 
-v1 scope is intentionally minimal - a catalog + linking suppliers to
-StockMovementDocument (Guia de Entrada) for traceability. No purchase-order
-workflow, no accounts-payable/payment tracking, no delivery/logistics
-tracking - those would be separate future chantiers if the need arises.
+Linked to StockMovementDocument (Guia de Entrada) for traceability, and to the
+purchase invoices (PurchaseInvoice, point 12) - which need the NIF of a
+supplier of Angola (its country, Angola when not set).
 """
 import uuid
 from datetime import datetime
@@ -31,7 +30,10 @@ class Supplier(Base):
     company_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("companies.id"), nullable=False, index=True)
 
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    nif: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    nif: Mapped[str | None] = mapped_column(String(20), nullable=True)  # required for a supplier of Angola (purchases)
+    trade_name: Mapped[str | None] = mapped_column(String(255), nullable=True)  # nome comercial
+    # its country - Angola when not set; a foreign supplier has no Angolan NIF
+    country_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("countries.id"), nullable=True)
     phone_number: Mapped[str | None] = mapped_column(String(20), nullable=True)
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     address: Mapped[str | None] = mapped_column(String(500), nullable=True)
