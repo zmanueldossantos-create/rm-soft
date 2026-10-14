@@ -11,6 +11,7 @@ from app.models.purchase_invoice import PurchaseInvoiceStatus
 from app.models.user import User
 from app.schemas.purchase_invoice import PurchaseInvoiceCancelRequest, PurchaseInvoiceCreateRequest
 from app.services.fiscal_period_service import PeriodClosedError
+from app.services.permission_service import has_permission
 from app.services.purchase_invoice_service import (
     PurchaseInvoiceError, PurchaseInvoiceNotFoundError, cancel_purchase_invoice, get_purchase_invoice,
     list_purchase_invoices, register_purchase_invoice,
@@ -43,11 +44,14 @@ async def post_purchase_invoice(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("purchases:manage")),
 ):
+    # bringing the goods into a warehouse is a stock reception: it needs that permission too
+    if payload.stock_entry and not await has_permission(db, current_user.company_id, current_user.role.value, "stock:receive"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Não tem permissão para dar entrada em stock")
     try:
         invoice = await register_purchase_invoice(
             db, current_user.company_id, current_user.id, payload.supplier_id, payload.supplier_document,
             payload.document_date, [l.model_dump() for l in payload.lines], payload.fiscal_period_id,
-            payload.due_date, payload.description,
+            payload.due_date, payload.description, payload.stock_entry, payload.warehouse_id,
         )
         return await get_purchase_invoice(db, current_user.company_id, invoice.id)
     except tuple(ERRORS) as e:

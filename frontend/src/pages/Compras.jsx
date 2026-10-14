@@ -10,12 +10,14 @@ import { useCan } from '../utils/permissions';
 import { listSuppliers } from '../api/suppliers';
 import { listProducts } from '../api/products';
 import { listServices } from '../api/services';
+import { listWarehouses } from '../api/stock';
 import { legalVatRatesApi, vatCodesApi } from '../api/catalogs';
 import { listPurchaseInvoices, getPurchaseInvoice, registerPurchaseInvoice, cancelPurchaseInvoice } from '../api/purchases';
 
 // Faturas de compra (purchase_invoice_service): the supplier invoices the company registers - the VAT the supplier
 // charged (a legal rate, its exemption motive when exempt), the share the company deducts by its regime, the rest a
-// cost. A registration is never deleted: it is cancelled with its reason.
+// cost. A registration is never deleted: it is cancelled with its reason. Its products may enter a warehouse at their
+// cost (the system's automatic entry) - one purchase, one entry: no separate Receção.
 const inputCls = 'w-full bg-bg-inset border border-border rounded-md px-3 py-2 text-sm text-text-primary outline-none focus:border-accent transition-colors';
 // the cells of a line: the same height as the selects beside them
 const cellCls = 'w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors';
@@ -29,7 +31,7 @@ function todayIso() {
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
 
-const emptyLine = () => ({ kind: 'product', itemId: '', description: '', quantity: '1', unitPrice: '', rateId: '', exemptionId: '' });
+const emptyLine = () => ({ kind: 'product', itemId: '', saleUnitId: '', description: '', quantity: '1', unitPrice: '', rateId: '', exemptionId: '' });
 
 export default function Compras() {
   const can = useCan();
@@ -41,6 +43,7 @@ export default function Compras() {
   const [services, setServices] = useState([]);
   const [rates, setRates] = useState([]);
   const [motives, setMotives] = useState([]);
+  const [warehouses, setWarehouses] = useState([]);
   const [filters, setFilters] = useState({ supplierId: '', status: '', dateFrom: todayIso().slice(0, 8) + '01', dateTo: todayIso() });
   const [search, setSearch] = useState('');
 
@@ -73,11 +76,14 @@ export default function Compras() {
     listServices().then((d) => setServices(d.filter((s) => s.is_active !== false))).catch(() => {});
     legalVatRatesApi.list().then((d) => setRates(d.filter((r) => r.is_active).sort((a, b) => b.rate - a.rate))).catch(() => {});
     vatCodesApi.list().then((d) => setMotives(d.filter((m) => m.is_active))).catch(() => {});
+    listWarehouses().then(setWarehouses).catch(() => {});
   }, []);
 
   function openForm() {
     const normal = rates.find((r) => r.tax_category === 'NOR') || rates[0];
+    // the goods enter the central warehouse (the first one) unless another is chosen - or not at all
     setForm({ supplierId: '', supplierDocument: '', documentDate: todayIso(), dueDate: '', periodId: '', description: '',
+      stockEntry: can('stock:receive'), warehouseId: warehouses.find((w) => w.is_active)?.id || '',
       lines: [{ ...emptyLine(), rateId: normal?.id || '' }] });
     setFormError('');
     setFormOpen(true);
@@ -87,11 +93,22 @@ export default function Compras() {
     setForm((f) => ({ ...f, lines: f.lines.map((l, i) => (i === idx ? { ...l, ...patch } : l)) }));
   }
 
-  // choosing an article proposes its description and, for a product, its last purchase price
+  // choosing an article proposes its description and, for a product, its last purchase price (per base unit)
   function chooseItem(idx, line, id) {
     const item = (line.kind === 'product' ? products : services).find((x) => x.id === id);
-    updateLine(idx, { itemId: id, description: item?.name || '',  // sent as the line's text
+    updateLine(idx, { itemId: id, saleUnitId: '', description: item?.name || '',  // sent as the line's text
       unitPrice: line.kind === 'product' && item?.purchase_price != null ? String(item.purchase_price) : line.unitPrice });
+  }
+
+  const productById = useMemo(() => Object.fromEntries(products.map((p) => [p.id, p])), [products]);
+  const unitOf = (l) => (productById[l.itemId]?.sale_units || []).find((u) => u.id === l.saleUnitId) || null;
+
+  // the unit it was bought in (a sack of 20 kg): the last price paid, per base unit, times the unit's factor
+  function chooseUnit(idx, line, value) {
+    const product = productById[line.itemId];
+    const unit = (product?.sale_units || []).find((u) => u.id === value) || null;
+    updateLine(idx, { saleUnitId: unit ? unit.id : '',
+      unitPrice: product?.purchase_price != null ? String(round2(Number(product.purchase_price) * (unit ? Number(unit.factor) : 1))) : line.unitPrice });
   }
 
   const rateById = useMemo(() => Object.fromEntries(rates.map((r) => [r.id, r])), [rates]);
@@ -111,8 +128,10 @@ export default function Compras() {
       const created = await registerPurchaseInvoice({
         supplier_id: form.supplierId, supplier_document: form.supplierDocument, document_date: form.documentDate,
         due_date: form.dueDate || null, fiscal_period_id: form.periodId || null, description: form.description || null,
+        stock_entry: stockEntry, warehouse_id: stockEntry ? form.warehouseId : null,
         lines: form.lines.map((l) => ({
           product_id: l.kind === 'product' && l.itemId ? l.itemId : null,
+          sale_unit_id: l.kind === 'product' && l.saleUnitId ? l.saleUnitId : null,
           service_id: l.kind === 'service' && l.itemId ? l.itemId : null,
           description: l.description || null, quantity: parseFloat(l.quantity) || 0, unit_price: parseFloat(l.unitPrice) || 0,
           legal_vat_rate_id: l.rateId, exemption_id: l.exemptionId || null,
@@ -152,7 +171,9 @@ export default function Compras() {
   const shown = invoices.filter((i) => !search || (i.supplier_name + ' ' + i.supplier_document + ' ' + i.reference).toLowerCase().includes(search.toLowerCase()));
   const active = shown.filter((i) => i.status === 'REGISTADA');
   const sum = (k) => active.reduce((s, i) => s + i[k], 0);
-  const formValid = form && form.supplierId && form.supplierDocument.trim() && form.documentDate && (!periodRequired || form.periodId)
+  const hasProduct = !!form && form.lines.some((l) => l.kind === 'product' && l.itemId);
+  const stockEntry = !!form && form.stockEntry && hasProduct;
+  const formValid = form && form.supplierId && (!stockEntry || form.warehouseId) && form.supplierDocument.trim() && form.documentDate && (!periodRequired || form.periodId)
     && form.lines.length > 0 && form.lines.every((l, i) => (l.description.trim() || l.itemId) && parseFloat(l.quantity) > 0 && l.unitPrice !== '' && l.rateId && (!computed[i].exempt || l.exemptionId));
 
   return (
@@ -274,7 +295,7 @@ export default function Compras() {
             <div className="border border-border rounded-md overflow-x-auto">
               <table className="w-full text-sm">
                 <thead><tr className="border-b border-border">
-                  <th className={th + ' text-left w-28'}>Tipo</th><th className={th + ' text-left'}>Artigo / descrição</th><th className={th + ' text-right w-24'}>Qtd</th>
+                  <th className={th + ' text-left w-28'}>Tipo</th><th className={th + ' text-left'}>Artigo / descrição</th><th className={th + ' text-left w-28'}>Un.</th><th className={th + ' text-right w-24'}>Qtd</th>
                   <th className={th + ' text-right w-32'}>Preço s/ IVA</th><th className={th + ' text-left w-56'}>IVA do fornecedor</th>
                   <th className={th + ' text-right w-32'}>Total</th><th className={th + ' w-10'}></th>
                 </tr></thead>
@@ -294,7 +315,21 @@ export default function Compras() {
                             options={(l.kind === 'product' ? products : services).map((x) => ({ value: x.id, label: x.code + ' - ' + x.name }))} />
                         )}
                       </td>
-                      <td className="px-2 py-2"><input type="number" min="0" step="any" value={l.quantity} onChange={(e) => updateLine(idx, { quantity: e.target.value })} className={cellCls + ' text-right font-mono'} /></td>
+                      <td className="px-2 py-2">
+                        {/* a product is bought in one of its units (a sack of 20 kg); its stock moves in base units */}
+                        {l.kind === 'product' && (productById[l.itemId]?.sale_units || []).length > 0 ? (
+                          <Select value={l.saleUnitId || 'base'} onChange={(v) => chooseUnit(idx, l, v === 'base' ? '' : v)}
+                            options={[{ value: 'base', label: productById[l.itemId].unit_of_measure_code || 'Base' }, ...productById[l.itemId].sale_units.map((u) => ({ value: u.id, label: u.unit_of_measure_code }))]} />
+                        ) : (
+                          <p className="px-1 py-3 font-mono text-[13px] text-text-muted">{l.kind === 'product' ? (productById[l.itemId]?.unit_of_measure_code || '-') : '-'}</p>
+                        )}
+                      </td>
+                      <td className="px-2 py-2">
+                        <input type="number" min="0" step="any" value={l.quantity} onChange={(e) => updateLine(idx, { quantity: e.target.value })} className={cellCls + ' text-right font-mono'} />
+                        {unitOf(l) && parseFloat(l.quantity) > 0 && (
+                          <p className="text-[10.5px] text-text-muted mt-0.5 text-right whitespace-nowrap">= {(parseFloat(l.quantity) * Number(unitOf(l).factor)).toLocaleString('pt-PT', { maximumFractionDigits: 3 })} {productById[l.itemId].unit_of_measure_code}</p>
+                        )}
+                      </td>
                       <td className="px-2 py-2"><input type="number" min="0" step="any" value={l.unitPrice} onChange={(e) => updateLine(idx, { unitPrice: e.target.value })} className={cellCls + ' text-right font-mono'} /></td>
                       <td className="px-2 py-2">
                         <Select value={l.rateId} onChange={(v) => updateLine(idx, { rateId: v, exemptionId: '' })} placeholder="Taxa"
@@ -323,6 +358,24 @@ export default function Compras() {
               className="self-start flex items-center gap-1.5 border border-dashed border-accent/60 hover:border-accent text-accent text-[13px] font-medium rounded-md px-3.5 py-2 cursor-pointer">
               <Plus size={15} /> Linha
             </button>
+
+            {hasProduct && can('stock:receive') && (
+              <div className="flex items-center gap-4 flex-wrap border border-border rounded-md px-4 py-3">
+                <label className="flex items-center gap-2.5 cursor-pointer">
+                  <input type="checkbox" checked={form.stockEntry} onChange={(e) => setForm((f) => ({ ...f, stockEntry: e.target.checked }))} className="w-4 h-4 accent-accent cursor-pointer" />
+                  <span className="text-sm text-text-primary">Dar entrada em stock dos produtos</span>
+                </label>
+                {form.stockEntry ? (
+                  <div className="w-64">
+                    <Select value={form.warehouseId} onChange={(v) => setForm((f) => ({ ...f, warehouseId: v }))} placeholder="Armazém *"
+                      options={warehouses.filter((w) => w.is_active).map((w) => ({ value: w.id, label: w.name }))} />
+                  </div>
+                ) : (
+                  <p className="text-[12px] text-text-muted">A mercadoria já entrou noutro documento - esta fatura não mexe no stock.</p>
+                )}
+                {form.stockEntry && <p className="text-[12px] text-text-muted basis-full">Cada produto entra ao seu custo (preço sem IVA + IVA não dedutível) - atualiza o custo médio.</p>}
+              </div>
+            )}
 
             <div className="flex items-center justify-between gap-3 flex-wrap bg-bg-inset border border-border rounded-md px-4 py-3">
               <p className="text-[13px] text-text-muted">
@@ -365,7 +418,7 @@ export default function Compras() {
                   {detail.lines.map((l) => (
                     <tr key={l.position} className="border-b border-border last:border-0">
                       <td className="px-3 py-2 text-text-primary">{l.description}</td>
-                      <td className="px-3 py-2 text-right font-mono text-text-muted">{l.quantity.toLocaleString('pt-PT')}</td>
+                      <td className="px-3 py-2 text-right font-mono text-text-muted whitespace-nowrap">{l.quantity.toLocaleString('pt-PT')}{l.unit ? ' ' + l.unit : ''}</td>
                       <td className="px-3 py-2 text-right font-mono text-text-muted whitespace-nowrap">{kz(l.unit_price)}</td>
                       <td className="px-3 py-2 font-mono text-[12px] text-text-muted whitespace-nowrap">{l.tax_category} {l.vat_rate} %{l.exemption_code ? ' · ' + l.exemption_code : ''}</td>
                       <td className="px-3 py-2 text-right font-mono text-text-primary whitespace-nowrap">{kz(l.line_subtotal)}</td>
@@ -385,6 +438,11 @@ export default function Compras() {
                 </div>
               ))}
             </div>
+            <p className="text-[13px] text-text-muted">
+              {detail.stock_entry_reference
+                ? <>Entrada em stock: <span className="font-mono text-text-primary">{detail.stock_entry_reference}</span> · {detail.warehouse_name}{detail.stock_exit_reference && <> · saída na anulação: <span className="font-mono text-text-primary">{detail.stock_exit_reference}</span></>}</>
+                : 'Sem entrada em stock'}
+            </p>
             <p className="text-[12px] text-text-muted">Registada por {detail.created_by || '-'} em {new Date(detail.created_at).toLocaleString('pt-PT')}{detail.description ? ' · ' + detail.description : ''}</p>
             {detail.status === 'REGISTADA' && can('purchases:manage') && (
               <div className="flex items-end gap-2 border-t border-border pt-4">

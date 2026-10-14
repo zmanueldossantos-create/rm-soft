@@ -9,6 +9,10 @@ the invoice as it was): the rest of the VAT is a cost, added to the line's cost 
 
 Booked in a period like every internal entry (the active one, or the soft-closed one for a late invoice). Never
 deleted: a mistaken registration is cancelled (ANULADA) with its reason - see purchase_invoice_service.
+
+Stock: an invoice may bring its products into a warehouse (warehouse_id) - the system's automatic entry document
+(stock_entry_document_id, an EA), each product at its line's cost; its cancellation takes them out again (an SA,
+stock_exit_document_id). A product line keeps the unit it was bought in (a sack of 20 kg: unit_factor 20).
 """
 import enum
 import uuid
@@ -47,6 +51,11 @@ class PurchaseInvoice(Base):
     vat_deductible: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
     vat_non_deductible: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
 
+    # the automatic stock entry of its products (None: the invoice did not touch the stock) and its reversal
+    warehouse_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("warehouses.id"), nullable=True)
+    stock_entry_document_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("stock_movement_documents.id"), nullable=True)
+    stock_exit_document_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("stock_movement_documents.id"), nullable=True)
+
     status: Mapped[PurchaseInvoiceStatus] = mapped_column(Enum(PurchaseInvoiceStatus), nullable=False, default=PurchaseInvoiceStatus.REGISTADA)
     cancel_reason: Mapped[str | None] = mapped_column(String(300), nullable=True)
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -64,6 +73,10 @@ class PurchaseInvoiceLine(Base):
     product_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("products.id"), nullable=True)
     service_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("services.id"), nullable=True)
     description: Mapped[str] = mapped_column(String(255), nullable=False)
+    # a product line: the unit it was bought in (None = the product's base unit), its code and base units per unit
+    sale_unit_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("product_sale_units.id"), nullable=True)
+    unit_snapshot: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    unit_factor: Mapped[float] = mapped_column(Numeric(14, 4), nullable=False, default=1, server_default="1")
     quantity: Mapped[float] = mapped_column(Numeric(14, 3), nullable=False)
     unit_price: Mapped[float] = mapped_column(Numeric(14, 4), nullable=False)  # without VAT
     # the VAT the supplier charged - a legal rate, kept as it was

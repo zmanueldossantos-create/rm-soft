@@ -45,7 +45,6 @@ async def create_movement_document(
             lines_input=[l.model_dump() for l in payload.lines],
             movement_date=payload.movement_date,
             description=payload.description,
-            supplier_id=payload.supplier_id,
             fiscal_period_id=payload.fiscal_period_id,
         )
     except PeriodClosedError as e:

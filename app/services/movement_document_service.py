@@ -78,9 +78,13 @@ async def create_stock_movement_document(
     description: str | None = None,
     supplier_id: uuid.UUID | None = None,
     fiscal_period_id: uuid.UUID | None = None,
+    system: bool = False,
+    commit: bool = True,
 ) -> StockMovementDocument:
     """
     lines_input items: {product_id, quantity, purchase_price, sale_price}
+    system: a document the system creates itself (a purchase invoice's entry) - the only ones that may use the
+    automatic types (is_auto); a user's document never does. commit=False leaves it in the caller's transaction.
     """
     movement_date = movement_date or date.today()
 
@@ -103,6 +107,8 @@ async def create_stock_movement_document(
     movement_type = type_result.scalar_one_or_none()
     if movement_type is None or not movement_type.is_active:
         raise MovementTypeNotConfiguredError("Tipo de movimento não encontrado ou inativo")
+    if movement_type.is_auto and not system:
+        raise MovementTypeNotConfiguredError("Este tipo de movimento é reservado aos movimentos automáticos do sistema")
 
     warehouse_result = await db.execute(select(Warehouse).where(Warehouse.id == warehouse_id, Warehouse.company_id == company_id))
     warehouse = warehouse_result.scalar_one_or_none()
@@ -207,9 +213,26 @@ async def create_stock_movement_document(
         line.document_id = document.id
         db.add(line)
 
+    if not commit:
+        await db.flush()
+        return document
     await db.commit()
     await db.refresh(document)
     return document
+
+
+async def get_automatic_movement_type(db: AsyncSession, direction: MovementDirection) -> MovementTypeCatalog:
+    """The system's own movement type for a direction (EA / SA): active, automatic - the first by code."""
+    movement_type = (await db.execute(
+        select(MovementTypeCatalog).where(
+            MovementTypeCatalog.direction == direction, MovementTypeCatalog.is_auto.is_(True),
+            MovementTypeCatalog.is_active.is_(True),
+        ).order_by(MovementTypeCatalog.code)
+    )).scalars().first()
+    if movement_type is None:
+        label = "entrada" if direction == MovementDirection.ENTRADA else "saída"
+        raise MovementTypeNotConfiguredError(f"Nenhum tipo de movimento automático de {label} ativo está configurado")
+    return movement_type
 
 
 class MovementDocumentNotFoundError(Exception):

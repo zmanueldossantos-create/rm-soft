@@ -7,6 +7,11 @@ Faturas de compra (point 12) - the supplier invoices the company registers (see 
   company may deduct and what is a cost, by the deductible share of the company's regime (data, never code).
 - the same supplier document is never registered twice (unless the first registration was cancelled).
 - cancel: a registration is never deleted - it is cancelled with its reason, and leaves the totals.
+- stock (optional, chosen at registration): the products of the invoice enter a warehouse in the SAME transaction - the
+  system's automatic entry document (EA), each product at its line's cost per base unit (HT + non-deductible VAT: what
+  the company really pays), which moves the weighted average cost. A product line is bought in one of the product's
+  units (10 SC of 20 kg = 200 KG). Its cancellation takes the same quantities out of that warehouse (an automatic
+  exit, SA) - refused when the stock is no longer there. One purchase, one entry: no separate Receção.
 """
 import uuid
 from datetime import date, datetime, timezone
@@ -18,13 +23,25 @@ from app.models.company import Company
 from app.models.fiscal_regime import FiscalRegime
 from app.models.fiscal_year import FiscalYear
 from app.models.legal_vat_rate import LegalVatRate
+from app.models.movement_type import MovementDirection
 from app.models.product import Product
 from app.models.purchase_invoice import PurchaseInvoice, PurchaseInvoiceLine, PurchaseInvoiceStatus
 from app.models.service import Service
 from app.models.supplier import Supplier
 from app.models.user import User
+from app.models.stock_movement_document import StockMovementDocument
 from app.models.vat_code import VatCode
+from app.models.warehouse import Warehouse
+from app.models.stock_movement_document import StockMovementDocumentLine
 from app.services.fiscal_period_service import MONTH_NAMES_PT, PeriodClosedError, resolve_posting_period
+from app.services.movement_document_service import (
+    EmptyMovementError, InsufficientStockForMovementError, MovementProductNotFoundError, MovementTypeNotConfiguredError,
+    MovementWarehouseNotFoundError, create_stock_movement_document, get_automatic_movement_type,
+)
+from app.services.product_sale_unit_service import SaleUnitInvalidError, resolve_line_unit
+
+_STOCK_ERRORS = (EmptyMovementError, InsufficientStockForMovementError, MovementProductNotFoundError,
+                 MovementTypeNotConfiguredError, MovementWarehouseNotFoundError)
 
 
 class PurchaseInvoiceError(Exception):
@@ -51,9 +68,13 @@ async def _deductible_pct(db: AsyncSession, company_id: uuid.UUID) -> float:
 async def register_purchase_invoice(
     db: AsyncSession, company_id: uuid.UUID, user_id: uuid.UUID, supplier_id: uuid.UUID, supplier_document: str,
     document_date: date, lines: list[dict], fiscal_period_id: uuid.UUID | None = None, due_date: date | None = None,
-    description: str | None = None,
+    description: str | None = None, stock_entry: bool = False, warehouse_id: uuid.UUID | None = None,
 ) -> PurchaseInvoice:
-    """lines: [{product_id | service_id | None, description, quantity, unit_price, legal_vat_rate_id, exemption_id}]"""
+    """
+    lines: [{product_id | service_id | None, sale_unit_id, description, quantity, unit_price, legal_vat_rate_id,
+    exemption_id}] - quantity and price in the line's unit (sale_unit_id: one of the product's; None: its base unit).
+    stock_entry: its products enter warehouse_id (see the module docstring).
+    """
     supplier = (await db.execute(
         select(Supplier).where(Supplier.id == supplier_id, Supplier.company_id == company_id)
     )).scalar_one_or_none()
@@ -115,11 +136,18 @@ async def register_purchase_invoice(
                 raise PurchaseInvoiceError(f"Linha {position}: produto não encontrado")
             text = text or product.name
             service_id = None
+            try:  # the unit it was bought in - the same conversion as sales and receptions
+                _price, factor, sale_unit_id, unit_code = await resolve_line_unit(
+                    db, company_id, product, line.get("sale_unit_id"), quantity)
+            except SaleUnitInvalidError as e:
+                raise PurchaseInvoiceError(f"Linha {position}: {e}")
         elif service_id is not None:
             service = (await db.execute(select(Service).where(Service.id == service_id, Service.company_id == company_id))).scalar_one_or_none()
             if service is None:
                 raise PurchaseInvoiceError(f"Linha {position}: serviço não encontrado")
             text = text or service.name
+        if product_id is None:
+            sale_unit_id, unit_code, factor = None, None, 1.0
         if not text:
             raise PurchaseInvoiceError(f"Linha {position}: indique a descrição")
 
@@ -133,7 +161,7 @@ async def register_purchase_invoice(
         totals["non_deductible"] += non_deductible
         line_rows.append(PurchaseInvoiceLine(
             position=position, product_id=product_id, service_id=service_id, description=text[:255],
-            quantity=quantity, unit_price=unit_price, legal_vat_rate_id=rate.id, tax_category=rate.tax_category,
+            sale_unit_id=sale_unit_id, unit_snapshot=unit_code, unit_factor=factor, quantity=quantity, unit_price=unit_price, legal_vat_rate_id=rate.id, tax_category=rate.tax_category,
             vat_rate=rate.rate, exemption_id=exemption_id, line_subtotal=subtotal, line_vat=vat,
             line_total=_money(subtotal + vat), vat_deductible=deductible, vat_non_deductible=non_deductible,
             cost=_money(subtotal + non_deductible),
@@ -156,9 +184,40 @@ async def register_purchase_invoice(
     for row in line_rows:
         row.purchase_invoice_id = invoice.id
         db.add(row)
+
+    if stock_entry:
+        stock_lines = [r for r in line_rows if r.product_id is not None]
+        if not stock_lines:
+            await db.rollback()
+            raise PurchaseInvoiceError("A entrada em stock precisa de pelo menos uma linha de produto")
+        warehouse = (await db.execute(
+            select(Warehouse).where(Warehouse.id == warehouse_id, Warehouse.company_id == company_id)
+        )).scalar_one_or_none() if warehouse_id else None
+        if warehouse is None or not warehouse.is_active:
+            await db.rollback()
+            raise PurchaseInvoiceError("Escolha o armazém de entrada da mercadoria")
+        try:  # each product at its cost per unit bought (HT + non-deductible VAT) - the weighted average cost
+            movement_type = await get_automatic_movement_type(db, MovementDirection.ENTRADA)
+            document = await create_stock_movement_document(
+                db, company_id, movement_type.id, warehouse.id,
+                [{"product_id": r.product_id, "sale_unit_id": r.sale_unit_id, "quantity": float(r.quantity),
+                  "purchase_price": float(r.cost) / float(r.quantity)} for r in stock_lines],
+                movement_date=document_date, description=_stock_text(invoice, supplier.name),
+                supplier_id=supplier_id, fiscal_period_id=period.id, system=True, commit=False,
+            )
+        except _STOCK_ERRORS as e:
+            await db.rollback()
+            raise PurchaseInvoiceError(str(e))
+        invoice.warehouse_id = warehouse.id
+        invoice.stock_entry_document_id = document.id
+
     await db.commit()
     await db.refresh(invoice)
     return invoice
+
+
+def _stock_text(invoice: PurchaseInvoice, supplier_name: str) -> str:
+    return f"Fatura de compra {invoice.series}/{invoice.number} - {supplier_name} {invoice.supplier_document}"[:300]
 
 
 async def _get(db: AsyncSession, company_id: uuid.UUID, invoice_id: uuid.UUID) -> PurchaseInvoice:
@@ -178,6 +237,24 @@ async def cancel_purchase_invoice(db: AsyncSession, company_id: uuid.UUID, invoi
     reason = " ".join((reason or "").split())
     if not reason:
         raise PurchaseInvoiceError("Indique o motivo da anulação")
+    if invoice.stock_entry_document_id is not None:
+        # its products leave the warehouse they entered - in the active period, today; refused if no longer there
+        entry_lines = (await db.execute(
+            select(StockMovementDocumentLine).where(StockMovementDocumentLine.document_id == invoice.stock_entry_document_id)
+        )).scalars().all()
+        supplier_name = (await db.execute(select(Supplier.name).where(Supplier.id == invoice.supplier_id))).scalar_one()
+        try:  # in base units: the quantities that entered, whatever became of the unit since
+            movement_type = await get_automatic_movement_type(db, MovementDirection.SAIDA)
+            document = await create_stock_movement_document(
+                db, company_id, movement_type.id, invoice.warehouse_id,
+                [{"product_id": l.product_id, "quantity": float(l.quantity) * float(l.unit_factor)} for l in entry_lines],
+                description=("Anulação da " + _stock_text(invoice, supplier_name))[:300],
+                supplier_id=invoice.supplier_id, system=True, commit=False,
+            )
+        except _STOCK_ERRORS as e:
+            await db.rollback()
+            raise PurchaseInvoiceError(f"Não é possível anular: {e}")
+        invoice.stock_exit_document_id = document.id
     invoice.status = PurchaseInvoiceStatus.ANULADA
     invoice.cancel_reason = reason[:300]
     invoice.cancelled_at = datetime.now(timezone.utc)
@@ -243,13 +320,20 @@ async def get_purchase_invoice(db: AsyncSession, company_id: uuid.UUID, invoice_
     names = dict((await db.execute(select(User.id, User.full_name).where(
         User.id.in_([u for u in (invoice.created_by_user_id, invoice.cancelled_by_user_id) if u]))
     )).all())
+    stock_docs = {d.id: f"{d.series}/{d.number}" for d in (await db.execute(select(StockMovementDocument).where(
+        StockMovementDocument.id.in_([d for d in (invoice.stock_entry_document_id, invoice.stock_exit_document_id) if d]))
+    )).scalars().all()}
+    warehouse_name = (await db.execute(select(Warehouse.name).where(Warehouse.id == invoice.warehouse_id))).scalar_one_or_none() \
+        if invoice.warehouse_id else None
     return {
         **_summary(invoice, supplier, labels.get(invoice.fiscal_period_id, "-")),
         "created_by": names.get(invoice.created_by_user_id), "cancelled_by": names.get(invoice.cancelled_by_user_id),
-        "cancelled_at": invoice.cancelled_at,
+        "cancelled_at": invoice.cancelled_at, "warehouse_name": warehouse_name,
+        "stock_entry_reference": stock_docs.get(invoice.stock_entry_document_id),
+        "stock_exit_reference": stock_docs.get(invoice.stock_exit_document_id),
         "lines": [{
             "position": l.position, "product_id": l.product_id, "service_id": l.service_id, "description": l.description,
-            "quantity": float(l.quantity), "unit_price": float(l.unit_price), "tax_category": l.tax_category,
+            "unit": l.unit_snapshot, "quantity": float(l.quantity), "unit_price": float(l.unit_price), "tax_category": l.tax_category,
             "vat_rate": float(l.vat_rate), "exemption_code": code, "line_subtotal": float(l.line_subtotal),
             "line_vat": float(l.line_vat), "line_total": float(l.line_total), "vat_deductible": float(l.vat_deductible),
             "vat_non_deductible": float(l.vat_non_deductible), "cost": float(l.cost),

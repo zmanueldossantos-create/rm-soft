@@ -8,6 +8,7 @@ from pydantic import BaseModel
 class PurchaseInvoiceLineInput(BaseModel):
     product_id: uuid.UUID | None = None
     service_id: uuid.UUID | None = None
+    sale_unit_id: uuid.UUID | None = None  # a product line: one of its units (None: its base unit)
     description: str | None = None
     quantity: float
     unit_price: float  # without VAT
@@ -22,6 +23,8 @@ class PurchaseInvoiceCreateRequest(BaseModel):
     due_date: date | None = None
     fiscal_period_id: uuid.UUID | None = None
     description: str | None = None
+    stock_entry: bool = False  # its products enter warehouse_id (the system's automatic entry)
+    warehouse_id: uuid.UUID | None = None
     lines: list[PurchaseInvoiceLineInput]
 
 

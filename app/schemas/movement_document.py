@@ -21,7 +21,6 @@ class MovementDocumentCreateRequest(BaseModel):
     warehouse_id: uuid.UUID
     movement_date: date | None = None
     description: str | None = None
-    supplier_id: uuid.UUID | None = None
     lines: list[MovementDocumentLineRequest]
 
     @field_validator("lines")

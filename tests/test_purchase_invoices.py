@@ -79,3 +79,91 @@ async def test_an_exempt_line_needs_its_motive_and_a_document_is_registered_once
 async def test_a_supplier_of_angola_needs_its_nif(db, company_with_essentials):
     with pytest.raises(SupplierNifRequiredError):
         await create_supplier(db, company_with_essentials["company"].id, "Sem NIF")
+
+
+async def _flour_in_sacks(db, ctx):
+    """Flour counted in kilos, bought in 20 kg sacks; the system's automatic entry and exit types."""
+    from app.models.movement_type import MovementDirection, MovementType
+    from app.models.product import Product, ProductType
+    from app.models.product_sale_unit import ProductSaleUnit
+    from app.models.unit_of_measure_catalog import UnitOfMeasureCatalog
+    company_id = ctx["company"].id
+    kilo = UnitOfMeasureCatalog(code="KPI", name="Quilo compra", is_fractional=True)
+    sack = UnitOfMeasureCatalog(code="SPI", name="Saco compra")
+    db.add_all([kilo, sack,
+                MovementType(code="EAP", name="Entrada automática", direction=MovementDirection.ENTRADA, is_auto=True),
+                MovementType(code="SAP", name="Saída automática", direction=MovementDirection.SAIDA, is_auto=True)])
+    await db.flush()
+    flour = Product(company_id=company_id, code="MP-FPI", name="Farinha", vat_id=None, price=0, min_stock_threshold=0,
+                    product_type=ProductType.BEM, is_raw_material=True, unit_of_measure_id=kilo.id)
+    db.add(flour)
+    await db.flush()
+    sack_unit = ProductSaleUnit(company_id=company_id, product_id=flour.id, unit_of_measure_id=sack.id, factor=20, price=0)
+    db.add(sack_unit)
+    await db.commit()
+    return flour.id, sack_unit.id
+
+
+async def _quantity(db, product_id):
+    from app.models.stock import Stock
+    return float((await db.execute(select(Stock.quantity).where(Stock.product_id == product_id))).scalar_one())
+
+
+@pytest.mark.asyncio
+async def test_the_invoice_brings_its_products_into_stock_at_their_cost_and_its_cancellation_takes_them_out(
+        db, company_with_essentials):
+    from app.models.product import Product
+    from app.models.stock import Stock
+    ctx = company_with_essentials
+    company_id, user_id, warehouse_id = ctx["company"].id, ctx["gestor"].id, ctx["activity_warehouse"].id
+    supplier, nor, _ = await _setup(db, ctx, 7)
+    supplier_id, nor_id = supplier.id, nor.id
+    flour_id, sack_id = await _flour_in_sacks(db, ctx)
+    line = {"product_id": flour_id, "sale_unit_id": sack_id, "quantity": 10, "unit_price": 10000, "legal_vat_rate_id": nor_id}
+
+    with pytest.raises(PurchaseInvoiceError, match="armazém"):
+        await register_purchase_invoice(db, company_id, user_id, supplier_id, "FT S/1", date.today(), [line], stock_entry=True)
+    with pytest.raises(PurchaseInvoiceError, match="linha de produto"):
+        await register_purchase_invoice(db, company_id, user_id, supplier_id, "FT S/1", date.today(),
+                                        [{**line, "product_id": None, "sale_unit_id": None, "description": "Renda"}],
+                                        stock_entry=True, warehouse_id=warehouse_id)
+
+    # 10 sacks at 10 000: HT 100 000, VAT 14 000 of which 7 % deductible (980) - the cost is 113 020 for 200 kg
+    invoice = await register_purchase_invoice(db, company_id, user_id, supplier_id, "FT S/1", date.today(), [line],
+                                              stock_entry=True, warehouse_id=warehouse_id)
+    invoice_id = invoice.id
+    detail = await get_purchase_invoice(db, company_id, invoice_id)
+    year = date.today().year
+    assert (detail["lines"][0]["unit"], detail["lines"][0]["cost"]) == ("SPI", 113020.0)
+    assert (detail["stock_entry_reference"], detail["warehouse_name"]) == (f"EAP{year}/1", ctx["activity_warehouse"].name)
+    assert await _quantity(db, flour_id) == 200.0
+    cost = (await db.execute(select(Product.average_cost).where(Product.id == flour_id))).scalar_one()
+    assert float(cost) == 565.1
+
+    # the flour was used: the cancellation cannot take it out again - nothing changes
+    stock = (await db.execute(select(Stock).where(Stock.product_id == flour_id))).scalar_one()
+    stock.quantity = 50
+    await db.commit()
+    with pytest.raises(PurchaseInvoiceError, match="Não é possível anular"):
+        await cancel_purchase_invoice(db, company_id, invoice_id, user_id, "Erro")
+    assert (await get_purchase_invoice(db, company_id, invoice_id))["status"] == "REGISTADA"
+
+    stock = (await db.execute(select(Stock).where(Stock.product_id == flour_id))).scalar_one()
+    stock.quantity = 200
+    await db.commit()
+    await cancel_purchase_invoice(db, company_id, invoice_id, user_id, "Erro")
+    detail = await get_purchase_invoice(db, company_id, invoice_id)
+    assert (detail["status"], detail["stock_exit_reference"]) == ("ANULADA", f"SAP{year}/1")
+    assert await _quantity(db, flour_id) == 0.0
+
+
+@pytest.mark.asyncio
+async def test_a_user_document_never_uses_an_automatic_type(db, company_with_essentials):
+    from app.services.movement_document_service import MovementTypeNotConfiguredError, create_stock_movement_document
+    ctx = company_with_essentials
+    flour_id, _ = await _flour_in_sacks(db, ctx)
+    from app.models.movement_type import MovementType
+    automatic = (await db.execute(select(MovementType).where(MovementType.code == "EAP"))).scalar_one()
+    with pytest.raises(MovementTypeNotConfiguredError, match="reservado"):
+        await create_stock_movement_document(db, ctx["company"].id, automatic.id, ctx["activity_warehouse"].id,
+                                             [{"product_id": flour_id, "quantity": 1, "purchase_price": 0}])

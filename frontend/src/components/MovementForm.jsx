@@ -9,7 +9,6 @@ import { createMovementDocument, downloadMovementExcelTemplate } from '../api/mo
 import { listProducts } from '../api/products';
 import { listWarehouses } from '../api/stock';
 import { movementTypesApi, unitsApi } from '../api/catalogs';
-import { listSuppliers } from '../api/suppliers';
 import { extractErrorMessage } from '../utils/errors';
 
 const inputClass = "w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors";
@@ -37,8 +36,6 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection }) {
   const [periodChoice, setPeriodChoice] = useState(false); // a soft-closed period exists: the period must be chosen
   const [postingPeriods, setPostingPeriods] = useState([]);
   const [description, setDescription] = useState('');
-  const [suppliers, setSuppliers] = useState([]);
-  const [supplierId, setSupplierId] = useState('');
   const [lines, setLines] = useState([{ product_id: '', sale_unit_id: '', quantity: '1', purchase_price: '0', sale_price: '0' }]);
   const [scanCode, setScanCode] = useState('');
   const [scanError, setScanError] = useState('');
@@ -58,7 +55,6 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection }) {
           ['tipos de movimento', movementTypesApi.list(), (d) => setMovementTypes(d.filter((t) => t.is_active && t.direction === filterDirection))],
           ['armazens', listWarehouses(), (d) => setWarehouses(d.filter((w) => w.is_active))],
           ['unidades', unitsApi.list(), (d) => setUnits(d)],
-          ['fornecedores', filterDirection === 'ENTRADA' ? listSuppliers() : Promise.resolve([]), (d) => setSuppliers(d.filter((s) => s.is_active))],
         ];
         const results = await Promise.allSettled(sources.map(([, request]) => request));
         const failed = [];
@@ -264,7 +260,6 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection }) {
         warehouse_id: warehouseId,
         movement_date: movementDate,
         description: description || null,
-        supplier_id: filterDirection === 'ENTRADA' ? (supplierId || null) : null,
         fiscal_period_id: fiscalPeriodId || null,
         lines: lines.map((l) => ({
           product_id: l.product_id,
@@ -307,18 +302,7 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection }) {
           <DateInput value={movementDate} min={movementDateMin} max={todayIso} onChange={(e) => setMovementDate(e.target.value)} required className={inputClass} />
         </div>
         <PostingPeriodSelect className="sm:col-span-2" value={fiscalPeriodId} onChange={setFiscalPeriodId} onChoice={setPeriodChoice} onPeriods={setPostingPeriods} />
-        {filterDirection === 'ENTRADA' && (
-          <div className="sm:col-span-2">
-            <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Fornecedor (opcional)</label>
-            <Select
-              value={supplierId}
-              onChange={setSupplierId}
-              options={suppliers.map((s) => ({ value: s.id, label: s.name }))}
-              placeholder="Nenhum"
-            />
-          </div>
-        )}
-        <div className={filterDirection === 'ENTRADA' ? 'sm:col-span-3' : 'sm:col-span-5'}>
+        <div className="sm:col-span-5">
           <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Descrição</label>
           <input value={description} onChange={(e) => setDescription(e.target.value)} className={inputClass} />
         </div>
