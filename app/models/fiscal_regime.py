@@ -48,6 +48,9 @@ class FiscalRegime(Base):
     # The share of the VAT paid on purchases a company of this regime may deduct (IVA dedutível), in % - the rest is a
     # cost of the purchase. Data, never code: set per regime by SUPER_ADMIN (purchase_invoice_service).
     input_vat_deductible_pct: Mapped[float] = mapped_column(Numeric(5, 2), default=100, server_default="100", nullable=False)
+    # The VAT a company of this regime owes on its turnover (sales base), in % - Simplificado: 7 %; 0 elsewhere (the
+    # VAT is the one charged on each sale). Data, never code: the apuramento do IVA (vat_return_service).
+    turnover_vat_pct: Mapped[float] = mapped_column(Numeric(5, 2), default=0, server_default="0", nullable=False)
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

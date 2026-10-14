@@ -125,6 +125,7 @@ PERMISSION_CATALOG: list[tuple[str, str, str, list[str]]] = [
     ("company_bank_accounts:manage", "Criar, editar e ativar/desativar contas bancárias da empresa", "Empresa", []),
     ("dashboard:view", "Ver painel de resumo", "Painel", ["ARMAZENISTA", "CONTABILISTA"]),
     ("vat:view", "Ver taxas de IVA da empresa", "IVA", ["CAIXA"]),
+    ("vat:return", "Ver o apuramento do IVA (liquidado, dedutível, a pagar)", "IVA", ["CONTABILISTA"]),
     ("document_series:view", "Ver series de documentos", "Faturação", []),
     ("document_series:manage", "Criar, editar e ativar/desativar series de documentos", "Faturação", []),
     ("establishments:view", "Ver estabelecimentos", "Empresa", []),

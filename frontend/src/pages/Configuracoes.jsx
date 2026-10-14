@@ -14,8 +14,8 @@ import { listModules, createModule, updateModule, toggleModuleStatus } from '../
 
 const fiscalRegimesApi = {
   list: () => listFiscalRegimes(),
-  create: (p) => createFiscalRegime(p.name, p.description, p.allows_nor, p.allows_red, p.allows_ise, p.allows_int, p.allows_out, p.required_exemption_id, p.input_vat_deductible_pct),
-  update: (id, p) => updateFiscalRegime(id, p.name, p.description, p.allows_nor, p.allows_red, p.allows_ise, p.allows_int, p.allows_out, p.required_exemption_id, p.input_vat_deductible_pct),
+  create: (p) => createFiscalRegime(p.name, p.description, p.allows_nor, p.allows_red, p.allows_ise, p.allows_int, p.allows_out, p.required_exemption_id, p.input_vat_deductible_pct, p.turnover_vat_pct),
+  update: (id, p) => updateFiscalRegime(id, p.name, p.description, p.allows_nor, p.allows_red, p.allows_ise, p.allows_int, p.allows_out, p.required_exemption_id, p.input_vat_deductible_pct, p.turnover_vat_pct),
   toggle: (id) => toggleFiscalRegimeStatus(id),
 };
 
@@ -299,7 +299,7 @@ export default function Configuracoes() {
       case 'withholding_taxes': return { name: '', rate: 0, tax_type: '' };
 
       case 'legal_vat_rates': return { tax_category: '', name: '', rate: 0 };
-      case 'fiscal_regimes': return { name: '', description: '', allows_nor: true, allows_red: true, allows_ise: true, allows_int: false, allows_out: false, required_exemption_id: '', input_vat_deductible_pct: 100 };
+      case 'fiscal_regimes': return { name: '', description: '', allows_nor: true, allows_red: true, allows_ise: true, allows_int: false, allows_out: false, required_exemption_id: '', input_vat_deductible_pct: 100, turnover_vat_pct: 0 };
       case 'modules': return { name: '', description: '' };
       case 'denominations': return { currency_id: '', value: '', denomination_type: 'NOTA' };
       default: return {};
@@ -606,6 +606,9 @@ export default function Configuracoes() {
           </Field>
           <Field label={'IVA dedut\u00edvel nas compras (%)'}>
             <input type="number" min="0" max="100" step="0.01" value={form.input_vat_deductible_pct ?? 100} onChange={(e) => updateField('input_vat_deductible_pct', e.target.value)} className={inputClass} />
+          </Field>
+          <Field label={'IVA sobre o volume de neg\u00f3cios (%)'}>
+            <input type="number" min="0" max="100" step="0.01" value={form.turnover_vat_pct ?? 0} onChange={(e) => updateField('turnover_vat_pct', e.target.value)} className={inputClass} />
           </Field>
         </>
       );

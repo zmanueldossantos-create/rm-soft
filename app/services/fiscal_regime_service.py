@@ -44,11 +44,14 @@ async def create_fiscal_regime(
     allows_out: bool,
     required_exemption_id: uuid.UUID | None = None,
     input_vat_deductible_pct: float = 100,
+    turnover_vat_pct: float = 0,
 ) -> FiscalRegime:
     _check_required_exemption(allows_ise, required_exemption_id)
     _check_deductible_pct(input_vat_deductible_pct)
+    _check_deductible_pct(turnover_vat_pct)
     regime = FiscalRegime(
         input_vat_deductible_pct=input_vat_deductible_pct,
+        turnover_vat_pct=turnover_vat_pct,
         name=name,
         description=description,
         allows_nor=allows_nor,
@@ -84,12 +87,16 @@ async def update_fiscal_regime(
     allows_out: bool,
     required_exemption_id: uuid.UUID | None = None,
     input_vat_deductible_pct: float | None = None,
+    turnover_vat_pct: float | None = None,
 ) -> FiscalRegime:
     _check_required_exemption(allows_ise, required_exemption_id)
     regime = await get_fiscal_regime_or_raise(db, regime_id)
     if input_vat_deductible_pct is not None:
         _check_deductible_pct(input_vat_deductible_pct)
         regime.input_vat_deductible_pct = input_vat_deductible_pct
+    if turnover_vat_pct is not None:
+        _check_deductible_pct(turnover_vat_pct)
+        regime.turnover_vat_pct = turnover_vat_pct
     regime.name = name
     regime.description = description
     regime.allows_nor = allows_nor

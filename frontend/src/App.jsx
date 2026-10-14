@@ -20,6 +20,7 @@ import Stock from './pages/Stock';
 import StockMovements from './pages/StockMovements';
 import Users from './pages/Users';
 import Tesouraria from './pages/Tesouraria';
+import ApuramentoIva from './pages/ApuramentoIva';
 import Compras from './pages/Compras';
 import Recursos from './pages/Recursos';
 import Reservas from './pages/Reservas';
@@ -84,6 +85,7 @@ export default function App() {
           <Route path="/stock-movements" element={<RequirePermission perm="stock:view"><StockMovements /></RequirePermission>} />
           <Route path="/users" element={<GestorRoute><Users /></GestorRoute>} />
           <Route path="/tesouraria" element={<RequirePermission perm="tesouraria:overview"><Tesouraria /></RequirePermission>} />
+          <Route path="/apuramento-iva" element={<RequirePermission perm="vat:return"><ApuramentoIva /></RequirePermission>} />
           <Route path="/recursos" element={<RequirePermission perm="resources:manage"><Recursos /></RequirePermission>} />
           <Route path="/reservas" element={<RequirePermission perm="bookings:view"><Reservas /></RequirePermission>} />
           <Route path="/recursos/historico" element={<RequirePermission perm="resources:history"><HistoricoRecursos /></RequirePermission>} />
