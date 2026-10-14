@@ -70,6 +70,7 @@ export default function CompanySettings() {
   }, []);
   const [allowsFutureSaleDate, setAllowsFutureSaleDate] = useState(false);
   const [stockPeriodClosing, setStockPeriodClosing] = useState(false); // Fecho de stock por período
+  const [stockCheckAtPeriodEnd, setStockCheckAtPeriodEnd] = useState(false); // Stock à data (late exits)
   const [saleUnitChecks, setSaleUnitChecks] = useState({ sale_unit_check_above_base: 'warn', sale_unit_check_below_cost: 'warn', sale_unit_check_same_factor: 'warn' });
   const [suggestsLastDocumentDate, setSuggestsLastDocumentDate] = useState(false);
   const [issuanceMode, setIssuanceMode] = useState('MANUAL');
@@ -172,6 +173,7 @@ export default function CompanySettings() {
       });
       setSuggestsLastDocumentDate(data.suggests_last_document_date);
       setStockPeriodClosing(!!data.stock_period_closing);
+      setStockCheckAtPeriodEnd(!!data.stock_check_at_period_end);
       setIssuanceMode(data.issuance_mode || 'MANUAL');
       setElectronicSignatureKey(data.electronic_signature_key || '');
     } catch (err) {
@@ -499,6 +501,7 @@ export default function CompanySettings() {
         allows_future_sale_date: allowsFutureSaleDate, suggests_last_document_date: suggestsLastDocumentDate,
         ...saleUnitChecks,
         stock_period_closing: stockPeriodClosing,
+        stock_check_at_period_end: stockCheckAtPeriodEnd,
         issuance_mode: issuanceMode, electronic_signature_key: issuanceMode === 'ELETRONICA' ? (electronicSignatureKey || null) : null,
       });
       setSaved(true);
@@ -835,13 +838,22 @@ export default function CompanySettings() {
             <div className="mt-6">
               <p className="text-[13px] font-medium text-text-primary mb-1">Controlos de stock</p>
               <p className="text-[12px] text-text-muted mb-3">Regras do stock ligadas aos períodos contabilísticos.</p>
-              <label className="flex items-start gap-2.5 cursor-pointer select-none border border-border rounded-md px-3.5 py-3 hover:border-accent transition-colors max-w-2xl">
+              <div className="flex flex-col gap-2.5 max-w-2xl">
+              <label className="flex items-start gap-2.5 cursor-pointer select-none border border-border rounded-md px-3.5 py-3 hover:border-accent transition-colors">
                 <input type="checkbox" checked={stockPeriodClosing} onChange={(e) => setStockPeriodClosing(e.target.checked)} className="w-4 h-4 mt-0.5 accent-accent cursor-pointer" />
                 <span>
                   <span className="text-sm text-text-primary block">Fecho de stock por período</span>
                   <span className="text-[12px] text-text-muted block">Ao fechar um período definitivamente, o stock de cada produto e armazém (inicial, entradas, saídas, final e valor ao custo médio) fica congelado. Consulta em Stock → Resumo de Stock → Movimento do período.</span>
                 </span>
               </label>
+              <label className="flex items-start gap-2.5 cursor-pointer select-none border border-border rounded-md px-3.5 py-3 hover:border-accent transition-colors">
+                <input type="checkbox" checked={stockCheckAtPeriodEnd} onChange={(e) => setStockCheckAtPeriodEnd(e.target.checked)} className="w-4 h-4 mt-0.5 accent-accent cursor-pointer" />
+                <span>
+                  <span className="text-sm text-text-primary block">Stock à data nos lançamentos tardios</span>
+                  <span className="text-[12px] text-text-muted block">Uma saída lançada no período fechado parcialmente (perda, saída, transferência, ajuste, produção, consumo interno) não pode usar mais do que o stock no fim desse período - nunca o que entrou depois.</span>
+                </span>
+              </label>
+              </div>
             </div>
           </div>
 

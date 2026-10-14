@@ -72,6 +72,9 @@ class Company(Base):
     # Fecho de stock por período: when a fiscal period is closed for good, its stock (start, in, out, end, value at the
     # average cost of the time) is frozen per product and warehouse - see stock_period_closing_service. Off by default.
     stock_period_closing: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    # Stock à data: a late exit booked in the soft-closed period may not take more than the stock at that period's end
+    # (not today's stock) - see stock_service.ensure_available_at_period_end. Off by default.
+    stock_check_at_period_end: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
 
     # Fiscal issuance mode - electronic mode requires the AGT-issued private
     # key and turns OFF auto_series_year (series are solicited from AGT instead).

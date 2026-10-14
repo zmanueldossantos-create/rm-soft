@@ -61,6 +61,7 @@ class CompanyContactUpdateRequest(BaseModel):
     sale_unit_check_same_factor: str | None = None
     # Fecho de stock por período (only changed when sent)
     stock_period_closing: bool | None = None
+    stock_check_at_period_end: bool | None = None
     issuance_mode: str = "MANUAL"
     electronic_signature_key: str | None = None
 
@@ -108,6 +109,7 @@ class CompanyContactResponse(BaseModel):
     sale_unit_check_below_cost: str = "warn"
     sale_unit_check_same_factor: str = "warn"
     stock_period_closing: bool = False
+    stock_check_at_period_end: bool = False
     issuance_mode: str
     electronic_signature_key: str | None
 

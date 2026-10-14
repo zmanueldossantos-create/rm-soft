@@ -18,7 +18,7 @@ from app.models.movement_type import MovementType as MovementTypeCatalog, Moveme
 from app.models.movement_series import MovementSeries
 from app.models.stock_movement import StockMovement, MovementType as LedgerMovementType
 from app.models.stock_movement_document import StockMovementDocument, StockMovementDocumentLine
-from app.services.stock_service import _get_or_create_stock_row, _stock_rule, InsufficientStockError as _StockRuleError, update_average_cost
+from app.services.stock_service import _get_or_create_stock_row, _stock_rule, InsufficientStockError as _StockRuleError, ensure_available_at_period_end, update_average_cost
 from app.services.product_sale_unit_service import SaleUnitInvalidError, resolve_line_unit
 from app.services.fiscal_period_service import ensure_period_open, PeriodClosedError, resolve_posting_period
 import io
@@ -149,6 +149,9 @@ async def create_stock_movement_document(
             await _stock_rule(db, product.id, warehouse_id, "in" if is_entrada else "out", strict=True)
         except _StockRuleError as e:
             raise InsufficientStockForMovementError(str(e))
+        if not is_entrada:  # a late exit takes the stock of its own period (company option)
+            await ensure_available_at_period_end(db, company_id, posting_period, product.id, warehouse_id, base_quantity,
+                                                 InsufficientStockForMovementError)
         # A priced entry line moves the weighted average cost (its price per base unit); a line without a price enters
         # at the current cost. Computed BEFORE the quantity is added - see update_average_cost.
         unit_cost = cost_before = cost_after = None

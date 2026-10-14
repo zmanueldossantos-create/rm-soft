@@ -113,6 +113,22 @@ async def compute_period_stock(db: AsyncSession, company_id: uuid.UUID, period: 
     return result
 
 
+async def quantity_at_period_end(
+    db: AsyncSession, company_id: uuid.UUID, period: FiscalPeriod, year: int, product_id: uuid.UUID, warehouse_id: uuid.UUID,
+) -> float:
+    """The stock of one product in one warehouse at the end of a period - every ledger row booked up to it."""
+    before, within = _bounds(year, period.month)
+    total = (await db.execute(
+        select(func.coalesce(func.sum(ledger_signed_quantity()), 0))
+        .select_from(StockMovement)
+        .outerjoin(FiscalPeriod, FiscalPeriod.id == StockMovement.fiscal_period_id)
+        .outerjoin(FiscalYear, FiscalYear.id == FiscalPeriod.fiscal_year_id)
+        .where(StockMovement.company_id == company_id, StockMovement.product_id == product_id,
+               StockMovement.warehouse_id == warehouse_id, or_(before, within))
+    )).scalar_one()
+    return float(total)
+
+
 async def freeze_period_stock(db: AsyncSession, company_id: uuid.UUID, period_id: uuid.UUID) -> int:
     """Freezes the stock of a period closed for good, when the company has the option - once (an already frozen period
     is kept as it is). No commit: part of the closing's transaction. Returns the number of rows written."""

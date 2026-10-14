@@ -189,6 +189,36 @@ async def _stock_rule(db: AsyncSession, product_id: uuid.UUID, warehouse_id: uui
     return True
 
 
+async def ensure_available_at_period_end(
+    db: AsyncSession, company_id: uuid.UUID, posting_period, product_id: uuid.UUID, warehouse_id: uuid.UUID,
+    quantity: float, error_class: type[Exception],
+) -> None:
+    """Stock à data (company option): an exit booked in the SOFT-CLOSED period may not take more than the stock at
+    that period's end - a late loss of 30 September cannot use what came in on 5 October. The active period needs no
+    check of its own (its end is today: the current stock, checked by each caller). A warehouse allowing negative stock
+    is never blocked. Raises error_class, the caller's own insufficient-stock error."""
+    from app.models.company import Company
+    from app.models.fiscal_year import FiscalYear
+    from app.services.fiscal_period_service import MONTH_NAMES_PT
+    from app.services.stock_period_closing_service import quantity_at_period_end  # local: it imports this module
+
+    if getattr(posting_period.status, "value", posting_period.status) != "FECHO_PARCIAL" or quantity <= 0:
+        return
+    if not (await db.execute(select(Company.stock_check_at_period_end).where(Company.id == company_id))).scalar_one():
+        return
+    warehouse = (await db.execute(select(Warehouse).where(Warehouse.id == warehouse_id))).scalar_one_or_none()
+    if warehouse is not None and warehouse.allow_negative_stock:
+        return
+    year = (await db.execute(select(FiscalYear.year).where(FiscalYear.id == posting_period.fiscal_year_id))).scalar_one()
+    available = await quantity_at_period_end(db, company_id, posting_period, year, product_id, warehouse_id)
+    if available < quantity:
+        name = (await db.execute(select(Product.name).where(Product.id == product_id))).scalar_one_or_none() or str(product_id)
+        raise error_class(
+            f"Stock insuficiente para {name} no fim de {MONTH_NAMES_PT[posting_period.month]} de {year} "
+            f"(disponível nessa data: {_format_quantity(available)}) - um lançamento tardio usa o stock do seu período"
+        )
+
+
 async def _get_or_create_stock_row(db: AsyncSession, company_id: uuid.UUID, product_id: uuid.UUID, warehouse_id: uuid.UUID) -> Stock:
     result = await db.execute(
         select(Stock).where(Stock.product_id == product_id, Stock.warehouse_id == warehouse_id)
@@ -300,6 +330,7 @@ async def transfer_stock(
 
     await _stock_rule(db, product_id, from_warehouse_id, "out", strict=True)
     await _stock_rule(db, product_id, to_warehouse_id, "in", strict=True)
+    await ensure_available_at_period_end(db, company_id, posting_period, product_id, from_warehouse_id, quantity, InsufficientStockError)
     source_stock = await _get_or_create_stock_row(db, company_id, product_id, from_warehouse_id)
     if float(source_stock.quantity) < quantity:
         result = await db.execute(select(Product).where(Product.id == product_id))
@@ -346,6 +377,7 @@ async def record_stock_loss(
     quantity = await _to_base_quantity(db, company_id, product_id, quantity, sale_unit_id)
     warehouse = await get_warehouse_or_raise(db, company_id, warehouse_id)
     await _stock_rule(db, product_id, warehouse.id, "out", strict=True)
+    await ensure_available_at_period_end(db, company_id, posting_period, product_id, warehouse.id, quantity, InsufficientStockError)
     stock = await _get_or_create_stock_row(db, company_id, product_id, warehouse.id)
 
     if float(stock.quantity) < quantity:
@@ -388,6 +420,7 @@ async def adjust_stock(
     stock = await _get_or_create_stock_row(db, company_id, product_id, warehouse.id)
 
     delta = new_quantity - float(stock.quantity)
+    await ensure_available_at_period_end(db, company_id, posting_period, product_id, warehouse.id, -delta, InsufficientStockError)
     stock.quantity = new_quantity
     db.add(StockMovement(
         company_id=company_id, fiscal_period_id=posting_period.id, product_id=product_id, warehouse_id=warehouse.id,
@@ -419,6 +452,7 @@ async def deduct_stock_for_sale(
     posting_period = await resolve_posting_period(db, company_id, fiscal_period_id)
     if not await _stock_rule(db, product_id, warehouse_id, "out", strict=False):
         return  # a product without stock: sold, nothing moves
+    await ensure_available_at_period_end(db, company_id, posting_period, product_id, warehouse_id, quantity, InsufficientStockError)
     stock = await _get_or_create_stock_row(db, company_id, product_id, warehouse_id)
 
     if float(stock.quantity) < quantity:
@@ -624,6 +658,8 @@ async def produce_stock(
         needed = float(ing.quantity_per_batch) * batches_needed
         if not await _stock_rule(db, ing.ingredient_product_id, warehouse_id, "out", strict=False):
             continue  # an ingredient without stock (water...): used, nothing moves
+        await ensure_available_at_period_end(db, company_id, posting_period, ing.ingredient_product_id, warehouse_id, needed,
+                                             InsufficientStockError)
         stock = await _get_or_create_stock_row(db, company_id, ing.ingredient_product_id, warehouse_id)
         if float(stock.quantity) < needed:
             result = await db.execute(select(Product).where(Product.id == ing.ingredient_product_id))
