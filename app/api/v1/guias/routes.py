@@ -14,7 +14,7 @@ from app.models.user import User
 from app.services.fiscal_period_service import PeriodClosedError
 from app.services.goods_movement_service import (
     GoodsMovementError, GoodsMovementNotFoundError, cancel_goods_movement, create_goods_movement, get_goods_movement,
-    list_goods_movements,
+    invoice_goods_movements, list_goods_movements,
 )
 
 router = APIRouter(prefix="/api/v1/guias", tags=["guias"])
@@ -49,6 +49,11 @@ class GuiaCancelRequest(BaseModel):
     reason: str
 
 
+class GuiaInvoiceRequest(BaseModel):
+    guia_ids: list[uuid.UUID]  # guias de remessa of one customer
+    activity_id: uuid.UUID  # the activity whose FT series the invoice takes
+
+
 def _http(e: Exception) -> HTTPException:
     return HTTPException(status_code=ERRORS[type(e)], detail=str(e))
 
@@ -73,6 +78,17 @@ async def post_guia(payload: GuiaCreateRequest, db: AsyncSession = Depends(get_d
         return await get_goods_movement(db, current_user.company_id, movement.id)
     except tuple(ERRORS) as e:
         raise _http(e)
+
+
+@router.post("/invoice", status_code=status.HTTP_201_CREATED)
+async def post_invoice_guias(payload: GuiaInvoiceRequest, db: AsyncSession = Depends(get_db),
+                             current_user: User = Depends(require_permission("guias:invoice"))):
+    """One Fatura for the selected guias de remessa of a customer - the goods already left the stock with them."""
+    try:
+        invoice = await invoice_goods_movements(db, current_user.company_id, payload.guia_ids, payload.activity_id)
+    except tuple(ERRORS) as e:
+        raise _http(e)
+    return {"id": invoice.id, "reference": f"FT {invoice.series}/{invoice.number}", "total": float(invoice.total)}
 
 
 @router.get("/{guia_id}")

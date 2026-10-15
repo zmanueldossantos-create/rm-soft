@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Send, Plus, Loader2, Trash2, Ban, FileText, Eye } from 'lucide-react';
+import { Send, Plus, Loader2, Trash2, Ban, FileText, Eye, Receipt, CheckCircle2 } from 'lucide-react';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
 import DateInput from '../components/DateInput';
@@ -11,14 +11,16 @@ import { listSuppliers } from '../api/suppliers';
 import { listProducts } from '../api/products';
 import { listWarehouses } from '../api/stock';
 import { listPurchaseInvoices } from '../api/purchases';
-import { listGuias, getGuia, createGuia, cancelGuia, fetchGuiaPdfBlob } from '../api/guias';
+import { listActivities } from '../api/activity';
+import { listGuias, getGuia, createGuia, cancelGuia, fetchGuiaPdfBlob, invoiceGuias } from '../api/guias';
 
 // Guias (goods_movement_service): the documents that travel with the goods - GR to a customer, GT between two
 // warehouses of the company, GD back to a supplier. Issued like an invoice (series, hash, ATCUD), they move the stock;
-// cancelled with a reason, the goods come back. An invoiced GR cannot be cancelled.
+// cancelled with a reason, the goods come back. An invoiced GR cannot be cancelled. The GR of a customer are invoiced
+// together: one Fatura with their lines, without taking the goods out of the stock again.
 const TYPES = [{ value: 'GR', label: 'Guia de Remessa' }, { value: 'GT', label: 'Guia de Transporte' }, { value: 'GD', label: 'Guia de Devolução' }];
 const TYPE_LABEL = Object.fromEntries(TYPES.map((t) => [t.value, t.label]));
-const STATUS = { EMITIDA: ['Emitida', 'text-success bg-success/10'], FATURADA: ['Faturada', 'text-accent bg-accent/10'], ANULADA: ['Anulada', 'text-danger bg-danger/10'] };
+const STATUS = { EMITIDA: ['Emitida', 'text-success bg-success/10'], FATURADA: ['Faturada', 'text-text-primary bg-text-muted/15'], ANULADA: ['Anulada', 'text-danger bg-danger/10'] };
 const inputCls = 'w-full bg-bg-inset border border-border rounded-md px-3 py-2 text-sm text-text-primary outline-none focus:border-accent transition-colors';
 const cellCls = 'w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors';
 const labelCls = 'text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block';
@@ -64,11 +66,23 @@ export default function Guias() {
   const [cancelling, setCancelling] = useState(false);
   const [pdf, setPdf] = useState(null);
 
+  // invoicing: the GR ticked in the list (of one customer), the activity whose FT series the invoice takes
+  const [selected, setSelected] = useState([]);
+  const [activities, setActivities] = useState([]);
+  const [invoicing, setInvoicing] = useState(null);  // the GR being invoiced
+  const [invoiceActivity, setInvoiceActivity] = useState('');
+  const [invoiceError, setInvoiceError] = useState('');
+  const [invoiceSaving, setInvoiceSaving] = useState(false);
+  const [notice, setNotice] = useState('');
+
   async function load() {
     setLoading(true);
     setError('');
     try {
-      setGuias(await listGuias(filters));
+      const rows = await listGuias(filters);
+      setGuias(rows);
+      // a ticked guide stays ticked only while it is still in the list and still to invoice
+      setSelected((sel) => sel.filter((id) => rows.some((g) => g.id === id && g.status === 'EMITIDA')));
     } catch (err) {
       setError(extractErrorMessage(err, 'Erro ao carregar as guias'));
     } finally {
@@ -81,7 +95,8 @@ export default function Guias() {
     listSuppliers().then((d) => setSuppliers(d.filter((s) => s.is_active))).catch(() => {});
     listProducts().then((d) => setProducts(d.filter((p) => p.is_active && p.managed_by_stock !== false))).catch(() => {});
     listWarehouses().then((d) => setWarehouses(d.filter((w) => w.is_active))).catch(() => {});
-  }, []);
+    if (can('guias:invoice')) listActivities().then((d) => setActivities(d.filter((a) => a.is_active))).catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // a return (GD) may name the supplier's purchase invoice
   useEffect(() => {
@@ -94,7 +109,7 @@ export default function Guias() {
 
   function openForm() {
     const central = warehouses[0];
-    setForm({ type: 'GR', originId: central?.id || '', customerId: '', destinationId: '', supplierId: '', purchaseInvoiceId: '',
+    setForm({ type: '', originId: central?.id || '', customerId: '', destinationId: '', supplierId: '', purchaseInvoiceId: '',
       startTime: nowLocal(), startTimeEdited: false, vehicle: '', loadAddress: central?.address || central?.name || '', unloadAddress: '', notes: '', lines: [emptyLine()] });
     setFormError('');
   }
@@ -111,7 +126,7 @@ export default function Guias() {
   // the proposed price of a line: a GR the sale price of its unit, a GT / GD the current cost of the goods
   function proposedPrice(l) {
     const p = productById[l.productId];
-    if (!p) return 0;
+    if (!p || !form.type) return 0;
     const unit = unitOf(l);
     if (form.type === 'GR') return unit ? Number(unit.price) : Number(p.price || 0);
     return Number(p.average_cost ?? p.purchase_price ?? 0) * (unit ? Number(unit.factor) : 1);
@@ -173,6 +188,35 @@ export default function Guias() {
     }
   }
 
+  // a GR can be ticked when issued and of the same customer as the ones already ticked
+  const selectedCustomer = guias.find((g) => g.id === selected[0])?.customer_id;
+  const canTick = (g) => g.movement_type === 'GR' && g.status === 'EMITIDA' && (!selectedCustomer || g.customer_id === selectedCustomer);
+  const toggle = (id) => setSelected((sel) => (sel.includes(id) ? sel.filter((x) => x !== id) : [...sel, id]));
+
+  function openInvoicing(rows) {
+    setInvoicing(rows);
+    setInvoiceActivity(activities.length === 1 ? activities[0].id : '');
+    setInvoiceError('');
+  }
+
+  async function submitInvoice() {
+    setInvoiceSaving(true);
+    setInvoiceError('');
+    try {
+      const inv = await invoiceGuias(invoicing.map((g) => g.id), invoiceActivity);
+      setNotice('Fatura ' + inv.reference + ' emitida (' + kz(inv.total) + ') para ' + invoicing.map((g) => g.reference).join(', '));
+      const refreshed = detail && invoicing.some((g) => g.id === detail.id) ? await getGuia(detail.id) : null;
+      if (refreshed) setDetail(refreshed);
+      setInvoicing(null);
+      setSelected([]);
+      load();
+    } catch (err) {
+      setInvoiceError(extractErrorMessage(err, 'Erro ao faturar as guias'));
+    } finally {
+      setInvoiceSaving(false);
+    }
+  }
+
   async function openPdf(guia) {
     try {
       setPdf({ url: await fetchGuiaPdfBlob(guia.id), title: guia.type_label + ' ' + guia.reference });
@@ -190,11 +234,18 @@ export default function Guias() {
           </h2>
           <p className="text-text-muted text-sm">Remessa a um cliente, transporte entre armazéns, devolução a um fornecedor - a mercadoria sai do stock com a guia</p>
         </div>
-        {can('guias:manage') && (
-          <button onClick={openForm} className="bg-accent hover:bg-accent-hover text-white font-semibold text-sm rounded-md px-5 py-2.5 flex items-center gap-2 cursor-pointer">
-            <Plus size={16} /> Nova guia
-          </button>
-        )}
+        <div className="flex items-center gap-2.5">
+          {can('guias:invoice') && selected.length > 0 && (
+            <button onClick={() => openInvoicing(guias.filter((g) => selected.includes(g.id)))} className="border border-accent text-accent hover:bg-accent/10 font-semibold text-sm rounded-md px-5 py-2.5 flex items-center gap-2 cursor-pointer">
+              <Receipt size={16} /> Faturar {selected.length} {selected.length === 1 ? 'guia' : 'guias'}
+            </button>
+          )}
+          {can('guias:manage') && (
+            <button onClick={openForm} className="bg-accent hover:bg-accent-hover text-white font-semibold text-sm rounded-md px-5 py-2.5 flex items-center gap-2 cursor-pointer">
+              <Plus size={16} /> Nova guia
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex items-end gap-2.5 mb-5 flex-wrap">
@@ -218,6 +269,15 @@ export default function Guias() {
       </div>
 
       {error && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r mb-4">{error}</div>}
+      {notice && (
+        <div className="bg-success/10 border-l-2 border-success text-success px-3.5 py-2.5 text-[13px] rounded-r mb-4 flex items-center justify-between gap-3">
+          <span className="flex items-center gap-2"><CheckCircle2 size={15} /> {notice}</span>
+          <button onClick={() => setNotice('')} className="text-[12px] underline cursor-pointer">Fechar</button>
+        </div>
+      )}
+      {can('guias:invoice') && (
+        <p className="text-[12px] text-text-muted mb-3">Para faturar, marque as guias de remessa emitidas de um cliente - uma fatura para todas.</p>
+      )}
 
       <div className="bg-bg-elevated border border-border rounded-lg overflow-x-auto">
         {loading ? (
@@ -227,13 +287,23 @@ export default function Guias() {
         ) : (
           <table className="w-full text-sm">
             <thead><tr className="border-b border-border">
+              {can('guias:invoice') && <th className={th + ' w-10'} />}
               <th className={th + ' text-left'}>Número</th><th className={th + ' text-left'}>Tipo</th><th className={th + ' text-left'}>Início do transporte</th>
               <th className={th + ' text-left'}>Destinatário</th><th className={th + ' text-left'}>Carga</th><th className={th + ' text-left'}>Viatura</th>
               <th className={th + ' text-right'}>Total</th><th className={th + ' text-left'}>Estado</th><th className={th + ' text-right'}>Ações</th>
             </tr></thead>
             <tbody>
               {guias.map((g) => (
-                <tr key={g.id} className={'border-b border-border last:border-0 ' + (g.status === 'ANULADA' ? 'opacity-50' : '')}>
+                <tr key={g.id} className={'border-b border-border last:border-0 ' + (g.status === 'ANULADA' ? 'opacity-50' : '') + (selected.includes(g.id) ? ' bg-accent/5' : '')}>
+                  {can('guias:invoice') && (
+                    <td className="px-3 py-2.5 text-center">
+                      {g.movement_type === 'GR' && g.status === 'EMITIDA' && (
+                        <input type="checkbox" checked={selected.includes(g.id)} disabled={!selected.includes(g.id) && !canTick(g)} onChange={() => toggle(g.id)}
+                          title={!selected.includes(g.id) && !canTick(g) ? 'Outro cliente: uma fatura é de um só cliente' : 'Marcar para faturar'}
+                          className="w-4 h-4 accent-accent cursor-pointer disabled:cursor-not-allowed disabled:opacity-30" />
+                      )}
+                    </td>
+                  )}
                   <td className="px-3 py-2.5 font-mono text-text-primary whitespace-nowrap">{g.reference}</td>
                   <td className="px-3 py-2.5 text-text-muted">{g.type_label}</td>
                   <td className="px-3 py-2.5 font-mono text-[12px] text-text-muted whitespace-nowrap">{when(g.start_time)}</td>
@@ -261,13 +331,19 @@ export default function Guias() {
               <div>
                 <label className={labelCls}>Tipo de guia *</label>
                 <Select value={form.type} onChange={(v) => set({ type: v, customerId: '', destinationId: '', supplierId: '', purchaseInvoiceId: '', unloadAddress: '',
-                  lines: form.lines.map((l) => ({ ...l, unitPrice: '' })) })} options={TYPES} />
+                  lines: form.lines.map((l) => ({ ...l, unitPrice: '' })) })} placeholder="Selecionar" options={TYPES} />
               </div>
               <div>
                 <label className={labelCls}>Armazém de carga *</label>
                 <Select value={form.originId} onChange={(v) => set({ originId: v, loadAddress: warehouseById[v]?.address || warehouseById[v]?.name || '' })}
                   placeholder="Selecionar" options={warehouses.map((w) => ({ value: w.id, label: w.name }))} />
               </div>
+              {!form.type && (
+                <div className="md:col-span-2">
+                  <label className={labelCls}>Destinatário *</label>
+                  <p className={inputCls + ' text-text-muted py-[11px]'}>Escolha primeiro o tipo de guia</p>
+                </div>
+              )}
               {form.type === 'GR' && (
                 <div className="md:col-span-2">
                   <label className={labelCls}>Cliente *</label>
@@ -319,7 +395,7 @@ export default function Guias() {
               <table className="w-full text-sm">
                 <thead><tr className="border-b border-border">
                   <th className={th + ' text-left'}>Artigo</th><th className={th + ' text-left w-28'}>Un.</th><th className={th + ' text-right w-28'}>Qtd</th>
-                  <th className={th + ' text-right w-36'}>{form.type === 'GR' ? 'Preço s/ IVA' : 'Custo'}</th><th className={th + ' text-right w-36'}>Valor</th><th className={th + ' w-10'}></th>
+                  <th className={th + ' text-right w-36'}>{form.type === 'GR' ? 'Preço s/ IVA' : form.type ? 'Custo' : 'Preço'}</th><th className={th + ' text-right w-36'}>Valor</th><th className={th + ' w-10'}></th>
                 </tr></thead>
                 <tbody>
                   {form.lines.map((l, idx) => {
@@ -329,7 +405,7 @@ export default function Guias() {
                       <tr key={idx} className="border-b border-border last:border-0 align-top">
                         <td className="px-2 py-2 min-w-[240px]">
                           <Select value={l.productId} onChange={(v) => updateLine(idx, { productId: v, saleUnitId: '', unitPrice: '' })} placeholder="Selecionar"
-                            options={products.map((x) => ({ value: x.id, label: x.code + ' - ' + x.name }))} />
+                            options={products.filter((x) => form.type !== 'GR' || !x.is_raw_material).map((x) => ({ value: x.id, label: x.code + ' - ' + x.name }))} />
                         </td>
                         <td className="px-2 py-2">
                           {(p?.sale_units || []).length > 0 ? (
@@ -365,7 +441,7 @@ export default function Guias() {
                 <input value={form.notes} onChange={(e) => set({ notes: e.target.value })} className={inputCls} />
               </div>
               <div className="bg-bg-inset border border-border rounded-md px-4 py-2.5 text-right">
-                <p className="text-[11px] uppercase tracking-wide text-text-muted">{form.type === 'GR' ? 'Valor sem IVA' : 'Valor ao custo'}</p>
+                <p className="text-[11px] uppercase tracking-wide text-text-muted">{form.type === 'GR' ? 'Valor sem IVA' : form.type ? 'Valor ao custo' : 'Valor'}</p>
                 <p className="font-mono font-semibold text-lg text-text-primary">{kz(total)}</p>
               </div>
             </div>
@@ -377,7 +453,7 @@ export default function Guias() {
 
             {formError && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{formError}</div>}
             <button type="submit" disabled={saving || !formValid} className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 cursor-pointer">
-              {saving ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />} Emitir {TYPE_LABEL[form.type].toLowerCase()}
+              {saving ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />} Emitir {form.type ? TYPE_LABEL[form.type].toLowerCase() : 'guia'}
             </button>
           </form>
         )}
@@ -394,6 +470,11 @@ export default function Guias() {
               <div><p className={labelCls}>Descarga</p><p className="text-text-primary">{detail.unload_address}</p></div>
               <div><p className={labelCls}>Início do transporte</p><p className="text-text-primary">{when(detail.start_time)}</p><p className="font-mono text-[11px] text-text-muted">{detail.vehicle_plate || 'sem viatura'}</p></div>
             </div>
+            {detail.status === 'FATURADA' && (
+              <div className="bg-bg-inset border-l-2 border-success text-text-primary px-3.5 py-2.5 text-[13px] rounded-r">
+                Faturada na fatura <span className="font-mono font-semibold">{detail.invoice_reference}</span> - a mercadoria saiu do stock com a guia
+              </div>
+            )}
             {detail.status === 'ANULADA' && (
               <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">
                 Anulada por {detail.cancelled_by || '-'} em {when(detail.cancelled_at)}: {detail.cancel_reason}
@@ -429,9 +510,16 @@ export default function Guias() {
             </div>
             <div className="flex items-center justify-between gap-3 flex-wrap text-[12px] text-text-muted">
               <p>Emitida por {detail.created_by || '-'} em {when(detail.created_at)} · ATCUD <span className="font-mono">{detail.atcud}</span>{detail.notes ? ' · ' + detail.notes : ''}</p>
-              <button onClick={() => openPdf(detail)} className="inline-flex items-center gap-1.5 border border-border hover:border-accent hover:text-accent text-text-primary text-[12px] font-medium px-3 py-1.5 rounded-md cursor-pointer">
-                <FileText size={14} /> Ver PDF
-              </button>
+              <div className="flex items-center gap-2">
+                {detail.movement_type === 'GR' && detail.status === 'EMITIDA' && can('guias:invoice') && (
+                  <button onClick={() => openInvoicing([detail])} className="inline-flex items-center gap-1.5 border border-accent text-accent hover:bg-accent/10 text-[12px] font-semibold px-3 py-1.5 rounded-md cursor-pointer">
+                    <Receipt size={14} /> Faturar
+                  </button>
+                )}
+                <button onClick={() => openPdf(detail)} className="inline-flex items-center gap-1.5 border border-border hover:border-accent hover:text-accent text-text-primary text-[12px] font-medium px-3 py-1.5 rounded-md cursor-pointer">
+                  <FileText size={14} /> Ver PDF
+                </button>
+              </div>
             </div>
             {detailError && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{detailError}</div>}
             {detail.status === 'EMITIDA' && can('guias:manage') && (
@@ -445,6 +533,52 @@ export default function Guias() {
                 </button>
               </div>
             )}
+          </div>
+        )}
+      </Modal>
+
+      <Modal open={!!invoicing} onClose={() => setInvoicing(null)} title="Faturar guias de remessa" maxWidthClass="max-w-3xl" stacked>
+        {invoicing && (
+          <div className="flex flex-col gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <p className={labelCls}>Cliente</p>
+                <p className="text-text-primary text-sm py-2.5">{invoicing[0].party}</p>
+              </div>
+              <div>
+                <label className={labelCls}>Atividade *</label>
+                <Select value={invoiceActivity} onChange={setInvoiceActivity} placeholder="Selecionar"
+                  options={activities.map((a) => ({ value: a.id, label: a.name }))} />
+              </div>
+            </div>
+            <div className="border border-border rounded-md overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead><tr className="border-b border-border">
+                  <th className={th + ' text-left'}>Guia</th><th className={th + ' text-left'}>Data</th><th className={th + ' text-right'}>Total</th>
+                </tr></thead>
+                <tbody>
+                  {invoicing.map((g) => (
+                    <tr key={g.id} className="border-b border-border last:border-0">
+                      <td className="px-3 py-2 font-mono text-text-primary">{g.reference}</td>
+                      <td className="px-3 py-2 font-mono text-[12px] text-text-muted">{when(g.start_time)}</td>
+                      <td className="px-3 py-2 text-right font-mono text-text-primary">{kz(g.gross_total)}</td>
+                    </tr>
+                  ))}
+                  <tr className="bg-bg-inset">
+                    <td className="px-3 py-2 font-semibold text-text-primary" colSpan={2}>Total da fatura</td>
+                    <td className="px-3 py-2 text-right font-mono font-semibold text-text-primary">{kz(round2(invoicing.reduce((s, g) => s + g.gross_total, 0)))}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p className="text-[12px] text-text-muted">
+              Uma Fatura (FT) com as linhas das guias, ao preço de cada guia; a mercadoria já saiu do stock com as guias e não volta a sair.
+              As guias passam a «Faturada». O pagamento regista-se depois com um recibo.
+            </p>
+            {invoiceError && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{invoiceError}</div>}
+            <button onClick={submitInvoice} disabled={invoiceSaving || !invoiceActivity} className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 cursor-pointer">
+              {invoiceSaving ? <Loader2 size={17} className="animate-spin" /> : <Receipt size={17} />} Emitir fatura
+            </button>
           </div>
         )}
       </Modal>

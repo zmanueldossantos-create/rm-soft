@@ -73,12 +73,15 @@ def _write_lines(parent_el, inv: dict, saft_type: str) -> None:
         line_el = _el(parent_el, "Line")
         _el(line_el, "LineNumber", idx)
 
-        # A document issued from another one (an invoice from a pro-forma) names its origin - right after LineNumber (XSD).
-        if inv.get("order_reference"):
+        # A document issued from another one names its origin - right after LineNumber (XSD): the line's own (an
+        # invoice of several guias de remessa: each line its GR), else the document's (an invoice from a pro-forma).
+        origin, origin_date = (line["order_reference"], line.get("order_date")) if line.get("order_reference") \
+            else (inv.get("order_reference"), inv.get("order_date"))
+        if origin:
             order_refs = _el(line_el, "OrderReferences")
-            _el(order_refs, "OriginatingON", inv["order_reference"][:60])
-            if inv.get("order_date"):
-                _el(order_refs, "OrderDate", inv["order_date"].isoformat())
+            _el(order_refs, "OriginatingON", origin[:60])
+            if origin_date:
+                _el(order_refs, "OrderDate", origin_date.isoformat())
         _el(line_el, "ProductCode", line["product_code"])
         _el(line_el, "ProductDescription", line["product_name"])
         _el(line_el, "Quantity", f"{Decimal(str(line['quantity'])):.3f}")

@@ -117,6 +117,8 @@ async def _build_lines(db: AsyncSession, company_id: uuid.UUID, period: FiscalPe
                 db, company_id, product, line.get("sale_unit_id"), quantity)
         except SaleUnitInvalidError as e:
             raise GoodsMovementError(f"Linha {position}: {e}")
+        if movement_type == "GR" and product.is_raw_material:  # never sold, so never sent to a customer
+            raise GoodsMovementError(f"Linha {position}: {product.name} é uma matéria-prima - não pode ser enviada a um cliente")
         if movement_type == "GR":  # what the invoice will charge: the unit's sale price and the product's VAT
             vat = (await db.execute(select(VAT).where(VAT.id == product.vat_id))).scalar_one_or_none() if product.vat_id else None
             vat_rate, tax_code = (float(vat.rate), vat.tax_category) if vat else (0.0, "ISE")
@@ -284,6 +286,70 @@ async def cancel_goods_movement(db: AsyncSession, company_id: uuid.UUID, movemen
     return movement
 
 
+async def invoice_goods_movements(db: AsyncSession, company_id: uuid.UUID, movement_ids: list[uuid.UUID],
+                                  activity_id: uuid.UUID):
+    """
+    Invoices one or several guias de remessa of the same customer in ONE Fatura (FT) of the given activity - paid later
+    with a receipt, like any FT (a FR would need the cash point where the money enters, chosen on the invoicing screen): the
+    lines of each GR, in its unit and at its price, each naming its GR (SAF-T OrderReferences); the goods already left
+    the stock with the guides, so the invoice does not take them out again. Every GR becomes FATURADA with the invoice
+    - all in one transaction: a guide invoiced twice is impossible.
+    """
+    from app.models.invoice import Invoice
+    from app.services import invoice_service
+    from app.workers.agt_worker import submit_invoice_to_agt
+    ids = list(dict.fromkeys(movement_ids or []))
+    if not ids:
+        raise GoodsMovementError("Escolha as guias de remessa a faturar")
+    movements = (await db.execute(select(GoodsMovement).where(
+        GoodsMovement.id.in_(ids), GoodsMovement.company_id == company_id)
+        .order_by(GoodsMovement.series, GoodsMovement.number).with_for_update())).scalars().all()
+    if len(movements) != len(ids):
+        raise GoodsMovementNotFoundError("Guia não encontrada")
+    for m in movements:
+        if m.movement_type != "GR":
+            raise GoodsMovementError(f"{reference(m)}: só uma guia de remessa é faturada")
+        if m.status != GoodsMovementStatus.EMITIDA:
+            state = "já faturada" if m.status == GoodsMovementStatus.FATURADA else "anulada"
+            raise GoodsMovementError(f"{reference(m)} está {state}")
+    if len({m.customer_id for m in movements}) > 1:
+        raise GoodsMovementError("As guias de uma fatura devem ser do mesmo cliente")
+    customer = (await db.execute(select(Customer).where(Customer.id == movements[0].customer_id))).scalar_one()
+    if not customer.is_active or customer.status in BLOCKED_CUSTOMER:
+        raise GoodsMovementError(f"O cliente {customer.name} está {customer.status.value.lower()} - não pode ser faturado")
+
+    lines = (await db.execute(select(GoodsMovementLine).where(GoodsMovementLine.goods_movement_id.in_(ids)))).scalars().all()
+    order = {m.id: i for i, m in enumerate(movements)}
+    lines_input = [{
+        "product_id": l.product_id, "sale_unit_id": l.sale_unit_id, "quantity": float(l.quantity),
+        "unit_price": float(l.unit_price), "goods_movement_id": l.goods_movement_id,
+    } for l in sorted(lines, key=lambda l: (order[l.goods_movement_id], l.position))]
+    refs = ", ".join(reference(m) for m in movements)
+    try:
+        invoice = await invoice_service.create_invoice(
+            db, company_id=company_id, activity_id=activity_id, customer_id=customer.id, invoice_type="FACTURA",
+            lines_input=lines_input, payment_term_id=customer.payment_term_id, payment_method_id=customer.payment_method_id,
+            document_reference=(("Guias: " if len(movements) > 1 else "Guia: ") + refs)[:255],
+            deduct_stock=False, commit=False,
+        )
+    except (invoice_service.ActivityNotFoundError, invoice_service.EmptyInvoiceError, invoice_service.ProductNotFoundError,
+            invoice_service.SeriesNotConfiguredError, invoice_service.DocumentTypeNotConfiguredError,
+            invoice_service.PaymentAmountMismatchError, invoice_service.PaymentMethodNotAllowedError,
+            invoice_service.CashPointRequiredError, invoice_service.MissingExemptionReasonError) as e:
+        await db.rollback()
+        raise GoodsMovementError(str(e))
+    except Exception:
+        await db.rollback()
+        raise
+    for m in movements:
+        m.status = GoodsMovementStatus.FATURADA
+        m.invoice_id = invoice.id
+    await db.commit()
+    invoice = (await db.execute(select(Invoice).where(Invoice.id == invoice.id))).scalar_one()
+    submit_invoice_to_agt.delay(str(invoice.id))  # a fiscal invoice: sent to the AGT like any other
+    return invoice
+
+
 async def _names(db: AsyncSession, model, ids) -> dict:
     ids = [i for i in ids if i]
     if not ids:
@@ -295,7 +361,7 @@ def _summary(m: GoodsMovement, names: dict) -> dict:
     party = names["customers"].get(m.customer_id) or names["suppliers"].get(m.supplier_id) \
         or names["warehouses"].get(m.destination_warehouse_id)
     return {
-        "id": m.id, "movement_type": m.movement_type, "type_label": MOVEMENT_TYPES[m.movement_type],
+        "id": m.id, "customer_id": m.customer_id, "movement_type": m.movement_type, "type_label": MOVEMENT_TYPES[m.movement_type],
         "reference": reference(m), "status": m.status.value, "movement_date": m.movement_date, "start_time": m.start_time,
         "party": party, "origin_warehouse": names["warehouses"].get(m.origin_warehouse_id),
         "net_total": float(m.net_total), "vat_total": float(m.vat_total), "gross_total": float(m.gross_total),
@@ -339,6 +405,12 @@ async def get_goods_movement(db: AsyncSession, company_id: uuid.UUID, movement_i
     if movement.purchase_invoice_id:
         pi = (await db.execute(select(PurchaseInvoice).where(PurchaseInvoice.id == movement.purchase_invoice_id))).scalar_one()
         purchase = f"{pi.series}/{pi.number} · {pi.supplier_document}"
+    invoice_reference = None
+    if movement.invoice_id:  # the invoice of a GR invoiced: FT FT2026/9
+        from app.models.invoice import Invoice
+        from app.services.document_rules import DOC_CODE_BY_INVOICE_TYPE
+        inv = (await db.execute(select(Invoice).where(Invoice.id == movement.invoice_id))).scalar_one()
+        invoice_reference = f"{DOC_CODE_BY_INVOICE_TYPE.get(inv.invoice_type.value, 'FT')} {inv.series}/{inv.number}"
     party_nif = None
     if movement.customer_id:
         party_nif = (await db.execute(select(Customer.nif).where(Customer.id == movement.customer_id))).scalar_one()
@@ -347,7 +419,8 @@ async def get_goods_movement(db: AsyncSession, company_id: uuid.UUID, movement_i
     return {
         **_summary(movement, names), "party_nif": party_nif,
         "destination_warehouse": names["warehouses"].get(movement.destination_warehouse_id),
-        "purchase_invoice": purchase, "load_address": movement.load_address, "unload_address": movement.unload_address,
+        "purchase_invoice": purchase, "invoice_id": movement.invoice_id, "invoice_reference": invoice_reference,
+        "load_address": movement.load_address, "unload_address": movement.unload_address,
         "notes": movement.notes, "atcud": movement.atcud, "document_hash": movement.document_hash,
         "created_at": movement.created_at, "created_by": users.get(movement.created_by_user_id),
         "cancel_reason": movement.cancel_reason, "cancelled_at": movement.cancelled_at,

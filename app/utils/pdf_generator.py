@@ -84,9 +84,11 @@ CREDIT_NOTE_REASON_LABELS = {"ANL": "Anulação", "RTF": "Retificação"}
 def _reference_texts(invoice: dict) -> list[str]:
     """What a correcting document (Nota de Crédito, Nota de Débito) prints about the document it corrects: the origin
     document with its date, and for a credit note its reason and cause - 'Documento de origem: FR FR2026/1 de
-    11/10/2026', 'Motivo: Anulação - Cliente desistiu'. Nothing for any other document."""
+    11/10/2026', 'Motivo: Anulação - Cliente desistiu'. Another document prints only the guias it invoices."""
     if invoice.get("invoice_type") not in ("NC", "ND"):
-        return []
+        # an invoice of guias de remessa names them (Guia: GR GR2026/2) - the goods it charges travelled with them
+        origin = invoice.get("document_reference") or ""
+        return [origin] if origin.startswith(("Guia: ", "Guias: ")) else []
     texts = []
     ref = invoice.get("reference_invoice")
     if ref:

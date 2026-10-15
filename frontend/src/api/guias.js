@@ -26,3 +26,8 @@ export async function fetchGuiaPdfBlob(id) {
   const res = await apiClient.get('/guias/' + id + '/pdf', { responseType: 'blob' });
   return URL.createObjectURL(res.data);
 }
+
+// One Fatura (FT) for guias de remessa of one customer: the goods already left the stock with them.
+export async function invoiceGuias(guiaIds, activityId) {
+  return (await apiClient.post('/guias/invoice', { guia_ids: guiaIds, activity_id: activityId })).data;
+}

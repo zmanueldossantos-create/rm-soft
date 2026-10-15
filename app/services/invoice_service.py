@@ -244,8 +244,13 @@ async def create_invoice(
     cash_pos_id: uuid.UUID | None = None,
     require_cash_point: bool = False,
     enforce_document_rules: bool = False,
+    deduct_stock: bool = True,
+    commit: bool = True,
 ) -> Invoice:
     """
+    deduct_stock=False: the goods already left the stock (an invoice of guias de remessa) - the lines may then carry
+    their own unit_price (the guide's) and goods_movement_id. commit=False: the caller commits (and submits to the AGT).
+
     Creates an invoice with its lines, under the given Activity (which
     determines the invoice series and number padding).
     lines_input: list of {"product_id": UUID, "quantity": float}
@@ -378,6 +383,8 @@ async def create_invoice(
             )
             if line_unit_code is None:  # sold in its base unit
                 line_unit_code = await _base_unit_code(db, product)
+            if not deduct_stock and line_input.get("unit_price") is not None:  # the price the guide carried
+                unit_price = float(line_input["unit_price"])
             line_input["_unit_factor"] = line_unit_factor  # stock moves quantity x factor (base units)
             item_name = product.name
             line_product_id = product.id
@@ -422,6 +429,7 @@ async def create_invoice(
             sale_unit_id=line_sale_unit_id,
             unit_code_snapshot=line_unit_code,
             unit_factor=line_unit_factor,
+            goods_movement_id=line_input.get("goods_movement_id"),
         ))
 
     subtotal_total = round(subtotal_total, 2)
@@ -557,7 +565,7 @@ async def create_invoice(
     # SAF-T XSD requires the space: "{DocType} {series_code}/{number}".
     invoice_reference = f"{doc_code} {series}/{next_number}"
     try:
-        for line_input in (lines_input if rules.deducts_stock else []):
+        for line_input in (lines_input if rules.deducts_stock and deduct_stock else []):
             # Services have no physical inventory - never deduct stock for them (either a
             # true Service line, or a legacy Product row typed as SERVICO).
             if line_input.get("service_id"):
@@ -574,6 +582,9 @@ async def create_invoice(
         await db.rollback()
         raise StockUnavailableError(str(e))
 
+    if not commit:
+        await db.flush()
+        return invoice
     await db.commit()
     await db.refresh(invoice)
 

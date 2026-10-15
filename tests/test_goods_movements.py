@@ -179,3 +179,74 @@ async def test_a_blocked_customer_receives_no_guide(db, company_with_essentials)
         await create_goods_movement(db, company_id, user_id, "GR", origin, [{"product_id": flour, "quantity": 1}],
                                     customer_id=customer)
     assert await _qty(db, flour, origin) == 100.0
+
+
+@pytest.mark.asyncio
+async def test_guias_de_remessa_of_a_customer_are_invoiced_in_one_fatura(db, company_with_essentials):
+    """Point 1, part 2: the GR of a customer invoiced together - one FT with their lines at the guide's price, each
+    naming its GR in the SAF-T; the stock is not taken out again; the GR become FATURADA (SAF-T F) and can neither be
+    invoiced again nor cancelled."""
+    from pathlib import Path
+
+    from lxml import etree
+
+    from app.models.invoice_line import InvoiceLine
+    from app.services.goods_movement_service import invoice_goods_movements
+    from app.services.saf_t_export_service import export_saf_t_for_period
+    ctx = company_with_essentials
+    company_id, user_id, flour, sack, customer, _, origin, _ = await _setup(db, ctx)
+    first = (await create_goods_movement(db, company_id, user_id, "GR", origin,
+                                         [{"product_id": flour, "sale_unit_id": sack, "quantity": 2}], customer_id=customer)).id
+    second = (await create_goods_movement(db, company_id, user_id, "GR", origin,
+                                          [{"product_id": flour, "quantity": 5, "unit_price": 1400}], customer_id=customer)).id
+    other_customer = Customer(company_id=company_id, name="Hotel Talatona", nif="5000777888", legal_person_type=LegalPersonType.JURIDICA,
+                              address="Talatona")
+    db.add(other_customer)
+    await db.commit()
+    third = (await create_goods_movement(db, company_id, user_id, "GR", origin, [{"product_id": flour, "quantity": 1}],
+                                         customer_id=other_customer.id)).id
+    assert await _qty(db, flour, origin) == 54.0  # 40 + 5 + 1 KG out with the guides
+
+    with pytest.raises(GoodsMovementError, match="mesmo cliente"):
+        await invoice_goods_movements(db, company_id, [first, third], ctx["activity"].id)
+
+    invoice = await invoice_goods_movements(db, company_id, [second, first], ctx["activity"].id)
+    invoice_id = invoice.id
+    assert invoice.invoice_type.value == "FACTURA" and invoice.customer_id == customer
+    assert invoice.document_reference.startswith("Guias: GR ") and invoice.document_reference.endswith("/2")
+    lines = (await db.execute(select(InvoiceLine).where(InvoiceLine.invoice_id == invoice_id)
+                              .order_by(InvoiceLine.created_at, InvoiceLine.id))).scalars().all()
+    assert sorted((float(l.quantity), float(l.unit_price), l.unit_code_snapshot) for l in lines) == [
+        (2.0, 28000.0, "SCG"), (5.0, 1400.0, "KGG")]  # each line at its guide's price, in its unit
+    assert {l.goods_movement_id for l in lines} == {first, second}
+    assert float(invoice.subtotal) == 63000.0 and float(invoice.vat_total) == 8820.0
+    assert await _qty(db, flour, origin) == 54.0  # the invoice did not take the goods out again
+
+    assert (await get_goods_movement(db, company_id, first))["invoice_reference"].startswith("FT ")
+    with pytest.raises(GoodsMovementError, match="já faturada"):
+        await invoice_goods_movements(db, company_id, [first], ctx["activity"].id)
+    with pytest.raises(GoodsMovementError, match="já foi faturada"):
+        await cancel_goods_movement(db, company_id, first, user_id, "Erro")
+
+    today = datetime.now().date()
+    root = etree.fromstring(await export_saf_t_for_period(db, company_id, today.year, today.month))
+    etree.XMLSchema(etree.parse(str(Path(__file__).parent / "data" / "SAFTAO1.01_01.xsd"))).assertValid(root)
+    ns = {"s": "urn:OECD:StandardAuditFile-Tax:AO_1.01_01"}
+    statuses = {m.findtext("s:DocumentNumber", namespaces=ns): m.findtext("s:DocumentStatus/s:MovementStatus", namespaces=ns)
+                for m in root.findall("s:SourceDocuments/s:MovementOfGoods/s:StockMovement", ns)}
+    assert sorted(statuses.values()) == ["F", "F", "N"]
+    ft = next(i for i in root.findall("s:SourceDocuments/s:SalesInvoices/s:Invoice", ns)
+              if i.findtext("s:InvoiceType", namespaces=ns) == "FT")
+    origins = [l.findtext("s:OrderReferences/s:OriginatingON", namespaces=ns) for l in ft.findall("s:Line", ns)]
+    assert sorted(origins) == sorted(n for n, st in statuses.items() if st == "F")
+
+
+@pytest.mark.asyncio
+async def test_a_raw_material_is_not_sent_to_a_customer(db, company_with_essentials):
+    company_id, user_id, flour, _, customer, _, origin, _ = await _setup(db, company_with_essentials)
+    product = (await db.execute(select(Product).where(Product.id == flour))).scalar_one()
+    product.is_raw_material = True
+    await db.commit()
+    with pytest.raises(GoodsMovementError, match="matéria-prima"):
+        await create_goods_movement(db, company_id, user_id, "GR", origin, [{"product_id": flour, "quantity": 1}],
+                                    customer_id=customer)

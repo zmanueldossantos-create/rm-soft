@@ -280,6 +280,7 @@ async def export_saf_t_for_period(db: AsyncSession, company_id: uuid.UUID, year:
                     "retention_type": l.retention_type,
                     "retention_name": l.retention_name_snapshot,
                     "retention_amount": float(l.retention_amount) if l.retention_amount is not None else None,
+                    "goods_movement_id": l.goods_movement_id,
                 }
                 for l in lines
             ],
@@ -323,6 +324,17 @@ async def export_saf_t_for_period(db: AsyncSession, company_id: uuid.UUID, year:
         _origin = _origin_by_doc.get((_doc.get("series"), _doc.get("number")))
         if _origin:
             _doc["order_reference"], _doc["order_date"] = _origin
+    # A line invoiced from a guia de remessa names its GR (OrderReferences: GR GR2026/2 and its date)
+    from app.models.goods_movement import GoodsMovement
+    guide_ids = {l["goods_movement_id"] for d in invoices_data for l in d["lines"] if l.get("goods_movement_id")}
+    guides = {g.id: g for g in (await db.execute(select(GoodsMovement).where(GoodsMovement.id.in_(guide_ids)))).scalars().all()} \
+        if guide_ids else {}
+    for _doc in invoices_data:
+        for _line in _doc["lines"]:
+            guide = guides.get(_line.pop("goods_movement_id", None))
+            if guide is not None:
+                _line["order_reference"] = f"{guide.movement_type} {guide.series}/{guide.number}"
+                _line["order_date"] = guide.movement_date
     suppliers_data, purchases_data = (await _purchases_for_saft(db, company_id, year, month, source_codes)) \
         if include_purchases else ([], None)
     # The guides of the month; the suppliers of their returns join the MasterFiles (once)

@@ -34,6 +34,9 @@ class InvoiceLine(Base):
     unit_code_snapshot: Mapped[str | None] = mapped_column(String(10), nullable=True)
     unit_factor: Mapped[float] = mapped_column(Numeric(14, 4), nullable=False, default=1, server_default="1")
     unit_price: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    # A line invoiced from a guia de remessa: the GR it comes from (SAF-T OrderReferences) - its goods already left
+    # the stock with the guide.
+    goods_movement_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("goods_movements.id"), nullable=True, index=True)
     discount_percent: Mapped[float] = mapped_column(Numeric(5, 2), nullable=False, default=0)
     vat_rate_snapshot: Mapped[float] = mapped_column(Numeric(5, 2), nullable=False)  # % at time of sale
     # SAF-T / AGT tax code of the line (NOR, RED, INT, ISE, OUT): the category of the VAT rate, copied when the
