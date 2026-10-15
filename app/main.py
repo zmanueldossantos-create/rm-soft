@@ -30,6 +30,7 @@ from app.api.v1.hotel.routes import router as hotel_router
 from app.api.v1.internal_consumption.routes import router as internal_consumption_router
 from app.api.v1.suppliers.routes import router as suppliers_router
 from app.api.v1.purchases.routes import router as purchases_router
+from app.api.v1.guias.routes import router as guias_router
 from app.api.v1.vat_return.routes import router as vat_return_router
 from app.api.v1.permissions.routes import router as permissions_router
 from app.api.v1.pos.routes import router as pos_router
@@ -119,6 +120,7 @@ app.include_router(hotel_router)
 app.include_router(internal_consumption_router)
 app.include_router(suppliers_router)
 app.include_router(purchases_router)
+app.include_router(guias_router)
 app.include_router(vat_return_router)
 app.include_router(permissions_router)
 app.include_router(pos_router)
