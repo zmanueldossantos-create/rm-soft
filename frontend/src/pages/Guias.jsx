@@ -38,6 +38,9 @@ function nowLocal() {  // value of a datetime-local input: now, in the browser's
 }
 
 const when = (v) => (v ? new Date(v).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Luanda' }) : '-');
+// A customer in one of these states receives no guide (the server refuses it too)
+const BLOCKED_CUSTOMER = ['BLOQUEADO', 'ELIMINADO', 'INACTIVO', 'SUSPENSO'];
+
 const emptyLine = () => ({ productId: '', saleUnitId: '', quantity: '1', unitPrice: '' });
 
 export default function Guias() {
@@ -74,7 +77,7 @@ export default function Guias() {
   }
   useEffect(() => { load(); }, [filters]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    listCustomers().then((d) => setCustomers(d.filter((c) => c.status !== 'INATIVO' && c.is_active !== false))).catch(() => {});
+    listCustomers().then((d) => setCustomers(d.filter((c) => c.is_active !== false && !BLOCKED_CUSTOMER.includes(c.status)))).catch(() => {});
     listSuppliers().then((d) => setSuppliers(d.filter((s) => s.is_active))).catch(() => {});
     listProducts().then((d) => setProducts(d.filter((p) => p.is_active && p.managed_by_stock !== false))).catch(() => {});
     listWarehouses().then((d) => setWarehouses(d.filter((w) => w.is_active))).catch(() => {});
@@ -92,7 +95,7 @@ export default function Guias() {
   function openForm() {
     const central = warehouses[0];
     setForm({ type: 'GR', originId: central?.id || '', customerId: '', destinationId: '', supplierId: '', purchaseInvoiceId: '',
-      startTime: nowLocal(), vehicle: '', loadAddress: central?.address || central?.name || '', unloadAddress: '', notes: '', lines: [emptyLine()] });
+      startTime: nowLocal(), startTimeEdited: false, vehicle: '', loadAddress: central?.address || central?.name || '', unloadAddress: '', notes: '', lines: [emptyLine()] });
     setFormError('');
   }
 
@@ -126,7 +129,8 @@ export default function Guias() {
     setFormError('');
     try {
       const created = await createGuia({
-        movement_type: form.type, origin_warehouse_id: form.originId, start_time: new Date(form.startTime).toISOString(),
+        movement_type: form.type, origin_warehouse_id: form.originId, // not changed: the server starts the transport at the moment of issue (the form may stay open for a while)
+        start_time: form.startTimeEdited ? new Date(form.startTime).toISOString() : null,
         customer_id: form.type === 'GR' ? form.customerId : null, destination_warehouse_id: form.type === 'GT' ? form.destinationId : null,
         supplier_id: form.type === 'GD' ? form.supplierId : null, purchase_invoice_id: form.type === 'GD' && form.purchaseInvoiceId ? form.purchaseInvoiceId : null,
         load_address: form.loadAddress || null, unload_address: form.unloadAddress, vehicle_plate: form.vehicle || null, notes: form.notes || null,
@@ -294,7 +298,8 @@ export default function Guias() {
               )}
               <div>
                 <label className={labelCls}>Início do transporte *</label>
-                <input type="datetime-local" value={form.startTime} min={nowLocal()} onChange={(e) => set({ startTime: e.target.value })} className={inputCls} />
+                <input type="datetime-local" value={form.startTime} onChange={(e) => set({ startTime: e.target.value, startTimeEdited: true })} className={inputCls} />
+                {!form.startTimeEdited && <p className="text-[11px] text-text-muted mt-1">Se não alterar, conta a hora da emissão da guia</p>}
               </div>
               <div>
                 <label className={labelCls}>Viatura (matrícula)</label>
@@ -385,7 +390,7 @@ export default function Guias() {
               <div><p className={labelCls}>{detail.movement_type === 'GR' ? 'Cliente' : detail.movement_type === 'GT' ? 'Armazém de descarga' : 'Fornecedor'}</p>
                 <p className="text-text-primary">{detail.party}</p>{detail.party_nif && <p className="font-mono text-[11px] text-text-muted">{detail.party_nif}</p>}
                 {detail.purchase_invoice && <p className="text-[11px] text-text-muted">Fatura {detail.purchase_invoice}</p>}</div>
-              <div><p className={labelCls}>Carga</p><p className="text-text-primary">{detail.origin_warehouse}</p><p className="text-[11px] text-text-muted">{detail.load_address}</p></div>
+              <div><p className={labelCls}>Carga</p><p className="text-text-primary">{detail.origin_warehouse}</p>{detail.load_address !== detail.origin_warehouse && <p className="text-[11px] text-text-muted">{detail.load_address}</p>}</div>
               <div><p className={labelCls}>Descarga</p><p className="text-text-primary">{detail.unload_address}</p></div>
               <div><p className={labelCls}>Início do transporte</p><p className="text-text-primary">{when(detail.start_time)}</p><p className="font-mono text-[11px] text-text-muted">{detail.vehicle_plate || 'sem viatura'}</p></div>
             </div>

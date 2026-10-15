@@ -31,7 +31,9 @@ def generate_guia_pdf(data: dict, company: dict) -> bytes:
         party += f"  ·  NIF {data['party_nif']}"
     details = [
         (PARTY_LABEL[data["movement_type"]], party),
-        ("Carga", f"{data['origin_warehouse'] or ''} - {data['load_address']}".strip(" -")),
+        # the warehouse, then its address when it has one (the address is the warehouse's name otherwise)
+        ("Carga", data["origin_warehouse"] if data["load_address"] in (None, "", data["origin_warehouse"])
+         else f"{data['origin_warehouse'] or ''} - {data['load_address']}".strip(" -")),
         ("Descarga", data["unload_address"]),
         ("Transporte", _when(data["start_time"])),
         ("Viatura", data["vehicle_plate"] or "-"),

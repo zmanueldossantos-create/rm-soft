@@ -18,7 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.company import Company
-from app.models.customer import Customer
+from app.models.customer import Customer, CustomerStatus
 from app.models.document_type import DocumentType
 from app.models.fiscal_period import FiscalPeriod
 from app.models.fiscal_year import FiscalYear
@@ -37,6 +37,8 @@ from app.services.product_sale_unit_service import SaleUnitInvalidError, resolve
 from app.services.stock_service import InsufficientStockError, _get_or_create_stock_row, _stock_rule, ensure_available_at_period_end
 
 MOVEMENT_TYPES = {"GR": "Guia de Remessa", "GT": "Guia de Transporte", "GD": "Guia de Devolução"}
+# A customer in one of these states receives no goods
+BLOCKED_CUSTOMER = {CustomerStatus.BLOQUEADO, CustomerStatus.ELIMINADO, CustomerStatus.INACTIVO, CustomerStatus.SUSPENSO}
 
 
 class GoodsMovementError(Exception):
@@ -172,6 +174,8 @@ async def create_goods_movement(
             Customer.id == customer_id, Customer.company_id == company_id))).scalar_one_or_none() if customer_id else None
         if customer is None:
             raise GoodsMovementError("Escolha o cliente da guia de remessa")
+        if not customer.is_active or customer.status in BLOCKED_CUSTOMER:
+            raise GoodsMovementError(f"O cliente {customer.name} está {customer.status.value.lower()} - não pode receber mercadoria")
         default_unload = customer.address
     elif movement_type == "GT":
         destination = await _warehouse(db, company_id, destination_warehouse_id, "descarga")

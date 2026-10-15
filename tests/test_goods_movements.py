@@ -122,3 +122,60 @@ async def test_a_guide_prints(db, company_with_essentials):
                                         [{"product_id": flour, "sale_unit_id": sack, "quantity": 2}], customer_id=customer)
     data = await get_goods_movement(db, company_id, guide.id)
     assert generate_guia_pdf(data, _company_dict(company_with_essentials["company"])).startswith(b"%PDF")
+
+
+@pytest.mark.asyncio
+async def test_the_guides_go_into_the_saft_movement_of_goods(db, company_with_essentials):
+    """Point 1, part 2: the guides of the month in SourceDocuments.MovementOfGoods - a GT received by the company itself,
+    a GD by its supplier (in MasterFiles even without the purchases), a cancelled guide declared A and left out of the
+    control totals. The file is valid against the SAF-T AO schema."""
+    from pathlib import Path
+
+    from lxml import etree
+
+    from app.services.saf_t_export_service import export_saf_t_for_period
+    company_id, user_id, flour, sack, customer, supplier, origin, shop = await _setup(db, company_with_essentials)
+    await create_goods_movement(db, company_id, user_id, "GR", origin,
+                                [{"product_id": flour, "sale_unit_id": sack, "quantity": 2}], customer_id=customer,
+                                notes="Entregar na receção")
+    transport = await create_goods_movement(db, company_id, user_id, "GT", origin, [{"product_id": flour, "quantity": 30}],
+                                            destination_warehouse_id=shop)
+    await create_goods_movement(db, company_id, user_id, "GD", origin, [{"product_id": flour, "quantity": 10}],
+                                supplier_id=supplier)
+    await cancel_goods_movement(db, company_id, transport.id, user_id, "Viatura avariada")
+    today = datetime.now().date()
+    root = etree.fromstring(await export_saf_t_for_period(db, company_id, today.year, today.month))
+    etree.XMLSchema(etree.parse(str(Path(__file__).parent / "data" / "SAFTAO1.01_01.xsd"))).assertValid(root)
+
+    ns = {"s": "urn:OECD:StandardAuditFile-Tax:AO_1.01_01"}
+    goods = root.find("s:SourceDocuments/s:MovementOfGoods", ns)
+    assert goods.findtext("s:NumberOfMovementLines", namespaces=ns) == "2"  # the cancelled GT is not counted
+    assert goods.findtext("s:TotalQuantityIssued", namespaces=ns) == "12.000"  # 2 SC + 10 KG, as entered
+    docs = {d.findtext("s:MovementType", namespaces=ns): d for d in goods.findall("s:StockMovement", ns)}
+    assert docs["GR"].findtext("s:DocumentStatus/s:MovementStatus", namespaces=ns) == "N"
+    assert docs["GR"].findtext("s:MovementComments", namespaces=ns) == "Entregar na receção"
+    assert docs["GR"].findtext("s:ShipTo/s:Address/s:AddressDetail", namespaces=ns) == "Rua 1, Kilamba"
+    assert docs["GR"].findtext("s:Line/s:Tax/s:TaxCode", namespaces=ns) == "NOR"
+    assert docs["GT"].findtext("s:DocumentStatus/s:MovementStatus", namespaces=ns) == "A"
+    assert docs["GT"].findtext("s:DocumentStatus/s:Reason", namespaces=ns) == "Viatura avariada"
+    assert (docs["GT"].findtext("s:Line/s:Tax/s:TaxType", namespaces=ns), docs["GT"].findtext("s:Line/s:Tax/s:TaxCode", namespaces=ns)) == ("NS", "NS")
+    own = docs["GT"].findtext("s:CustomerID", namespaces=ns)
+    company_nif = company_with_essentials["company"].nif
+    assert [c.findtext("s:CustomerTaxID", namespaces=ns) for c in root.findall("s:MasterFiles/s:Customer", ns)
+            if c.findtext("s:CustomerID", namespaces=ns) == own] == [company_nif]
+    supplier_id = docs["GD"].findtext("s:SupplierID", namespaces=ns)
+    assert [s.findtext("s:SupplierTaxID", namespaces=ns) for s in root.findall("s:MasterFiles/s:Supplier", ns)
+            if s.findtext("s:SupplierID", namespaces=ns) == supplier_id] == ["5000444555"]
+
+
+@pytest.mark.asyncio
+async def test_a_blocked_customer_receives_no_guide(db, company_with_essentials):
+    from app.models.customer import CustomerStatus
+    company_id, user_id, flour, _, customer, _, origin, _ = await _setup(db, company_with_essentials)
+    row = (await db.execute(select(Customer).where(Customer.id == customer))).scalar_one()
+    row.status = CustomerStatus.BLOQUEADO
+    await db.commit()
+    with pytest.raises(GoodsMovementError, match="bloqueado"):
+        await create_goods_movement(db, company_id, user_id, "GR", origin, [{"product_id": flour, "quantity": 1}],
+                                    customer_id=customer)
+    assert await _qty(db, flour, origin) == 100.0

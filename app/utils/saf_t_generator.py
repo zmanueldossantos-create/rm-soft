@@ -29,6 +29,7 @@ NS = "urn:OECD:StandardAuditFile-Tax:AO_1.01_01"
 
 FINAL_CONSUMER_ID = "0"
 FINAL_CONSUMER_TAX_ID = "999999999"
+OWN_COMPANY_ID = "EMPRESA"  # the company itself, receiver of its GT (goods between its own warehouses)
 
 # XSD PaymentMechanism (the codes of the platform payment-method catalog); anything else is reported as "OU".
 PAYMENT_MECHANISMS = {"CC", "CD", "CH", "CI", "CO", "CS", "DE", "MB", "NU", "OU", "PR", "TB"}
@@ -113,6 +114,89 @@ def _write_lines(parent_el, inv: dict, saft_type: str) -> None:
         _el(line_el, "SettlementAmount", _money(line.get("settlement", 0)))  # its own discount + its share of the global one
 
 
+def _ship_point(parent_el, tag: str, address: str) -> None:
+    """ShipFrom / ShipTo: the place where the goods are loaded / unloaded (XSD ShippingPointStructure > Address)."""
+    point = _el(parent_el, tag)
+    address_el = _el(point, "Address")
+    _el(address_el, "AddressDetail", (address or "Desconhecido")[:250])
+    _el(address_el, "City", "Desconhecido")
+    _el(address_el, "Country", "AO")
+
+
+def _write_movements(source_documents, movements: list[dict], customer_short_id: dict, supplier_short_id: dict,
+                     own_company_id: str | None, walk_in_id: str) -> None:
+    """
+    SourceDocuments.MovementOfGoods: the guides (GR, GT, GD) in their numbering order. A cancelled guide is declared
+    (MovementStatus A, with its reason) but left out of the control totals - NumberOfMovementLines and
+    TotalQuantityIssued count the lines of the others. A GR invoiced is declared F.
+
+    movements: [{"movement_type", "series", "number", "status" (N/F/A), "status_date", "reason", "source_id", "hash",
+    "movement_date", "system_entry_date", "start_time", "customer_id" | "supplier_id" | "own_company": True,
+    "comments", "load_address", "unload_address", "net_total", "vat_total", "gross_total",
+    "lines": [{"product_code", "description", "quantity", "unit_code", "unit_price", "line_net", "tax_code",
+    "vat_rate", "exemption_code", "exemption_reason"}]}]
+    """
+    movements = sorted(movements, key=lambda m: (m["movement_type"], str(m["series"]), int(m["number"])))
+    counted = [m for m in movements if m["status"] != "A"]
+    goods_el = _el(source_documents, "MovementOfGoods")
+    _el(goods_el, "NumberOfMovementLines", sum(len(m["lines"]) for m in counted))
+    _el(goods_el, "TotalQuantityIssued", f"{sum(Decimal(str(l['quantity'])) for m in counted for l in m['lines']):.3f}")
+    for m in movements:
+        stamp = lambda moment: moment.strftime("%Y-%m-%dT%H:%M:%S")  # noqa: E731 - local times, like the invoices
+        movement_el = _el(goods_el, "StockMovement")
+        _el(movement_el, "DocumentNumber", f"{m['movement_type']} {m['series']}/{m['number']}")
+        status = _el(movement_el, "DocumentStatus")
+        _el(status, "MovementStatus", m["status"])
+        _el(status, "MovementStatusDate", stamp(m["status_date"]))
+        if m["status"] == "A" and m.get("reason"):
+            _el(status, "Reason", m["reason"][:50])
+        _el(status, "SourceID", m["source_id"])
+        _el(status, "SourceBilling", "P")
+        _el(movement_el, "Hash", m["hash"])
+        _el(movement_el, "HashControl", "0")
+        _el(movement_el, "Period", m["movement_date"].month)
+        _el(movement_el, "MovementDate", m["movement_date"].isoformat())
+        _el(movement_el, "MovementType", m["movement_type"])
+        _el(movement_el, "SystemEntryDate", stamp(m["system_entry_date"]))
+        if m.get("supplier_id"):
+            _el(movement_el, "SupplierID", supplier_short_id[m["supplier_id"]])
+        elif m.get("own_company"):
+            _el(movement_el, "CustomerID", own_company_id)
+        else:
+            _el(movement_el, "CustomerID", customer_short_id.get(m.get("customer_id"), walk_in_id))
+        _el(movement_el, "SourceID", m["source_id"])
+        if m.get("comments"):
+            _el(movement_el, "MovementComments", m["comments"][:60])
+        _ship_point(movement_el, "ShipTo", m["unload_address"])
+        _ship_point(movement_el, "ShipFrom", m["load_address"])
+        _el(movement_el, "MovementStartTime", stamp(m["start_time"]))
+        for idx, line in enumerate(m["lines"], start=1):
+            line_el = _el(movement_el, "Line")
+            _el(line_el, "LineNumber", idx)
+            _el(line_el, "ProductCode", line["product_code"])
+            _el(line_el, "ProductDescription", line["description"][:200])
+            _el(line_el, "Quantity", f"{Decimal(str(line['quantity'])):.3f}")
+            _el(line_el, "UnitOfMeasure", (line.get("unit_code") or "UN")[:20])
+            _el(line_el, "UnitPrice", _money(line["unit_price"]))
+            _el(line_el, "Description", line["description"][:200])
+            _el(line_el, "CreditAmount", _money(line["line_net"]))  # goods leaving the company's warehouse
+            tax = _el(line_el, "Tax")
+            not_subject = line["tax_code"] == "NS"  # goods carried or returned at cost: not subject to VAT
+            _el(tax, "TaxType", "NS" if not_subject else "IVA")
+            _el(tax, "TaxCountryRegion", "AO")
+            _el(tax, "TaxCode", line["tax_code"])
+            _el(tax, "TaxPercentage", _money(line["vat_rate"]))
+            if line["tax_code"] == "ISE":
+                if not line.get("exemption_code") or not line.get("exemption_reason"):
+                    raise ValueError(f"Linha isenta sem motivo de isenção: {line.get('product_code')}")
+                _el(line_el, "TaxExemptionReason", line["exemption_reason"])
+                _el(line_el, "TaxExemptionCode", line["exemption_code"])
+        totals = _el(movement_el, "DocumentTotals")
+        _el(totals, "TaxPayable", _money(m["vat_total"]))
+        _el(totals, "NetTotal", _money(m["net_total"]))
+        _el(totals, "GrossTotal", _money(m["gross_total"]))
+
+
 def _write_withholding(parent_el, entries) -> None:
     """Writes WithholdingTax elements: entries = [(WithholdingTaxType, description, amount)]."""
     for tax_type, description, amount in entries:
@@ -135,6 +219,7 @@ def generate_saf_t_xml(
     end_date: date,
     suppliers: list[dict] | None = None,
     purchases: list[dict] | None = None,
+    movements: list[dict] | None = None,
 ) -> bytes:
     """
     Builds the complete AuditFile XML for one fiscal period (typically one
@@ -149,6 +234,7 @@ def generate_saf_t_xml(
                     "unit_price": float, "vat_rate": float, "tax_code": str, "line_subtotal": float,
                     "line_vat": float, "line_total": float}],
     }
+    movements: the guides of the period (MovementOfGoods) - see _write_movements.
     """
     # Only documents that map to a SAF-T InvoiceType belong in SalesInvoices. A pro-forma is a working document
     # (WorkingDocuments, WorkType PP - as in the AGT-validated Kiami exports); a receipt is a payment (Payments,
@@ -255,6 +341,34 @@ def generate_saf_t_xml(
         _el(generic, "Email", "Desconhecido")
         _el(generic, "SelfBillingIndicator", "0")
 
+    # A GT carries the company's goods between its own warehouses: its receiver is the company itself (XSD: a
+    # StockMovement names a CustomerID or a SupplierID) - its own customer record when it has one, else this entry.
+    movements = movements or []
+    own_company_id = None
+    if any(m.get("own_company") for m in movements):
+        own = next((c for c in customers if c["nif"] == company["nif"]), None)
+        if own is not None:
+            own_company_id = customer_short_id[own["id"]]
+        else:
+            own_company_id = OWN_COMPANY_ID
+            own_el = _el(master_files, "Customer")
+            _el(own_el, "CustomerID", OWN_COMPANY_ID)
+            _el(own_el, "AccountID", "Desconhecido")
+            _el(own_el, "CustomerTaxID", company["nif"])
+            _el(own_el, "CompanyName", company["name"])
+            _el(own_el, "Contact", "Desconhecido")
+            billing = _el(own_el, "BillingAddress")
+            _el(billing, "BuildingNumber", "S/N")
+            _el(billing, "StreetName", "Desconhecido")
+            _el(billing, "AddressDetail", company.get("address") or "Desconhecido")
+            _el(billing, "City", "Desconhecido")
+            _el(billing, "PostalCode", "0000")
+            _el(billing, "Province", "Desconhecido")
+            _el(billing, "Country", "AO")
+            _el(own_el, "Telephone", company.get("phone_number") or "Desconhecido")
+            _el(own_el, "Email", company.get("email") or "Desconhecido")
+            _el(own_el, "SelfBillingIndicator", "0")
+
     # Suppliers of the exported purchases (XSD: after the customers, before the products), with short sequential IDs
     supplier_short_id = {s["id"]: f"F{idx + 1}" for idx, s in enumerate(suppliers or [])}
     for sup in suppliers or []:
@@ -353,6 +467,11 @@ def generate_saf_t_xml(
             if entry["name"]:
                 _el(withholding, "WithholdingTaxDescription", entry["name"][:60])
             _el(withholding, "WithholdingTaxAmount", _money(entry["amount"]))
+
+    # ---------- SourceDocuments.MovementOfGoods (guides) ----------
+    if movements:
+        walk_in_id = customer_short_id[own_final_consumer["id"]] if own_final_consumer else FINAL_CONSUMER_ID
+        _write_movements(source_documents, movements, customer_short_id, supplier_short_id, own_company_id, walk_in_id)
 
     # ---------- SourceDocuments.WorkingDocuments (pro-formas) ----------
     # Structure and element order follow the XSD and the AGT-validated Kiami exports: WorkType PP, WorkStatus

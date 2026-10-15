@@ -138,6 +138,56 @@ async def _purchases_for_saft(db: AsyncSession, company_id: uuid.UUID, year: int
     return suppliers, purchases
 
 
+async def _movements_for_saft(db: AsyncSession, company_id: uuid.UUID, start_date: date, end_date: date,
+                              source_codes: dict) -> tuple[list, list]:
+    """
+    The guides issued in the month (MovementOfGoods) - the cancelled ones too, declared as such - and the suppliers of
+    the GD (returns), which the MasterFiles must hold even when the purchases are not exported.
+    """
+    from app.models.country import Country
+    from app.models.goods_movement import GoodsMovement, GoodsMovementLine, GoodsMovementStatus
+    from app.models.supplier import Supplier
+    movements = (await db.execute(select(GoodsMovement).where(
+        GoodsMovement.company_id == company_id, GoodsMovement.movement_date >= start_date,
+        GoodsMovement.movement_date <= end_date))).scalars().all()
+    if not movements:
+        return [], []
+    lines = (await db.execute(select(GoodsMovementLine).where(
+        GoodsMovementLine.goods_movement_id.in_([m.id for m in movements]))
+        .order_by(GoodsMovementLine.position))).scalars().all()
+    invoiced_at = dict((await db.execute(select(Invoice.id, Invoice.created_at).where(
+        Invoice.id.in_([m.invoice_id for m in movements if m.invoice_id])))).all()) if any(m.invoice_id for m in movements) else {}
+    supplier_rows = (await db.execute(
+        select(Supplier, Country.code).outerjoin(Country, Country.id == Supplier.country_id)
+        .where(Supplier.id.in_({m.supplier_id for m in movements if m.supplier_id})).order_by(Supplier.name, Supplier.id)
+    )).all()
+    suppliers = [{"id": sup.id, "name": sup.name, "nif": sup.nif, "address": sup.address, "phone_number": sup.phone_number,
+                  "email": sup.email, "country": (country or "AO").upper()} for sup, country in supplier_rows]
+    status_code = {GoodsMovementStatus.EMITIDA: "N", GoodsMovementStatus.FATURADA: "F", GoodsMovementStatus.ANULADA: "A"}
+    data = []
+    for m in movements:
+        # the date of the current state: issued, invoiced (the invoice's issue) or cancelled
+        status_date = m.cancelled_at if m.status == GoodsMovementStatus.ANULADA else \
+            invoiced_at.get(m.invoice_id, m.created_at) if m.status == GoodsMovementStatus.FATURADA else m.created_at
+        data.append({
+            "movement_type": m.movement_type, "series": m.series, "number": m.number, "status": status_code[m.status],
+            "status_date": _local(status_date or m.created_at), "reason": m.cancel_reason,
+            "source_id": (source_codes.get(m.created_by_user_id) or "RMSOFT")[:30], "hash": m.document_hash,
+            "movement_date": m.movement_date, "system_entry_date": _local(m.created_at), "start_time": _local(m.start_time),
+            "customer_id": str(m.customer_id) if m.customer_id else None, "supplier_id": m.supplier_id,
+            "own_company": m.movement_type == "GT", "comments": m.notes, "load_address": m.load_address,
+            "unload_address": m.unload_address, "net_total": float(m.net_total), "vat_total": float(m.vat_total),
+            "gross_total": float(m.gross_total),
+            "lines": [{
+                "product_code": l.product_code, "description": l.description, "quantity": float(l.quantity),
+                "unit_code": l.unit_code, "unit_price": float(l.unit_price), "line_net": float(l.line_net),
+                "tax_code": l.tax_code, "vat_rate": float(l.vat_rate), "exemption_code": l.exemption_code,
+                "exemption_reason": l.exemption_reason,
+            } for l in lines if l.goods_movement_id == m.id],
+        })
+    return suppliers, data
+
+
 async def export_saf_t_for_period(db: AsyncSession, company_id: uuid.UUID, year: int, month: int,
                                   include_purchases: bool = False) -> bytes:
     """
@@ -275,6 +325,10 @@ async def export_saf_t_for_period(db: AsyncSession, company_id: uuid.UUID, year:
             _doc["order_reference"], _doc["order_date"] = _origin
     suppliers_data, purchases_data = (await _purchases_for_saft(db, company_id, year, month, source_codes)) \
         if include_purchases else ([], None)
+    # The guides of the month; the suppliers of their returns join the MasterFiles (once)
+    movement_suppliers, movements_data = await _movements_for_saft(db, company_id, start_date, end_date, source_codes)
+    known_suppliers = {sup["id"] for sup in suppliers_data}
+    suppliers_data = suppliers_data + [sup for sup in movement_suppliers if sup["id"] not in known_suppliers]
     return generate_saf_t_xml(
         company=company_dict,
         platform_settings=platform_dict,
@@ -287,4 +341,5 @@ async def export_saf_t_for_period(db: AsyncSession, company_id: uuid.UUID, year:
         end_date=end_date,
         suppliers=suppliers_data,
         purchases=purchases_data,
+        movements=movements_data,
     )
