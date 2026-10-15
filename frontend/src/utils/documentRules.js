@@ -3,7 +3,7 @@ import { documentRulesApi } from '../api/catalogs';
 
 // Stored invoice type -> catalog code (the same mapping the server uses)
 export const DOC_CODE_BY_TYPE = {
-  FACTURA: 'FT', FACTURA_RECIBO: 'FR', NOTA_CREDITO: 'NC', NOTA_DEBITO: 'ND', RECIBO: 'RC', PRO_FORMA: 'FP',
+  FACTURA: 'FT', FACTURA_RECIBO: 'FR', NOTA_CREDITO: 'NC', NOTA_DEBITO: 'ND', RECIBO: 'RC', PRO_FORMA: 'FP', ORCAMENTO: 'OR',
 };
 
 // Default behaviour when the catalog is not readable by the user (the server enforces the rules anyway)

@@ -105,6 +105,7 @@ class InvoiceResponse(BaseModel):
     credit_note_reason: str | None
     credit_note_cause: str | None
     due_date: date | None
+    valid_until: date | None = None  # an orçamento
     payment_term_id: uuid.UUID | None
     payment_method_id: uuid.UUID | None
     bank_account_id: uuid.UUID | None
@@ -234,6 +235,11 @@ class ProFormaCreateRequest(BaseModel):
         if not v:
             raise ValueError("A pro-forma deve ter pelo menos uma linha")
         return v
+
+
+class OrcamentoCreateRequest(ProFormaCreateRequest):
+    customer_id: uuid.UUID  # a quote is addressed to someone
+    valid_until: date | None = None  # empty: 30 days
 
 
 class ConvertProFormaRequest(BaseModel):

@@ -234,6 +234,8 @@ async def company_with_essentials(db):
     existing_fp = (await db.execute(select(DocumentType).where(DocumentType.code == "FP"))).scalar_one_or_none()
     if existing_fp is None:
         db.add(DocumentType(code="FP", name="Fatura Pro-forma", area="FACTURACAO", electronic_eligible=False, is_fiscal=False, **DOCUMENT_TYPE_RULES["FP"]))
+    if (await db.execute(select(DocumentType).where(DocumentType.code == "OR"))).scalar_one_or_none() is None:
+        db.add(DocumentType(code="OR", name="Orçamento", area="FACTURACAO", electronic_eligible=False, is_fiscal=False, **DOCUMENT_TYPE_RULES["OR"]))
 
     await db.commit()
     await db.refresh(company)

@@ -28,7 +28,7 @@ from app.services.invoice_service import (
     CashPointRequiredError, RefundNotAllowedError, attach_amount_due, get_credit_note_info, list_open_cash_points,
 )
 from datetime import date
-from app.schemas.invoice import InvoiceCreateRequest, InvoiceResponse, InvoiceDetailResponse, CreditNoteCreateRequest, DebitNoteCreateRequest, ReceiptCreateRequest, ProFormaCreateRequest, ConvertProFormaRequest, line_inputs
+from app.schemas.invoice import InvoiceCreateRequest, InvoiceResponse, InvoiceDetailResponse, CreditNoteCreateRequest, DebitNoteCreateRequest, ReceiptCreateRequest, ProFormaCreateRequest, OrcamentoCreateRequest, ConvertProFormaRequest, line_inputs
 from app.utils.pdf_generator import generate_invoice_pdf_thermal, generate_invoice_pdf_a4
 from app.services.cash_session_service import get_open_session_for_user
 from app.services.invoice_service import (
@@ -57,6 +57,7 @@ from app.services.invoice_service import (
     convert_pro_forma_to_invoice,
     ProFormaNotFoundError,
     ProFormaAlreadyConvertedError,
+    QuoteExpiredError,
     PaymentAmountMismatchError,
 )
 
@@ -280,6 +281,40 @@ async def create_new_pro_forma(
     return pro_forma
 
 
+@router.post("/orcamento", response_model=InvoiceResponse, status_code=status.HTTP_201_CREATED)
+async def create_new_orcamento(
+    payload: OrcamentoCreateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("invoices:quote")),
+):
+    """Creates an Orçamento (OR) - a quote to a customer, valid until a date; non-fiscal, never submitted to AGT."""
+    await ensure_issuable(db, "ORCAMENTO", "invoices")
+    try:
+        quote = await create_pro_forma(
+            db,
+            company_id=current_user.company_id,
+            activity_id=payload.activity_id,
+            customer_id=payload.customer_id,
+            lines_input=line_inputs(payload.lines),
+            document_reference=payload.document_reference,
+            observations=payload.observations,
+            discount_global_percent=payload.discount_global_percent,
+            invoice_type="ORCAMENTO",
+            valid_until=payload.valid_until,
+        )
+    except ActivityNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (EmptyInvoiceError, ProductNotFoundError) as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    except CustomerNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except DocumentTypeNotConfiguredError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    except SeriesNotConfiguredError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    return quote
+
+
 @router.post("/pro-forma/{item_id}/convert", response_model=InvoiceResponse, status_code=status.HTTP_201_CREATED)
 async def convert_pro_forma(
     item_id: uuid.UUID,
@@ -301,7 +336,9 @@ async def convert_pro_forma(
         )
     except ProFormaNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except ProFormaAlreadyConvertedError as e:
+    except (ProFormaAlreadyConvertedError, QuoteExpiredError) as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except StockUnavailableError as e:  # the invoice takes the goods out: not enough in the activity's warehouse
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except PeriodClosedError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
@@ -453,7 +490,7 @@ async def download_invoice_pdf(
 
     INVOICE_TYPE_CODE = {
         "FACTURA": "FT", "FACTURA_RECIBO": "FR", "NOTA_CREDITO": "NC",
-        "NOTA_DEBITO": "ND", "RECIBO": "RC", "PRO_FORMA": "FP",
+        "NOTA_DEBITO": "ND", "RECIBO": "RC", "PRO_FORMA": "FP", "ORCAMENTO": "OR",
     }
 
     # The referenced original invoice - RC/NC/ND all point back to one via reference_invoice_id.
@@ -496,6 +533,7 @@ async def download_invoice_pdf(
         "number": invoice.number,
         "business_date": str(invoice.business_date),
         "due_date": str(invoice.due_date) if invoice.due_date else None,
+        "valid_until": invoice.valid_until,  # an orçamento
         "payment_date": str(invoice.payment_date) if invoice.payment_date else None,
         "subtotal": float(invoice.subtotal),
         "vat_total": float(invoice.vat_total),

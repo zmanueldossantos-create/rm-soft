@@ -14,6 +14,7 @@ from app.models.document_type import DocumentType
 # The only place that maps the two.
 DOC_CODE_BY_INVOICE_TYPE = {
     "FACTURA": "FT", "FACTURA_RECIBO": "FR", "NOTA_CREDITO": "NC", "NOTA_DEBITO": "ND", "RECIBO": "RC", "PRO_FORMA": "FP",
+    "ORCAMENTO": "OR",
 }
 
 

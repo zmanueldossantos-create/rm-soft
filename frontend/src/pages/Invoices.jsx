@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { API_BASE_URL } from '../api/config';
-import { useNavigate } from 'react-router-dom';
 import { useCan } from '../utils/permissions';
 import { useAuthStore } from '../store/authStore';
 import { createPortal } from 'react-dom';
@@ -34,7 +33,15 @@ const INVOICE_TYPE_CODE = {
   NOTA_DEBITO: 'ND',
   RECIBO: 'RC',
   PRO_FORMA: 'FP',
+  ORCAMENTO: 'OR',
 };
+
+// a working document (pro-forma, orçamento): not fiscal, never sent to the AGT
+const WORKING_TYPES = ['PRO_FORMA', 'ORCAMENTO'];
+const todayIsoDate = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Africa/Luanda' });
+// an orçamento past its validity date and not converted: no longer converted into an invoice
+const isExpired = (inv) => !!inv.valid_until && !inv.converted_to_invoice_id && inv.valid_until < todayIsoDate();
+const ptDate = (iso) => (iso ? iso.split('-').reverse().join('/') : '-');
 
 const PDF_BASE_URL = API_BASE_URL + '/invoices';
 
@@ -112,7 +119,6 @@ export default function Invoices() {
   // load must know the REAL answer before deciding whether to call listProducts (Servicos has no products:view).
   const permissionsList = useAuthStore((state) => state.permissions);
   const canViewProducts = Array.isArray(permissionsList) ? permissionsList.includes('products:view') : true;
-  const navigate = useNavigate();
   const [invoices, setInvoices] = useState([]);
   const [products, setProducts] = useState([]);
   const [customers, setCustomers] = useState([]);
@@ -131,7 +137,7 @@ export default function Invoices() {
     // A user who cannot read the catalog keeps the default behaviour; the server enforces the rules anyway.
     documentRulesApi.list().then(setDocumentTypes).catch(() => {});
   }, []);
-  const DOC_CODES = { FACTURA: 'FT', FACTURA_RECIBO: 'FR', PRO_FORMA: 'FP' };
+  const DOC_CODES = { FACTURA: 'FT', FACTURA_RECIBO: 'FR', PRO_FORMA: 'FP', ORCAMENTO: 'OR' };
   // "convertible" rule of the catalog (a pro-forma by default) and the invoices a conversion can produce
   const isConvertible = (type) => {
     const d = documentTypes && documentTypes.find((x) => x.code === DOC_CODES[type]);
@@ -269,13 +275,15 @@ export default function Invoices() {
     setConvertFormError('');
     setConvertSaving(true);
     try {
-      await convertProForma(detailInvoice.id, {
+      const created = await convertProForma(detailInvoice.id, {
         target_invoice_type: convertTargetType,
       });
       setConvertModalOpen(false);
-      navigate('/invoices');
+      // the list shows the new invoice and its origin as invoiced; the detail opens on the invoice just issued
+      loadData();
+      await openDetailModal(created.id);
     } catch (err) {
-      setConvertFormError(extractErrorMessage(err, 'Erro ao converter pro-forma'));
+      setConvertFormError(extractErrorMessage(err, 'Erro ao converter o documento'));
     } finally {
       setConvertSaving(false);
     }
@@ -439,7 +447,8 @@ export default function Invoices() {
         return sum + round2(beforeDiscount * (pct / 100));
       }, 0));
     }
-    const debitoList = filteredInvoices.filter((inv) => inv.invoice_type !== 'NOTA_CREDITO');
+    // a pro-forma or an orçamento is not a sale: out of the totals
+    const debitoList = filteredInvoices.filter((inv) => inv.invoice_type !== 'NOTA_CREDITO' && !WORKING_TYPES.includes(inv.invoice_type));
     const creditoList = filteredInvoices.filter((inv) => inv.invoice_type === 'NOTA_CREDITO');
     const build = (list) => ({
       totalDoc: sumFor(list, 'total'),
@@ -593,12 +602,16 @@ export default function Invoices() {
                       <td className="px-4 py-3 text-text-muted whitespace-nowrap">{customer?.fiscal_name || customer?.name || '-'}</td>
                       <td className="px-4 py-3 font-mono text-text-muted whitespace-nowrap">{customer?.nif || '999999999'}</td>
                       <td className="px-4 py-3 font-mono text-text-muted whitespace-nowrap">{inv.business_date}</td>
-                      <td className="px-4 py-3 font-mono text-text-muted whitespace-nowrap">{inv.due_date || '-'}</td>
+                      <td className={'px-4 py-3 font-mono whitespace-nowrap ' + (isExpired(inv) ? 'text-danger' : 'text-text-muted')} title={inv.valid_until ? 'Válido até' : undefined}>{inv.due_date || inv.valid_until || '-'}</td>
                       <td className="px-4 py-3 whitespace-nowrap">
-                        {inv.invoice_type === 'PRO_FORMA' ? (
-                          <span className="text-[11px] font-semibold uppercase tracking-wide px-2.5 py-1 rounded bg-text-muted/10 text-text-muted">
-                            Não Fiscal
-                          </span>
+                        {WORKING_TYPES.includes(inv.invoice_type) ? (
+                          isExpired(inv) ? (
+                            <span className="text-[11px] font-semibold uppercase tracking-wide px-2.5 py-1 rounded bg-danger/10 text-danger">Expirado</span>
+                          ) : (
+                            <span className="text-[11px] font-semibold uppercase tracking-wide px-2.5 py-1 rounded bg-text-muted/10 text-text-muted">
+                              {inv.converted_to_invoice_id ? 'Faturado' : 'Não Fiscal'}
+                            </span>
+                          )
                         ) : (
                           <div className="flex items-center gap-2">
                             <span className={'text-[11px] font-semibold uppercase tracking-wide px-2.5 py-1 rounded ' + (STATUS_STYLE[inv.status] || '')}>
@@ -652,7 +665,7 @@ export default function Invoices() {
                               ...(ruleOf(inv.invoice_type, 'accepts_debit_note') ? [{ perm: 'invoices:debit_note', label: 'Emitir Nota de Débito', icon: <FilePlus size={14} />, onClick: () => openNdModalFromRow(inv.id) }] : []),
                               ...(ruleOf(inv.invoice_type, 'accepts_receipt') && Number(inv.amount_due || 0) > 0.005 ? [{ perm: 'invoices:receipt', label: 'Emitir Recibo', icon: <Receipt size={14} />, onClick: () => openRcModalFromRow(inv.id) }] : []),
                             ] : []),
-                            ...(isConvertible(inv.invoice_type) && !inv.converted_to_invoice_id ? [
+                            ...(isConvertible(inv.invoice_type) && !inv.converted_to_invoice_id && !isExpired(inv) ? [
                               { perm: 'invoices:proforma_convert', label: 'Converter em Fatura', icon: <FileText size={14} />, onClick: () => openConvertModalFromRow(inv.id) },
                             ] : []),
                           ].filter((item) => !item.perm || can(item.perm))} />
@@ -764,6 +777,11 @@ export default function Invoices() {
                   {INVOICE_TYPE_CODE[detailInvoice.invoice_type] || detailInvoice.invoice_type} {detailInvoice.series}/{detailInvoice.number}
                 </p>
                 <p className="text-text-muted text-sm font-mono">{detailInvoice.business_date}</p>
+                {detailInvoice.valid_until && (
+                  <p className={'text-[12px] mt-0.5 ' + (isExpired(detailInvoice) ? 'text-danger' : 'text-text-muted')}>
+                    Válido até {ptDate(detailInvoice.valid_until)}{isExpired(detailInvoice) ? ' - expirado: emita um novo orçamento para faturar' : ''}
+                  </p>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 <span className={'text-[11px] font-semibold uppercase tracking-wide px-2.5 py-1 rounded ' + (STATUS_STYLE[detailInvoice.status] || '')}>
@@ -894,7 +912,7 @@ export default function Invoices() {
                   <Receipt size={14} /> Emitir Recibo
                 </button>
               )}
-              {isConvertible(detailInvoice.invoice_type) && !detailInvoice.converted_to_invoice_id && (
+              {isConvertible(detailInvoice.invoice_type) && !detailInvoice.converted_to_invoice_id && !isExpired(detailInvoice) && (
                 <button
                   type="button"
                   onClick={openConvertModal}
@@ -911,11 +929,11 @@ export default function Invoices() {
 
       <DocumentActionModals ref={rcActionsRef} onSuccess={handleReceiptIssued} />
 
-      <Modal open={convertModalOpen} onClose={() => setConvertModalOpen(false)} title="Converter Pro-forma" maxWidthClass="max-w-md">
+      <Modal open={convertModalOpen} onClose={() => setConvertModalOpen(false)} title={detailInvoice?.invoice_type === 'ORCAMENTO' ? 'Converter Orçamento' : 'Converter Pro-forma'} maxWidthClass="max-w-md">
         {detailInvoice && (
           <form onSubmit={handleConvertSubmit} className="flex flex-col gap-4">
             <p className="text-[12px] text-text-muted">
-              A converter <span className="font-mono text-text-primary">FP {detailInvoice.series}/{detailInvoice.number}</span> numa fatura real - o stock sera deduzido e o documento sera submetido a AGT.
+              A converter <span className="font-mono text-text-primary">{INVOICE_TYPE_CODE[detailInvoice.invoice_type]} {detailInvoice.series}/{detailInvoice.number}</span> numa fatura real, aos preços do documento - o stock será deduzido e o documento será submetido à AGT.
             </p>
             <div>
               <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Converter para</label>

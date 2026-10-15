@@ -37,6 +37,7 @@ DOCUMENT_TYPE_LABELS = {
     "ND": "Nota de Débito",
     "RC": "Recibo",
     "FP": "Factura Pro-forma",
+    "OR": "Orçamento",
 }
 
 BANNER_LIGHT = HexColor("#E3E3E3")
@@ -55,6 +56,7 @@ DOCUMENT_TYPE_LABELS_SENTENCE = {
     "ND": "Nota de débito",
     "RC": "Recibo",
     "FP": "Factura pro-forma",
+    "OR": "Orçamento",
 }
 
 
@@ -84,7 +86,15 @@ CREDIT_NOTE_REASON_LABELS = {"ANL": "Anulação", "RTF": "Retificação"}
 def _reference_texts(invoice: dict) -> list[str]:
     """What a correcting document (Nota de Crédito, Nota de Débito) prints about the document it corrects: the origin
     document with its date, and for a credit note its reason and cause - 'Documento de origem: FR FR2026/1 de
-    11/10/2026', 'Motivo: Anulação - Cliente desistiu'. Another document prints only the guias it invoices."""
+    11/10/2026', 'Motivo: Anulação - Cliente desistiu'. A pro-forma or an orçamento: its validity and that it is not an
+    invoice. Another document prints only the guias it invoices."""
+    if invoice.get("invoice_type") in ("FP", "OR"):
+        # a working document: not an invoice; an orçamento, until when its prices hold
+        texts = []
+        if invoice.get("valid_until"):
+            texts.append(f"Válido até: {_date_pt(invoice['valid_until'])}")
+        texts.append("Este documento não serve de fatura")
+        return texts
     if invoice.get("invoice_type") not in ("NC", "ND"):
         # an invoice of guias de remessa names them (Guia: GR GR2026/2) - the goods it charges travelled with them
         origin = invoice.get("document_reference") or ""

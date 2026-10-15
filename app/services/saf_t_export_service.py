@@ -314,12 +314,14 @@ async def export_saf_t_for_period(db: AsyncSession, company_id: uuid.UUID, year:
     # An invoice issued from a pro-forma names it (OrderReferences): the pro-forma keeps the link (converted_to_invoice_id).
     from sqlalchemy.orm import aliased as _aliased
     _fp, _ft = _aliased(Invoice), _aliased(Invoice)
+    from app.utils.saf_t_generator import WORK_TYPE_MAP
     _origins = (await db.execute(
-        select(_fp.series, _fp.number, _fp.business_date, _ft.series, _ft.number)
+        select(_fp.invoice_type, _fp.series, _fp.number, _fp.business_date, _ft.series, _ft.number)
         .join(_ft, _ft.id == _fp.converted_to_invoice_id)
         .where(_fp.company_id == company_id)
     )).all()
-    _origin_by_doc = {(fs, fn): (f"{INVOICE_TYPE_MAP.get('PRO_FORMA', 'PP')} {ps}/{pn}", pd) for ps, pn, pd, fs, fn in _origins}
+    # the origin in its own SAF-T numbering: PP FP2026/3 (a pro-forma), OR OR2026/1 (an orçamento)
+    _origin_by_doc = {(fs, fn): (f"{WORK_TYPE_MAP.get(pt.value, 'PP')} {ps}/{pn}", pd) for pt, ps, pn, pd, fs, fn in _origins}
     for _doc in invoices_data:
         _origin = _origin_by_doc.get((_doc.get("series"), _doc.get("number")))
         if _origin:

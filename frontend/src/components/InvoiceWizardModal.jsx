@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Plus, Trash2, Loader2, Copy, Eye, ArrowLeft, ArrowRight, Check, FileText } from 'lucide-react';
 import Select from './Select';
 import Modal from './Modal';
-import { createInvoice, createProForma, getInvoiceDetail, createCreditNote, createDebitNote, getCreditNoteInfo, getOpenCashPoints } from '../api/invoices';
+import { createInvoice, createProForma, createOrcamento, getInvoiceDetail, createCreditNote, createDebitNote, getCreditNoteInfo, getOpenCashPoints } from '../api/invoices';
 import { listProducts } from '../api/products';
 import { listServices } from '../api/services';
 import { listActivities } from '../api/activity';
@@ -21,8 +21,10 @@ import { isPessoaColetiva } from '../utils/customerType';
 
 const inputClass = "w-full bg-bg-inset border border-border rounded-md px-2.5 py-2 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors";
 
-const INVOICE_TYPE_CODE = { FACTURA: 'FT', FACTURA_RECIBO: 'FR', PRO_FORMA: 'FP', NOTA_CREDITO: 'NC', NOTA_DEBITO: 'ND', RECIBO: 'RC' };
-const INVOICE_TYPE_LABEL = { FACTURA: 'Factura', FACTURA_RECIBO: 'Factura/Recibo', PRO_FORMA: 'Factura Pro-forma' };
+const INVOICE_TYPE_CODE = { FACTURA: 'FT', FACTURA_RECIBO: 'FR', PRO_FORMA: 'FP', ORCAMENTO: 'OR', NOTA_CREDITO: 'NC', NOTA_DEBITO: 'ND', RECIBO: 'RC' };
+const INVOICE_TYPE_LABEL = { FACTURA: 'Factura', FACTURA_RECIBO: 'Factura/Recibo', PRO_FORMA: 'Factura Pro-forma', ORCAMENTO: 'Orçamento' };
+const QUOTE_VALIDITY_DAYS = 30;
+const WORKING_TYPES = ['PRO_FORMA', 'ORCAMENTO'];  // not a sale: no payment, no due date  // an orçamento's validity proposed by default (the server applies the same)
 
 const PT_ONES = ['', 'um', 'dois', 'tres', 'quatro', 'cinco', 'seis', 'sete', 'oito', 'nove', 'dez', 'onze', 'doze', 'treze', 'catorze', 'quinze', 'dezasseis', 'dezassete', 'dezoito', 'dezanove'];
 const PT_TENS = ['', '', 'vinte', 'trinta', 'quarenta', 'cinquenta', 'sessenta', 'setenta', 'oitenta', 'noventa'];
@@ -101,6 +103,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
   const [paymentDate, setPaymentDate] = useState(todayStr());
   const [documentReference, setDocumentReference] = useState('');
   const [observations, setObservations] = useState('');
+  const [validUntil, setValidUntil] = useState('');  // an orçamento: until when its prices hold
   const [discountGlobalPercent, setDiscountGlobalPercent] = useState('0');
   const [lines, setLines] = useState([{ ...emptyLine }]);
 
@@ -154,6 +157,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
     setPaymentDate(todayStr());
     setDocumentReference('');
     setObservations('');
+    setValidUntil('');
     setDiscountGlobalPercent('0');
     setLines([{ ...emptyLine, item_type: canViewProducts ? 'product' : 'service' }]);
     setFormError('');
@@ -444,6 +448,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
   }
 
   const requiresPaymentTerm = !!documentTypes.find((d) => d.code === INVOICE_TYPE_CODE[invoiceType])?.requires_payment_term;
+  const isWorkingDoc = WORKING_TYPES.includes(invoiceType);
   const requiresCustomer = !!documentTypes.find((d) => d.code === INVOICE_TYPE_CODE[invoiceType])?.requires_customer;
   const isFormValid = activityId && invoiceType && businessDate && lines.length > 0 &&
     (!requiresPaymentTerm || paymentTermId) &&
@@ -545,7 +550,17 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
         discount_percent: parseFloat(l.discount_percent) || 0,
       }));
 
-      if (invoiceType === 'PRO_FORMA') {
+      if (invoiceType === 'ORCAMENTO') {
+        await createOrcamento({
+          activity_id: activityId,
+          customer_id: customerId,
+          valid_until: validUntil || null,
+          observations: observations || null,
+          document_reference: documentReference || null,
+          discount_global_percent: parseFloat(discountGlobalPercent) || 0,
+          lines: commonLines,
+        });
+      } else if (invoiceType === 'PRO_FORMA') {
         await createProForma({
           activity_id: activityId,
           customer_id: customerId || null,
@@ -608,7 +623,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
   // Create mode: the products panel is its own tab (3); payment (4) shows a totals strip, review (5) the lines. NC / ND keep both.
   const showLeft = isSingleScreen || step !== 3;
   const showSidePanel = isSingleScreen || step === 3;
-  const submitLabel = mode === 'nc' ? 'Emitir Nota de Crédito' : mode === 'nd' ? 'Emitir Nota de Débito' : (invoiceType === 'PRO_FORMA' ? 'Gerar pro-forma' : 'Criar factura');
+  const submitLabel = mode === 'nc' ? 'Emitir Nota de Crédito' : mode === 'nd' ? 'Emitir Nota de Débito' : (invoiceType === 'PRO_FORMA' ? 'Gerar pro-forma' : invoiceType === 'ORCAMENTO' ? 'Gerar orçamento' : 'Criar factura');
   const isSubmitDisabled = mode === 'nc' ? (saving || !ncCause || !ncReason) : mode === 'nd' ? (saving || lines.every((l) => !getLineItem(l) || parseFloat(l.quantity) <= 0) || lines.some((l) => getLineItem(l) && computeLine(l).quantityError)) : (saving || !isFormValid);
 
   const footer = (
@@ -813,10 +828,10 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                       <Select value={activityId} onChange={setActivityId} options={activities.map((a) => ({ value: a.id, label: a.name }))} placeholder="Selecionar" />
                     </div>
                     <div>
-                      <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Cliente</label>
-                      <Select value={customerId} onChange={handleCustomerChange} options={[{ value: '', label: 'Sem cliente (venda ao balcão)' }, ...customers.map((c) => ({ value: c.id, label: c.name + ' - ' + c.nif }))]} placeholder="Selecionar cliente" />
+                      <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Cliente{requiresCustomer ? ' *' : ''}</label>
+                      <Select value={customerId} onChange={handleCustomerChange} options={[...(requiresCustomer ? [] : [{ value: '', label: 'Sem cliente (venda ao balcão)' }]), ...customers.map((c) => ({ value: c.id, label: c.name + ' - ' + c.nif }))]} placeholder="Selecionar cliente" />
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className={'grid gap-4 ' + (invoiceType === 'ORCAMENTO' ? 'grid-cols-3' : 'grid-cols-2')}>
                       <div>
                         <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Data do documento *</label>
                         <DateInput value={businessDate} max={maxBusinessDate || undefined} onChange={(e) => handleBusinessDateChange(e.target.value)} required className={inputClass} />
@@ -825,6 +840,13 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                         <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Documento (No)</label>
                         <input value={documentPreview ? documentPreview.label : 'Serie não configurada'} disabled className={inputClass + ' opacity-60 cursor-not-allowed'} />
                       </div>
+                      {invoiceType === 'ORCAMENTO' && (
+                        <div>
+                          <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Válido até *</label>
+                          <DateInput value={validUntil || addDays(businessDate || todayStr(), QUOTE_VALIDITY_DAYS)} min={businessDate || undefined}
+                            onChange={(e) => setValidUntil(e.target.value)} required className={inputClass} />
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -837,6 +859,12 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                   <div><p className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Retenção</p><p className="font-mono text-[13px] text-text-primary">{formatMoney(totals.totalRetencao)}</p></div>
                   <div><p className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">A pagar</p><p className="font-mono text-[13px] text-accent font-medium">{formatMoney(totals.valorAPagar)}</p></div>
                 </div>
+                    {isWorkingDoc && (
+                      <p className="text-[12px] text-text-muted">
+                        {INVOICE_TYPE_LABEL[invoiceType]} não é uma venda: sem pagamento. A condição e o meio de pagamento escolhem-se na fatura feita a partir dele.
+                      </p>
+                    )}
+                    {!isWorkingDoc && (<>
                     <div className="grid grid-cols-2 gap-4">
                       <div className={lockCls(paidOnIssue)}>
                         <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Condição de pagamento{requiresPaymentTerm && !paidOnIssue ? ' *' : ''}</label>
@@ -867,6 +895,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                         <Select value={bankAccountId} onChange={setBankAccountId} options={bankAccounts.map((b) => ({ value: b.id, label: (bankById[b.bank_id]?.acronym || '?') + ' - ' + b.account_number }))} placeholder="Selecionar" />
                       </div>
                     </div>
+                    </>)}
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Referência</label>
@@ -877,6 +906,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                         <input type="number" step="0.01" min="0" max="100" value={discountGlobalPercent} onChange={(e) => setDiscountGlobalPercent(e.target.value)} className={inputClass} />
                       </div>
                     </div>
+                    {!isWorkingDoc && (
                     <div className={lockCls(!collectsCash)}>
                       <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Caixa de entrada{collectsCash ? ' *' : ''}</label>
                       {collectsCash && cashPoints.length === 0 ? (
@@ -885,6 +915,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                         <Select value={collectsCash ? cashPosId : ''} onChange={setCashPosId} options={cashPoints.map((cp) => ({ value: cp.pos_id, label: cp.name }))} placeholder={collectsCash ? 'Selecionar' : 'Sem recebimento em numerário'} />
                       )}
                     </div>
+                    )}
                   </div>
                 )}
 
@@ -901,7 +932,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                         <div className="min-w-0"><p className="text-[10.5px] uppercase tracking-wide text-text-muted">Atividade</p><p className="text-text-primary truncate">{activities.find((a) => a.id === activityId)?.name || '-'}</p></div>
                         <div className="min-w-0"><p className="text-[10.5px] uppercase tracking-wide text-text-muted">Cliente</p><p className="text-text-primary truncate">{selectedCustomer?.name || 'Sem cliente'}</p></div>
                         <div className="min-w-0"><p className="text-[10.5px] uppercase tracking-wide text-text-muted">Data</p><p className="text-text-primary truncate">{businessDate}</p></div>
-                        <div className="min-w-0"><p className="text-[10.5px] uppercase tracking-wide text-text-muted">Vencimento</p><p className="text-text-primary truncate">{dueDate || '-'}</p></div>
+                        <div className="min-w-0"><p className="text-[10.5px] uppercase tracking-wide text-text-muted">{invoiceType === 'ORCAMENTO' ? 'Válido até' : 'Vencimento'}</p><p className="text-text-primary truncate">{invoiceType === 'ORCAMENTO' ? (validUntil || addDays(businessDate || todayStr(), QUOTE_VALIDITY_DAYS)) : (dueDate || '-')}</p></div>
                         <div className="min-w-0"><p className="text-[10.5px] uppercase tracking-wide text-text-muted">Pagamento</p><p className="text-text-primary truncate">{paymentMethods.find((m) => m.id === paymentMethodId)?.name || '-'}</p></div>
                       </div>
                     </div>
@@ -1235,8 +1266,8 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
             )}
           </div>
 
-          {invoiceType === 'PRO_FORMA' && (
-            <p className="text-[10px] italic text-gray-500 mt-3">Este documento não serve como factura</p>
+          {(invoiceType === 'PRO_FORMA' || invoiceType === 'ORCAMENTO') && (
+            <p className="text-[10px] italic text-gray-500 mt-3">Este documento não serve de fatura</p>
           )}
 
           <p className="text-[11px] italic mt-4 text-center text-gray-500">O número definitivo do documento e atribuido ao guardar.</p>

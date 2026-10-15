@@ -24,7 +24,7 @@ class SessionNotClosedError(Exception):
 
 DOCUMENT_LABELS = {
     "FACTURA": "Factura", "FACTURA_RECIBO": "Factura/Recibo", "NOTA_CREDITO": "Nota de crédito",
-    "NOTA_DEBITO": "Nota de débito", "RECIBO": "Recibo", "PRO_FORMA": "Factura pro-forma",
+    "NOTA_DEBITO": "Nota de débito", "RECIBO": "Recibo", "PRO_FORMA": "Factura pro-forma", "ORCAMENTO": "Orçamento",
 }
 
 

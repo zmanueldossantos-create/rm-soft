@@ -26,7 +26,7 @@ business_date defaults to today, no Payment rows are created.
 """
 import hashlib
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from sqlalchemy import select, func, extract, or_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -63,6 +63,7 @@ INVOICE_TYPE_TO_DOC_CODE = {
     "NOTA_CREDITO": "NC",
     "NOTA_DEBITO": "ND",
 }
+QUOTE_VALIDITY_DAYS = 30  # an orçamento is valid 30 days unless another date is given
 
 
 class DocumentTypeNotConfiguredError(Exception):
@@ -246,10 +247,13 @@ async def create_invoice(
     enforce_document_rules: bool = False,
     deduct_stock: bool = True,
     commit: bool = True,
+    keep_line_prices: bool = False,
 ) -> Invoice:
     """
-    deduct_stock=False: the goods already left the stock (an invoice of guias de remessa) - the lines may then carry
-    their own unit_price (the guide's) and goods_movement_id. commit=False: the caller commits (and submits to the AGT).
+    deduct_stock=False: the goods already left the stock (an invoice of guias de remessa) - the lines then carry
+    their goods_movement_id. keep_line_prices (and deduct_stock=False): a line's own unit_price is charged - the price
+    of the guide, pro-forma or orçamento the invoice comes from - instead of the article's current one.
+    commit=False: the caller commits (and submits to the AGT).
 
     Creates an invoice with its lines, under the given Activity (which
     determines the invoice series and number padding).
@@ -383,8 +387,6 @@ async def create_invoice(
             )
             if line_unit_code is None:  # sold in its base unit
                 line_unit_code = await _base_unit_code(db, product)
-            if not deduct_stock and line_input.get("unit_price") is not None:  # the price the guide carried
-                unit_price = float(line_input["unit_price"])
             line_input["_unit_factor"] = line_unit_factor  # stock moves quantity x factor (base units)
             item_name = product.name
             line_product_id = product.id
@@ -394,6 +396,8 @@ async def create_invoice(
             line_retention_type = None
             line_exemption_code, line_exemption_reason = await _exemption_for(db, product, tax_code)
 
+        if (keep_line_prices or not deduct_stock) and line_input.get("unit_price") is not None:
+            unit_price = float(line_input["unit_price"])  # the price of the document the invoice comes from
         discount_percent = float(line_input.get("discount_percent", 0) or 0)
         gross_subtotal = round(quantity * unit_price, 2)
         line_discount = round(gross_subtotal * (discount_percent / 100), 2)
@@ -1594,8 +1598,13 @@ async def create_pro_forma(
     document_reference: str | None = None,
     observations: str | None = None,
     discount_global_percent: float = 0,
+    invoice_type: str = "PRO_FORMA",
+    valid_until: date | None = None,
 ) -> Invoice:
     """
+    invoice_type ORCAMENTO: an Orçamento (OR) - the same working document, addressed to a customer (mandatory) and
+    valid until a date (30 days when not given), after which it is no longer converted into an invoice.
+
     Creates a Fatura Pro-forma (FP) - a non-fiscal quote/preview document. Unlike FT/FR/NC/ND/RC:
     - Never submitted to AGT (no submit_invoice_to_agt.delay call)
     - Does not deduct stock (no real sale has happened yet)
@@ -1615,8 +1624,18 @@ async def create_pro_forma(
     if activity is None:
         raise ActivityNotFoundError("Atividade não encontrada ou inativa")
 
+    is_quote = invoice_type == "ORCAMENTO"
+    label = "o orçamento" if is_quote else "a pro-forma"
     if not lines_input:
-        raise EmptyInvoiceError("A pro-forma deve ter pelo menos uma linha")
+        raise EmptyInvoiceError(f"{label[0].upper() + label[1:]} deve ter pelo menos uma linha")
+    if is_quote:
+        if customer_id is None:
+            raise EmptyInvoiceError("Indique o cliente do orçamento")
+        valid_until = valid_until or business_date + timedelta(days=QUOTE_VALIDITY_DAYS)
+        if valid_until < business_date:
+            raise EmptyInvoiceError("A validade do orçamento não pode ser anterior à data do documento")
+    else:
+        valid_until = None
 
     customer = None
     if customer_id is not None:
@@ -1627,10 +1646,11 @@ async def create_pro_forma(
         if customer is None:
             raise CustomerNotFoundError("Cliente não encontrado")
 
-    doc_type_result = await db.execute(select(DocumentType).where(DocumentType.code == "FP"))
+    doc_code = "OR" if is_quote else "FP"
+    doc_type_result = await db.execute(select(DocumentType).where(DocumentType.code == doc_code))
     doc_type = doc_type_result.scalar_one_or_none()
     if doc_type is None:
-        raise DocumentTypeNotConfiguredError("Tipo de documento 'FP' não existe no catálogo da plataforma")
+        raise DocumentTypeNotConfiguredError(f"Tipo de documento '{doc_code}' não existe no catálogo da plataforma")
 
     try:
         series_row = await get_or_create_current_series(db, company, doc_type.id)
@@ -1638,7 +1658,7 @@ async def create_pro_forma(
         raise SeriesNotConfiguredError(str(e))
 
     if not series_row.is_active:
-        raise SeriesNotConfiguredError(f"A serie {series_row.series_code} para FP esta inativa")
+        raise SeriesNotConfiguredError(f"A serie {series_row.series_code} para {doc_code} esta inativa")
 
     subtotal_total = 0.0
     vat_total = 0.0
@@ -1761,8 +1781,9 @@ async def create_pro_forma(
         company_id=company_id,
         activity_id=activity_id,
         customer_id=customer_id,
-        invoice_type=InvoiceType.PRO_FORMA,
+        invoice_type=InvoiceType(invoice_type),
         document_type_id=doc_type.id,
+        valid_until=valid_until,
         series=series_row.series_code,
         number=next_number,
         business_date=business_date,
@@ -1793,6 +1814,10 @@ async def create_pro_forma(
     # Deliberately NOT calling submit_invoice_to_agt.delay() here - FP is non-fiscal.
 
     return pro_forma
+
+
+class QuoteExpiredError(Exception):
+    """An orçamento past its validity: it is no longer converted into an invoice (a new one is issued)."""
 
 
 class ProFormaNotFoundError(Exception):
@@ -1845,8 +1870,13 @@ async def convert_pro_forma_to_invoice(
     if target_rules.saft_section != "INVOICES" or target_rules.requires_origin:
         raise ReferenceInvoiceTypeNotEligibleError("O tipo de documento de destino não é válido para uma conversão")
 
+    from app.services.document_rules import DOC_CODE_BY_INVOICE_TYPE
+    source_code = DOC_CODE_BY_INVOICE_TYPE.get(pro_forma.invoice_type.value, "FP")
     if pro_forma.converted_to_invoice_id is not None:
-        raise ProFormaAlreadyConvertedError("Esta pro-forma já foi convertida numa fatura")
+        raise ProFormaAlreadyConvertedError(f"Este documento ({source_code} {pro_forma.series}/{pro_forma.number}) já foi convertido numa fatura")
+    if pro_forma.valid_until is not None and pro_forma.valid_until < date.today():
+        raise QuoteExpiredError(f"O orçamento {source_code} {pro_forma.series}/{pro_forma.number} expirou em "
+                                f"{pro_forma.valid_until.strftime('%d/%m/%Y')} - emita um novo orçamento")
 
     lines_result = await db.execute(select(InvoiceLine).where(InvoiceLine.invoice_id == pro_forma.id))
     pf_lines = lines_result.scalars().all()
@@ -1857,6 +1887,7 @@ async def convert_pro_forma_to_invoice(
             "service_id": line.service_id,
             "quantity": float(line.quantity),
             "discount_percent": float(line.discount_percent or 0),
+            "unit_price": float(line.unit_price),  # the price announced to the customer
         }
         for line in pf_lines
     ]
@@ -1875,9 +1906,10 @@ async def convert_pro_forma_to_invoice(
         due_date=due_date,
         observations=pro_forma.observations,
         discount_global_percent=float(pro_forma.discount_global_percent or 0),
-        document_reference=f"FP {pro_forma.series}/{pro_forma.number}",
+        document_reference=f"{source_code} {pro_forma.series}/{pro_forma.number}",
         cash_session_id=cash_session_id,
         payments=payments,
+        keep_line_prices=True,
     )
 
     pro_forma.converted_to_invoice_id = new_invoice.id

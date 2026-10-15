@@ -56,7 +56,7 @@ async def get_daily_report(
         )
         .order_by(Payment.created_at)
     )
-    invoice_type_labels = {"FACTURA": "FT", "FACTURA_RECIBO": "FR", "PRO_FORMA": "PF", "NOTA_CREDITO": "NC", "NOTA_DEBITO": "ND", "RECIBO": "RC"}
+    invoice_type_labels = {"FACTURA": "FT", "FACTURA_RECIBO": "FR", "PRO_FORMA": "PF", "ORCAMENTO": "OR", "NOTA_CREDITO": "NC", "NOTA_DEBITO": "ND", "RECIBO": "RC"}
     for payment, inv, method_name, method_is_cash in payments_result.all():
         type_value = inv.invoice_type.value if hasattr(inv.invoice_type, "value") else str(inv.invoice_type)
         label = invoice_type_labels.get(type_value, type_value)

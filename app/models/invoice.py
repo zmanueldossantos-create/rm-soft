@@ -28,6 +28,7 @@ class InvoiceType(str, enum.Enum):
     NOTA_DEBITO = "NOTA_DEBITO"
     RECIBO = "RECIBO"
     PRO_FORMA = "PRO_FORMA"
+    ORCAMENTO = "ORCAMENTO"  # a quote with a validity date - a working document like the pro-forma
 
 
 class InvoiceStatus(str, enum.Enum):
@@ -104,6 +105,7 @@ class Invoice(Base):
     payment_method_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("payment_method_catalog.id"), nullable=True)
     bank_account_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("company_bank_accounts.id"), nullable=True)
     due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    valid_until: Mapped[date | None] = mapped_column(Date, nullable=True)  # an orçamento: converted up to this day
     amount_received: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
     payment_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     observations: Mapped[str | None] = mapped_column(String(500), nullable=True)

@@ -71,6 +71,12 @@ export async function createReceipt(payload) {
   return res.data;
 }
 
+// An orçamento: a quote to a customer, valid until a date (empty: 30 days)
+export async function createOrcamento(payload) {
+  const res = await apiClient.post('/invoices/orcamento', payload);
+  return res.data;
+}
+
 export async function createProForma(payload) {
   const res = await apiClient.post('/invoices/pro-forma', payload);
   return res.data;

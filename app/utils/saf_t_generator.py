@@ -38,8 +38,11 @@ PAYMENT_MECHANISMS = {"CC", "CD", "CH", "CI", "CO", "CS", "DE", "MB", "NU", "OU"
 # a caller does not carry it (test data) is this table used - to be removed once every caller carries the rule.
 _SECTION_WHEN_UNSET = {
     "FACTURA": "INVOICES", "FACTURA_RECIBO": "INVOICES", "NOTA_CREDITO": "INVOICES", "NOTA_DEBITO": "INVOICES",
-    "RECIBO": "PAYMENTS", "PRO_FORMA": "WORKING",
+    "RECIBO": "PAYMENTS", "PRO_FORMA": "WORKING", "ORCAMENTO": "WORKING",
 }
+
+# The SAF-T WorkType of a working document: a pro-forma PP (as the AGT-validated exports), an orçamento OR
+WORK_TYPE_MAP = {"PRO_FORMA": "PP", "ORCAMENTO": "OR"}
 
 INVOICE_TYPE_MAP = {
     "FACTURA": "FT",
@@ -85,7 +88,8 @@ def _write_lines(parent_el, inv: dict, saft_type: str) -> None:
         _el(line_el, "ProductCode", line["product_code"])
         _el(line_el, "ProductDescription", line["product_name"])
         _el(line_el, "Quantity", f"{Decimal(str(line['quantity'])):.3f}")
-        _el(line_el, "UnitOfMeasure", line["unit_code"])  # the unit recorded on the line (KG, SC, DZ...)
+        # the unit recorded on the line (KG, SC, DZ...); an article without a unit counts in units (XSD: never empty)
+        _el(line_el, "UnitOfMeasure", (line.get("unit_code") or "UN")[:20])
         _el(line_el, "UnitPrice", _money(line["unit_price"]))
         _el(line_el, "TaxPointDate", inv["business_date"].isoformat())
         # XSD: References is mandatory on the lines of a credit (and debit) note (the credited document, in the
@@ -252,7 +256,8 @@ def generate_saf_t_xml(
     # Each section lists its documents in their numbering order - by type, series, then number (FR FR2026/1, /2,
     # ... /10) - whatever order they were read in: a sequence must read as a sequence for the AGT.
     def _numbering(inv):
-        return (INVOICE_TYPE_MAP.get(inv["invoice_type"], inv["invoice_type"]), str(inv["series"]), int(inv["number"]))
+        code = INVOICE_TYPE_MAP.get(inv["invoice_type"]) or WORK_TYPE_MAP.get(inv["invoice_type"], inv["invoice_type"])
+        return (code, str(inv["series"]), int(inv["number"]))
 
     invoices.sort(key=_numbering)
     working_docs.sort(key=_numbering)
@@ -477,8 +482,8 @@ def generate_saf_t_xml(
         _write_movements(source_documents, movements, customer_short_id, supplier_short_id, own_company_id, walk_in_id)
 
     # ---------- SourceDocuments.WorkingDocuments (pro-formas) ----------
-    # Structure and element order follow the XSD and the AGT-validated Kiami exports: WorkType PP, WorkStatus
-    # N - or F once the pro-forma has been invoiced. A walk-in pro-forma points at the same customer as a walk-in
+    # Structure and element order follow the XSD and the AGT-validated Kiami exports: WorkType PP (a pro-forma) or
+    # OR (an orçamento), WorkStatus N - or F once it has been invoiced. A walk-in pro-forma points at the same customer as a walk-in
     # invoice.
     if working_docs:
         walk_in_id = customer_short_id[own_final_consumer["id"]] if own_final_consumer else FINAL_CONSUMER_ID
@@ -489,7 +494,8 @@ def generate_saf_t_xml(
         for doc in working_docs:
             entry_date = doc["created_at"].strftime("%Y-%m-%dT%H:%M:%S")
             work_el = _el(working, "WorkDocument")
-            _el(work_el, "DocumentNumber", f"PP {doc['series']}/{doc['number']}")
+            work_type = WORK_TYPE_MAP.get(doc["invoice_type"], "PP")
+            _el(work_el, "DocumentNumber", f"{work_type} {doc['series']}/{doc['number']}")
             status = _el(work_el, "DocumentStatus")
             _el(status, "WorkStatus", "F" if doc.get("converted") else "N")
             _el(status, "WorkStatusDate", entry_date)
@@ -499,7 +505,7 @@ def generate_saf_t_xml(
             _el(work_el, "HashControl", "0")
             _el(work_el, "Period", doc["business_date"].month)
             _el(work_el, "WorkDate", doc["business_date"].isoformat())
-            _el(work_el, "WorkType", "PP")
+            _el(work_el, "WorkType", work_type)
             _el(work_el, "SourceID", doc.get("source_id") or "RMSOFT")
             _el(work_el, "SystemEntryDate", entry_date)
             real_customer_id = doc.get("customer_id")
