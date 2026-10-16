@@ -28,6 +28,12 @@ export async function listStockLevels(warehouseId) {
   return res.data;
 }
 
+// The lots of a product followed by lot / expiry still holding stock (every warehouse unless one is given).
+export async function listProductLots(productId, warehouseId = null) {
+  const res = await apiClient.get('/stock/lots', { params: { product_id: productId, ...(warehouseId ? { warehouse_id: warehouseId } : {}) } });
+  return res.data;
+}
+
 export async function listStockMovements(filters = {}) {
   const params = {};
   if (filters.warehouseId) params.warehouse_id = filters.warehouseId;
@@ -95,13 +101,14 @@ export async function getProductionEstimate(warehouseId, productId) {
   return res.data;
 }
 
-export async function produceStock(warehouseId, finishedProductId, quantityToProduce, reason, fiscalPeriodId = null, saleUnitId = null) {
+export async function produceStock(warehouseId, finishedProductId, quantityToProduce, reason, fiscalPeriodId = null, saleUnitId = null, lot = {}) {
   const res = await apiClient.post('/stock/produce', {
     fiscal_period_id: fiscalPeriodId || null,
     warehouse_id: warehouseId,
     finished_product_id: finishedProductId,
     quantity_to_produce: quantityToProduce, sale_unit_id: saleUnitId,
     reason: reason || null,
+    lot_number: lot.lotNumber || null, expiry_date: lot.expiryDate || null,  // a product followed by lot / expiry
   });
   return res.data;
 }

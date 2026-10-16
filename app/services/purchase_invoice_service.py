@@ -37,6 +37,7 @@ from app.models.vat_code import VatCode
 from app.models.warehouse import Warehouse
 from app.models.stock_movement_document import StockMovementDocumentLine
 from app.services.fiscal_period_service import MONTH_NAMES_PT, PeriodClosedError, resolve_posting_period
+from app.services.stock_lot_service import lot_label
 from app.services.movement_document_service import (
     EmptyMovementError, InsufficientStockForMovementError, MovementProductNotFoundError, MovementTypeNotConfiguredError,
     MovementWarehouseNotFoundError, create_stock_movement_document, get_automatic_movement_type,
@@ -197,6 +198,9 @@ async def register_purchase_invoice(
             vat_rate=rate.rate, exemption_id=exemption_id, line_subtotal=subtotal, line_vat=vat,
             line_total=_money(subtotal + vat), vat_deductible=deductible, vat_non_deductible=non_deductible,
             cost=_money(subtotal + non_deductible), deductible_tax_type=destination,
+            # the lot received - checked against the product when it enters the stock (create_stock_movement_document)
+            lot_number=(" ".join((line.get("lot_number") or "").split())[:60] or None) if product_id else None,
+            expiry_date=line.get("expiry_date") if product_id else None,
         ))
 
     series = f"COMP{year}"
@@ -234,7 +238,8 @@ async def register_purchase_invoice(
             document = await create_stock_movement_document(
                 db, company_id, movement_type.id, warehouse.id,
                 [{"product_id": r.product_id, "sale_unit_id": r.sale_unit_id, "quantity": float(r.quantity),
-                  "purchase_price": float(r.cost) / float(r.quantity)} for r in stock_lines],
+                  "purchase_price": float(r.cost) / float(r.quantity),
+                  "lot_number": r.lot_number, "expiry_date": r.expiry_date} for r in stock_lines],
                 movement_date=document_date, description=_stock_text(invoice, supplier.name),
                 supplier_id=supplier_id, fiscal_period_id=period.id, system=True, commit=False,
             )
@@ -292,7 +297,8 @@ async def cancel_purchase_invoice(db: AsyncSession, company_id: uuid.UUID, invoi
             movement_type = await get_automatic_movement_type(db, MovementDirection.SAIDA)
             document = await create_stock_movement_document(
                 db, company_id, movement_type.id, invoice.warehouse_id,
-                [{"product_id": l.product_id, "quantity": float(l.quantity) * float(l.unit_factor)} for l in entry_lines],
+                [{"product_id": l.product_id, "quantity": float(l.quantity) * float(l.unit_factor), "lot_id": l.lot_id}
+                 for l in entry_lines],
                 description=("Anulação da " + _stock_text(invoice, supplier_name))[:300],
                 supplier_id=invoice.supplier_id, system=True, commit=False,
             )
@@ -399,5 +405,7 @@ async def get_purchase_invoice(db: AsyncSession, company_id: uuid.UUID, invoice_
             "line_vat": float(l.line_vat), "line_total": float(l.line_total), "vat_deductible": float(l.vat_deductible),
             "vat_non_deductible": float(l.vat_non_deductible), "cost": float(l.cost),
             "deductible_tax_type": l.deductible_tax_type,
+            "lot_number": l.lot_number, "expiry_date": l.expiry_date,
+            "lot": lot_label(l.lot_number, l.expiry_date) if (l.lot_number or l.expiry_date) else None,
         } for l, code in lines],
     }

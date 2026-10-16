@@ -5,7 +5,7 @@ Extended (Video 3) with category, brand, image, purchase price, the
 managed-by-lote/stock/validade toggles, and richer status.
 """
 import uuid
-from datetime import date, datetime
+from datetime import datetime
 
 from pydantic import BaseModel, field_validator
 
@@ -32,7 +32,6 @@ class ProductCreateRequest(BaseModel):
     vat_id: uuid.UUID | None = None
     price: float
     min_stock_threshold: float = 0
-    expiry_date: date | None = None
     product_type: str = "BEM"
     unit_of_measure_id: uuid.UUID | None = None
     is_raw_material: bool = False
@@ -90,7 +89,6 @@ class ProductUpdateRequest(BaseModel):
     vat_id: uuid.UUID | None = None
     price: float
     min_stock_threshold: float = 0
-    expiry_date: date | None = None
     product_type: str = "BEM"
     unit_of_measure_id: uuid.UUID | None = None
     is_raw_material: bool = False
@@ -150,7 +148,6 @@ class ProductResponse(BaseModel):
     vat_id: uuid.UUID | None = None
     price: float
     min_stock_threshold: float
-    expiry_date: date | None
     product_type: str
     unit_of_measure_id: uuid.UUID | None
     unit_of_measure_code: str | None = None  # attached by the list: the unit's code (UN, CX...)

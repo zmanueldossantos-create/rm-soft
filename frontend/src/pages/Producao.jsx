@@ -10,6 +10,7 @@ import { unitsApi } from '../api/catalogs';
 import { extractErrorMessage } from '../utils/errors';
 
 import PostingPeriodSelect from '../components/PostingPeriodSelect';
+import DateInput from '../components/DateInput';
 
 async function getProductsWithRecipe() {
   const res = await apiClient.get('/products/with-recipe');
@@ -17,7 +18,7 @@ async function getProductsWithRecipe() {
 }
 
 const emptyRecipeForm = { productId: '', batchYield: '1', batchYieldSaleUnitId: 'base', rows: [] };
-const emptyProduceForm = { productId: '', warehouseId: '', quantity: '', reason: '', fiscalPeriodId: '' };
+const emptyProduceForm = { productId: '', warehouseId: '', quantity: '', reason: '', fiscalPeriodId: '', lotNumber: '', expiryDate: '' };
 
 export default function Producao() {
   const [allProducts, setAllProducts] = useState([]);
@@ -207,7 +208,7 @@ export default function Producao() {
   }
 
   function openProduceModal(product) {
-    setProduceForm({ productId: product.id, saleUnitId: 'base', warehouseId: '', fiscalPeriodId: '', quantity: '', numBatches: '', batchYield: product.batch_yield, reason: '' });
+    setProduceForm({ productId: product.id, saleUnitId: 'base', warehouseId: '', fiscalPeriodId: '', quantity: '', numBatches: '', batchYield: product.batch_yield, reason: '', lotNumber: '', expiryDate: '' });
     setProduceEstimate(null);
     setProduceEstimateError('');
     setProduceError('');
@@ -255,6 +256,12 @@ export default function Producao() {
     setProduceEstimate(null);
   }
 
+  // the product made is followed by lot / expiry: the batch gets its lot (number: P + today's date unless typed)
+  const producedProduct = allProducts.find((p) => p.id === produceForm.productId);
+  const producedLotRule = producedProduct && producedProduct.managed_by_stock !== false && (producedProduct.managed_by_batch || producedProduct.managed_by_expiry)
+    ? { batch: !!producedProduct.managed_by_batch, expiry: !!producedProduct.managed_by_expiry } : null;
+  const todayIso = new Date().toISOString().slice(0, 10);
+
   const produceExceedsCapacity = produceEstimate && produceForm.quantity && parseFloat(produceForm.quantity) * produceFactor() > produceEstimate.max_units;
 
   async function handleProduceSubmit(e) {
@@ -262,7 +269,8 @@ export default function Producao() {
     setProduceError('');
     setProduceSaving(true);
     try {
-      await produceStock(produceForm.warehouseId, produceForm.productId, parseFloat(produceForm.quantity), produceForm.reason || null, produceForm.fiscalPeriodId, produceForm.saleUnitId === 'base' ? null : produceForm.saleUnitId);
+      await produceStock(produceForm.warehouseId, produceForm.productId, parseFloat(produceForm.quantity), produceForm.reason || null, produceForm.fiscalPeriodId, produceForm.saleUnitId === 'base' ? null : produceForm.saleUnitId,
+        producedLotRule ? { lotNumber: produceForm.lotNumber.trim(), expiryDate: produceForm.expiryDate } : {});
       closeProduceModal();
     } catch (err) {
       setProduceError(extractErrorMessage(err, 'Erro ao produzir'));
@@ -565,6 +573,22 @@ export default function Producao() {
             )}
           </div>
 
+          {producedLotRule && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Lote</label>
+                <input value={produceForm.lotNumber} maxLength={60} onChange={(e) => setProduceForm((prev) => ({ ...prev, lotNumber: e.target.value }))}
+                  placeholder={producedLotRule.batch ? 'P' + todayIso.replaceAll('-', '') : ''}
+                  className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors" />
+              </div>
+              <div>
+                <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">{producedLotRule.expiry ? 'Validade *' : 'Validade'}</label>
+                <DateInput value={produceForm.expiryDate} min={todayIso} onChange={(e) => setProduceForm((prev) => ({ ...prev, expiryDate: e.target.value }))}
+                  className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors" />
+              </div>
+            </div>
+          )}
+
           <div>
             <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Motivo (opcional)</label>
             <input
@@ -584,7 +608,7 @@ export default function Producao() {
           <PostingPeriodSelect value={produceForm.fiscalPeriodId} onChange={(v) => setProduceForm((prev) => ({ ...prev, fiscalPeriodId: v }))} onChoice={setProducePeriodChoice} />
           <button
             type="submit"
-            disabled={produceSaving || (producePeriodChoice && !produceForm.fiscalPeriodId) || !produceForm.quantity || !produceForm.warehouseId || produceExceedsCapacity}
+            disabled={produceSaving || (producePeriodChoice && !produceForm.fiscalPeriodId) || !produceForm.quantity || !produceForm.warehouseId || produceExceedsCapacity || (producedLotRule?.expiry && !produceForm.expiryDate)}
             className="mt-1 bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors"
           >
             {produceSaving ? <Loader2 size={17} className="animate-spin" /> : <Factory size={17} />}

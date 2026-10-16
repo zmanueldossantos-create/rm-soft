@@ -210,6 +210,17 @@ async def get_pos_stock(db: AsyncSession, company_id: uuid.UUID, pos_id: uuid.UU
     # the stock only moves when the account is closed. The till and the open accounts both sell what is left.
     from app.services.open_account_service import engaged_on_open_accounts
     engaged = await engaged_on_open_accounts(db, warehouse.id)
+    # An expired lot is never sold (stock_lot_service): it is no longer on the shelf either.
+    from datetime import date as _date
+    from sqlalchemy import func as _func
+    from app.models.stock_lot import StockLot
+    expired = dict((await db.execute(
+        select(StockLot.product_id, _func.sum(StockLot.quantity)).where(
+            StockLot.warehouse_id == warehouse.id, StockLot.quantity > 0, StockLot.expiry_date < _date.today(),
+        ).group_by(StockLot.product_id)
+    )).all())
+    for pid, qty in expired.items():
+        engaged[pid] = engaged.get(pid, 0.0) + float(qty or 0)
     return {
         "warehouse_id": str(warehouse.id),
         "allow_negative_stock": bool(warehouse.allow_negative_stock),

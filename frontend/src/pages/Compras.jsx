@@ -44,7 +44,7 @@ const sign = (i) => (i.purchase_type === 'NC' ? -1 : 1);
 // what is paid on an invoice (supplier_payment_service): a FT is owed until paid, a FR / TV was paid when issued
 const PAYMENT_STATUS = { PENDENTE: ['Pendente', 'text-text-muted bg-text-muted/10'], PARCIAL: ['Parcial', 'text-text-primary bg-text-muted/15'], PAGA: ['Paga', 'text-success bg-success/10'] };
 
-const emptyLine = () => ({ kind: 'product', destination: 'INV', itemId: '', saleUnitId: '', description: '', quantity: '1', unitPrice: '', rateId: '', exemptionId: '' });
+const emptyLine = () => ({ kind: 'product', destination: 'INV', itemId: '', saleUnitId: '', description: '', quantity: '1', unitPrice: '', rateId: '', exemptionId: '', lotNumber: '', expiryDate: '' });
 
 export default function Compras() {
   const can = useCan();
@@ -68,6 +68,8 @@ export default function Compras() {
   const [form, setForm] = useState(null);
   const [periodRequired, setPeriodRequired] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [scanCode, setScanCode] = useState('');
+  const [scanError, setScanError] = useState('');
   const [formError, setFormError] = useState('');
 
   const [detail, setDetail] = useState(null);
@@ -117,11 +119,17 @@ export default function Compras() {
   // choosing an article proposes its description and, for a product, its last purchase price (per base unit)
   function chooseItem(idx, line, id) {
     const item = (line.kind === 'product' ? products : services).find((x) => x.id === id);
-    updateLine(idx, { itemId: id, saleUnitId: '', description: item?.name || '',  // sent as the line's text
+    updateLine(idx, { itemId: id, saleUnitId: '', description: item?.name || '', lotNumber: '', expiryDate: '',  // sent as the line's text
       unitPrice: line.kind === 'product' && item?.purchase_price != null ? String(item.purchase_price) : line.unitPrice });
   }
 
   const productById = useMemo(() => Object.fromEntries(products.map((p) => [p.id, p])), [products]);
+  // a product followed by lot / expiry entering the stock: its lot is entered on the line (number and/or date)
+  const lotRule = (l) => {
+    const p = l.kind === 'product' ? productById[l.itemId] : null;
+    if (!p || p.managed_by_stock === false) return null;
+    return p.managed_by_batch || p.managed_by_expiry ? { batch: !!p.managed_by_batch, expiry: !!p.managed_by_expiry } : null;
+  };
   const unitOf = (l) => (productById[l.itemId]?.sale_units || []).find((u) => u.id === l.saleUnitId) || null;
 
   // the unit it was bought in (a sack of 20 kg): the last price paid, per base unit, times the unit's factor
@@ -130,6 +138,39 @@ export default function Compras() {
     const unit = (product?.sale_units || []).find((u) => u.id === value) || null;
     updateLine(idx, { saleUnitId: unit ? unit.id : '',
       unitPrice: product?.purchase_price != null ? String(round2(Number(product.purchase_price) * (unit ? Number(unit.factor) : 1))) : line.unitPrice });
+  }
+
+  // Barcode scan (field + Enter): the product's barcode or code (its base unit), or the barcode of one of its units (a box).
+  // The same article in the same unit, still without a lot entered, gets +1; otherwise a new line at its last price.
+  function handleScan() {
+    const code = scanCode.trim().toLowerCase();
+    if (!code) return;
+    let product = null;
+    let unit = null;
+    for (const p of products) {
+      if ((p.barcode || '').toLowerCase() === code || (p.code || '').toLowerCase() === code) { product = p; break; }
+      const u = (p.sale_units || []).find((x) => (x.barcode || '').toLowerCase() === code);
+      if (u) { product = p; unit = u; break; }
+    }
+    if (!product) {
+      setScanError('Código não encontrado: ' + scanCode.trim());
+      return;
+    }
+    const unitId = unit ? unit.id : '';
+    const factor = unit ? Number(unit.factor) : 1;
+    setForm((f) => {
+      const same = f.lines.findIndex((l) => l.kind === 'product' && l.itemId === product.id && (l.saleUnitId || '') === unitId && !l.lotNumber && !l.expiryDate);
+      if (same >= 0) {
+        return { ...f, lines: f.lines.map((l, i) => (i === same ? { ...l, quantity: String((parseFloat(l.quantity) || 0) + 1) } : l)) };
+      }
+      const fresh = { ...emptyLine(), itemId: product.id, saleUnitId: unitId, description: product.name, quantity: '1',
+        unitPrice: product.purchase_price != null ? String(round2(Number(product.purchase_price) * factor)) : '',
+        rateId: f.lines[f.lines.length - 1]?.rateId || '' };
+      const empty = f.lines.findIndex((l) => !l.itemId && !l.description.trim());
+      return { ...f, lines: empty >= 0 ? f.lines.map((l, i) => (i === empty ? { ...fresh, rateId: l.rateId || fresh.rateId } : l)) : [...f.lines, fresh] };
+    });
+    setScanCode('');
+    setScanError('');
   }
 
   // a credit note corrects one of the supplier's registered invoices
@@ -166,6 +207,8 @@ export default function Compras() {
           service_id: l.kind === 'service' && l.itemId ? l.itemId : null,
           description: l.description || null, quantity: parseFloat(l.quantity) || 0, unit_price: parseFloat(l.unitPrice) || 0,
           legal_vat_rate_id: l.rateId, exemption_id: l.exemptionId || null, deductible_tax_type: l.destination,
+          lot_number: stockEntry && lotRule(l) ? l.lotNumber.trim() || null : null,
+          expiry_date: stockEntry && lotRule(l) ? l.expiryDate || null : null,
         })),
       });
       setFormOpen(false);
@@ -216,7 +259,8 @@ export default function Compras() {
   const isCreditNote = !!form && form.purchaseType === 'NC';
   const stockEntry = !!form && form.stockEntry && hasProduct && !isCreditNote;
   const formValid = form && form.supplierId && (!stockEntry || form.warehouseId) && (!isCreditNote || form.referenceInvoiceId) && form.supplierDocument.trim() && form.documentDate && (!periodRequired || form.periodId)
-    && form.lines.length > 0 && form.lines.every((l, i) => (l.description.trim() || l.itemId) && parseFloat(l.quantity) > 0 && l.unitPrice !== '' && l.rateId && (!computed[i].exempt || l.exemptionId));
+    && form.lines.length > 0 && form.lines.every((l, i) => (l.description.trim() || l.itemId) && parseFloat(l.quantity) > 0 && l.unitPrice !== '' && l.rateId && (!computed[i].exempt || l.exemptionId)
+      && (!stockEntry || !lotRule(l) || ((!lotRule(l).batch || l.lotNumber.trim()) && (!lotRule(l).expiry || l.expiryDate))));
 
   return (
     <main className="max-w-[1600px] mx-auto px-4 sm:px-6 md:px-8 py-6 sm:py-9">
@@ -345,9 +389,25 @@ export default function Compras() {
         )}
       </div>
 
-      <Modal open={formOpen} onClose={() => setFormOpen(false)} title="Nova fatura de compra" maxWidthClass="max-w-7xl">
+      <Modal open={formOpen} onClose={() => setFormOpen(false)} title="Nova fatura de compra" size="full" maxWidthClass="max-w-7xl"
+        footer={form && (
+          <div className="px-6 py-3 grid grid-cols-1 md:grid-cols-[1fr_340px] gap-3 items-stretch">
+            <div className="flex items-center justify-between gap-3 flex-wrap bg-bg-inset border border-border rounded-md px-4 py-3">
+              <p className="text-[13px] text-text-muted">
+                Base <span className="font-mono text-text-primary">{kz(totals.subtotal)}</span> · IVA <span className="font-mono text-text-primary">{kz(totals.vat)}</span>
+                <span className="block text-[11px]">A parte dedutível do IVA segue o regime da empresa - calculada ao registar.</span>
+              </p>
+              <p className="font-mono font-semibold text-lg text-text-primary">{kz(totals.subtotal + totals.vat)}</p>
+            </div>
+
+            {formError && <div className="md:col-span-2 md:order-first bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{formError}</div>}
+            <button type="submit" form="purchase-form" disabled={saving || !formValid} className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 cursor-pointer">
+              {saving ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />} Registar fatura de compra
+            </button>
+          </div>
+        )}>
         {form && (
-          <form onSubmit={submit} className="flex flex-col gap-4">
+          <form id="purchase-form" onSubmit={submit} className="flex flex-col gap-4">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
               <div>
                 <label className={labelCls}>Fornecedor *</label>
@@ -389,6 +449,12 @@ export default function Compras() {
               </div>
             </div>
 
+            <div className="flex items-center gap-3 flex-wrap">
+              <input value={scanCode} onChange={(e) => { setScanCode(e.target.value); setScanError(''); }}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleScan(); } }}
+                placeholder="Ler código de barras" className={inputCls + ' font-mono max-w-sm'} />
+              {scanError && <span className="text-[12px] text-danger">{scanError}</span>}
+            </div>
             <div className="border border-border rounded-md overflow-x-auto">
               <table className="w-full text-sm">
                 <thead><tr className="border-b border-border">
@@ -410,6 +476,18 @@ export default function Compras() {
                         ) : (
                           <Select value={l.itemId} onChange={(v) => chooseItem(idx, l, v)} placeholder="Selecionar"
                             options={(l.kind === 'product' ? products : services).map((x) => ({ value: x.id, label: x.code + ' - ' + x.name }))} />
+                        )}
+                        {stockEntry && lotRule(l) && (
+                          <div className="grid grid-cols-2 gap-1.5 mt-1.5">
+                            <div>
+                              <p className="text-[10.5px] uppercase tracking-wide text-text-muted mb-0.5">{lotRule(l).batch ? 'Lote *' : 'Lote'}</p>
+                              <input value={l.lotNumber} onChange={(e) => updateLine(idx, { lotNumber: e.target.value })} maxLength={60} className={cellCls + ' font-mono'} />
+                            </div>
+                            <div>
+                              <p className="text-[10.5px] uppercase tracking-wide text-text-muted mb-0.5">{lotRule(l).expiry ? 'Validade *' : 'Validade'}</p>
+                              <DateInput value={l.expiryDate} min={form.documentDate || undefined} onChange={(e) => updateLine(idx, { expiryDate: e.target.value })} className={cellCls} />
+                            </div>
+                          </div>
                         )}
                       </td>
                       <td className="px-2 py-2">
@@ -479,18 +557,6 @@ export default function Compras() {
               </div>
             )}
 
-            <div className="flex items-center justify-between gap-3 flex-wrap bg-bg-inset border border-border rounded-md px-4 py-3">
-              <p className="text-[13px] text-text-muted">
-                Base <span className="font-mono text-text-primary">{kz(totals.subtotal)}</span> · IVA <span className="font-mono text-text-primary">{kz(totals.vat)}</span>
-                <span className="block text-[11px]">A parte dedutível do IVA segue o regime da empresa - calculada ao registar.</span>
-              </p>
-              <p className="font-mono font-semibold text-lg text-text-primary">{kz(totals.subtotal + totals.vat)}</p>
-            </div>
-
-            {formError && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{formError}</div>}
-            <button type="submit" disabled={saving || !formValid} className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 cursor-pointer">
-              {saving ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />} Registar fatura de compra
-            </button>
           </form>
         )}
       </Modal>
@@ -521,7 +587,7 @@ export default function Compras() {
                 <tbody>
                   {detail.lines.map((l) => (
                     <tr key={l.position} className="border-b border-border last:border-0">
-                      <td className="px-3 py-2 text-text-primary">{l.description}</td>
+                      <td className="px-3 py-2 text-text-primary">{l.description}{l.lot && <span className="block font-mono text-[11px] text-text-muted">Lote {l.lot}</span>}</td>
                       <td className="px-3 py-2 text-right font-mono text-text-muted whitespace-nowrap">{l.quantity.toLocaleString('pt-PT')}{l.unit ? ' ' + l.unit : ''}</td>
                       <td className="px-3 py-2 text-right font-mono text-text-muted whitespace-nowrap">{kz(l.unit_price)}</td>
                       <td className="px-3 py-2 font-mono text-[12px] text-text-muted whitespace-nowrap">{l.tax_category} {l.vat_rate} %{l.exemption_code ? ' · ' + l.exemption_code : ''}</td>

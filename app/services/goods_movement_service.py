@@ -34,6 +34,7 @@ from app.services.document_series_service import SeriesNotFoundError, get_next_n
 from app.services.fiscal_period_service import ensure_period_open
 from app.services.invoice_service import _exemption_for, _simulate_atcud, _simulate_hash
 from app.services.product_sale_unit_service import SaleUnitInvalidError, resolve_line_unit
+from app.services.stock_lot_service import lots_in, lots_out, parts_taken_by
 from app.services.stock_service import InsufficientStockError, _get_or_create_stock_row, _stock_rule, ensure_available_at_period_end
 
 MOVEMENT_TYPES = {"GR": "Guia de Remessa", "GT": "Guia de Transporte", "GD": "Guia de Devolução"}
@@ -75,6 +76,7 @@ async def _move(db: AsyncSession, company_id: uuid.UUID, period: FiscalPeriod, p
     if not product.managed_by_stock:
         return
     out_id, in_id = (destination_id, origin_id) if back else (origin_id, destination_id)
+    in_before = 0.0
     if out_id is not None:  # the goods leave a warehouse: its rules and its stock (at the period's end, a late entry)
         await _stock_rule(db, product.id, out_id, "out", strict=True)
         await ensure_available_at_period_end(db, company_id, period, product.id, out_id, quantity, GoodsMovementError)
@@ -85,19 +87,33 @@ async def _move(db: AsyncSession, company_id: uuid.UUID, period: FiscalPeriod, p
     if in_id is not None:
         await _stock_rule(db, product.id, in_id, "in", strict=True)
         stock = await _get_or_create_stock_row(db, company_id, product.id, in_id)
-        stock.quantity = float(stock.quantity) + quantity
+        in_before = float(stock.quantity)
+        stock.quantity = in_before + quantity
     reason = ("Anulação da " if back else "") + ref
     common = dict(company_id=company_id, fiscal_period_id=period.id, product_id=product.id, quantity=quantity,
                   reason=reason, reference=ref)
+    out_row = in_row = None
     if out_id is not None and in_id is not None:  # a transfer: the pair of the ledger
-        db.add(StockMovement(**common, warehouse_id=out_id, movement_type=MovementType.TRANSFERENCIA,
-                             counterpart_warehouse_id=in_id, is_transfer_source=True))
-        db.add(StockMovement(**common, warehouse_id=in_id, movement_type=MovementType.TRANSFERENCIA,
-                             counterpart_warehouse_id=out_id, is_transfer_source=False))
+        out_row = StockMovement(**common, warehouse_id=out_id, movement_type=MovementType.TRANSFERENCIA,
+                                counterpart_warehouse_id=in_id, is_transfer_source=True)
+        in_row = StockMovement(**common, warehouse_id=in_id, movement_type=MovementType.TRANSFERENCIA,
+                               counterpart_warehouse_id=out_id, is_transfer_source=False)
     elif out_id is not None:
-        db.add(StockMovement(**common, warehouse_id=out_id, movement_type=MovementType.SAIDA))
+        out_row = StockMovement(**common, warehouse_id=out_id, movement_type=MovementType.SAIDA)
     else:
-        db.add(StockMovement(**common, warehouse_id=in_id, movement_type=MovementType.RECEPCAO))
+        in_row = StockMovement(**common, warehouse_id=in_id, movement_type=MovementType.RECEPCAO)
+    # the lots (a product followed by lot): FEFO out, never an expired one on the way out to a customer; they travel
+    # with the goods, and a cancelled guide puts its goods back into the lots it took
+    parts = []
+    if out_row is not None:
+        db.add(out_row)
+        parts = await lots_out(db, company_id, product.id, out_id, quantity, out_row, usable_only=not back,
+                               error_class=GoodsMovementError)
+    if in_row is not None:
+        db.add(in_row)
+        if out_row is None:  # a cancelled GR / GD: the lots its exit took from this warehouse
+            parts = await parts_taken_by(db, company_id, product.id, in_id, ref, [MovementType.SAIDA])
+        await lots_in(db, company_id, product.id, in_id, quantity, in_row, in_before, parts)
 
 
 async def _build_lines(db: AsyncSession, company_id: uuid.UUID, period: FiscalPeriod, movement_type: str,

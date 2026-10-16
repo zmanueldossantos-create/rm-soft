@@ -7,7 +7,6 @@ managed-by-lote/stock/validade toggles, and richer status.
 """
 from app.services.vat_rule_service import resolve_article_vat
 import uuid
-from datetime import date
 
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -95,7 +94,6 @@ async def create_product(
     vat_id: uuid.UUID | None,
     price: float,
     min_stock_threshold: float,
-    expiry_date: date | None,
     product_type: str = "BEM",
     unit_of_measure_id: uuid.UUID | None = None,
     is_raw_material: bool = False,
@@ -130,7 +128,6 @@ async def create_product(
         vat_id=vat_id,
         price=price,
         min_stock_threshold=min_stock_threshold,
-        expiry_date=expiry_date,
         product_type=product_type,
         unit_of_measure_id=unit_of_measure_id,
         is_raw_material=is_raw_material,
@@ -210,6 +207,38 @@ class BaseUnitLockedError(Exception):
     """The base unit of a product that already has a history cannot change."""
 
 
+class LotTrackingLockedError(BaseUnitLockedError):
+    """Following a product by lot / expiry is switched on or off only while it has no stock (a subclass: the same
+    409 answer, see main.py)."""
+
+
+async def ensure_lot_tracking_can_change(db: AsyncSession, product: Product, managed_by_batch: bool,
+                                         managed_by_expiry: bool, managed_by_stock: bool) -> None:
+    """
+    The lots of a warehouse always add up to its stock (stock_lot_service). Starting or stopping to follow a product
+    by lot while it has stock would leave stock without lots (or lots without stock), so it is refused until the stock
+    is zero in every warehouse. Switching between lot and expiry while followed only changes what the next entries
+    must give - always allowed.
+    """
+    from sqlalchemy import func as _func
+    from app.models.stock import Stock
+    from app.services.stock_lot_service import is_followed
+
+    class _After:  # the product as it would be saved
+        pass
+    after = _After()
+    after.managed_by_batch, after.managed_by_expiry, after.managed_by_stock = managed_by_batch, managed_by_expiry, managed_by_stock
+    if is_followed(product) == is_followed(after):
+        return
+    total = float((await db.execute(select(_func.coalesce(_func.sum(_func.abs(Stock.quantity)), 0)).where(
+        Stock.product_id == product.id))).scalar_one())
+    if total > 0:
+        raise LotTrackingLockedError(
+            f"O seguimento por lote / validade de {product.name} só pode ser alterado com o stock a zero "
+            "em todos os armazéns"
+        )
+
+
 async def ensure_base_unit_can_change(db: AsyncSession, product: Product, new_unit_id) -> None:
     """
     The base unit is what every quantity of the product is counted in (stock, ledger, sale-unit factors, average cost).
@@ -244,7 +273,6 @@ async def update_product(
     vat_id: uuid.UUID | None,
     price: float,
     min_stock_threshold: float,
-    expiry_date: date | None,
     product_type: str = "BEM",
     unit_of_measure_id: uuid.UUID | None = None,
     is_raw_material: bool = False,
@@ -277,7 +305,6 @@ async def update_product(
     product.vat_id = vat_id
     product.price = price
     product.min_stock_threshold = min_stock_threshold
-    product.expiry_date = expiry_date
     product.product_type = product_type
     await ensure_base_unit_can_change(db, product, unit_of_measure_id)
     product.unit_of_measure_id = unit_of_measure_id
@@ -286,6 +313,7 @@ async def update_product(
     product.brand = brand
     # the image is not touched here: it has its own routes (upload, removal), so a save never loses it
     product.purchase_price = purchase_price
+    await ensure_lot_tracking_can_change(db, product, managed_by_batch, managed_by_expiry, managed_by_stock)
     product.managed_by_batch = managed_by_batch
     product.managed_by_stock = managed_by_stock
     product.managed_by_expiry = managed_by_expiry

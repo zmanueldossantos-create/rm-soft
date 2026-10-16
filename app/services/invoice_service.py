@@ -1156,7 +1156,7 @@ async def create_credit_note(
         for restock_product_id, restock_quantity in restock_candidates:
             await return_stock_for_credit_note(
                 db, company_id, restock_warehouse_by_product[str(restock_product_id)], restock_product_id,
-                restock_quantity, invoice_reference,
+                restock_quantity, invoice_reference, sale_reference=credit_note.document_reference,
             )
 
     # Update the original invoice's fiscal lifecycle - see Video 5.

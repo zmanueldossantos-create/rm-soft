@@ -1,6 +1,5 @@
 import { formatKz } from '../utils/format';
 import { API_ORIGIN } from '../api/config';
-import DateInput from '../components/DateInput';
 import { useCan } from '../utils/permissions';
 import VatReclassify from '../components/VatReclassify';
 import { useState, useEffect, useMemo, useRef } from 'react';
@@ -49,7 +48,7 @@ const STATUS_COLOR = {
 
 const emptyForm = {
   code: '', name: '', barcode: '', vat_id: '', price: '', purchasePrice: '',
-  minStockThreshold: '0', expiryDate: '',
+  minStockThreshold: '0',
   unitOfMeasureId: '', categoryId: '', brand: '',
   managedByBatch: false, managedByStock: true, managedByExpiry: false,
   notAvailablePos: false, preparedInKitchen: false, internalUseOnly: false, status: 'ACTIVO',
@@ -147,7 +146,6 @@ export default function Products() {
       price: String(product.price),
       purchasePrice: product.purchase_price != null ? String(product.purchase_price) : '', averageCost: product.average_cost ?? null, // CMP, read only
       minStockThreshold: String(product.min_stock_threshold),
-      expiryDate: product.expiry_date || '',
       unitOfMeasureId: product.unit_of_measure_id || '',
       categoryId: product.category_id || '',
       brand: product.brand || '',
@@ -234,14 +232,13 @@ export default function Products() {
       price: parseFloat(form.price),
       purchase_price: form.purchasePrice !== '' ? parseFloat(form.purchasePrice) : null,
       min_stock_threshold: parseFloat(form.minStockThreshold || '0'),
-      expiry_date: form.expiryDate || null,
       product_type: 'BEM',
       unit_of_measure_id: form.unitOfMeasureId || null,
       category_id: form.categoryId || null,
       brand: form.brand || null,
-      managed_by_batch: form.managedByBatch,
+      managed_by_batch: form.managedByBatch && form.managedByStock,
       managed_by_stock: form.managedByStock,
-      managed_by_expiry: form.managedByExpiry,
+      managed_by_expiry: form.managedByExpiry && form.managedByStock,
       not_available_pos: form.notAvailablePos,
       prepared_in_kitchen: form.preparedInKitchen,
       internal_use_only: form.internalUseOnly,
@@ -480,9 +477,6 @@ export default function Products() {
             <Field label="Limite mínimo stock">
               <input type="number" step="0.001" min="0" value={form.minStockThreshold} onChange={(e) => updateField('minStockThreshold', e.target.value)} className={inputClass} />
             </Field>
-            <Field label="Data limite de consumo">
-              <DateInput value={form.expiryDate} onChange={(e) => updateField('expiryDate', e.target.value)} className={inputClass} />
-            </Field>
             {isExemptVat && (
               <Field label="Motivo de isenção *">
                 {imposedExemption ? (
@@ -506,6 +500,15 @@ export default function Products() {
             <label className="flex items-center gap-2.5 cursor-pointer select-none">
               <input type="checkbox" checked={form.managedByStock} onChange={(e) => updateField('managedByStock', e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
               <span className="text-sm text-text-primary">Gerido por stocks</span>
+            </label>
+            {/* followed by lot / expiry: the lot is entered on every entry, exits take the first to expire (FEFO) */}
+            <label className={'flex items-center gap-2.5 select-none ' + (form.managedByStock ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed')} title="Número de lote obrigatório em cada entrada de stock. Só pode ser alterado com o stock a zero.">
+              <input type="checkbox" disabled={!form.managedByStock} checked={form.managedByBatch && form.managedByStock} onChange={(e) => updateField('managedByBatch', e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer disabled:cursor-not-allowed" />
+              <span className="text-sm text-text-primary">Gerido por lotes</span>
+            </label>
+            <label className={'flex items-center gap-2.5 select-none ' + (form.managedByStock ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed')} title="Data de validade obrigatória em cada entrada de stock; um lote expirado nunca é vendido. Só pode ser alterado com o stock a zero.">
+              <input type="checkbox" disabled={!form.managedByStock} checked={form.managedByExpiry && form.managedByStock} onChange={(e) => updateField('managedByExpiry', e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer disabled:cursor-not-allowed" />
+              <span className="text-sm text-text-primary">Gerido por validade</span>
             </label>
             <label className="flex items-center gap-2.5 cursor-pointer select-none">
               <input type="checkbox" checked={form.notAvailablePos} onChange={(e) => updateField('notAvailablePos', e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />

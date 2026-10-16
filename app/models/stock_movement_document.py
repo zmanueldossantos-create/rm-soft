@@ -61,6 +61,10 @@ class StockMovementDocumentLine(Base):
     purchase_price: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False, default=0)
     sale_price: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False, default=0)
     line_total: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
+    # Lots (a product followed by lot / expiry): the lot an entry filled, or the lot an exit was asked to take.
+    lot_number: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    expiry_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    lot_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("stock_lots.id"), nullable=True)
 
     def __repr__(self) -> str:
         return f"<StockMovementDocumentLine {self.product_code_snapshot} x{self.quantity}>"

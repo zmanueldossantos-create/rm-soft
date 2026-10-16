@@ -20,7 +20,7 @@ async def test_editing_a_product_keeps_its_image(db, company_with_essentials):
     db.add(cola)
     await db.commit()
     await update_product(db, company_id=ctx["company"].id, product_id=cola.id, code=code, name="Cola 33cl",
-                         barcode=None, vat_id=ctx["vat_nor"].id, price=550, min_stock_threshold=0, expiry_date=None,
+                         barcode=None, vat_id=ctx["vat_nor"].id, price=550, min_stock_threshold=0,
                          unit_of_measure_id=ctx["unit_un"].id)
     kept = (await db.execute(select(Product).where(Product.id == cola.id))).scalar_one()
     assert kept.image_path == path and kept.name == "Cola 33cl" and float(kept.price) == 550

@@ -5,6 +5,7 @@ single unit - e.g. "1 saco de farinha per batch -> 400 paes" - matching
 how production is actually measured and avoiding error-prone tiny decimals.
 """
 import uuid
+from datetime import date
 
 from pydantic import BaseModel, field_validator
 
@@ -65,6 +66,8 @@ class ProduceStockRequest(BaseModel):
     quantity_to_produce: float
     sale_unit_id: uuid.UUID | None = None  # produce in a package (5 CX); None = the base unit
     reason: str | None = None
+    lot_number: str | None = None  # a product followed by lot: the batch made (empty = P + today's date)
+    expiry_date: date | None = None  # a product followed by expiry: required
 
     @field_validator("quantity_to_produce")
     @classmethod

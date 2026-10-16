@@ -87,6 +87,12 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection }) {
   // types are kept for the movements the system creates itself.
   const resolvedMovementType = movementTypes.find((t) => !t.is_auto);
   const isEntrada = filterDirection === 'ENTRADA';
+  // an entry of a product followed by lot / expiry: its lot is entered on the line (number and/or date, as required)
+  const lotRule = (line) => {
+    const p = productById[line.product_id];
+    if (!isEntrada || !p || p.managed_by_stock === false || !(p.managed_by_batch || p.managed_by_expiry)) return null;
+    return { batch: !!p.managed_by_batch, expiry: !!p.managed_by_expiry };
+  };
 
   const totals = useMemo(() => {
     let totalValue = 0;
@@ -171,7 +177,8 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection }) {
   const movementDateMin = boundPeriod ? boundPeriod.year + '-' + String(boundPeriod.month).padStart(2, '0') + '-01' : undefined;
 
   const isFormValid = warehouseId && resolvedMovementType && lines.length > 0 && (!periodChoice || fiscalPeriodId) &&
-    lines.every((l) => l.product_id && parseFloat(l.quantity) > 0);
+    lines.every((l) => l.product_id && parseFloat(l.quantity) > 0 &&
+      (!lotRule(l) || ((!lotRule(l).batch || (l.lot_number || '').trim()) && (!lotRule(l).expiry || l.expiry_date))));
 
   // Lines of an Excel file left out: unknown codes and units the product does not have, told apart.
   function skippedMessage(skipped) {
@@ -242,7 +249,7 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection }) {
   }
 
   function handleManualLineEdit(index, field, value) {
-    if (field === 'product_id') setLines((prev) => prev.map((l, i) => (i === index ? { ...l, sale_unit_id: '' } : l)));
+    if (field === 'product_id') setLines((prev) => prev.map((l, i) => (i === index ? { ...l, sale_unit_id: '', lot_number: '', expiry_date: '' } : l)));
     updateLine(index, field, value);
   }
 
@@ -267,6 +274,8 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection }) {
           quantity: parseFloat(l.quantity),
           purchase_price: parseFloat(l.purchase_price) || 0,
           sale_price: parseFloat(l.sale_price) || 0,
+          lot_number: lotRule(l) ? (l.lot_number || '').trim() || null : null,
+          expiry_date: lotRule(l) ? l.expiry_date || null : null,
         })),
       });
       onSuccess?.();
@@ -366,6 +375,18 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection }) {
                       options={products.map((p) => ({ value: p.id, label: p.code + ' - ' + p.name }))}
                       placeholder="Selecionar produto"
                     />
+                    {lotRule(line) && (
+                      <div className="grid grid-cols-2 gap-1.5 mt-1.5">
+                        <div>
+                          <p className="text-[10.5px] uppercase tracking-wide text-text-muted mb-0.5">{lotRule(line).batch ? 'Lote *' : 'Lote'}</p>
+                          <input value={line.lot_number || ''} maxLength={60} onChange={(e) => updateLine(idx, 'lot_number', e.target.value)} className="w-full bg-bg-inset border border-border rounded-md px-2.5 py-1.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors" />
+                        </div>
+                        <div>
+                          <p className="text-[10.5px] uppercase tracking-wide text-text-muted mb-0.5">{lotRule(line).expiry ? 'Validade *' : 'Validade'}</p>
+                          <DateInput value={line.expiry_date || ''} min={movementDate || undefined} onChange={(e) => updateLine(idx, 'expiry_date', e.target.value)} className="w-full bg-bg-inset border border-border rounded-md px-2.5 py-1.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors" />
+                        </div>
+                      </div>
+                    )}
                   </td>
                   <td className="px-4 py-2.5 w-28 text-right font-mono text-text-muted text-[13px]">
                     {(product?.sale_units || []).length > 0 ? (

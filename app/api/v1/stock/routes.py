@@ -110,6 +110,18 @@ async def get_stock_movements(
     return await list_stock_movements(db, current_user.company_id, warehouse_id, year, month, date_from, date_to, limit, offset)
 
 
+@router.get("/lots")
+async def get_product_lots(
+    product_id: uuid.UUID,
+    warehouse_id: uuid.UUID | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("stock:view")),
+):
+    """The lots of a product followed by lot / expiry still holding stock, per warehouse, FEFO (Stock > Lotes)."""
+    from app.services.stock_lot_service import list_lots
+    return await list_lots(db, current_user.company_id, product_id, warehouse_id)
+
+
 @router.get("/movements/available-periods")
 async def get_movements_available_periods(
     db: AsyncSession = Depends(get_db),
@@ -278,6 +290,7 @@ async def post_produce_stock(
         await produce_stock(
             db, current_user.company_id, payload.warehouse_id, payload.finished_product_id,
             payload.quantity_to_produce, payload.reason, fiscal_period_id=payload.fiscal_period_id, sale_unit_id=payload.sale_unit_id,
+            lot_number=payload.lot_number, expiry_date=payload.expiry_date,
         )
     except NoRecipeError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))

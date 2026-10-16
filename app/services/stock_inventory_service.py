@@ -26,6 +26,7 @@ from app.models.unit_of_measure_catalog import UnitOfMeasureCatalog
 from app.models.user import User
 from app.models.warehouse import Warehouse
 from app.services.fiscal_period_service import MONTH_NAMES_PT, resolve_posting_period
+from app.services.stock_lot_service import lots_in, lots_out
 from app.services.stock_service import _get_or_create_stock_row, get_warehouse_or_raise
 
 
@@ -215,12 +216,19 @@ async def validate_inventory(db: AsyncSession, company_id: uuid.UUID, inventory_
         if diff == 0:
             continue
         stock = await _get_or_create_stock_row(db, company_id, product.id, inventory.warehouse_id)
-        stock.quantity = float(stock.quantity) + diff
-        db.add(StockMovement(
+        stock_before = float(stock.quantity)
+        stock.quantity = stock_before + diff
+        movement = StockMovement(
             company_id=company_id, fiscal_period_id=period.id, product_id=product.id, warehouse_id=inventory.warehouse_id,
             movement_type=MovementType.AJUSTE, quantity=diff, reference=reference,  # signed, as every AJUSTE
             reason=f"Inventário {reference}",
-        ))
+        )
+        db.add(movement)
+        # the lots (a product followed by lot): a shortage leaves FEFO, a surplus enters as "Sem lote"
+        if diff < 0:
+            await lots_out(db, company_id, product.id, inventory.warehouse_id, -diff, movement, allow_uncovered=True)
+        else:
+            await lots_in(db, company_id, product.id, inventory.warehouse_id, diff, movement, stock_before)
     inventory.status = InventoryStatus.VALIDADO
     inventory.validated_by_user_id = user_id
     inventory.validated_at = datetime.now(timezone.utc)

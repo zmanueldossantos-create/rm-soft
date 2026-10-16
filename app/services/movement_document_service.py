@@ -20,6 +20,7 @@ from app.models.stock_movement import StockMovement, MovementType as LedgerMovem
 from app.models.stock_movement_document import StockMovementDocument, StockMovementDocumentLine
 from app.services.stock_service import _get_or_create_stock_row, _stock_rule, InsufficientStockError as _StockRuleError, ensure_available_at_period_end, update_average_cost
 from app.services.product_sale_unit_service import SaleUnitInvalidError, resolve_line_unit
+from app.services.stock_lot_service import LotInputError, check_lot_input, lots_in, lots_out
 from app.services.fiscal_period_service import ensure_period_open, PeriodClosedError, resolve_posting_period
 import io
 import openpyxl
@@ -82,7 +83,8 @@ async def create_stock_movement_document(
     commit: bool = True,
 ) -> StockMovementDocument:
     """
-    lines_input items: {product_id, quantity, purchase_price, sale_price}
+    lines_input items: {product_id, quantity, purchase_price, sale_price} - and for a product followed by lot: on an
+    entry its lot_number / expiry_date, on an exit the lot_id to take (empty = FEFO, never an expired lot).
     system: a document the system creates itself (a purchase invoice's entry) - the only ones that may use the
     automatic types (is_auto); a user's document never does. commit=False leaves it in the caller's transaction.
     """
@@ -147,6 +149,12 @@ async def create_stock_movement_document(
         sale_price = float(line_input.get("sale_price", 0) or 0)
         line_value_price = purchase_price if is_entrada else sale_price
         line_total = round(quantity * line_value_price, 2)
+        try:  # an entry of a product followed by lot: its number / date, as required (see check_lot_input)
+            lot_number, expiry_date = (check_lot_input(product, line_input.get("lot_number"), line_input.get("expiry_date"), movement_date)
+                                       if is_entrada else (None, None))
+        except LotInputError as e:
+            raise InsufficientStockForMovementError(str(e))
+        exit_lot_id = None if is_entrada else line_input.get("lot_id")
 
         total_value += line_total
 
@@ -166,20 +174,33 @@ async def create_stock_movement_document(
             cost_before, cost_after = await update_average_cost(db, company_id, product, base_quantity, unit_cost)
             product.purchase_price = round(purchase_price / factor, 2)  # the last price paid, per base unit
         stock = await _get_or_create_stock_row(db, company_id, product.id, warehouse_id)
+        stock_before = float(stock.quantity)
         if is_entrada:
-            stock.quantity = float(stock.quantity) + base_quantity
+            stock.quantity = stock_before + base_quantity
         else:
-            if float(stock.quantity) < base_quantity:
+            if stock_before < base_quantity:
                 raise InsufficientStockForMovementError(f"Stock insuficiente para {product.name}")
-            stock.quantity = float(stock.quantity) - base_quantity
+            stock.quantity = stock_before - base_quantity
 
-        db.add(StockMovement(
+        ledger_row = StockMovement(
             company_id=company_id, fiscal_period_id=posting_period.id, product_id=product.id, warehouse_id=warehouse_id,
             movement_type=ledger_type, quantity=base_quantity,
             reason=description, reference=f"{movement_type.code}{movement_date.year}/{next_number}",
             unit_cost=round(unit_cost, 4) if unit_cost is not None else None,
             average_cost_before=cost_before, average_cost_after=cost_after,
-        ))
+        )
+        db.add(ledger_row)
+        line_lot_id = None
+        if is_entrada:
+            filled = await lots_in(db, company_id, product.id, warehouse_id, base_quantity, ledger_row, stock_before,
+                                   [(lot_number, expiry_date, base_quantity)])
+            line_lot_id = filled[0].id if filled else None
+        else:
+            # a user's exit never takes an expired lot unless that lot is chosen; the system's exit (a cancelled
+            # purchase) takes back the very lot its entry filled
+            await lots_out(db, company_id, product.id, warehouse_id, base_quantity, ledger_row, lot_id=exit_lot_id,
+                           usable_only=exit_lot_id is None and not system, error_class=InsufficientStockForMovementError)
+            line_lot_id = exit_lot_id
 
         line_objects.append(StockMovementDocumentLine(
             product_id=product.id,
@@ -192,6 +213,7 @@ async def create_stock_movement_document(
             purchase_price=purchase_price,
             sale_price=sale_price,
             line_total=line_total,
+            lot_number=lot_number, expiry_date=expiry_date, lot_id=line_lot_id,
         ))
 
     document = StockMovementDocument(

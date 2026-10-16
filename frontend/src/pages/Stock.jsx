@@ -3,6 +3,7 @@ import { Package2, Plus, Loader2, Search, AlertTriangle, ArrowDownToLine, Slider
 import Modal from '../components/Modal';
 import MovementForm from '../components/MovementForm';
 import StockInventory from '../components/StockInventory';
+import StockLotsModal from '../components/StockLotsModal';
 
 import PostingPeriodSelect from '../components/PostingPeriodSelect';
 import UnitBreakdown from '../components/UnitBreakdown';
@@ -77,6 +78,7 @@ export default function Stock() {
   const [warehouses, setWarehouses] = useState([]);
   const [selectedWarehouseId, setSelectedWarehouseId] = useState('');
   const [levels, setLevels] = useState([]);
+  const [lotsOf, setLotsOf] = useState(null);  // the stock line whose lots are shown
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -496,6 +498,7 @@ export default function Stock() {
                   <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Equivalência</th>
                   <th className="text-right text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Limite mínimo</th>
                   <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Estado</th>
+                  <th className="text-right text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -517,6 +520,16 @@ export default function Stock() {
                           OK
                         </span>
                       )}
+                      {l.expired_quantity > 0 && (
+                        <span className="ml-1.5 inline-flex items-center gap-1 bg-danger/10 text-danger text-[11px] font-semibold uppercase tracking-wide px-2.5 py-1 rounded" title="Quantidade em lotes expirados - nunca é vendida">
+                          {formatQty(l.expired_quantity)} expirado
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      {l.followed_by_lot && (
+                        <button type="button" onClick={() => setLotsOf(l)} className="text-[12px] border border-border hover:border-accent text-text-primary px-2.5 py-1 rounded-md cursor-pointer">Lotes</button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -525,6 +538,8 @@ export default function Stock() {
           </div>
         )}
       </div>
+
+      <StockLotsModal product={lotsOf} onClose={() => setLotsOf(null)} />
 
       <Modal open={receiveModalOpen} onClose={() => setReceiveModalOpen(false)} title="Registar Receção de Stock" maxWidthClass="max-w-6xl">
         <MovementForm

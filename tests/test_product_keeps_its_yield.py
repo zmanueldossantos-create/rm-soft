@@ -17,7 +17,7 @@ async def test_editing_a_finished_product_keeps_its_yield(db, company_with_essen
     db.add(bread)
     await db.commit()
     await update_product(db, company_id=ctx["company"].id, product_id=bread.id, code=code, name="Pao de forma",
-                         barcode=None, vat_id=ctx["vat_nor"].id, price=120, min_stock_threshold=0, expiry_date=None,
+                         barcode=None, vat_id=ctx["vat_nor"].id, price=120, min_stock_threshold=0,
                          unit_of_measure_id=ctx["unit_un"].id)
     kept = (await db.execute(select(Product).where(Product.id == bread.id))).scalar_one()
     assert float(kept.batch_yield) == 60 and kept.name == "Pao de forma"

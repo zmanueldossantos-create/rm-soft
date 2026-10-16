@@ -2587,7 +2587,7 @@ export default function Caixa() {
       </Modal>
 
 
-      <Modal variant="drawer" drawerLeftClass="left-16" open={proFormaModalOpen} onClose={() => setProFormaModalOpen(false)} title="Consultar documentos" maxWidthClass="max-w-4xl">
+      <Modal variant="drawer" drawerLeftClass="left-16" open={proFormaModalOpen} onClose={() => setProFormaModalOpen(false)} title="Consultar documentos" maxWidthClass="max-w-6xl">
         <div className="flex flex-col gap-3">
           <div className="flex gap-1 border-b border-border">
             {[['docs', 'Documentos emitidos', recentInvoices.length], ['proformas', 'Pro-formas pendentes', pendingProFormas.length]].map(([key, label, count]) => (
@@ -2605,9 +2605,9 @@ export default function Caixa() {
             <p className="text-text-muted text-[13px] text-center py-8">Nenhuma pro-forma pendente de liquidação</p>
           ) : (
             <div>
-              <div className="max-h-[calc(100vh-15rem)] overflow-y-auto overflow-x-auto scrollbar-thin">
+              <div>
               <table className="w-full text-[12px] border-collapse">
-                <thead className="sticky top-0 bg-bg-elevated">
+                <thead className="sticky -top-5 z-10 bg-bg-elevated">
                   <tr className="border-b border-border text-[10px] font-semibold text-text-muted uppercase tracking-wide">
                     <th className="text-left px-2.5 py-2">Documento</th>
                     <th className="text-left px-2.5 py-2">Data</th>
@@ -2648,9 +2648,9 @@ export default function Caixa() {
             ) : recentInvoices.length === 0 ? (
               <p className="text-text-muted text-[13px] text-center py-6">Nenhum documento emitido ainda</p>
             ) : (
-              <div className="max-h-[calc(100vh-15rem)] overflow-y-auto overflow-x-auto scrollbar-thin">
+              <div>
                 <table className="w-full text-[12px] border-collapse">
-                  <thead className="sticky top-0 bg-bg-elevated">
+                  <thead className="sticky -top-5 z-10 bg-bg-elevated">
                     <tr className="border-b border-border text-[10px] font-semibold text-text-muted uppercase tracking-wide">
                       <th className="text-left px-2.5 py-2">Documento</th>
                       <th className="text-left px-2.5 py-2">Data</th>

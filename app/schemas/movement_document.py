@@ -13,6 +13,9 @@ class MovementDocumentLineRequest(BaseModel):
     sale_unit_id: uuid.UUID | None = None  # entered in one of the product's units (SC...); empty = its base unit
     purchase_price: float = 0
     sale_price: float = 0
+    lot_number: str | None = None  # an entry of a product followed by lot / expiry: the lot it fills
+    expiry_date: date | None = None
+    lot_id: uuid.UUID | None = None  # an exit: the lot it takes (empty = FEFO)
 
 
 class MovementDocumentCreateRequest(BaseModel):
@@ -43,6 +46,8 @@ class MovementDocumentLineResponse(BaseModel):
     purchase_price: float
     sale_price: float
     line_total: float
+    lot_number: str | None = None
+    expiry_date: date | None = None
 
     class Config:
         from_attributes = True

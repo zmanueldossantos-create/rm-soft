@@ -19,6 +19,8 @@ class StockLevelResponse(BaseModel):
     quantity: float
     min_stock_threshold: float
     is_low: bool
+    followed_by_lot: bool = False  # followed by lot / expiry: its lots are listed (Stock > Lotes)
+    expired_quantity: float = 0  # in expired lots - never sold
 
 
 class StockAdjustRequest(BaseModel):

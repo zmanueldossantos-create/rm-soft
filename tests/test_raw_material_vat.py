@@ -19,7 +19,7 @@ from app.services.vat_rule_service import ArticleVatError
 async def _create(db, ctx, code, vat_id, raw=False):
     return await create_product(
         db, company_id=ctx["company"].id, unit_of_measure_id=ctx["unit_un"].id, code=code, name="Item " + code, barcode=None, vat_id=vat_id,
-        price=0 if raw else 1000, min_stock_threshold=0, expiry_date=None,is_raw_material=raw,
+        price=0 if raw else 1000, min_stock_threshold=0, is_raw_material=raw,
     )
 
 
@@ -51,7 +51,7 @@ async def test_update_can_make_a_raw_material_but_a_normal_product_keeps_needing
     product_id = product.id
     common = dict(unit_of_measure_id=ctx["unit_un"].id, 
         company_id=ctx["company"].id, product_id=product_id, code="P-4", name="Item P-4", barcode=None, price=1000,
-        min_stock_threshold=0, expiry_date=None,
+        min_stock_threshold=0,
     )
     raw = await update_product(db, vat_id=None, is_raw_material=True, **common)
     assert raw.vat_id is None and raw.is_raw_material is True

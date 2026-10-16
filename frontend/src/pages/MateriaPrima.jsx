@@ -24,6 +24,8 @@ const emptyForm = {
   name: '',
   unit_of_measure_id: '',
   min_stock_threshold: '0',
+  managed_by_batch: false,
+  managed_by_expiry: false,
 };
 
 export default function MateriaPrima() {
@@ -84,6 +86,8 @@ export default function MateriaPrima() {
       name: material.name,
       unit_of_measure_id: material.unit_of_measure_id || '',
       min_stock_threshold: String(material.min_stock_threshold),
+      managed_by_batch: !!material.managed_by_batch,
+      managed_by_expiry: !!material.managed_by_expiry,
     });
     setFormError('');
     setModalOpen(true);
@@ -116,7 +120,8 @@ export default function MateriaPrima() {
       // Kept as it is: only receptions set the last purchase price (an edit must never erase it).
       purchase_price: editingMaterial ? editingMaterial.purchase_price ?? null : null,
       min_stock_threshold: parseFloat(form.min_stock_threshold || '0'),
-      expiry_date: null,
+      managed_by_batch: form.managed_by_batch,
+      managed_by_expiry: form.managed_by_expiry,
       product_type: 'BEM',
       unit_of_measure_id: form.unit_of_measure_id || null,
       is_raw_material: true,
@@ -298,6 +303,18 @@ export default function MateriaPrima() {
               onChange={(e) => updateField('min_stock_threshold', e.target.value)}
               className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors"
             />
+          </div>
+
+          {/* followed by lot / expiry: the lot is entered on every entry, a production uses the first to expire */}
+          <div className="sm:col-span-2 grid grid-cols-2 gap-2 pt-2 border-t border-border">
+            <label className="flex items-center gap-2.5 cursor-pointer select-none" title="Número de lote obrigatório em cada entrada de stock. Só pode ser alterado com o stock a zero.">
+              <input type="checkbox" checked={form.managed_by_batch} onChange={(e) => updateField('managed_by_batch', e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
+              <span className="text-sm text-text-primary">Gerido por lotes</span>
+            </label>
+            <label className="flex items-center gap-2.5 cursor-pointer select-none" title="Data de validade obrigatória em cada entrada de stock; um lote expirado nunca é usado. Só pode ser alterado com o stock a zero.">
+              <input type="checkbox" checked={form.managed_by_expiry} onChange={(e) => updateField('managed_by_expiry', e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
+              <span className="text-sm text-text-primary">Gerido por validade</span>
+            </label>
           </div>
 
           {editingMaterial && (() => {

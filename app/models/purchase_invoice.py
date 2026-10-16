@@ -101,3 +101,6 @@ class PurchaseInvoiceLine(Base):
     vat_non_deductible: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
     cost: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)  # HT + non-deductible VAT
     deductible_tax_type: Mapped[str] = mapped_column(String(4), nullable=False, default="OBC", server_default="OBC")
+    # the lot received (a product followed by lot / expiry, entering the stock)
+    lot_number: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    expiry_date: Mapped[date | None] = mapped_column(Date, nullable=True)

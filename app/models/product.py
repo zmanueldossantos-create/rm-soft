@@ -24,9 +24,9 @@ separate purchase price alongside the existing sale price.
 """
 import enum
 import uuid
-from datetime import date, datetime
+from datetime import datetime
 
-from sqlalchemy import String, Numeric, Boolean, Date, DateTime, ForeignKey, Enum, func, UniqueConstraint
+from sqlalchemy import String, Numeric, Boolean, DateTime, ForeignKey, Enum, func, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import UUID
 
@@ -71,7 +71,6 @@ class Product(Base):
     # None = cost unknown. The purchase price above stays a reference typed on the product sheet.
     average_cost: Mapped[float | None] = mapped_column(Numeric(14, 4), nullable=True)
     min_stock_threshold: Mapped[float] = mapped_column(Numeric(12, 3), nullable=False, default=0)
-    expiry_date: Mapped[date | None] = mapped_column(Date, nullable=True)  # DLC
     product_type: Mapped[ProductType] = mapped_column(Enum(ProductType), nullable=False, default=ProductType.BEM)
     # Base unit, from the platform catalog (Configuracoes > Unidades) - required: the SAF-T and the documents show it.
     unit_of_measure_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("unit_of_measure_catalog.id"), nullable=True)

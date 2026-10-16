@@ -15,6 +15,8 @@ class PurchaseInvoiceLineInput(BaseModel):
     legal_vat_rate_id: uuid.UUID
     exemption_id: uuid.UUID | None = None  # required on an exempt line
     deductible_tax_type: str | None = None  # MFI, INV, OBC, SERV, IMPT, SCE - by default from the line
+    lot_number: str | None = None  # a product followed by lot / expiry entering the stock: the lot received
+    expiry_date: date | None = None
 
 
 class PurchaseInvoiceCreateRequest(BaseModel):

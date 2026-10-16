@@ -3,13 +3,15 @@ import { X } from 'lucide-react';
 
 // stacked: this modal opens on top of another already-open one (e.g. Liquidar pro-forma over Consultar
 // documentos) - higher z-index, and no own backdrop since the modal underneath already dims the page.
+// size="full": the whole height of the screen (a long entry form - lines, lots), at the width maxWidthClass gives: the
+// body scrolls, the footer stays visible.
 // variant="drawer": slides in from the left between the navbar (h-14) and the footer (h-11), starting after a page
 // sidebar (drawerLeftClass, e.g. "left-16" at the Caixa); on close it slides back out before being removed.
 const DRAWER_OUT_MS = 220;
 
 export default function Modal({
   open, onClose, title, subtitle, children, footer, maxWidthClass = 'max-w-md', stacked = false,
-  variant = 'center', drawerLeftClass = 'left-0',
+  variant = 'center', drawerLeftClass = 'left-0', size = 'auto',
 }) {
   const isDrawer = variant === 'drawer';
   const [rendered, setRendered] = useState(open);
@@ -78,7 +80,7 @@ export default function Modal({
         />
       )}
       {stacked && <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />}
-      <div className={'relative bg-bg-elevated border border-border rounded-lg w-full shadow-2xl flex flex-col max-h-[90vh] ' + maxWidthClass}>
+      <div className={'relative bg-bg-elevated border border-border rounded-lg w-full shadow-2xl flex flex-col ' + (size === 'full' ? 'h-[calc(100vh-2rem)] ' : 'max-h-[90vh] ') + maxWidthClass}>
         {header}
         {body}
         {foot}

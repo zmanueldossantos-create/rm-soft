@@ -24,6 +24,7 @@ from app.models.stock_movement import StockMovement, MovementType, LossCategory
 from app.models.warehouse import Warehouse
 from app.models.product import Product
 from app.models.recipe_ingredient import RecipeIngredient
+from app.services.stock_lot_service import LotInputError, check_lot_input, lots_in, lots_out, parts_taken_by
 
 
 class WarehouseNotFoundError(Exception):
@@ -240,18 +241,27 @@ async def receive_stock(
     quantity: float,
     reason: str | None = None,
     fiscal_period_id: uuid.UUID | None = None,
+    lot_number: str | None = None,
+    expiry_date: date | None = None,
+    warehouse_id: uuid.UUID | None = None,
 ) -> Stock:
     """Records incoming stock (purchase, production) into the CENTRAL warehouse - RECEPCAO movement."""
     posting_period = await resolve_posting_period(db, company_id, fiscal_period_id)
-    warehouse = await get_default_warehouse(db, company_id)
+    warehouse = await get_warehouse_or_raise(db, company_id, warehouse_id) if warehouse_id else await get_default_warehouse(db, company_id)
     await _stock_rule(db, product_id, warehouse.id, "in", strict=True)
+    product = (await db.execute(select(Product).where(Product.id == product_id))).scalar_one()
+    lot_number, expiry_date = check_lot_input(product, lot_number, expiry_date)
     stock = await _get_or_create_stock_row(db, company_id, product_id, warehouse.id)
 
-    stock.quantity = float(stock.quantity) + quantity
-    db.add(StockMovement(
+    stock_before = float(stock.quantity)
+    stock.quantity = stock_before + quantity
+    movement = StockMovement(
         company_id=company_id, fiscal_period_id=posting_period.id, product_id=product_id, warehouse_id=warehouse.id,
         movement_type=MovementType.RECEPCAO, quantity=quantity, reason=reason,
-    ))
+    )
+    db.add(movement)
+    await lots_in(db, company_id, product_id, warehouse.id, quantity, movement, stock_before,
+                  [(lot_number, expiry_date, quantity)])
 
     await db.commit()
     await db.refresh(stock)
@@ -312,6 +322,7 @@ async def transfer_stock(
     reason: str | None = None,
     sale_unit_id: uuid.UUID | None = None,  # entered in one of the product's units (SC...); empty = base unit
     fiscal_period_id: uuid.UUID | None = None,
+    lot_id: uuid.UUID | None = None,  # a product followed by lot: the lot moved (empty = FEFO, never an expired one)
 ) -> None:
     """
     Internally moves stock between any two of the company's warehouses
@@ -340,19 +351,26 @@ async def transfer_stock(
 
     dest_stock = await _get_or_create_stock_row(db, company_id, product_id, to_warehouse_id)
 
+    dest_before = float(dest_stock.quantity)
     source_stock.quantity = float(source_stock.quantity) - quantity
-    dest_stock.quantity = float(dest_stock.quantity) + quantity
+    dest_stock.quantity = dest_before + quantity
 
-    db.add(StockMovement(
+    out_movement = StockMovement(
         company_id=company_id, fiscal_period_id=posting_period.id, product_id=product_id, warehouse_id=from_warehouse_id,
         movement_type=MovementType.TRANSFERENCIA, quantity=quantity, reason=reason,
         counterpart_warehouse_id=to_warehouse_id, is_transfer_source=True,
-    ))
-    db.add(StockMovement(
+    )
+    in_movement = StockMovement(
         company_id=company_id, fiscal_period_id=posting_period.id, product_id=product_id, warehouse_id=to_warehouse_id,
         movement_type=MovementType.TRANSFERENCIA, quantity=quantity, reason=reason,
         counterpart_warehouse_id=from_warehouse_id, is_transfer_source=False,
-    ))
+    )
+    db.add(out_movement)
+    db.add(in_movement)
+    # the lots travel with the goods: same number and date in the destination warehouse
+    taken = await lots_out(db, company_id, product_id, from_warehouse_id, quantity, out_movement, lot_id=lot_id,
+                           usable_only=lot_id is None)
+    await lots_in(db, company_id, product_id, to_warehouse_id, quantity, in_movement, dest_before, taken)
 
     await db.commit()
 
@@ -367,6 +385,7 @@ async def record_stock_loss(
     reason: str | None = None,
     sale_unit_id: uuid.UUID | None = None,  # entered in one of the product's units (SC...); empty = base unit
     fiscal_period_id: uuid.UUID | None = None,
+    lot_id: uuid.UUID | None = None,  # a product followed by lot: the lot lost (empty = FEFO, the expired first)
 ) -> Stock:
     """
     Writes off stock with no sale - expiry, breakage, theft, or other
@@ -387,11 +406,13 @@ async def record_stock_loss(
         raise InsufficientStockError(f"Stock insuficiente para {product_name} (disponível: {_format_quantity(float(stock.quantity))})")
 
     stock.quantity = float(stock.quantity) - quantity
-    db.add(StockMovement(
+    movement = StockMovement(
         company_id=company_id, fiscal_period_id=posting_period.id, product_id=product_id, warehouse_id=warehouse.id,
         movement_type=MovementType.PERDA, quantity=quantity,
         loss_category=LossCategory(loss_category), reason=reason,
-    ))
+    )
+    db.add(movement)
+    await lots_out(db, company_id, product_id, warehouse.id, quantity, movement, lot_id=lot_id)
 
     await db.commit()
     await db.refresh(stock)
@@ -407,6 +428,9 @@ async def adjust_stock(
     reason: str,
     sale_unit_id: uuid.UUID | None = None,  # entered in one of the product's units (SC...); empty = base unit
     fiscal_period_id: uuid.UUID | None = None,
+    lot_id: uuid.UUID | None = None,  # a product followed by lot - a decrease: the lot it takes (empty = FEFO)
+    lot_number: str | None = None,  # an increase: the lot it fills
+    expiry_date: date | None = None,
 ) -> Stock:
     """
     Manually corrects stock to an exact new quantity (physical count
@@ -419,13 +443,25 @@ async def adjust_stock(
     await _stock_rule(db, product_id, warehouse.id, "adjust", strict=True)
     stock = await _get_or_create_stock_row(db, company_id, product_id, warehouse.id)
 
-    delta = new_quantity - float(stock.quantity)
+    stock_before = float(stock.quantity)
+    delta = new_quantity - stock_before
     await ensure_available_at_period_end(db, company_id, posting_period, product_id, warehouse.id, -delta, InsufficientStockError)
+    if delta > 0:
+        product = (await db.execute(select(Product).where(Product.id == product_id))).scalar_one()
+        try:
+            lot_number, expiry_date = check_lot_input(product, lot_number, expiry_date)
+        except LotInputError as e:
+            raise InsufficientStockError(str(e))
     stock.quantity = new_quantity
-    db.add(StockMovement(
+    movement = StockMovement(
         company_id=company_id, fiscal_period_id=posting_period.id, product_id=product_id, warehouse_id=warehouse.id,
         movement_type=MovementType.AJUSTE, quantity=delta, reason=reason,  # signed - preserves direction for display
-    ))
+    )
+    db.add(movement)
+    if delta > 0:
+        await lots_in(db, company_id, product_id, warehouse.id, delta, movement, stock_before, [(lot_number, expiry_date, delta)])
+    elif delta < 0:
+        await lots_out(db, company_id, product_id, warehouse.id, -delta, movement, lot_id=lot_id, allow_uncovered=True)
 
     await db.commit()
     await db.refresh(stock)
@@ -454,21 +490,24 @@ async def deduct_stock_for_sale(
         return  # a product without stock: sold, nothing moves
     await ensure_available_at_period_end(db, company_id, posting_period, product_id, warehouse_id, quantity, InsufficientStockError)
     stock = await _get_or_create_stock_row(db, company_id, product_id, warehouse_id)
+    warehouse = (await db.execute(select(Warehouse).where(Warehouse.id == warehouse_id))).scalar_one_or_none()
+    allow_negative = bool(warehouse and warehouse.allow_negative_stock)
 
-    if float(stock.quantity) < quantity:
-        warehouse_result = await db.execute(select(Warehouse).where(Warehouse.id == warehouse_id))
-        warehouse = warehouse_result.scalar_one_or_none()
-        if not (warehouse and warehouse.allow_negative_stock):
-            result = await db.execute(select(Product).where(Product.id == product_id))
-            product = result.scalar_one_or_none()
-            product_name = product.name if product else str(product_id)
-            raise InsufficientStockError(f"Stock insuficiente para {product_name} (disponível: {_format_quantity(float(stock.quantity))})")
+    if float(stock.quantity) < quantity and not allow_negative:
+        result = await db.execute(select(Product).where(Product.id == product_id))
+        product = result.scalar_one_or_none()
+        product_name = product.name if product else str(product_id)
+        raise InsufficientStockError(f"Stock insuficiente para {product_name} (disponível: {_format_quantity(float(stock.quantity))})")
 
     stock.quantity = float(stock.quantity) - quantity
-    db.add(StockMovement(
+    movement = StockMovement(
         company_id=company_id, fiscal_period_id=posting_period.id, product_id=product_id, warehouse_id=warehouse_id,
         movement_type=MovementType.SAIDA, quantity=quantity, reference=reference,
-    ))
+    )
+    db.add(movement)
+    # FEFO, never an expired lot - a product followed by lot (see stock_lot_service)
+    await lots_out(db, company_id, product_id, warehouse_id, quantity, movement, usable_only=True,
+                   allow_uncovered=allow_negative)
     # No commit here - part of the caller's (invoice creation) transaction.
 
 
@@ -480,6 +519,7 @@ async def return_stock_for_credit_note(
     quantity: float,
     reference: str,
     fiscal_period_id: uuid.UUID | None = None,
+    sale_reference: str | None = None,  # the invoice credited: its goods go back into the lots its sale took
 ) -> None:
     """
     Puts credited goods back into the warehouse the sale took them from - the mirror of
@@ -491,12 +531,16 @@ async def return_stock_for_credit_note(
     if not await _stock_rule(db, product_id, warehouse_id, "in", strict=False):
         return
     stock = await _get_or_create_stock_row(db, company_id, product_id, warehouse_id)
-    stock.quantity = float(stock.quantity) + quantity
-    db.add(StockMovement(
+    stock_before = float(stock.quantity)
+    stock.quantity = stock_before + quantity
+    movement = StockMovement(
         company_id=company_id, fiscal_period_id=posting_period.id, product_id=product_id, warehouse_id=warehouse_id,
         movement_type=MovementType.RECEPCAO, quantity=quantity, reference=reference,
         reason="Devolução - nota de crédito",
-    ))
+    )
+    db.add(movement)
+    parts = await parts_taken_by(db, company_id, product_id, warehouse_id, sale_reference, [MovementType.SAIDA]) if sale_reference else []
+    await lots_in(db, company_id, product_id, warehouse_id, quantity, movement, stock_before, parts)
 
 
 async def list_stock_levels(db: AsyncSession, company_id: uuid.UUID, warehouse_id: uuid.UUID) -> list[dict]:
@@ -508,6 +552,15 @@ async def list_stock_levels(db: AsyncSession, company_id: uuid.UUID, warehouse_i
         .order_by(Product.name)
     )
     rows = result.all()
+    # a product followed by lot: how much of it has expired here (never sold - see stock_lot_service)
+    from sqlalchemy import func as _func
+    from app.models.stock_lot import StockLot
+    from app.services.stock_lot_service import is_followed
+    expired = dict((await db.execute(
+        select(StockLot.product_id, _func.sum(StockLot.quantity)).where(
+            StockLot.warehouse_id == warehouse_id, StockLot.quantity > 0, StockLot.expiry_date < date.today(),
+        ).group_by(StockLot.product_id)
+    )).all())
     return [
         {
             "product_id": product.id,
@@ -516,6 +569,8 @@ async def list_stock_levels(db: AsyncSession, company_id: uuid.UUID, warehouse_i
             "quantity": float(stock.quantity),
             "min_stock_threshold": float(product.min_stock_threshold),
             "is_low": float(stock.quantity) <= float(product.min_stock_threshold),
+            "followed_by_lot": is_followed(product),
+            "expired_quantity": float(expired.get(product.id, 0) or 0),
         }
         for stock, product in rows
     ]
@@ -631,6 +686,8 @@ async def produce_stock(
     reason: str | None = None,
     fiscal_period_id: uuid.UUID | None = None,
     sale_unit_id: uuid.UUID | None = None,  # produce in a package (5 CX)
+    lot_number: str | None = None,  # a product followed by lot: the batch made (empty = P + the date, e.g. P20261016)
+    expiry_date: date | None = None,  # a product followed by expiry: its date (required)
 ) -> Stock:
     """
     Transforms ingredients into a finished product, within ONE warehouse
@@ -651,6 +708,12 @@ async def produce_stock(
     product_result = await db.execute(select(Product).where(Product.id == finished_product_id))
     product = product_result.scalar_one()
     batches_needed = quantity_to_produce / float(product.batch_yield)
+    if product.managed_by_batch and not (lot_number or "").strip():
+        lot_number = f"P{date.today():%Y%m%d}"
+    try:
+        lot_number, expiry_date = check_lot_input(product, lot_number, expiry_date)
+    except LotInputError as e:
+        raise InsufficientStockError(str(e))
 
     # Validate ALL ingredients are sufficient BEFORE deducting any of them.
     ingredient_stocks = []
@@ -685,24 +748,30 @@ async def produce_stock(
 
     for stock, needed, ingredient_product_id in ingredient_stocks:
         stock.quantity = float(stock.quantity) - needed
-        db.add(StockMovement(
+        movement = StockMovement(
             company_id=company_id, fiscal_period_id=posting_period.id, product_id=ingredient_product_id, warehouse_id=warehouse_id,
             movement_type=MovementType.PRODUCAO, quantity=needed, reason=reason,
             is_production_output=False, unit_cost=ingredient_costs.get(ingredient_product_id),
-        ))
+        )
+        db.add(movement)
+        await lots_out(db, company_id, ingredient_product_id, warehouse_id, needed, movement, usable_only=True)
 
     cost_before = cost_after = None
     if produced_unit_cost is not None:  # THE average cost rule, before the quantity made is added (as a reception)
         finished = (await db.execute(select(Product).where(Product.id == finished_product_id))).scalar_one()
         cost_before, cost_after = await update_average_cost(db, company_id, finished, quantity_to_produce, produced_unit_cost)
     finished_stock = await _get_or_create_stock_row(db, company_id, finished_product_id, warehouse_id)
-    finished_stock.quantity = float(finished_stock.quantity) + quantity_to_produce
-    db.add(StockMovement(
+    finished_before = float(finished_stock.quantity)
+    finished_stock.quantity = finished_before + quantity_to_produce
+    movement = StockMovement(
         company_id=company_id, fiscal_period_id=posting_period.id, product_id=finished_product_id, warehouse_id=warehouse_id,
         movement_type=MovementType.PRODUCAO, quantity=quantity_to_produce, reason=reason,
         is_production_output=True, unit_cost=produced_unit_cost,
         average_cost_before=cost_before, average_cost_after=cost_after,
-    ))
+    )
+    db.add(movement)
+    await lots_in(db, company_id, finished_product_id, warehouse_id, quantity_to_produce, movement, finished_before,
+                  [(lot_number, expiry_date, quantity_to_produce)])
 
     await db.commit()
     await db.refresh(finished_stock)
