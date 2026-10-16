@@ -50,6 +50,7 @@ PERMISSION_CATALOG: list[tuple[str, str, str, list[str]]] = [
     ("suppliers:manage", "Criar e editar fornecedores", "Fornecedores", []),
     ("purchases:view", "Ver as faturas de compra", "Fornecedores", ["CONTABILISTA"]),
     ("purchases:manage", "Registar e anular faturas de compra", "Fornecedores", []),
+    ("purchases:pay", "Pagar fornecedores e anular pagamentos", "Fornecedores", []),
     ("guias:view", "Ver as guias de remessa, transporte e devolução", "Guias", ["ARMAZENISTA", "CONTABILISTA"]),
     ("guias:manage", "Emitir e anular guias de remessa, transporte e devolução", "Guias", ["ARMAZENISTA"]),
     ("guias:invoice", "Faturar guias de remessa (uma fatura para as guias de um cliente)", "Guias", []),

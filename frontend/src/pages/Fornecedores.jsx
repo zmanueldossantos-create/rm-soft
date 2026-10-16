@@ -1,5 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Truck, Plus, Pencil, Loader2, Search } from 'lucide-react';
+import { Truck, Plus, Pencil, Loader2, Search, BookOpen } from 'lucide-react';
+import SupplierStatementModal from '../components/SupplierStatementModal';
+import { getSupplierBalances } from '../api/supplierPayments';
+import { useCan } from '../utils/permissions';
+import { formatKz } from '../utils/format';
 import { listSuppliers, createSupplier, updateSupplier, toggleSupplierStatus } from '../api/suppliers';
 import { extractErrorMessage } from '../utils/errors';
 import Modal from '../components/Modal';
@@ -19,7 +23,10 @@ function ToggleSwitch({ checked, onChange, disabled }) {
 const emptyForm = { name: '', tradeName: '', countryId: '', nif: '', phoneNumber: '', email: '', address: '', paymentTerms: '', notes: '' };
 
 export default function Fornecedores() {
+  const can = useCan();
   const [suppliers, setSuppliers] = useState([]);
+  const [balances, setBalances] = useState({});  // what the company owes each supplier
+  const [statementOf, setStatementOf] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [togglingId, setTogglingId] = useState(null);
@@ -47,6 +54,7 @@ export default function Fornecedores() {
     setError('');
     try {
       setSuppliers(await listSuppliers());
+      if (can('purchases:view')) getSupplierBalances().then(setBalances).catch(() => setBalances({}));
     } catch (err) {
       setError(extractErrorMessage(err, 'Erro ao carregar fornecedores'));
     } finally {
@@ -177,6 +185,7 @@ export default function Fornecedores() {
                 <th className="text-left px-4 py-2.5">NIF</th>
                 <th className="text-left px-4 py-2.5">Telefone</th>
                 <th className="text-left px-4 py-2.5">Condições de pagamento</th>
+                {can('purchases:view') && <th className="text-right px-4 py-2.5">Saldo em dívida</th>}
                 <th className="text-left px-4 py-2.5">Estado</th>
                 <th className="text-right px-4 py-2.5">Ações</th>
               </tr>
@@ -188,10 +197,18 @@ export default function Fornecedores() {
                   <td className="px-4 py-2.5 text-text-muted font-mono text-[12px]">{s.nif || '-'}</td>
                   <td className="px-4 py-2.5 text-text-muted">{s.phone_number || '-'}</td>
                   <td className="px-4 py-2.5 text-text-muted">{s.payment_terms || '-'}</td>
+                  {can('purchases:view') && (
+                    <td className={'px-4 py-2.5 text-right font-mono whitespace-nowrap ' + (balances[s.id] > 0 ? 'text-text-primary font-semibold' : 'text-text-muted')}>{formatKz(balances[s.id] || 0)} Kz</td>
+                  )}
                   <td className="px-4 py-2.5">
                     <ToggleSwitch checked={s.is_active} disabled={togglingId === s.id} onChange={() => handleToggle(s.id)} />
                   </td>
-                  <td className="px-4 py-2.5 text-right">
+                  <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                    {can('purchases:view') && (
+                      <button onClick={() => setStatementOf(s)} className="inline-flex items-center gap-1.5 h-8 px-2.5 mr-2 rounded-md border border-border text-text-primary text-[12px] font-medium hover:border-accent hover:text-accent transition-colors cursor-pointer">
+                        <BookOpen size={13} /> Conta corrente
+                      </button>
+                    )}
                     <button onClick={() => openEditForm(s)} className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-border text-text-muted hover:text-text-primary hover:border-accent transition-colors cursor-pointer">
                       <Pencil size={13} />
                     </button>
@@ -259,6 +276,8 @@ export default function Fornecedores() {
           </button>
         </form>
       </Modal>
+
+      <SupplierStatementModal supplier={statementOf} onClose={() => setStatementOf(null)} />
     </main>
   );
 }

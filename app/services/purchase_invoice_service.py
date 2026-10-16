@@ -275,6 +275,13 @@ async def cancel_purchase_invoice(db: AsyncSession, company_id: uuid.UUID, invoi
     ))).first()
     if credit_note is not None:
         raise PurchaseInvoiceError(f"Anule primeiro a nota de crédito {credit_note[0]}/{credit_note[1]} desta fatura")
+    from app.models.supplier_payment import SupplierPayment, SupplierPaymentAllocation, SupplierPaymentStatus
+    payment = (await db.execute(select(SupplierPayment.series, SupplierPayment.number)
+                                .join(SupplierPaymentAllocation, SupplierPaymentAllocation.payment_id == SupplierPayment.id)
+                                .where(SupplierPaymentAllocation.purchase_invoice_id == invoice.id,
+                                       SupplierPayment.status == SupplierPaymentStatus.REGISTADO))).first()
+    if payment is not None:  # what was paid on it must be cancelled first
+        raise PurchaseInvoiceError(f"Anule primeiro o pagamento {payment[0]}/{payment[1]} desta fatura")
     if invoice.stock_entry_document_id is not None:
         # its products leave the warehouse they entered - in the active period, today; refused if no longer there
         entry_lines = (await db.execute(
@@ -302,8 +309,13 @@ async def cancel_purchase_invoice(db: AsyncSession, company_id: uuid.UUID, invoi
     return invoice
 
 
-def _summary(invoice: PurchaseInvoice, supplier: Supplier, period_label: str) -> dict:
+def _summary(invoice: PurchaseInvoice, supplier: Supplier, period_label: str, balance: dict | None = None) -> dict:
+    balance = balance or {}
     return {
+        # what is paid and still owed on it (supplier_payment_service.invoice_balances)
+        "amount_paid": balance.get("paid", 0.0), "amount_credited": balance.get("credited", 0.0),
+        "amount_due": balance.get("due", 0.0), "payment_status": balance.get("payment_status"),
+        "overdue": balance.get("overdue", False),
         "id": invoice.id, "reference": f"{invoice.series}/{invoice.number}", "status": invoice.status.value,
         "purchase_type": invoice.purchase_type, "supplier_hash": invoice.supplier_hash,
         "supplier_id": supplier.id, "supplier_name": supplier.name, "supplier_nif": supplier.nif,
@@ -345,7 +357,10 @@ async def list_purchase_invoices(
         query = query.where(PurchaseInvoice.document_date <= date_to)
     rows = (await db.execute(query.order_by(PurchaseInvoice.document_date.desc(), PurchaseInvoice.number.desc()))).all()
     labels = await _period_labels(db, {i.fiscal_period_id for i, _ in rows})
-    return [_summary(invoice, supplier, labels.get(invoice.fiscal_period_id, "-")) for invoice, supplier in rows]
+    from app.services.supplier_payment_service import invoice_balances
+    balances = await invoice_balances(db, [i for i, _ in rows])
+    return [_summary(invoice, supplier, labels.get(invoice.fiscal_period_id, "-"), balances.get(invoice.id))
+            for invoice, supplier in rows]
 
 
 async def get_purchase_invoice(db: AsyncSession, company_id: uuid.UUID, invoice_id: uuid.UUID) -> dict:
@@ -368,8 +383,10 @@ async def get_purchase_invoice(db: AsyncSession, company_id: uuid.UUID, invoice_
     )).scalars().all()}
     warehouse_name = (await db.execute(select(Warehouse.name).where(Warehouse.id == invoice.warehouse_id))).scalar_one_or_none() \
         if invoice.warehouse_id else None
+    from app.services.supplier_payment_service import invoice_balances
+    balance = (await invoice_balances(db, [invoice])).get(invoice.id)
     return {
-        **_summary(invoice, supplier, labels.get(invoice.fiscal_period_id, "-")),
+        **_summary(invoice, supplier, labels.get(invoice.fiscal_period_id, "-"), balance),
         "created_by": names.get(invoice.created_by_user_id), "cancelled_by": names.get(invoice.cancelled_by_user_id),
         "cancelled_at": invoice.cancelled_at, "warehouse_name": warehouse_name,
         "reference_invoice": reference_label,

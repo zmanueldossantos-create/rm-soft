@@ -22,6 +22,7 @@ import Users from './pages/Users';
 import Tesouraria from './pages/Tesouraria';
 import ApuramentoIva from './pages/ApuramentoIva';
 import Compras from './pages/Compras';
+import PagamentosFornecedores from './pages/PagamentosFornecedores';
 import Guias from './pages/Guias';
 import Recursos from './pages/Recursos';
 import Reservas from './pages/Reservas';
@@ -93,6 +94,7 @@ export default function App() {
           <Route path="/consumo-interno" element={<RequirePermission perm="internal_consumption:view"><ConsumoInterno /></RequirePermission>} />
           <Route path="/fornecedores" element={<RequirePermission perm="suppliers:manage"><Fornecedores /></RequirePermission>} />
           <Route path="/compras" element={<RequirePermission perm="purchases:view"><Compras /></RequirePermission>} />
+          <Route path="/pagamentos-fornecedores" element={<RequirePermission perm="purchases:view"><PagamentosFornecedores /></RequirePermission>} />
           <Route path="/guias" element={<RequirePermission perm="guias:view"><Guias /></RequirePermission>} />
           <Route path="/permissoes" element={<GestorRoute><Permissoes /></GestorRoute>} />
           <Route path="/contas-abertas" element={<RequirePermission perm="open_accounts:view"><ContasAbertas /></RequirePermission>} />

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { FileInput, Plus, Loader2, Trash2, Ban, Search } from 'lucide-react';
+import { FileInput, Plus, Loader2, Trash2, Ban, Search, Eye, Wallet, CheckCircle2 } from 'lucide-react';
+import SupplierPaymentModal from '../components/SupplierPaymentModal';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
 import DateInput from '../components/DateInput';
@@ -40,6 +41,8 @@ const DESTINATIONS = [{ value: 'INV', label: 'INV - Existências' }, { value: 'O
   { value: 'MFI', label: 'MFI - Meios fixos e investimentos' }, { value: 'IMPT', label: 'IMPT - Importação' }, { value: 'SCE', label: 'SCE - Serviços contratados no estrangeiro' }];
 const DEFAULT_DESTINATION = { product: 'INV', service: 'SERV', free: 'OBC' };
 const sign = (i) => (i.purchase_type === 'NC' ? -1 : 1);
+// what is paid on an invoice (supplier_payment_service): a FT is owed until paid, a FR / TV was paid when issued
+const PAYMENT_STATUS = { PENDENTE: ['Pendente', 'text-text-muted bg-text-muted/10'], PARCIAL: ['Parcial', 'text-text-primary bg-text-muted/15'], PAGA: ['Paga', 'text-success bg-success/10'] };
 
 const emptyLine = () => ({ kind: 'product', destination: 'INV', itemId: '', saleUnitId: '', description: '', quantity: '1', unitPrice: '', rateId: '', exemptionId: '' });
 
@@ -54,7 +57,11 @@ export default function Compras() {
   const [rates, setRates] = useState([]);
   const [motives, setMotives] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
-  const [filters, setFilters] = useState({ supplierId: '', status: '', dateFrom: todayIso().slice(0, 8) + '01', dateTo: todayIso() });
+  // payment 'DUE': every invoice still owed, whatever its date
+  const [filters, setFilters] = useState({ supplierId: '', status: '', payment: '', dateFrom: todayIso().slice(0, 8) + '01', dateTo: todayIso() });
+  const [selected, setSelected] = useState([]);  // invoices ticked to pay (one supplier)
+  const [paying, setPaying] = useState(null);
+  const [notice, setNotice] = useState('');
   const [search, setSearch] = useState('');
 
   const [formOpen, setFormOpen] = useState(false);
@@ -72,7 +79,10 @@ export default function Compras() {
     setLoading(true);
     setError('');
     try {
-      setInvoices(await listPurchaseInvoices(filters));
+      const due = filters.payment === 'DUE';
+      const rows = await listPurchaseInvoices(due ? { supplierId: filters.supplierId, status: 'REGISTADA' } : filters);
+      setInvoices(due ? rows.filter((i) => i.amount_due > 0.005) : rows);
+      setSelected((sel) => sel.filter((id) => rows.some((i) => i.id === id && i.amount_due > 0.005)));
     } catch (err) {
       setError(extractErrorMessage(err, 'Erro ao carregar as faturas de compra'));
     } finally {
@@ -194,6 +204,11 @@ export default function Compras() {
     }
   }
 
+  const canPay = can('purchases:pay');
+  const selectedSupplier = invoices.find((i) => i.id === selected[0])?.supplier_id;
+  const payable = (i) => i.status === 'REGISTADA' && i.purchase_type === 'FT' && i.amount_due > 0.005;
+  const canTick = (i) => payable(i) && (!selectedSupplier || i.supplier_id === selectedSupplier);
+  const toggle = (id) => setSelected((sel) => (sel.includes(id) ? sel.filter((x) => x !== id) : [...sel, id]));
   const shown = invoices.filter((i) => !search || (i.supplier_name + ' ' + i.supplier_document + ' ' + i.reference).toLowerCase().includes(search.toLowerCase()));
   const active = shown.filter((i) => i.status === 'REGISTADA');
   const sum = (k) => active.reduce((s, i) => s + sign(i) * i[k], 0);  // a credit note counts against
@@ -212,36 +227,48 @@ export default function Compras() {
           </h2>
           <p className="text-text-muted text-sm">As faturas dos fornecedores - IVA dedutível segundo o regime da empresa, o resto é custo</p>
         </div>
-        {can('purchases:manage') && (
-          <button onClick={openForm} className="bg-accent hover:bg-accent-hover text-white font-semibold text-sm rounded-md px-5 py-2.5 flex items-center gap-2 cursor-pointer">
-            <Plus size={16} /> Nova fatura de compra
-          </button>
-        )}
+        <div className="flex items-center gap-2.5">
+          {canPay && selected.length > 0 && (
+            <button onClick={() => setPaying(invoices.filter((i) => selected.includes(i.id)))} className="border border-accent text-accent hover:bg-accent/10 font-semibold text-sm rounded-md px-5 py-2.5 flex items-center gap-2 cursor-pointer">
+              <Wallet size={16} /> Pagar {selected.length} {selected.length === 1 ? 'fatura' : 'faturas'}
+            </button>
+          )}
+          {can('purchases:manage') && (
+            <button onClick={openForm} className="bg-accent hover:bg-accent-hover text-white font-semibold text-sm rounded-md px-5 py-2.5 flex items-center gap-2 cursor-pointer">
+              <Plus size={16} /> Nova fatura de compra
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex items-end gap-2.5 mb-5 flex-wrap">
-        <div className="relative w-64">
+        <div className="relative w-56">
           <label className={labelCls}>Pesquisar</label>
           <Search size={15} className="absolute left-3 bottom-2.5 text-text-muted" />
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Fornecedor, documento..." className={inputCls + ' pl-9'} />
         </div>
-        <div className="w-56">
+        <div className="w-52">
           <label className={labelCls}>Fornecedor</label>
           <Select value={filters.supplierId} onChange={(v) => setFilters((f) => ({ ...f, supplierId: v }))} placeholder="Todos"
             options={[{ value: '', label: 'Todos' }, ...suppliers.map((s) => ({ value: s.id, label: s.name }))]} />
         </div>
-        <div className="w-40">
+        <div className="w-36">
           <label className={labelCls}>Estado</label>
           <Select value={filters.status} onChange={(v) => setFilters((f) => ({ ...f, status: v }))} placeholder="Todos"
             options={[{ value: '', label: 'Todos' }, { value: 'REGISTADA', label: 'Registada' }, { value: 'ANULADA', label: 'Anulada' }]} />
         </div>
-        <div>
-          <label className={labelCls}>De</label>
-          <DateInput value={filters.dateFrom} onChange={(e) => setFilters((f) => ({ ...f, dateFrom: e.target.value }))} className={inputCls} />
+        <div className="w-56">
+          <label className={labelCls}>Pagamento</label>
+          <Select value={filters.payment} onChange={(v) => setFilters((f) => ({ ...f, payment: v }))}
+            options={[{ value: '', label: 'Todas' }, { value: 'DUE', label: 'Em dívida (todas as datas)' }]} />
         </div>
-        <div>
+        <div className="w-40">
+          <label className={labelCls}>De</label>
+          <DateInput value={filters.dateFrom} disabled={filters.payment === 'DUE'} onChange={(e) => setFilters((f) => ({ ...f, dateFrom: e.target.value }))} className={inputCls + (filters.payment === 'DUE' ? ' opacity-40 cursor-not-allowed' : '')} />
+        </div>
+        <div className="w-40">
           <label className={labelCls}>Até</label>
-          <DateInput value={filters.dateTo} min={filters.dateFrom || undefined} onChange={(e) => setFilters((f) => ({ ...f, dateTo: e.target.value }))} className={inputCls} />
+          <DateInput value={filters.dateTo} disabled={filters.payment === 'DUE'} min={filters.dateFrom || undefined} onChange={(e) => setFilters((f) => ({ ...f, dateTo: e.target.value }))} className={inputCls + (filters.payment === 'DUE' ? ' opacity-40 cursor-not-allowed' : '')} />
         </div>
       </div>
 
@@ -255,6 +282,13 @@ export default function Compras() {
       </div>
 
       {error && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r mb-4">{error}</div>}
+      {notice && (
+        <div className="bg-success/10 border-l-2 border-success text-success px-3.5 py-2.5 text-[13px] rounded-r mb-4 flex items-center justify-between gap-3">
+          <span className="flex items-center gap-2"><CheckCircle2 size={15} /> {notice}</span>
+          <button onClick={() => setNotice('')} className="text-[12px] underline cursor-pointer">Fechar</button>
+        </div>
+      )}
+      {canPay && <p className="text-[12px] text-text-muted mb-3">Para pagar, marque as faturas em dívida de um fornecedor - um pagamento para todas.</p>}
 
       <div className="bg-bg-elevated border border-border rounded-lg overflow-x-auto">
         {loading ? (
@@ -264,13 +298,24 @@ export default function Compras() {
         ) : (
           <table className="w-full text-sm">
             <thead><tr className="border-b border-border">
+              {canPay && <th className={th + ' w-10'} />}
               <th className={th + ' text-left'}>Registo</th><th className={th + ' text-left'}>Data</th><th className={th + ' text-left'}>Fornecedor</th>
               <th className={th + ' text-left'}>Documento</th><th className={th + ' text-right'}>Base</th><th className={th + ' text-right'}>IVA</th>
-              <th className={th + ' text-right'}>Dedutível</th><th className={th + ' text-right'}>Total</th><th className={th + ' text-left'}>Estado</th>
+              <th className={th + ' text-right'}>Dedutível</th><th className={th + ' text-right'}>Total</th><th className={th + ' text-right'}>Em dívida</th>
+              <th className={th + ' text-left'}>Estado</th><th className={th + ' text-right'}>Ações</th>
             </tr></thead>
             <tbody>
               {shown.map((i) => (
-                <tr key={i.id} onClick={() => openDetail(i.id)} className={'border-b border-border last:border-0 hover:bg-bg-inset/40 cursor-pointer ' + (i.status === 'ANULADA' ? 'opacity-50' : '')}>
+                <tr key={i.id} className={'border-b border-border last:border-0 ' + (i.status === 'ANULADA' ? 'opacity-50' : '') + (selected.includes(i.id) ? ' bg-accent/5' : '')}>
+                  {canPay && (
+                    <td className="px-3 py-2.5 text-center">
+                      {payable(i) && (
+                        <input type="checkbox" checked={selected.includes(i.id)} disabled={!selected.includes(i.id) && !canTick(i)} onChange={() => toggle(i.id)}
+                          title={!selected.includes(i.id) && !canTick(i) ? 'Outro fornecedor: um pagamento é de um só fornecedor' : 'Marcar para pagar'}
+                          className="w-4 h-4 accent-accent cursor-pointer disabled:cursor-not-allowed disabled:opacity-30" />
+                      )}
+                    </td>
+                  )}
                   <td className="px-3 py-2.5 font-mono text-text-muted">{i.reference}</td>
                   <td className="px-3 py-2.5 font-mono text-[12px] text-text-muted">{new Date(i.document_date + 'T00:00:00').toLocaleDateString('pt-PT')}</td>
                   <td className="px-3 py-2.5 text-text-primary">{i.supplier_name}<span className="block text-[11px] text-text-muted font-mono">{i.supplier_nif || ''}</span></td>
@@ -279,10 +324,19 @@ export default function Compras() {
                   <td className="px-3 py-2.5 text-right font-mono text-text-muted whitespace-nowrap">{kz(i.vat_total)}</td>
                   <td className="px-3 py-2.5 text-right font-mono text-success whitespace-nowrap">{kz(i.vat_deductible)}</td>
                   <td className="px-3 py-2.5 text-right font-mono font-semibold text-text-primary whitespace-nowrap">{kz(i.total)}</td>
-                  <td className="px-3 py-2.5">
-                    <span className={'text-[11px] font-semibold uppercase tracking-wide px-2 py-1 rounded ' + (i.status === 'ANULADA' ? 'text-danger bg-danger/10' : 'text-success bg-success/10')}>
-                      {i.status === 'ANULADA' ? 'Anulada' : 'Registada'}
-                    </span>
+                  <td className={'px-3 py-2.5 text-right font-mono whitespace-nowrap ' + (i.overdue ? 'text-danger' : 'text-text-primary')}>{i.payment_status ? kz(i.amount_due) : '-'}</td>
+                  <td className="px-3 py-2.5 whitespace-nowrap">
+                    {i.status === 'ANULADA' && <span className="text-[11px] font-semibold uppercase tracking-wide px-2 py-1 rounded text-danger bg-danger/10">Anulada</span>}
+                    {i.purchase_type === 'NC' && i.status !== 'ANULADA' && <span className="text-[11px] font-semibold uppercase tracking-wide px-2 py-1 rounded text-text-muted bg-text-muted/10">Registada</span>}
+                    {i.payment_status && (
+                      <span className={'text-[11px] font-semibold uppercase tracking-wide px-2 py-1 rounded ' + PAYMENT_STATUS[i.payment_status][1]}>{PAYMENT_STATUS[i.payment_status][0]}</span>
+                    )}
+                    {i.overdue && <span className="ml-1.5 text-[11px] font-semibold uppercase tracking-wide px-2 py-1 rounded text-danger bg-danger/10">Vencida</span>}
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <button onClick={() => openDetail(i.id)} className="inline-flex items-center gap-1.5 border border-border hover:border-accent hover:text-accent text-text-primary text-[12px] font-medium px-2.5 py-1.5 rounded-md cursor-pointer">
+                      <Eye size={14} /> Ver
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -489,6 +543,15 @@ export default function Compras() {
                 </div>
               ))}
             </div>
+            {detail.payment_status && (
+              <p className="text-[13px] text-text-muted">
+                Pagamento: <span className="text-text-primary font-medium">{PAYMENT_STATUS[detail.payment_status][0]}</span>
+                {' · pago '}<span className="font-mono text-text-primary">{kz(detail.amount_paid)}</span>
+                {detail.amount_credited > 0 && <>{' · notas de crédito '}<span className="font-mono text-text-primary">{kz(detail.amount_credited)}</span></>}
+                {' · em dívida '}<span className={'font-mono ' + (detail.overdue ? 'text-danger' : 'text-text-primary')}>{kz(detail.amount_due)}</span>
+                {detail.overdue && ' (vencida)'}
+              </p>
+            )}
             <p className="text-[13px] text-text-muted">
               {detail.stock_entry_reference
                 ? <>Entrada em stock: <span className="font-mono text-text-primary">{detail.stock_entry_reference}</span> · {detail.warehouse_name}{detail.stock_exit_reference && <> · saída na anulação: <span className="font-mono text-text-primary">{detail.stock_exit_reference}</span></>}</>
@@ -510,6 +573,9 @@ export default function Compras() {
           </div>
         )}
       </Modal>
+
+      <SupplierPaymentModal invoices={paying} onClose={() => setPaying(null)}
+        onPaid={(payment) => { setPaying(null); setSelected([]); setNotice('Pagamento ' + payment.reference + ' registado (' + kz(payment.amount) + ') - ' + payment.supplier_name); load(); }} />
     </main>
   );
 }

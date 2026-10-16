@@ -80,3 +80,4 @@ from app.models.stock_period_closing import StockPeriodClosing  # noqa: E402,F40
 from app.models.stock_inventory import StockInventory, StockInventoryLine  # noqa: E402,F401 - inventories (point 11)
 from app.models.purchase_invoice import PurchaseInvoice, PurchaseInvoiceLine  # noqa: E402,F401 - purchase invoices (point 12)
 from app.models.goods_movement import GoodsMovement, GoodsMovementLine  # noqa: E402,F401 - guias GR, GT, GD (MovementOfGoods)
+from app.models.supplier_payment import SupplierPayment, SupplierPaymentAllocation  # noqa: E402,F401 - supplier payments (conta corrente)
