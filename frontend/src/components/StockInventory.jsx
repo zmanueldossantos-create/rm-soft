@@ -4,6 +4,7 @@ import Modal from './Modal';
 import Select from './Select';
 import ConfirmDialog from './ConfirmDialog';
 import PostingPeriodSelect from './PostingPeriodSelect';
+import DateInput from './DateInput';
 import { formatKz } from '../utils/format';
 import { extractErrorMessage } from '../utils/errors';
 import {
@@ -38,6 +39,8 @@ export default function StockInventory({ open, onClose, warehouses, warehouseId,
   const [fields, setFields] = useState({}); // { product_id: { unitId: '2' } }
   const [search, setSearch] = useState('');
   const [onlyUncounted, setOnlyUncounted] = useState(false);
+  // a product followed by lot / expiry counted above what is expected: the lot its surplus enters
+  const [surplus, setSurplus] = useState({});
   const [saving, setSaving] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pdf, setPdf] = useState(null);
@@ -67,6 +70,7 @@ export default function StockInventory({ open, onClose, warehouses, warehouseId,
     setInventory(data);
     // a saved count comes back as its total in base units
     setFields(Object.fromEntries(data.lines.filter((l) => l.counted != null).map((l) => [l.product_id, { base: String(l.counted) }])));
+    setSurplus(Object.fromEntries(data.lines.filter((l) => l.lot_rule).map((l) => [l.product_id, { lot: l.surplus_lot_number || '', date: l.surplus_expiry_date || '' }])));
     setSearch('');
     setOnlyUncounted(false);
     setView('edit');
@@ -100,7 +104,11 @@ export default function StockInventory({ open, onClose, warehouses, warehouseId,
     setSaving(true);
     setError('');
     try {
-      const payload = inventory.lines.map((l) => ({ product_id: l.product_id, counted_quantity: counts[l.product_id].total, count_detail: counts[l.product_id].detail }));
+      const payload = inventory.lines.map((l) => ({
+        product_id: l.product_id, counted_quantity: counts[l.product_id].total, count_detail: counts[l.product_id].detail,
+        surplus_lot_number: l.lot_rule ? (surplus[l.product_id]?.lot || '').trim() || null : null,
+        surplus_expiry_date: l.lot_rule ? surplus[l.product_id]?.date || null : null,
+      }));
       const data = await saveInventoryCounts(inventory.id, payload);
       setInventory(data);
       return true;
@@ -274,9 +282,21 @@ export default function StockInventory({ open, onClose, warehouses, warehouseId,
                                 <span className="text-[11px] text-text-muted">{u.code}</span>
                               </span>
                             ))}
+                            {l.lot_rule && row.diff > 0 && (
+                              <span className="basis-full flex items-center gap-1.5 mt-1">
+                                <span className="text-[11px] text-text-muted whitespace-nowrap">Excedente:</span>
+                                <input value={surplus[l.product_id]?.lot || ''} maxLength={60} placeholder={l.lot_rule.batch ? 'Lote *' : 'Lote'}
+                                  onChange={(e) => setSurplus((x) => ({ ...x, [l.product_id]: { ...(x[l.product_id] || {}), lot: e.target.value } }))}
+                                  className="w-28 bg-bg-inset border border-border rounded px-2 py-1 font-mono text-sm text-text-primary outline-none focus:border-accent" />
+                                <span className="w-36" title={l.lot_rule.expiry ? 'Validade *' : 'Validade'}>
+                                  <DateInput value={surplus[l.product_id]?.date || ''} onChange={(e) => setSurplus((x) => ({ ...x, [l.product_id]: { ...(x[l.product_id] || {}), date: e.target.value } }))}
+                                    className="w-full bg-bg-inset border border-border rounded px-2 py-1 font-mono text-sm text-text-primary outline-none focus:border-accent" />
+                                </span>
+                              </span>
+                            )}
                           </div>
                         ) : (
-                          <span className="font-mono text-text-primary whitespace-nowrap">{l.counted == null ? <span className="text-text-muted text-[12px]">não contado</span> : qty(l.counted) + ' ' + (l.unit_code || '')}{l.count_detail && l.sale_units.length > 0 && <span className="block text-[11px] text-text-muted">{l.count_detail}</span>}</span>
+                          <span className="font-mono text-text-primary whitespace-nowrap">{l.counted == null ? <span className="text-text-muted text-[12px]">não contado</span> : qty(l.counted) + ' ' + (l.unit_code || '')}{l.count_detail && l.sale_units.length > 0 && <span className="block text-[11px] text-text-muted">{l.count_detail}</span>}{(l.surplus_lot_number || l.surplus_expiry_date) && l.difference > 0 && <span className="block text-[11px] text-text-muted">Excedente: lote {l.surplus_lot_number || '-'}{l.surplus_expiry_date ? ' · val. ' + new Date(l.surplus_expiry_date + 'T00:00:00').toLocaleDateString('pt-PT') : ''}</span>}</span>
                         )}
                       </td>
                       <td className={'px-3 py-2 text-right font-mono whitespace-nowrap ' + (row.diff > 0 ? 'text-success' : row.diff < 0 ? 'text-danger' : 'text-text-muted')}>

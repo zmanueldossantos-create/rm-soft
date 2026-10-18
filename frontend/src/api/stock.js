@@ -52,8 +52,9 @@ export async function getMovementPeriods() {
   return res.data;
 }
 
-export async function transferStock(fromWarehouseId, toWarehouseId, productId, quantity, reason, fiscalPeriodId = null, saleUnitId = null) {
+export async function transferStock(fromWarehouseId, toWarehouseId, productId, quantity, reason, fiscalPeriodId = null, saleUnitId = null, lotId = null) {
   const res = await apiClient.post('/stock/transfer', {
+    lot_id: lotId || null,  // a product followed by lot: the lot moved (empty = FEFO)
     sale_unit_id: saleUnitId || null,
     fiscal_period_id: fiscalPeriodId || null,
     from_warehouse_id: fromWarehouseId,
@@ -65,8 +66,9 @@ export async function transferStock(fromWarehouseId, toWarehouseId, productId, q
   return res.data;
 }
 
-export async function recordStockLoss(warehouseId, productId, quantity, lossCategory, reason, fiscalPeriodId = null, saleUnitId = null) {
+export async function recordStockLoss(warehouseId, productId, quantity, lossCategory, reason, fiscalPeriodId = null, saleUnitId = null, lotId = null) {
   const res = await apiClient.post('/stock/loss', {
+    lot_id: lotId || null,  // a product followed by lot: the lot lost (empty = FEFO, the expired first)
     sale_unit_id: saleUnitId || null,
     fiscal_period_id: fiscalPeriodId || null,
     warehouse_id: warehouseId,
@@ -78,8 +80,10 @@ export async function recordStockLoss(warehouseId, productId, quantity, lossCate
   return res.data;
 }
 
-export async function adjustStock(warehouseId, productId, newQuantity, reason, fiscalPeriodId = null, saleUnitId = null) {
+export async function adjustStock(warehouseId, productId, newQuantity, reason, fiscalPeriodId = null, saleUnitId = null, lot = {}) {
   const res = await apiClient.post('/stock/adjust', {
+    // a product followed by lot: a decrease takes lot_id (empty = FEFO), an increase fills lot_number / expiry_date
+    lot_id: lot.lotId || null, lot_number: lot.lotNumber || null, expiry_date: lot.expiryDate || null,
     sale_unit_id: saleUnitId || null,
     fiscal_period_id: fiscalPeriodId || null,
     warehouse_id: warehouseId,

@@ -4,6 +4,8 @@ import Modal from '../components/Modal';
 import MovementForm from '../components/MovementForm';
 import StockInventory from '../components/StockInventory';
 import StockLotsModal from '../components/StockLotsModal';
+import LotPicker, { lotRuleOf } from '../components/LotPicker';
+import DateInput from '../components/DateInput';
 
 import PostingPeriodSelect from '../components/PostingPeriodSelect';
 import UnitBreakdown from '../components/UnitBreakdown';
@@ -116,6 +118,11 @@ export default function Stock() {
   const [transferFromWarehouseId, setTransferFromWarehouseId] = useState('');
   const [transferToWarehouseId, setTransferToWarehouseId] = useState('');
   const [lossCategory, setLossCategory] = useState('EXPIRACAO');
+  // a product followed by lot / expiry: the lot a manual exit takes (empty = FEFO), the lot an adjustment up fills
+  const [lotId, setLotId] = useState('');
+  const [lotNumber, setLotNumber] = useState('');
+  const [expiryDate, setExpiryDate] = useState('');
+  const [adjustCurrent, setAdjustCurrent] = useState(null); // adjustment: the product's stock now in that warehouse
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
   const [formSuccess, setFormSuccess] = useState('');
@@ -190,6 +197,18 @@ export default function Stock() {
   const countedLines = countLines.filter((c) => c.quantity !== '' && parseFloat(c.quantity) >= 0);
   const countFilled = countedLines.length > 0;
   const countTotal = Math.round(countedLines.reduce((sum, c) => sum + parseFloat(c.quantity) * (unitOfCount(c) ? Number(unitOfCount(c).factor) : 1), 0) * 1000) / 1000;
+  // a product followed by lot / expiry: the exits choose their lot, an adjustment up names the lot of its surplus
+  const selectedLotRule = lotRuleOf(selectedProduct);
+  useEffect(() => {
+    if (!adjustModalOpen || !opWarehouseId || !selectedProductId || !selectedLotRule) { setAdjustCurrent(null); return; }
+    listStockLevels(opWarehouseId)
+      .then((d) => setAdjustCurrent(d.find((l) => l.product_id === selectedProductId)?.quantity ?? 0))
+      .catch(() => setAdjustCurrent(null));
+  }, [adjustModalOpen, opWarehouseId, selectedProductId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const adjustDirection = adjustCurrent == null || !countFilled ? null
+    : countTotal < adjustCurrent - 0.0005 ? 'down' : countTotal > adjustCurrent + 0.0005 ? 'up' : null;
+  const adjustLotMissing = !!selectedLotRule && adjustDirection === 'up'
+    && ((selectedLotRule.batch && !lotNumber.trim()) || (selectedLotRule.expiry && !expiryDate));
   const countDetail = countedLines.map((c) => c.quantity + ' ' + (unitOfCount(c) ? unitOfCount(c).unit_of_measure_code : (selectedProduct?.unit_of_measure_code || ''))).join(' + ');
   const countUsesUnits = countedLines.length > 1 || countedLines.some((c) => c.saleUnitId);
 
@@ -213,6 +232,7 @@ export default function Stock() {
     setReason('');
     setTransferFromWarehouseId(selectedWarehouseId || centralWarehouse?.id || '');
     setTransferToWarehouseId('');
+    setLotId('');
     setFormError('');
     setFormSuccess('');
     setTransferModalOpen(true);
@@ -303,6 +323,7 @@ export default function Stock() {
     setQuantity(''); setCountLines(EMPTY_COUNT);
     setReason('');
     setLossCategory('');
+    setLotId('');
     setFormError('');
     setFormSuccess('');
     setLossModalOpen(true);
@@ -315,6 +336,7 @@ export default function Stock() {
     setSelectedProductId('');
     setQuantity(''); setCountLines(EMPTY_COUNT);
     setReason('');
+    setLotId(''); setLotNumber(''); setExpiryDate('');
     setFormError('');
     setFormSuccess('');
     setAdjustModalOpen(true);
@@ -323,10 +345,11 @@ export default function Stock() {
   async function handleTransferSubmit(e) {
     e.preventDefault();
     setFormError('');
+    setFormSuccess('');  // a new attempt: the previous success message goes
     setSaving(true);
     try {
-      await transferStock(transferFromWarehouseId, transferToWarehouseId, selectedProductId, parseFloat(quantity), reason || null, fiscalPeriodId, saleUnitId);
-      setSelectedProductId('');
+      await transferStock(transferFromWarehouseId, transferToWarehouseId, selectedProductId, parseFloat(quantity), reason || null, fiscalPeriodId, saleUnitId, selectedLotRule ? lotId : null);
+      setSelectedProductId(''); setLotId('');
       setQuantity(''); setCountLines(EMPTY_COUNT);
       setReason('');
       setFormSuccess('Transferência registada com sucesso.');
@@ -341,10 +364,11 @@ export default function Stock() {
   async function handleLossSubmit(e) {
     e.preventDefault();
     setFormError('');
+    setFormSuccess('');  // a new attempt: the previous success message goes
     setSaving(true);
     try {
-      await recordStockLoss(opWarehouseId, selectedProductId, parseFloat(quantity), lossCategory, reason || null, fiscalPeriodId, saleUnitId);
-      setSelectedProductId('');
+      await recordStockLoss(opWarehouseId, selectedProductId, parseFloat(quantity), lossCategory, reason || null, fiscalPeriodId, saleUnitId, selectedLotRule ? lotId : null);
+      setSelectedProductId(''); setLotId('');
       setQuantity(''); setCountLines(EMPTY_COUNT);
       setReason('');
       setFormSuccess('Perda registada com sucesso.');
@@ -359,10 +383,12 @@ export default function Stock() {
   async function handleAdjustSubmit(e) {
     e.preventDefault();
     setFormError('');
+    setFormSuccess('');  // a new attempt: the previous success message goes
     setSaving(true);
     try {
-      await adjustStock(opWarehouseId, selectedProductId, countTotal, countUsesUnits ? reason + ' (Contagem: ' + countDetail + ')' : reason, fiscalPeriodId);
-      setSelectedProductId('');
+      await adjustStock(opWarehouseId, selectedProductId, countTotal, countUsesUnits ? reason + ' (Contagem: ' + countDetail + ')' : reason, fiscalPeriodId, null,
+        !selectedLotRule ? {} : adjustDirection === 'down' ? { lotId } : { lotNumber: lotNumber.trim(), expiryDate });
+      setSelectedProductId(''); setLotId(''); setLotNumber(''); setExpiryDate('');
       setQuantity(''); setCountLines(EMPTY_COUNT);
       setReason('');
       setFormSuccess('Stock ajustado com sucesso.');
@@ -575,11 +601,17 @@ export default function Stock() {
             <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Produto *</label>
             <Select
               value={selectedProductId}
-              onChange={(v) => { setSelectedProductId(v); setSaleUnitId(''); setCountLines(EMPTY_COUNT); }}
+              onChange={(v) => { setSelectedProductId(v); setSaleUnitId(''); setCountLines(EMPTY_COUNT); setLotId(''); setLotNumber(''); setExpiryDate(''); }}
               options={products.map((p) => ({ value: p.id, label: p.code + ' - ' + p.name }))}
               placeholder="Selecionar produto"
             />
           </div>
+          {selectedLotRule && (
+            <div>
+              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Lote</label>
+              <LotPicker productId={selectedProductId} warehouseId={transferFromWarehouseId} value={lotId} onChange={setLotId} unitCode={selectedProduct?.unit_of_measure_code || ''} />
+            </div>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <PostingPeriodSelect value={fiscalPeriodId} onChange={setFiscalPeriodId} onChoice={setPeriodChoice} />
             <div>
@@ -652,11 +684,17 @@ export default function Stock() {
             <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Produto *</label>
             <Select
               value={selectedProductId}
-              onChange={(v) => { setSelectedProductId(v); setSaleUnitId(''); setCountLines(EMPTY_COUNT); }}
+              onChange={(v) => { setSelectedProductId(v); setSaleUnitId(''); setCountLines(EMPTY_COUNT); setLotId(''); setLotNumber(''); setExpiryDate(''); }}
               options={products.map((p) => ({ value: p.id, label: p.code + ' - ' + p.name }))}
               placeholder="Selecionar produto"
             />
           </div>
+          {selectedLotRule && (
+            <div>
+              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Lote</label>
+              <LotPicker productId={selectedProductId} warehouseId={opWarehouseId} value={lotId} onChange={setLotId} unitCode={selectedProduct?.unit_of_measure_code || ''} />
+            </div>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <PostingPeriodSelect value={fiscalPeriodId} onChange={setFiscalPeriodId} onChoice={setPeriodChoice} />
             <div>
@@ -749,7 +787,7 @@ export default function Stock() {
             <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Produto *</label>
             <Select
               value={selectedProductId}
-              onChange={(v) => { setSelectedProductId(v); setSaleUnitId(''); setCountLines(EMPTY_COUNT); }}
+              onChange={(v) => { setSelectedProductId(v); setSaleUnitId(''); setCountLines(EMPTY_COUNT); setLotId(''); setLotNumber(''); setExpiryDate(''); }}
               options={products.map((p) => ({ value: p.id, label: p.code + ' - ' + p.name }))}
               placeholder="Selecionar produto"
             />
@@ -792,6 +830,24 @@ export default function Stock() {
               )}
             </div>
           </div>
+          {selectedLotRule && adjustDirection === 'down' && (
+            <div>
+              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Lote a retirar</label>
+              <LotPicker productId={selectedProductId} warehouseId={opWarehouseId} value={lotId} onChange={setLotId} unitCode={selectedProduct?.unit_of_measure_code || ''} />
+            </div>
+          )}
+          {selectedLotRule && adjustDirection === 'up' && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">{selectedLotRule.batch ? 'Lote do excedente *' : 'Lote do excedente'}</label>
+                <input value={lotNumber} maxLength={60} onChange={(e) => setLotNumber(e.target.value)} className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors" />
+              </div>
+              <div>
+                <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">{selectedLotRule.expiry ? 'Validade *' : 'Validade'}</label>
+                <DateInput value={expiryDate} min={new Date().toISOString().slice(0, 10)} onChange={(e) => setExpiryDate(e.target.value)} className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors" />
+              </div>
+            </div>
+          )}
           <div>
             <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Motivo *</label>
             <input
@@ -814,7 +870,7 @@ export default function Stock() {
           )}
           <button
             type="submit"
-            disabled={saving || (periodChoice && !fiscalPeriodId) || !opWarehouseId || !selectedProductId || !countFilled || reason.trim().length < 5}
+            disabled={saving || (periodChoice && !fiscalPeriodId) || !opWarehouseId || !selectedProductId || !countFilled || reason.trim().length < 5 || adjustLotMissing}
             className="mt-1 bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors"
           >
             {saving ? <Loader2 size={17} className="animate-spin" /> : <SlidersHorizontal size={17} />}

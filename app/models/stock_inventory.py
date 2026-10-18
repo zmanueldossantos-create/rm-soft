@@ -10,9 +10,9 @@ soft-closed one for an inventory of the month just ended) - see stock_inventory_
 """
 import enum
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, Numeric, String, func
+from sqlalchemy import Date, DateTime, Enum, ForeignKey, Integer, Numeric, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -55,3 +55,6 @@ class StockInventoryLine(Base):
     difference: Mapped[float | None] = mapped_column(Numeric(14, 3), nullable=True)
     unit_cost: Mapped[float | None] = mapped_column(Numeric(14, 4), nullable=True)
     difference_value: Mapped[float | None] = mapped_column(Numeric(16, 2), nullable=True)
+    # a product followed by lot / expiry counted above what was expected: the lot the surplus enters
+    surplus_lot_number: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    surplus_expiry_date: Mapped[date | None] = mapped_column(Date, nullable=True)

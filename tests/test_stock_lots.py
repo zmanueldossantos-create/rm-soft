@@ -239,3 +239,54 @@ async def test_following_by_lot_changes_only_with_the_stock_at_zero(db, company_
     await ensure_lot_tracking_can_change(db, product, False, False, True)  # nothing changes: allowed
     await adjust_stock(db, company_id, central, product_id, 0, "Zerar")
     await ensure_lot_tracking_can_change(db, product, True, False, True)
+
+
+@pytest.mark.asyncio
+async def test_a_manual_exit_takes_the_lot_chosen(db, company_with_essentials):
+    from app.services.movement_document_service import InsufficientStockForMovementError, create_stock_movement_document
+    ctx = company_with_essentials
+    company_id, central = ctx["company"].id, ctx["central_warehouse"].id
+    product_id = await _product(db, ctx)
+    await receive_stock(db, company_id, product_id, 5, lot_number="A", expiry_date=TODAY + timedelta(days=5))
+    await receive_stock(db, company_id, product_id, 5, lot_number="B", expiry_date=TODAY + timedelta(days=50))
+    lot_b = (await db.execute(select(StockLot.id).where(StockLot.lot_number == "B"))).scalar_one()
+
+    await record_stock_loss(db, company_id, central, product_id, 2, "QUEBRA", lot_id=lot_b)  # not FEFO: B
+    assert await _lots(db, product_id, central) == ({"A": 5.0, "B": 3.0}, 8.0)
+    with pytest.raises(InsufficientStockError, match="Quantidade insuficiente no lote B"):
+        await record_stock_loss(db, company_id, central, product_id, 4, "QUEBRA", lot_id=lot_b)
+    await db.rollback()
+
+    exit_type = MovementTypeCatalog(code="SM", name="Saída manual", direction=MovementDirection.SAIDA, is_auto=False)
+    db.add(exit_type)
+    await db.commit()
+    await create_stock_movement_document(db, company_id, exit_type.id, central,
+                                         [{"product_id": product_id, "quantity": 3, "lot_id": lot_b}])
+    assert await _lots(db, product_id, central) == ({"A": 5.0}, 5.0)
+    with pytest.raises(InsufficientStockForMovementError, match="Lote não encontrado"):
+        await create_stock_movement_document(db, company_id, exit_type.id, central,
+                                             [{"product_id": product_id, "quantity": 1, "lot_id": lot_b}])
+
+
+@pytest.mark.asyncio
+async def test_an_inventory_surplus_enters_the_lot_counted(db, company_with_essentials):
+    from app.services.stock_inventory_service import (
+        InventoryStateError, create_inventory, get_inventory, save_counts, validate_inventory,
+    )
+    ctx = company_with_essentials
+    company_id, user_id, central = ctx["company"].id, ctx["gestor"].id, ctx["central_warehouse"].id
+    product_id = await _product(db, ctx)
+    await receive_stock(db, company_id, product_id, 5, lot_number="A", expiry_date=TODAY + timedelta(days=5))
+    inventory = await create_inventory(db, company_id, central, user_id)
+    inventory_id = inventory.id
+    line = next(l for l in (await get_inventory(db, company_id, inventory_id))["lines"] if l["product_id"] == product_id)
+    assert line["lot_rule"] == {"batch": True, "expiry": True}
+
+    await save_counts(db, company_id, inventory_id, [{"product_id": product_id, "counted_quantity": 8}])
+    with pytest.raises(InventoryStateError, match=r"Indique o lote de Iogurte \(excedente contado\)"):
+        await validate_inventory(db, company_id, inventory_id, user_id)
+    await db.rollback()
+    await save_counts(db, company_id, inventory_id, [{"product_id": product_id, "counted_quantity": 8,
+                                                     "surplus_lot_number": "C", "surplus_expiry_date": TODAY + timedelta(days=60)}])
+    await validate_inventory(db, company_id, inventory_id, user_id)
+    assert await _lots(db, product_id, central) == ({"A": 5.0, "C": 3.0}, 8.0)

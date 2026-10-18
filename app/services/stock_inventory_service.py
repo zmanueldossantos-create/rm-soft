@@ -26,7 +26,7 @@ from app.models.unit_of_measure_catalog import UnitOfMeasureCatalog
 from app.models.user import User
 from app.models.warehouse import Warehouse
 from app.services.fiscal_period_service import MONTH_NAMES_PT, resolve_posting_period
-from app.services.stock_lot_service import lots_in, lots_out
+from app.services.stock_lot_service import LotInputError, check_lot_input, is_followed, lots_in, lots_out
 from app.services.stock_service import _get_or_create_stock_row, get_warehouse_or_raise
 
 
@@ -150,6 +150,9 @@ async def get_inventory(db: AsyncSession, company_id: uuid.UUID, inventory_id: u
             "sale_units": sorted(sale_units.get(product.id, []), key=lambda u: -u["factor"]),
             "expected": exp, "counted": counted, "count_detail": line.count_detail,
             "difference": diff, "unit_cost": cost, "difference_value": value,
+            # followed by lot / expiry: a surplus enters a lot - its number / date (required as on any entry)
+            "lot_rule": {"batch": bool(product.managed_by_batch), "expiry": bool(product.managed_by_expiry)} if is_followed(product) else None,
+            "surplus_lot_number": line.surplus_lot_number, "surplus_expiry_date": line.surplus_expiry_date,
         })
     out.sort(key=lambda l: l["name"])
     differing = [l for l in out if l["difference"] not in (None, 0)]
@@ -186,6 +189,8 @@ async def save_counts(db: AsyncSession, company_id: uuid.UUID, inventory_id: uui
             raise InventoryStateError("Uma quantidade contada não pode ser negativa")
         line.counted_quantity = None if quantity is None else round(float(quantity), 3)
         line.count_detail = (count.get("count_detail") or None) if quantity is not None else None
+        line.surplus_lot_number = (" ".join((count.get("surplus_lot_number") or "").split())[:60] or None) if quantity is not None else None
+        line.surplus_expiry_date = count.get("surplus_expiry_date") if quantity is not None else None
     await db.commit()
 
 
@@ -204,6 +209,15 @@ async def validate_inventory(db: AsyncSession, company_id: uuid.UUID, inventory_
         raise InventoryStateError("Nenhum produto foi contado - conte pelo menos um antes de validar")
     expected = await _expected(db, inventory, [p.id for _, p in lines])
     reference = _ref(inventory)
+    # a surplus of a product followed by lot enters a lot: checked for every line before anything moves
+    surplus_lots = {}
+    for line, product in lines:
+        if line.counted_quantity is None or float(line.counted_quantity) - expected.get(product.id, 0.0) <= 0.0005:
+            continue
+        try:
+            surplus_lots[product.id] = check_lot_input(product, line.surplus_lot_number, line.surplus_expiry_date)
+        except LotInputError as e:
+            raise InventoryStateError(f"{e} (excedente contado)")
     for line, product in lines:
         exp = round(expected.get(product.id, 0.0), 3)
         line.expected_quantity = exp
@@ -228,7 +242,9 @@ async def validate_inventory(db: AsyncSession, company_id: uuid.UUID, inventory_
         if diff < 0:
             await lots_out(db, company_id, product.id, inventory.warehouse_id, -diff, movement, allow_uncovered=True)
         else:
-            await lots_in(db, company_id, product.id, inventory.warehouse_id, diff, movement, stock_before)
+            lot_number, expiry_date = surplus_lots.get(product.id, (None, None))
+            await lots_in(db, company_id, product.id, inventory.warehouse_id, diff, movement, stock_before,
+                          [(lot_number, expiry_date, diff)])
     inventory.status = InventoryStatus.VALIDADO
     inventory.validated_by_user_id = user_id
     inventory.validated_at = datetime.now(timezone.utc)

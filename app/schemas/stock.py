@@ -7,7 +7,7 @@ carries a warehouse_id, receptions included: they go through movement documents,
 which name their warehouse explicitly.
 """
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, field_validator
 
@@ -30,6 +30,10 @@ class StockAdjustRequest(BaseModel):
     product_id: uuid.UUID
     new_quantity: float
     reason: str
+    # a product followed by lot / expiry: a decrease takes lot_id (empty = FEFO), an increase fills lot_number / expiry_date
+    lot_id: uuid.UUID | None = None
+    lot_number: str | None = None
+    expiry_date: date | None = None
 
     @field_validator("new_quantity")
     @classmethod
@@ -55,6 +59,7 @@ class StockTransferRequest(BaseModel):
     product_id: uuid.UUID
     quantity: float
     reason: str | None = None
+    lot_id: uuid.UUID | None = None  # a product followed by lot: the lot moved (empty = FEFO, never an expired one)
 
     @field_validator("quantity")
     @classmethod
@@ -72,6 +77,7 @@ class StockLossRequest(BaseModel):
     quantity: float
     loss_category: str
     reason: str | None = None
+    lot_id: uuid.UUID | None = None  # a product followed by lot: the lot lost (empty = FEFO, the expired first)
 
     @field_validator("quantity")
     @classmethod
