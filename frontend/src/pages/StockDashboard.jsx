@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Gauge, Loader2, AlertTriangle, Package2, Wallet, Search } from 'lucide-react';
+import { Gauge, Loader2, AlertTriangle, Package2, Wallet, Search, CalendarClock } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import apiClient from '../api/client';
 import Select from '../components/Select';
 import UnitBreakdown from '../components/UnitBreakdown';
@@ -27,6 +28,7 @@ function formatQty(v) {
 }
 
 export default function StockDashboard() {
+  const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -99,7 +101,7 @@ export default function StockDashboard() {
 
       {!loading && !error && data && (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4 mb-6">
             <div className="bg-bg-elevated border border-border rounded-lg p-4">
               <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wide flex items-center gap-1.5 mb-1.5"><Package2 size={12} />Produtos ativos</p>
               <p className="font-display font-semibold text-2xl text-text-primary">{data.total_products}</p>
@@ -119,6 +121,17 @@ export default function StockDashboard() {
             >
               <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wide flex items-center gap-1.5 mb-1.5"><AlertTriangle size={12} className="text-danger" />Stock zero</p>
               <p className="font-display font-semibold text-2xl text-danger">{data.zero_stock_count}</p>
+            </button>
+            {/* lots et péremption - today, whatever the period shown: opens Stock > Validades */}
+            <button
+              type="button"
+              onClick={() => navigate('/stock', { state: { tab: 'validades' } })}
+              title={'Lotes expirados e lotes que expiram nos próximos ' + (data.expiry_alert_days ?? 30) + ' dias'}
+              className="text-left bg-bg-elevated border border-border hover:border-amber-500/50 rounded-lg p-4 transition-colors cursor-pointer"
+            >
+              <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wide flex items-center gap-1.5 mb-1.5"><CalendarClock size={12} className="text-amber-500" />Lotes a expirar</p>
+              <p className="font-display font-semibold text-2xl text-amber-500">{data.lots_expiring_count ?? 0}</p>
+              {data.lots_expired_count > 0 && <p className="text-[11px] text-danger mt-1">{data.lots_expired_count} lote(s) expirado(s)</p>}
             </button>
             <div className="bg-bg-elevated border border-border rounded-lg p-4">
               <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wide flex items-center gap-1.5 mb-1.5"><Wallet size={12} />Valor em stock (custo médio)</p>

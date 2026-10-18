@@ -98,6 +98,11 @@ async def update_my_company_contact(
     for option in ("stock_period_closing", "stock_check_at_period_end", "inventory_before_close"):  # stock controls: only changed when sent
         if getattr(payload, option) is not None:
             setattr(company, option, getattr(payload, option))
+    if payload.expiry_alert_days is not None:  # lots: days of warning before an expiry date
+        if not 1 <= payload.expiry_alert_days <= 365:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                                detail="O alerta de validade deve estar entre 1 e 365 dias")
+        company.expiry_alert_days = payload.expiry_alert_days
     company.issuance_mode = payload.issuance_mode
     company.electronic_signature_key = payload.electronic_signature_key if payload.issuance_mode == "ELETRONICA" else None
 

@@ -13,7 +13,7 @@ by lot (managed_by_batch) or by expiry (managed_by_expiry) asks here, right afte
 See app/models/stock_lot.py.
 """
 import uuid
-from datetime import date
+from datetime import date, timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -208,11 +208,19 @@ async def lots_followed_total(db: AsyncSession, product_id: uuid.UUID, warehouse
         StockLot.product_id == product_id, StockLot.warehouse_id == warehouse_id))).scalar_one())
 
 
+async def expiry_alert_days(db: AsyncSession, company_id: uuid.UUID) -> int:
+    """How many days before its expiry date a lot is "a expirar" - the company's choice (30 by default)."""
+    from app.models.company import Company
+    days = (await db.execute(select(Company.expiry_alert_days).where(Company.id == company_id))).scalar_one_or_none()
+    return int(days or 30)
+
+
 async def list_lots(db: AsyncSession, company_id: uuid.UUID, product_id: uuid.UUID,
                     warehouse_id: uuid.UUID | None = None, today: date | None = None) -> list[dict]:
     """The lots of a product still holding stock, per warehouse, FEFO - with how many days are left."""
     from app.models.warehouse import Warehouse
     today = today or date.today()
+    alert = await expiry_alert_days(db, company_id)
     query = (select(StockLot, Warehouse.name).join(Warehouse, Warehouse.id == StockLot.warehouse_id)
              .where(StockLot.company_id == company_id, StockLot.product_id == product_id, StockLot.quantity > 0))
     if warehouse_id is not None:
@@ -223,4 +231,54 @@ async def list_lots(db: AsyncSession, company_id: uuid.UUID, product_id: uuid.UU
         "expiry_date": lot.expiry_date, "quantity": float(lot.quantity), "label": lot_label(lot.lot_number, lot.expiry_date),
         "days_left": (lot.expiry_date - today).days if lot.expiry_date else None,
         "expired": bool(lot.expiry_date and lot.expiry_date < today),
+        "expiring": bool(lot.expiry_date and today <= lot.expiry_date <= today + timedelta(days=alert)),
     } for lot, name in rows]
+
+
+async def list_expiring(db: AsyncSession, company_id: uuid.UUID, warehouse_id: uuid.UUID | None = None,
+                        today: date | None = None) -> dict:
+    """
+    Stock > Validades: every lot still holding stock that has expired (never sold - to write off) or expires within
+    the company's alert days, FEFO, with its product and warehouse - and the counts for the stock dashboard.
+    """
+    from app.models.unit_of_measure_catalog import UnitOfMeasureCatalog
+    from app.models.warehouse import Warehouse
+    today = today or date.today()
+    alert = await expiry_alert_days(db, company_id)
+    query = (select(StockLot, Product, Warehouse.name, UnitOfMeasureCatalog.code)
+             .join(Product, Product.id == StockLot.product_id)
+             .join(Warehouse, Warehouse.id == StockLot.warehouse_id)
+             .outerjoin(UnitOfMeasureCatalog, UnitOfMeasureCatalog.id == Product.unit_of_measure_id)
+             .where(StockLot.company_id == company_id, StockLot.quantity > 0, StockLot.expiry_date.is_not(None),
+                    StockLot.expiry_date <= today + timedelta(days=alert)))
+    if warehouse_id is not None:
+        query = query.where(StockLot.warehouse_id == warehouse_id)
+    rows = (await db.execute(query.order_by(StockLot.expiry_date, Product.name, Warehouse.name))).all()
+    lots = [{
+        "id": lot.id, "product_id": product.id, "product_code": product.code, "product_name": product.name,
+        "unit_code": unit, "warehouse_id": lot.warehouse_id, "warehouse_name": name, "lot_number": lot.lot_number,
+        "expiry_date": lot.expiry_date, "quantity": float(lot.quantity),
+        "days_left": (lot.expiry_date - today).days, "expired": lot.expiry_date < today,
+        "label": lot_label(lot.lot_number, lot.expiry_date),
+    } for lot, product, name, unit in rows]
+    return {
+        "alert_days": alert, "lots": lots,
+        "expired_count": sum(1 for l in lots if l["expired"]),
+        "expiring_count": sum(1 for l in lots if not l["expired"]),
+    }
+
+
+async def lots_of_movements(db: AsyncSession, movement_ids: list) -> dict:
+    """Historico de stock: the lots each ledger row took or filled, as a short text (L1 · 2, L2 · 1)."""
+    if not movement_ids:
+        return {}
+    rows = (await db.execute(
+        select(StockMovementLot.movement_id, StockLot.lot_number, StockLot.expiry_date, StockMovementLot.quantity)
+        .join(StockLot, StockLot.id == StockMovementLot.lot_id)
+        .where(StockMovementLot.movement_id.in_(movement_ids))
+        .order_by(StockLot.expiry_date.asc().nulls_last())
+    )).all()
+    out: dict = {}
+    for movement_id, number, expiry, quantity in rows:
+        out.setdefault(movement_id, []).append(f"{lot_label(number, expiry)} · {_fmt(float(quantity))}")
+    return {k: ", ".join(v) for k, v in out.items()}

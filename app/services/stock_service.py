@@ -960,6 +960,15 @@ async def get_stock_dashboard(db: AsyncSession, company_id: uuid.UUID, fiscal_pe
         "unknown_cost_count": sum(1 for i in items if i["cost_unknown"] and i["total_quantity"] > 0),
         "period_label": period_label,
         "periods": periods,
+        # lots et péremption, today (whatever the period shown): lots expired and lots expiring within the alert days
+        **await _expiry_counts(db, company_id),
     }
+
+
+async def _expiry_counts(db: AsyncSession, company_id: uuid.UUID) -> dict:
+    from app.services.stock_lot_service import list_expiring
+    expiring = await list_expiring(db, company_id)
+    return {"lots_expired_count": expiring["expired_count"], "lots_expiring_count": expiring["expiring_count"],
+            "expiry_alert_days": expiring["alert_days"]}
 
 

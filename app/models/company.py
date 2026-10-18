@@ -8,7 +8,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import String, Boolean, DateTime, ForeignKey, Enum, func
+from sqlalchemy import String, Boolean, DateTime, ForeignKey, Enum, Integer, func
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import UUID
 
@@ -78,6 +78,9 @@ class Company(Base):
     # Inventário obrigatório antes do fecho: a period is closed for good only once every warehouse holding stock has a
     # validated inventory booked in it - see stock_inventory_service.ensure_inventories_before_close. Off by default.
     inventory_before_close: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    # Lots et péremption: a lot is shown as "a expirar" this many days before its expiry date (Stock > Validades,
+    # the stock dashboard) - see stock_lot_service.list_expiring. 30 by default, chosen by the gestor.
+    expiry_alert_days: Mapped[int] = mapped_column(Integer, default=30, server_default="30", nullable=False)
 
     # Fiscal issuance mode - electronic mode requires the AGT-issued private
     # key and turns OFF auto_series_year (series are solicited from AGT instead).

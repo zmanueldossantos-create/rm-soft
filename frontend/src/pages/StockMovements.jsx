@@ -206,13 +206,14 @@ export default function StockMovements() {
 
         {!loading && !error && filteredMovements.length > 0 && (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[760px]">
+            <table className="w-full text-sm min-w-[900px]">
               <thead>
                 <tr className="border-b border-border">
                   <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Tipo</th>
                   <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Armazém</th>
                   <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Produto</th>
                   <th className="text-right text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Quantidade</th>
+                  <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Lote</th>
                   <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Motivo / Referência</th>
                   <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Data</th>
                 </tr>
@@ -249,6 +250,8 @@ export default function StockMovements() {
                       <td className={'px-6 py-4 font-mono text-right ' + (isOutgoing ? 'text-danger' : 'text-success')}>
                         {isOutgoing ? '-' : '+'}{formatQty(Math.abs(m.quantity))}
                       </td>
+                      {/* a product followed by lot: the lots this movement took or filled */}
+                      <td className="px-6 py-4 font-mono text-text-muted text-[12px] max-w-[260px]">{m.lots || '-'}</td>
                       <td className="px-6 py-4 font-mono text-text-muted text-[13px]">
                         {reasonCell}
                       </td>

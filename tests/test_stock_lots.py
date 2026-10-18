@@ -290,3 +290,32 @@ async def test_an_inventory_surplus_enters_the_lot_counted(db, company_with_esse
                                                      "surplus_lot_number": "C", "surplus_expiry_date": TODAY + timedelta(days=60)}])
     await validate_inventory(db, company_id, inventory_id, user_id)
     assert await _lots(db, product_id, central) == ({"A": 5.0, "C": 3.0}, 8.0)
+
+
+@pytest.mark.asyncio
+async def test_validades_lists_the_expired_and_the_lots_expiring_soon(db, company_with_essentials):
+    from app.models.stock_movement import StockMovement
+    from app.services.stock_lot_service import list_expiring, lots_of_movements
+    from app.services.stock_service import get_stock_dashboard
+    ctx = company_with_essentials
+    company_id, central = ctx["company"].id, ctx["central_warehouse"].id
+    product_id = await _product(db, ctx)
+    await receive_stock(db, company_id, product_id, 4, lot_number="OLD", expiry_date=TODAY)
+    await receive_stock(db, company_id, product_id, 3, lot_number="SOON", expiry_date=TODAY + timedelta(days=10))
+    await receive_stock(db, company_id, product_id, 5, lot_number="FAR", expiry_date=TODAY + timedelta(days=90))
+    (await db.execute(select(StockLot).where(StockLot.lot_number == "OLD"))).scalar_one().expiry_date = TODAY - timedelta(days=2)
+    await db.commit()
+
+    found = await list_expiring(db, company_id)
+    assert found["alert_days"] == 30
+    assert [(l["lot_number"], l["expired"], l["days_left"]) for l in found["lots"]] == [("OLD", True, -2), ("SOON", False, 10)]
+    ctx["company"].expiry_alert_days = 120  # the gestor widens the warning
+    await db.commit()
+    assert [l["lot_number"] for l in (await list_expiring(db, company_id))["lots"]] == ["OLD", "SOON", "FAR"]
+    dashboard = await get_stock_dashboard(db, company_id)
+    assert (dashboard["lots_expired_count"], dashboard["lots_expiring_count"]) == (1, 2)
+
+    await record_stock_loss(db, company_id, central, product_id, 5, "EXPIRACAO")  # OLD (4) then SOON (1)
+    loss = (await db.execute(select(StockMovement).where(StockMovement.loss_category.is_not(None)))).scalar_one()
+    text = (await lots_of_movements(db, [loss.id]))[loss.id]
+    assert text.startswith("OLD (val. ") and text.endswith(" · 1") and ", SOON (val." in text

@@ -28,6 +28,12 @@ export async function listStockLevels(warehouseId) {
   return res.data;
 }
 
+// Stock > Validades: lots expired or expiring within the company's alert days (every warehouse unless one is given).
+export async function listExpiringLots(warehouseId = null) {
+  const res = await apiClient.get('/stock/expiring', { params: warehouseId ? { warehouse_id: warehouseId } : {} });
+  return res.data;
+}
+
 // The lots of a product followed by lot / expiry still holding stock (every warehouse unless one is given).
 export async function listProductLots(productId, warehouseId = null) {
   const res = await apiClient.get('/stock/lots', { params: { product_id: productId, ...(warehouseId ? { warehouse_id: warehouseId } : {}) } });

@@ -108,6 +108,7 @@ class StockMovementResponse(BaseModel):
     reason: str | None
     reference: str | None
     created_at: datetime
+    lots: str | None = None  # a product followed by lot: the lots this row moved (L1 · 2, L2 · 1)
 
     class Config:
         from_attributes = True

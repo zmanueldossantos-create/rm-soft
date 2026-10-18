@@ -4,13 +4,15 @@ import Modal from '../components/Modal';
 import MovementForm from '../components/MovementForm';
 import StockInventory from '../components/StockInventory';
 import StockLotsModal from '../components/StockLotsModal';
+import ExpiringLots from '../components/ExpiringLots';
+import { useLocation } from 'react-router-dom';
 import LotPicker, { lotRuleOf } from '../components/LotPicker';
 import DateInput from '../components/DateInput';
 
 import PostingPeriodSelect from '../components/PostingPeriodSelect';
 import UnitBreakdown from '../components/UnitBreakdown';
 import Select from '../components/Select';
-import { listStockLevels, adjustStock, transferStock, recordStockLoss, listWarehouses, createWarehouse, updateWarehouseFull, toggleWarehouseStatus } from '../api/stock';
+import { listExpiringLots, listStockLevels, adjustStock, transferStock, recordStockLoss, listWarehouses, createWarehouse, updateWarehouseFull, toggleWarehouseStatus } from '../api/stock';
 import { provincesApi, municipalitiesApi } from '../api/catalogs';
 import { listProducts } from '../api/products';
 import { extractErrorMessage } from '../utils/errors';
@@ -81,6 +83,11 @@ export default function Stock() {
   const [selectedWarehouseId, setSelectedWarehouseId] = useState('');
   const [levels, setLevels] = useState([]);
   const [lotsOf, setLotsOf] = useState(null);  // the stock line whose lots are shown
+  const location = useLocation();
+  // 'niveis' (the stock of the warehouse) or 'validades' (lots expired / expiring, every warehouse) - the stock dashboard
+  // opens the second one directly
+  const [view, setView] = useState(location.state?.tab === 'validades' ? 'validades' : 'niveis');
+  const [expiring, setExpiring] = useState(null);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -148,6 +155,7 @@ export default function Stock() {
     try {
       const [levelsData, productsData] = await Promise.all([listStockLevels(warehouseId), listProducts()]);
       setLevels(levelsData);
+      listExpiringLots().then(setExpiring).catch(() => setExpiring(null));  // Validades: after every operation too
       setProducts(productsData.filter((p) => p.is_active && p.product_type === 'BEM'));
     } catch (err) {
       setError(extractErrorMessage(err, 'Erro ao carregar stock'));
@@ -329,6 +337,21 @@ export default function Stock() {
     setLossModalOpen(true);
   }
 
+  // Validades > Registar perda: the loss of that very lot, its whole quantity, as an expiry - everything can still change
+  function openLossForLot(lot) {
+    setFiscalPeriodId('');
+    setSaleUnitId('');
+    setOpWarehouseId(lot.warehouse_id);
+    setSelectedProductId(lot.product_id);
+    setLotId(lot.id);
+    setQuantity(String(lot.quantity)); setCountLines(EMPTY_COUNT);
+    setReason('');
+    setLossCategory('EXPIRACAO');
+    setFormError('');
+    setFormSuccess('');
+    setLossModalOpen(true);
+  }
+
   function openAdjustModal() {
     setFiscalPeriodId('');
     setSaleUnitId('');
@@ -482,9 +505,19 @@ export default function Stock() {
         </div>
       </div>
 
-      {selectedWarehouse && <div className="mb-5"><WarehouseCard key={selectedWarehouse.id} warehouse={selectedWarehouse} isCentral={selectedWarehouse.id === centralWarehouse?.id} onEditClick={openEditWarehouseModal} onToggleStatus={handleToggleWarehouseStatus} togglingId={togglingWarehouseId} /></div>}
+      {selectedWarehouse && view === 'niveis' && <div className="mb-5"><WarehouseCard key={selectedWarehouse.id} warehouse={selectedWarehouse} isCentral={selectedWarehouse.id === centralWarehouse?.id} onEditClick={openEditWarehouseModal} onToggleStatus={handleToggleWarehouseStatus} togglingId={togglingWarehouseId} /></div>}
 
-      <div className="relative max-w-sm mb-5">
+      <div className="flex items-center gap-3 mb-5 flex-wrap">
+      <div className="flex gap-1 border-b border-border">
+        {[['niveis', 'Níveis de stock', null], ['validades', 'Validades', expiring ? expiring.expired_count + expiring.expiring_count : null]].map(([key, label, count]) => (
+          <button key={key} type="button" onClick={() => setView(key)}
+            className={'px-3.5 py-2 text-[13px] font-medium border-b-2 -mb-px transition-colors cursor-pointer ' + (view === key ? 'border-accent text-text-primary' : 'border-transparent text-text-muted hover:text-text-primary')}>
+            {label}
+            {count > 0 && <span className={'ml-1.5 text-[11px] font-mono px-1.5 py-0.5 rounded ' + (expiring.expired_count > 0 ? 'bg-danger/10 text-danger' : 'bg-amber-500/10 text-amber-500')}>{count}</span>}
+          </button>
+        ))}
+      </div>
+      <div className="relative max-w-sm w-full sm:w-auto sm:min-w-[320px]">
         <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" />
         <input
           type="text"
@@ -494,8 +527,15 @@ export default function Stock() {
           className="w-full bg-bg-elevated border border-border rounded-md pl-10 pr-4 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors"
         />
       </div>
+      </div>
 
-      <div className="bg-bg-elevated border border-border rounded-lg overflow-hidden">
+      {view === 'validades' && (
+        <div className="bg-bg-elevated border border-border rounded-lg overflow-hidden">
+          <ExpiringLots data={expiring} search={search} canLoss={can('stock:loss')} onWriteOff={openLossForLot} />
+        </div>
+      )}
+
+      <div className={'bg-bg-elevated border border-border rounded-lg overflow-hidden ' + (view === 'niveis' ? '' : 'hidden')}>
         {loading && (
           <div className="flex items-center justify-center py-16 text-text-muted text-sm">
             <Loader2 size={18} className="animate-spin mr-2" />

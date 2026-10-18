@@ -15,23 +15,24 @@ const qty = (v) => Number(v || 0).toLocaleString('pt-PT', { maximumFractionDigit
 // (FEFO). The lots listed are the product's in that warehouse still holding stock - an expired one may be chosen here
 // (to write it off, or to move it aside), never by the automatic choice of a sale.
 export default function LotPicker({ productId, warehouseId, value, onChange, unitCode = '', compact = false }) {
-  const [lots, setLots] = useState([]);
+  const [lots, setLots] = useState(null); // null while loading: a lot given beforehand (Validades) is kept meanwhile
 
   useEffect(() => {
+    setLots(null);
     if (!productId || !warehouseId) { setLots([]); return; }
     let alive = true;
     listProductLots(productId, warehouseId).then((d) => { if (alive) setLots(d); }).catch(() => { if (alive) setLots([]); });
     return () => { alive = false; };
   }, [productId, warehouseId]);
 
-  // a lot chosen that is no longer listed (another warehouse chosen) falls back to automatic
+  // once loaded, a lot chosen that is not listed (another warehouse chosen) falls back to automatic
   useEffect(() => {
-    if (value && !lots.some((l) => l.id === value)) onChange('');
+    if (lots !== null && value && !lots.some((l) => l.id === value)) onChange('');
   }, [lots]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const options = [
     { value: '', label: 'Automático (primeiro a expirar)' },
-    ...lots.map((l) => ({
+    ...(lots || []).map((l) => ({
       value: l.id,
       label: (l.lot_number || 'Sem número') + (l.expiry_date ? ' · val. ' + day(l.expiry_date) : '') + ' · ' + qty(l.quantity) + (unitCode ? ' ' + unitCode : '') + (l.expired ? ' · EXPIRADO' : ''),
     })),

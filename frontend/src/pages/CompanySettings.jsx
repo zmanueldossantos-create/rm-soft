@@ -72,6 +72,7 @@ export default function CompanySettings() {
   const [stockPeriodClosing, setStockPeriodClosing] = useState(false); // Fecho de stock por período
   const [stockCheckAtPeriodEnd, setStockCheckAtPeriodEnd] = useState(false); // Stock à data (late exits)
   const [inventoryBeforeClose, setInventoryBeforeClose] = useState(false); // Inventário obrigatório antes do fecho
+  const [expiryAlertDays, setExpiryAlertDays] = useState('30'); // lots: days of warning before an expiry date
   const [saleUnitChecks, setSaleUnitChecks] = useState({ sale_unit_check_above_base: 'warn', sale_unit_check_below_cost: 'warn', sale_unit_check_same_factor: 'warn' });
   const [suggestsLastDocumentDate, setSuggestsLastDocumentDate] = useState(false);
   const [issuanceMode, setIssuanceMode] = useState('MANUAL');
@@ -176,6 +177,7 @@ export default function CompanySettings() {
       setStockPeriodClosing(!!data.stock_period_closing);
       setStockCheckAtPeriodEnd(!!data.stock_check_at_period_end);
       setInventoryBeforeClose(!!data.inventory_before_close);
+      setExpiryAlertDays(String(data.expiry_alert_days ?? 30));
       setIssuanceMode(data.issuance_mode || 'MANUAL');
       setElectronicSignatureKey(data.electronic_signature_key || '');
     } catch (err) {
@@ -505,6 +507,7 @@ export default function CompanySettings() {
         stock_period_closing: stockPeriodClosing,
         stock_check_at_period_end: stockCheckAtPeriodEnd,
         inventory_before_close: inventoryBeforeClose,
+        expiry_alert_days: parseInt(expiryAlertDays, 10) || 30,
         issuance_mode: issuanceMode, electronic_signature_key: issuanceMode === 'ELETRONICA' ? (electronicSignatureKey || null) : null,
       });
       setSaved(true);
@@ -863,6 +866,14 @@ export default function CompanySettings() {
                   <span className="text-[12px] text-text-muted block">Um período só pode ser fechado definitivamente depois de um inventário validado, nesse período, em cada armazém com stock (Stock → Armazéns e Stock → Inventário).</span>
                 </span>
               </label>
+              <div className="flex items-start gap-3 border border-border rounded-md px-3.5 py-3">
+                <input type="number" min="1" max="365" step="1" value={expiryAlertDays} onChange={(e) => setExpiryAlertDays(e.target.value)}
+                  className="w-20 shrink-0 bg-bg-inset border border-border rounded-md px-2.5 py-1.5 text-sm text-text-primary font-mono text-right outline-none focus:border-accent" />
+                <span>
+                  <span className="text-sm text-text-primary block">Alerta de validade (dias)</span>
+                  <span className="text-[12px] text-text-muted block">Um lote passa a «a expirar» este número de dias antes da sua validade (Stock → Validades e Resumo de Stock). Os lotes expirados nunca são vendidos.</span>
+                </span>
+              </div>
               </div>
             </div>
           </div>

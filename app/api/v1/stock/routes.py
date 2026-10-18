@@ -107,7 +107,10 @@ async def get_stock_movements(
     current_user: User = Depends(require_permission("stock:view")),
 ):
     """Lists recent stock movements (audit trail), filtered and paginated."""
-    return await list_stock_movements(db, current_user.company_id, warehouse_id, year, month, date_from, date_to, limit, offset)
+    from app.services.stock_lot_service import lots_of_movements
+    movements = await list_stock_movements(db, current_user.company_id, warehouse_id, year, month, date_from, date_to, limit, offset)
+    lots = await lots_of_movements(db, [m.id for m in movements])  # a product followed by lot: which lots it moved
+    return [{**StockMovementResponse.model_validate(m).model_dump(), "lots": lots.get(m.id)} for m in movements]
 
 
 @router.get("/lots")
@@ -120,6 +123,17 @@ async def get_product_lots(
     """The lots of a product followed by lot / expiry still holding stock, per warehouse, FEFO (Stock > Lotes)."""
     from app.services.stock_lot_service import list_lots
     return await list_lots(db, current_user.company_id, product_id, warehouse_id)
+
+
+@router.get("/expiring")
+async def get_expiring_lots(
+    warehouse_id: uuid.UUID | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("stock:view")),
+):
+    """Stock > Validades: the lots expired or expiring within the company's alert days, every warehouse unless one is given."""
+    from app.services.stock_lot_service import list_expiring
+    return await list_expiring(db, current_user.company_id, warehouse_id)
 
 
 @router.get("/movements/available-periods")

@@ -14,7 +14,7 @@ function LotState({ lot }) {
   if (lot.expired) {
     return <span className="inline-flex bg-danger/10 text-danger text-[11px] font-semibold uppercase tracking-wide px-2.5 py-1 rounded">Expirado</span>;
   }
-  const soon = lot.days_left <= 30;
+  const soon = lot.expiring;  // within the company's alert days (Configurações)
   const text = lot.days_left === 0 ? 'Expira hoje' : lot.days_left === 1 ? 'Expira amanhã' : 'Expira em ' + lot.days_left + ' dias';
   return (
     <span className={'inline-flex text-[11px] font-semibold uppercase tracking-wide px-2.5 py-1 rounded ' + (soon ? 'bg-amber-500/10 text-amber-500' : 'bg-success/10 text-success')}>

@@ -63,6 +63,7 @@ class CompanyContactUpdateRequest(BaseModel):
     stock_period_closing: bool | None = None
     stock_check_at_period_end: bool | None = None
     inventory_before_close: bool | None = None
+    expiry_alert_days: int | None = None  # lots: days before the expiry date a lot is "a expirar" (only changed when sent)
     issuance_mode: str = "MANUAL"
     electronic_signature_key: str | None = None
 
@@ -112,6 +113,7 @@ class CompanyContactResponse(BaseModel):
     stock_period_closing: bool = False
     stock_check_at_period_end: bool = False
     inventory_before_close: bool = False
+    expiry_alert_days: int = 30
     issuance_mode: str
     electronic_signature_key: str | None
 
