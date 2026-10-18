@@ -126,14 +126,21 @@ async def set_product_location(db: AsyncSession, company_id: uuid.UUID, product_
     await db.commit()
 
 
+def location_label(code: str, description: str | None) -> str:
+    """How a place is shown next to the stock: its code and description (A-01 · Prateleira 1), or the code alone."""
+    return f"{code} · {description}" if description else code
+
+
 async def location_codes(db: AsyncSession, warehouse_ids, product_ids=None) -> dict:
-    """{(product_id, warehouse_id): code} - where each product is kept, to show it next to the stock."""
+    """{(product_id, warehouse_id): "A-01 · Prateleira 1"} - where each product is kept, to show it next to the stock
+    (the code first: sorting on it sorts by code)."""
     warehouse_ids = [w for w in set(warehouse_ids) if w is not None]
     if not warehouse_ids:
         return {}
-    query = (select(ProductLocation.product_id, ProductLocation.warehouse_id, WarehouseLocation.code)
+    query = (select(ProductLocation.product_id, ProductLocation.warehouse_id, WarehouseLocation.code,
+                    WarehouseLocation.description)
              .join(WarehouseLocation, WarehouseLocation.id == ProductLocation.location_id)
              .where(ProductLocation.warehouse_id.in_(warehouse_ids)))
     if product_ids is not None:
         query = query.where(ProductLocation.product_id.in_(list(product_ids)))
-    return {(p, w): code for p, w, code in (await db.execute(query)).all()}
+    return {(p, w): location_label(code, desc) for p, w, code, desc in (await db.execute(query)).all()}

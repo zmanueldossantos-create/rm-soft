@@ -55,7 +55,7 @@ async def test_places_are_optional_then_shown_and_sort_the_inventory(db, company
     await set_product_location(db, company_id, cheese, central, fridge.id)
     await set_product_location(db, company_id, apple, central, shelf.id)
     levels = {l["product_id"]: l["location_code"] for l in await list_stock_levels(db, company_id, central)}
-    assert (levels[apple], levels[butter], levels[cheese]) == ("A-01", "FRIGO 1", "FRIGO 1")
+    assert (levels[apple], levels[butter], levels[cheese]) == ("A-01", "FRIGO 1 · Câmara fria", "FRIGO 1 · Câmara fria")
     assert {l["code"]: l["products"] for l in await list_locations(db, company_id, central)} == {"A-01": 1, "FRIGO 1": 2}
 
     with pytest.raises(LocationError, match="usada por 2 produto"):
@@ -65,7 +65,7 @@ async def test_places_are_optional_then_shown_and_sort_the_inventory(db, company
 
     inventory = await create_inventory(db, company_id, central, user_id)
     lines = (await get_inventory(db, company_id, inventory.id))["lines"]
-    assert [(l["name"], l["location_code"]) for l in lines] == [("Ananás", "A-01"), ("Manteiga", "F-01"), ("Queijo", None)]
+    assert [(l["name"], l["location_code"]) for l in lines] == [("Ananás", "A-01"), ("Manteiga", "F-01 · Câmara fria"), ("Queijo", None)]
 
 
 @pytest.mark.asyncio

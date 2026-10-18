@@ -201,7 +201,7 @@ export default function StockInventory({ open, onClose, warehouses, warehouseId,
                       <td className="px-3 py-2.5 text-text-primary">{i.warehouse_name}</td>
                       <td className="px-3 py-2.5 text-text-muted">{i.period_label}</td>
                       <td className="px-3 py-2.5">
-                        <span className={'text-[11px] font-semibold uppercase tracking-wide px-2 py-1 rounded ' + (i.status === 'VALIDADO' ? 'text-success bg-success/10' : 'text-[#f59e0b] bg-[#f59e0b]/10')}>
+                        <span className={'inline-block whitespace-nowrap text-[11px] font-semibold uppercase tracking-wide px-2 py-1 rounded ' + (i.status === 'VALIDADO' ? 'text-success bg-success/10' : 'text-[#f59e0b] bg-[#f59e0b]/10')}>
                           {i.status === 'VALIDADO' ? 'Validado' : 'Em curso'}
                         </span>
                       </td>

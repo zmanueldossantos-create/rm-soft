@@ -43,9 +43,9 @@ def generate_inventory_pdf(data: dict, company: dict) -> bytes:
     def with_location(headers, rows, widths, aligns, total=None):
         if not located:
             return headers, rows, widths, aligns, total
-        scale = 0.88  # the other columns give 12 % to the location
+        scale = 0.82  # the other columns give 18 % to the location (code and description)
         return (["Local."] + headers, [[l.get("location_code") or ""] + r for l, r in zip(data["lines"], rows)],
-                [0.12] + [w * scale for w in widths], ["l"] + aligns, ([""] + total) if total else None)
+                [0.18] + [w * scale for w in widths], ["l"] + aligns, ([""] + total) if total else None)
 
     if validated:
         _section_title(p, "Contagem")
