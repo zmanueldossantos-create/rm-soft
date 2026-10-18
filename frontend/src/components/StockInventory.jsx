@@ -143,6 +143,8 @@ export default function StockInventory({ open, onClose, warehouses, warehouseId,
     }
   }
 
+  // emplacements (optional): a Local. column when the warehouse has them - the lines come sorted by it
+  const located = (inventory?.lines || []).some((l) => l.location_code);
   const lines = (inventory?.lines || []).filter((l) => {
     if (onlyUncounted && counts[l.product_id]?.total != null) return false;
     return !search || (l.code + ' ' + l.name).toLowerCase().includes(search.toLowerCase());
@@ -256,6 +258,7 @@ export default function StockInventory({ open, onClose, warehouses, warehouseId,
           <div className="border border-border rounded-md overflow-auto max-h-[52vh]">
             <table className="w-full text-sm">
               <thead className="sticky top-0 bg-bg-elevated z-10"><tr className="border-b border-border">
+                {located && <th className={th + ' text-left'}>Local.</th>}
                 <th className={th + ' text-left'}>Código</th><th className={th + ' text-left'}>Produto</th><th className={th + ' text-right'}>Esperado</th>
                 <th className={th + ' text-left'}>Contado</th><th className={th + ' text-right'}>Diferença</th><th className={th + ' text-right'}>Valor</th>
               </tr></thead>
@@ -265,6 +268,7 @@ export default function StockInventory({ open, onClose, warehouses, warehouseId,
                   const units = [...l.sale_units, { id: 'base', code: l.unit_code || 'Base', factor: 1 }];
                   return (
                     <tr key={l.product_id} className="border-b border-border last:border-0">
+                      {located && <td className="px-3 py-2 font-mono text-text-primary whitespace-nowrap">{l.location_code || '-'}</td>}
                       <td className="px-3 py-2 font-mono text-text-muted whitespace-nowrap">{l.code}</td>
                       <td className="px-3 py-2 text-text-primary">{l.name}{l.is_raw_material && <span className="ml-2 text-[10px] font-semibold uppercase text-text-muted bg-bg-inset px-1.5 py-0.5 rounded">MP</span>}</td>
                       <td className="px-3 py-2 text-right font-mono text-text-muted whitespace-nowrap">{qty(l.expected)} <span className="text-[11px]">{l.unit_code}</span></td>

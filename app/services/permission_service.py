@@ -40,6 +40,7 @@ PERMISSION_CATALOG: list[tuple[str, str, str, list[str]]] = [
     ("stock:transfer", "Transferir stock entre armazens", "Stock", ["ARMAZENISTA"]),
     ("stock:loss", "Registar perdas de stock", "Stock", ["ARMAZENISTA"]),
     ("stock:adjust", "Ajustar stock (inventário)", "Stock", []),
+    ("stock:locations", "Gerir localizações dos armazéns e arrumar os produtos", "Stock", ["ARMAZENISTA"]),
     ("warehouses:view", "Ver armazens", "Armazens", ["ARMAZENISTA"]),
     ("warehouses:create", "Criar armazens", "Armazens", ["ARMAZENISTA"]),
     ("warehouses:manage", "Editar, ativar e desativar armazens", "Armazens", []),

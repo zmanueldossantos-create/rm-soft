@@ -21,6 +21,7 @@ from app.models.warehouse import Warehouse
 from app.models.stock import Stock
 from app.models.stock_movement import StockMovement
 from app.models.stock_lot import StockLot, StockMovementLot
+from app.models.warehouse_location import WarehouseLocation, ProductLocation
 from app.models.platform_settings import PlatformSettings
 from app.models.fiscal_regime import FiscalRegime
 from app.models.module import Module

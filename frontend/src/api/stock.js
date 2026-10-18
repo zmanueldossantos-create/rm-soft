@@ -28,6 +28,31 @@ export async function listStockLevels(warehouseId) {
   return res.data;
 }
 
+// Emplacements (optional): the places of a warehouse, and where a product is kept there.
+export async function listWarehouseLocations(warehouseId) {
+  const res = await apiClient.get('/stock/warehouses/' + warehouseId + '/locations');
+  return res.data;
+}
+
+export async function createWarehouseLocation(warehouseId, code, description) {
+  const res = await apiClient.post('/stock/warehouses/' + warehouseId + '/locations', { code, description: description || null });
+  return res.data;
+}
+
+export async function updateWarehouseLocation(locationId, code, description) {
+  const res = await apiClient.patch('/stock/locations/' + locationId, { code, description: description || null });
+  return res.data;
+}
+
+export async function toggleWarehouseLocation(locationId) {
+  const res = await apiClient.patch('/stock/locations/' + locationId + '/toggle');
+  return res.data;
+}
+
+export async function setProductLocation(productId, warehouseId, locationId) {
+  await apiClient.put('/stock/product-location', { product_id: productId, warehouse_id: warehouseId, location_id: locationId || null });
+}
+
 // Stock > Validades: lots expired or expiring within the company's alert days (every warehouse unless one is given).
 export async function listExpiringLots(warehouseId = null) {
   const res = await apiClient.get('/stock/expiring', { params: warehouseId ? { warehouse_id: warehouseId } : {} });

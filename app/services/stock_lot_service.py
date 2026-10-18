@@ -226,7 +226,10 @@ async def list_lots(db: AsyncSession, company_id: uuid.UUID, product_id: uuid.UU
     if warehouse_id is not None:
         query = query.where(StockLot.warehouse_id == warehouse_id)
     rows = (await db.execute(query.order_by(Warehouse.name, StockLot.expiry_date.asc().nulls_last(), StockLot.created_at))).all()
+    from app.services.location_service import location_codes
+    codes = await location_codes(db, [lot.warehouse_id for lot, _ in rows], [product_id])
     return [{
+        "location_code": codes.get((lot.product_id, lot.warehouse_id)),
         "id": lot.id, "warehouse_id": lot.warehouse_id, "warehouse_name": name, "lot_number": lot.lot_number,
         "expiry_date": lot.expiry_date, "quantity": float(lot.quantity), "label": lot_label(lot.lot_number, lot.expiry_date),
         "days_left": (lot.expiry_date - today).days if lot.expiry_date else None,
@@ -254,7 +257,10 @@ async def list_expiring(db: AsyncSession, company_id: uuid.UUID, warehouse_id: u
     if warehouse_id is not None:
         query = query.where(StockLot.warehouse_id == warehouse_id)
     rows = (await db.execute(query.order_by(StockLot.expiry_date, Product.name, Warehouse.name))).all()
+    from app.services.location_service import location_codes
+    codes = await location_codes(db, [lot.warehouse_id for lot, *_ in rows])
     lots = [{
+        "location_code": codes.get((lot.product_id, lot.warehouse_id)),
         "id": lot.id, "product_id": product.id, "product_code": product.code, "product_name": product.name,
         "unit_code": unit, "warehouse_id": lot.warehouse_id, "warehouse_name": name, "lot_number": lot.lot_number,
         "expiry_date": lot.expiry_date, "quantity": float(lot.quantity),

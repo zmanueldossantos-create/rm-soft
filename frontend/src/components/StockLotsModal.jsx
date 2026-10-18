@@ -56,7 +56,7 @@ export default function StockLotsModal({ product, onClose }) {
               <tbody>
                 {lots.map((l) => (
                   <tr key={l.id} className={'border-b border-border last:border-0 ' + (l.expired ? 'bg-danger/5' : '')}>
-                    <td className="px-4 py-2.5 text-text-primary">{l.warehouse_name}</td>
+                    <td className="px-4 py-2.5 text-text-primary">{l.warehouse_name}{l.location_code && <span className="block font-mono text-[11px] text-text-muted">Localização {l.location_code}</span>}</td>
                     <td className="px-4 py-2.5 font-mono text-text-primary">{l.lot_number || (l.expiry_date ? '-' : 'Sem lote')}</td>
                     <td className="px-4 py-2.5 font-mono text-text-muted">{day(l.expiry_date)}</td>
                     <td className="px-4 py-2.5 font-mono text-text-primary text-right">{qty(l.quantity)}</td>

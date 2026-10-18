@@ -11,6 +11,7 @@ import uuid
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -123,6 +124,89 @@ async def get_product_lots(
     """The lots of a product followed by lot / expiry still holding stock, per warehouse, FEFO (Stock > Lotes)."""
     from app.services.stock_lot_service import list_lots
     return await list_lots(db, current_user.company_id, product_id, warehouse_id)
+
+
+class _LocationIn(BaseModel):
+    code: str
+    description: str | None = None
+
+
+class _ProductLocationIn(BaseModel):
+    product_id: uuid.UUID
+    warehouse_id: uuid.UUID
+    location_id: uuid.UUID | None = None  # empty = no location
+
+
+def _location_out(location) -> dict:
+    return {"id": location.id, "warehouse_id": location.warehouse_id, "code": location.code,
+            "description": location.description, "is_active": location.is_active}
+
+
+@router.get("/warehouses/{warehouse_id}/locations")
+async def get_warehouse_locations(
+    warehouse_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("stock:view")),
+):
+    """Emplacements: the places of a warehouse (optional - none at first), with how many products are kept in each."""
+    from app.services.location_service import LocationError, list_locations
+    try:
+        return await list_locations(db, current_user.company_id, warehouse_id)
+    except LocationError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.post("/warehouses/{warehouse_id}/locations", status_code=status.HTTP_201_CREATED)
+async def post_warehouse_location(
+    warehouse_id: uuid.UUID, payload: _LocationIn,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("stock:locations")),
+):
+    from app.services.location_service import LocationError, create_location
+    try:
+        return _location_out(await create_location(db, current_user.company_id, warehouse_id, payload.code, payload.description))
+    except LocationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.patch("/locations/{location_id}")
+async def patch_location(
+    location_id: uuid.UUID, payload: _LocationIn,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("stock:locations")),
+):
+    from app.services.location_service import LocationError, update_location
+    try:
+        return _location_out(await update_location(db, current_user.company_id, location_id, payload.code, payload.description))
+    except LocationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.patch("/locations/{location_id}/toggle")
+async def toggle_location_status(
+    location_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("stock:locations")),
+):
+    from app.services.location_service import LocationError, toggle_location
+    try:
+        return _location_out(await toggle_location(db, current_user.company_id, location_id))
+    except LocationError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+
+
+@router.put("/product-location", status_code=status.HTTP_204_NO_CONTENT)
+async def put_product_location(
+    payload: _ProductLocationIn,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("stock:locations")),
+):
+    """Where a product is kept in a warehouse (one place per warehouse), or none."""
+    from app.services.location_service import LocationError, set_product_location
+    try:
+        await set_product_location(db, current_user.company_id, payload.product_id, payload.warehouse_id, payload.location_id)
+    except LocationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
 
 
 @router.get("/expiring")

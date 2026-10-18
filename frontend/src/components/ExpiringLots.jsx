@@ -43,7 +43,7 @@ export default function ExpiringLots({ data, search, canLoss, onWriteOff }) {
               {lots.map((l) => (
                 <tr key={l.id} className={'border-b border-border last:border-0 ' + (l.expired ? 'bg-danger/5' : '')}>
                   <td className="px-6 py-3.5"><span className="font-mono text-text-muted text-[12px] mr-2">{l.product_code}</span><span className="font-display font-medium text-text-primary">{l.product_name}</span></td>
-                  <td className="px-6 py-3.5 text-text-primary">{l.warehouse_name}</td>
+                  <td className="px-6 py-3.5 text-text-primary">{l.warehouse_name}{l.location_code && <span className="block font-mono text-[11px] text-text-muted">Localização {l.location_code}</span>}</td>
                   <td className="px-6 py-3.5 font-mono text-text-primary">{l.lot_number || '-'}</td>
                   <td className="px-6 py-3.5 font-mono text-text-muted">{day(l.expiry_date)}</td>
                   <td className="px-6 py-3.5 font-mono text-text-primary text-right whitespace-nowrap">{qty(l.quantity)} <span className="text-[11px] text-text-muted">{l.unit_code}</span></td>

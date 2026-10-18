@@ -134,6 +134,8 @@ async def get_inventory(db: AsyncSession, company_id: uuid.UUID, inventory_id: u
         select(User.id, User.full_name).where(User.id.in_([u for u in (inventory.created_by_user_id, inventory.validated_by_user_id) if u]))
     )).all())
 
+    from app.services.location_service import location_codes
+    codes = await location_codes(db, [inventory.warehouse_id])
     out = []
     for line, product in lines:
         cost = float(line.unit_cost) if validated and line.unit_cost is not None else (
@@ -146,6 +148,7 @@ async def get_inventory(db: AsyncSession, company_id: uuid.UUID, inventory_id: u
                  else (round(diff * cost, 2) if diff is not None and cost is not None else None))
         out.append({
             "line_id": line.id, "product_id": product.id, "code": product.code, "name": product.name,
+            "location_code": codes.get((product.id, inventory.warehouse_id)),  # emplacements (optional)
             "is_raw_material": product.is_raw_material, "unit_code": units.get(product.unit_of_measure_id),
             "sale_units": sorted(sale_units.get(product.id, []), key=lambda u: -u["factor"]),
             "expected": exp, "counted": counted, "count_detail": line.count_detail,
@@ -154,7 +157,8 @@ async def get_inventory(db: AsyncSession, company_id: uuid.UUID, inventory_id: u
             "lot_rule": {"batch": bool(product.managed_by_batch), "expiry": bool(product.managed_by_expiry)} if is_followed(product) else None,
             "surplus_lot_number": line.surplus_lot_number, "surplus_expiry_date": line.surplus_expiry_date,
         })
-    out.sort(key=lambda l: l["name"])
+    # the round of the shelves: by location (the products without one at the end), then by name
+    out.sort(key=lambda l: (l["location_code"] is None, l["location_code"] or "", l["name"]))
     differing = [l for l in out if l["difference"] not in (None, 0)]
     return {
         "id": inventory.id, "reference": _ref(inventory), "status": inventory.status.value,

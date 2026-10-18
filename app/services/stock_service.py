@@ -561,6 +561,13 @@ async def list_stock_levels(db: AsyncSession, company_id: uuid.UUID, warehouse_i
             StockLot.warehouse_id == warehouse_id, StockLot.quantity > 0, StockLot.expiry_date < date.today(),
         ).group_by(StockLot.product_id)
     )).all())
+    # emplacements (optional): where each product is kept in this warehouse
+    from app.models.warehouse_location import ProductLocation
+    locations = dict((await db.execute(
+        select(ProductLocation.product_id, ProductLocation.location_id).where(ProductLocation.warehouse_id == warehouse_id)
+    )).all())
+    from app.services.location_service import location_codes
+    codes = await location_codes(db, [warehouse_id])
     return [
         {
             "product_id": product.id,
@@ -571,6 +578,8 @@ async def list_stock_levels(db: AsyncSession, company_id: uuid.UUID, warehouse_i
             "is_low": float(stock.quantity) <= float(product.min_stock_threshold),
             "followed_by_lot": is_followed(product),
             "expired_quantity": float(expired.get(product.id, 0) or 0),
+            "location_id": locations.get(product.id),
+            "location_code": codes.get((product.id, warehouse_id)),
         }
         for stock, product in rows
     ]

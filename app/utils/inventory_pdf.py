@@ -37,6 +37,16 @@ def generate_inventory_pdf(data: dict, company: dict) -> bytes:
     def unit(line):
         return f" {line['unit_code']}" if line["unit_code"] else ""
 
+    # emplacements (optional): a first column "Local." when the warehouse has them - the lines come sorted by it
+    located = any(l.get("location_code") for l in data["lines"])
+
+    def with_location(headers, rows, widths, aligns, total=None):
+        if not located:
+            return headers, rows, widths, aligns, total
+        scale = 0.88  # the other columns give 12 % to the location
+        return (["Local."] + headers, [[l.get("location_code") or ""] + r for l, r in zip(data["lines"], rows)],
+                [0.12] + [w * scale for w in widths], ["l"] + aligns, ([""] + total) if total else None)
+
     if validated:
         _section_title(p, "Contagem")
         rows = [[l["code"], l["name"], _qty(l["expected"]) + unit(l),
@@ -44,15 +54,18 @@ def generate_inventory_pdf(data: dict, company: dict) -> bytes:
                  _qty(l["difference"]) if l["difference"] else ("0" if l["difference"] == 0 else ""),
                  kz(l["difference_value"]) if l["difference_value"] else ""]
                 for l in data["lines"]]
-        _table(p, ["Código", "Produto", "Esperado", "Contado", "Diferença", "Valor"], rows,
-               [0.13, 0.32, 0.14, 0.14, 0.12, 0.15], ["l", "l", "r", "r", "r", "r"],
-               total=["", f"{data['summary']['differences']} diferença(s)", "", "", "",
-                      kz(data["summary"]["difference_value"])])
+        headers, rows, widths, aligns, total = with_location(
+            ["Código", "Produto", "Esperado", "Contado", "Diferença", "Valor"], rows,
+            [0.13, 0.32, 0.14, 0.14, 0.12, 0.15], ["l", "l", "r", "r", "r", "r"],
+            ["", f"{data['summary']['differences']} diferença(s)", "", "", "", kz(data["summary"]["difference_value"])])
+        _table(p, headers, rows, widths, aligns, total=total)
     else:
         _section_title(p, "Produtos a contar")
         rows = [[l["code"], l["name"], (l["unit_code"] or ""), "", ""] for l in data["lines"]]
-        _table(p, ["Código", "Produto", "Unidade", "Contado", "Observações"], rows,
-               [0.14, 0.40, 0.10, 0.16, 0.20], ["l", "l", "l", "r", "l"])
+        headers, rows, widths, aligns, _ = with_location(
+            ["Código", "Produto", "Unidade", "Contado", "Observações"], rows,
+            [0.14, 0.40, 0.10, 0.16, 0.20], ["l", "l", "l", "r", "l"])
+        _table(p, headers, rows, widths, aligns)
 
     p.need(30 * mm)
     p.y -= 16 * mm

@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Package2, Plus, Loader2, Search, AlertTriangle, ArrowDownToLine, SlidersHorizontal, Warehouse, Pencil, Check, X, ArrowRightLeft, Trash2, Power, ClipboardCheck } from 'lucide-react';
+import { Package2, Plus, Loader2, Search, AlertTriangle, ArrowDownToLine, SlidersHorizontal, Warehouse, Pencil, Check, X, ArrowRightLeft, Trash2, Power, ClipboardCheck, MapPin } from 'lucide-react';
 import Modal from '../components/Modal';
 import MovementForm from '../components/MovementForm';
 import StockInventory from '../components/StockInventory';
 import StockLotsModal from '../components/StockLotsModal';
 import ExpiringLots from '../components/ExpiringLots';
+import WarehouseLocationsModal from '../components/WarehouseLocationsModal';
 import { useLocation } from 'react-router-dom';
 import LotPicker, { lotRuleOf } from '../components/LotPicker';
 import DateInput from '../components/DateInput';
@@ -12,7 +13,7 @@ import DateInput from '../components/DateInput';
 import PostingPeriodSelect from '../components/PostingPeriodSelect';
 import UnitBreakdown from '../components/UnitBreakdown';
 import Select from '../components/Select';
-import { listExpiringLots, listStockLevels, adjustStock, transferStock, recordStockLoss, listWarehouses, createWarehouse, updateWarehouseFull, toggleWarehouseStatus } from '../api/stock';
+import { listWarehouseLocations, setProductLocation, listExpiringLots, listStockLevels, adjustStock, transferStock, recordStockLoss, listWarehouses, createWarehouse, updateWarehouseFull, toggleWarehouseStatus } from '../api/stock';
 import { provincesApi, municipalitiesApi } from '../api/catalogs';
 import { listProducts } from '../api/products';
 import { extractErrorMessage } from '../utils/errors';
@@ -29,7 +30,7 @@ function formatQty(value) {
   return value % 1 === 0 ? String(value) : String(value).replace('.', ',');
 }
 
-function WarehouseCard({ warehouse, isCentral, onEditClick, onToggleStatus, togglingId }) {
+function WarehouseCard({ warehouse, isCentral, onEditClick, onToggleStatus, togglingId, onLocationsClick, locationCount }) {
   const can = useCan();
 
   return (
@@ -50,6 +51,14 @@ function WarehouseCard({ warehouse, isCentral, onEditClick, onToggleStatus, togg
         </div>
       </div>
 
+      <div className="flex items-center gap-2">
+      {/* emplacements (optional): the places of this warehouse */}
+      <button
+        onClick={() => onLocationsClick(warehouse)}
+        className="flex items-center gap-1.5 h-8 px-3 rounded-md border border-border text-[13px] text-text-primary hover:border-accent transition-colors cursor-pointer"
+      >
+        <MapPin size={14} className="text-text-muted" /> Localizações{locationCount > 0 && <span className="font-mono text-[11px] text-text-muted">{locationCount}</span>}
+      </button>
       {can('warehouses:manage') && !isCentral && (
         <div className="flex items-center gap-2">
           <button
@@ -70,6 +79,7 @@ function WarehouseCard({ warehouse, isCentral, onEditClick, onToggleStatus, togg
           </button>
         </div>
       )}
+      </div>
     </div>
   );
 }
@@ -88,6 +98,11 @@ export default function Stock() {
   // opens the second one directly
   const [view, setView] = useState(location.state?.tab === 'validades' ? 'validades' : 'niveis');
   const [expiring, setExpiring] = useState(null);
+  // emplacements (optional): the places of the selected warehouse, the modal managing them, the line being placed
+  const [whLocations, setWhLocations] = useState([]);
+  const [locationsOf, setLocationsOf] = useState(null);
+  const [placingId, setPlacingId] = useState(null);
+  const [placeError, setPlaceError] = useState('');
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -156,6 +171,7 @@ export default function Stock() {
       const [levelsData, productsData] = await Promise.all([listStockLevels(warehouseId), listProducts()]);
       setLevels(levelsData);
       listExpiringLots().then(setExpiring).catch(() => setExpiring(null));  // Validades: after every operation too
+      listWarehouseLocations(warehouseId).then(setWhLocations).catch(() => setWhLocations([]));
       setProducts(productsData.filter((p) => p.is_active && p.product_type === 'BEM'));
     } catch (err) {
       setError(extractErrorMessage(err, 'Erro ao carregar stock'));
@@ -352,6 +368,18 @@ export default function Stock() {
     setLossModalOpen(true);
   }
 
+  // Emplacements: puts a product away in a place of the selected warehouse (or none)
+  async function placeProduct(productId, locationId) {
+    setPlaceError('');
+    try {
+      await setProductLocation(productId, selectedWarehouseId, locationId);
+      setPlacingId(null);
+      await loadLevels(selectedWarehouseId);
+    } catch (err) {
+      setPlaceError(extractErrorMessage(err, 'Erro ao mudar a localização'));
+    }
+  }
+
   function openAdjustModal() {
     setFiscalPeriodId('');
     setSaleUnitId('');
@@ -505,7 +533,7 @@ export default function Stock() {
         </div>
       </div>
 
-      {selectedWarehouse && view === 'niveis' && <div className="mb-5"><WarehouseCard key={selectedWarehouse.id} warehouse={selectedWarehouse} isCentral={selectedWarehouse.id === centralWarehouse?.id} onEditClick={openEditWarehouseModal} onToggleStatus={handleToggleWarehouseStatus} togglingId={togglingWarehouseId} /></div>}
+      {selectedWarehouse && view === 'niveis' && <div className="mb-5"><WarehouseCard key={selectedWarehouse.id} warehouse={selectedWarehouse} isCentral={selectedWarehouse.id === centralWarehouse?.id} onEditClick={openEditWarehouseModal} onToggleStatus={handleToggleWarehouseStatus} togglingId={togglingWarehouseId} onLocationsClick={setLocationsOf} locationCount={whLocations.length} /></div>}
 
       <div className="flex items-center gap-3 mb-5 flex-wrap">
       <div className="flex gap-1 border-b border-border">
@@ -535,6 +563,7 @@ export default function Stock() {
         </div>
       )}
 
+      {placeError && view === 'niveis' && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r mb-3">{placeError}</div>}
       <div className={'bg-bg-elevated border border-border rounded-lg overflow-hidden ' + (view === 'niveis' ? '' : 'hidden')}>
         {loading && (
           <div className="flex items-center justify-center py-16 text-text-muted text-sm">
@@ -560,6 +589,7 @@ export default function Stock() {
                 <tr className="border-b border-border">
                   <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Código</th>
                   <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Produto</th>
+                  {whLocations.length > 0 && <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Localização</th>}
                   <th className="text-right text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Quantidade</th>
                   <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Equivalência</th>
                   <th className="text-right text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Limite mínimo</th>
@@ -572,6 +602,21 @@ export default function Stock() {
                   <tr key={l.product_id} className={'border-b border-border last:border-0 hover:bg-bg-inset/40 transition-colors ' + (l.is_low ? 'bg-danger/5' : '')}>
                     <td className="px-6 py-4 font-mono text-text-muted">{l.product_code}</td>
                     <td className="px-6 py-4 font-display font-medium text-text-primary">{l.product_name}</td>
+                    {whLocations.length > 0 && (
+                      <td className="px-6 py-3 min-w-[170px]">
+                        {placingId === l.product_id ? (
+                          <Select compact value={l.location_id || ''} onChange={(v) => placeProduct(l.product_id, v)}
+                            options={[{ value: '', label: 'Sem localização' }, ...whLocations.filter((x) => x.is_active || x.id === l.location_id).map((x) => ({ value: x.id, label: x.code + (x.description ? ' · ' + x.description : '') }))]} />
+                        ) : (
+                          <span className="flex items-center gap-2">
+                            <span className={'font-mono text-[13px] ' + (l.location_code ? 'text-text-primary' : 'text-text-muted')}>{l.location_code || '-'}</span>
+                            {can('stock:locations') && (
+                              <button type="button" onClick={() => { setPlacingId(l.product_id); setPlaceError(''); }} title="Mudar a localização" className="text-text-muted hover:text-accent cursor-pointer"><Pencil size={12} /></button>
+                            )}
+                          </span>
+                        )}
+                      </td>
+                    )}
                     <td className="px-6 py-4 font-mono text-text-primary text-right">{formatQty(l.quantity)}</td>
                       <td className="px-6 py-4">{(() => { const p = products.find((x) => x.id === l.product_id); return <UnitBreakdown quantity={l.quantity} baseCode={p?.unit_of_measure_code} units={(p?.sale_units || []).map((u) => ({ code: u.unit_of_measure_code, factor: Number(u.factor) }))} />; })()}</td>
                     <td className="px-6 py-4 font-mono text-text-muted text-right">{formatQty(l.min_stock_threshold)}</td>
@@ -606,6 +651,8 @@ export default function Stock() {
       </div>
 
       <StockLotsModal product={lotsOf} onClose={() => setLotsOf(null)} />
+      <WarehouseLocationsModal warehouse={locationsOf} canManage={can('stock:locations')} onClose={() => setLocationsOf(null)}
+        onChanged={() => loadLevels(selectedWarehouseId)} />
 
       <Modal open={receiveModalOpen} onClose={() => setReceiveModalOpen(false)} title="Registar Receção de Stock" maxWidthClass="max-w-6xl">
         <MovementForm

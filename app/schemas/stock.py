@@ -21,6 +21,8 @@ class StockLevelResponse(BaseModel):
     is_low: bool
     followed_by_lot: bool = False  # followed by lot / expiry: its lots are listed (Stock > Lotes)
     expired_quantity: float = 0  # in expired lots - never sold
+    location_id: uuid.UUID | None = None  # emplacements (optional): where it is kept in this warehouse
+    location_code: str | None = None
 
 
 class StockAdjustRequest(BaseModel):
