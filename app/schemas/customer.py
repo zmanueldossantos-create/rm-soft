@@ -84,6 +84,10 @@ class CustomerCreateRequest(BaseModel):
     payment_term_id: uuid.UUID | None = None
     payment_method_id: uuid.UUID | None = None
     withholding_tax_id: uuid.UUID | None = None
+    # Farmácia: an insurer / agreement (insurance_service)
+    is_insurer: bool = False
+    insurer_coverage_pct: float | None = None
+    insurer_medicines_only: bool = True
 
     @field_validator("name")
     @classmethod
@@ -125,6 +129,10 @@ class CustomerUpdateRequest(BaseModel):
     payment_method_id: uuid.UUID | None = None
     withholding_tax_id: uuid.UUID | None = None
     status: str = "ACTIVO"
+    # Farmácia: an insurer / agreement - None = unchanged (a screen that does not send them keeps them)
+    is_insurer: bool | None = None
+    insurer_coverage_pct: float | None = None
+    insurer_medicines_only: bool | None = None
 
     @field_validator("name")
     @classmethod
@@ -169,6 +177,9 @@ class CustomerResponse(BaseModel):
     payment_method_id: uuid.UUID | None
     withholding_tax_id: uuid.UUID | None
     status: str
+    is_insurer: bool = False
+    insurer_coverage_pct: float | None = None
+    insurer_medicines_only: bool = True
 
     class Config:
         from_attributes = True

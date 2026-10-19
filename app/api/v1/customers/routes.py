@@ -70,6 +70,8 @@ async def create_new_customer(
             payment_term_id=payload.payment_term_id,
             payment_method_id=payload.payment_method_id,
             withholding_tax_id=payload.withholding_tax_id,
+            insurer={"is_insurer": payload.is_insurer, "insurer_coverage_pct": payload.insurer_coverage_pct,
+                     "insurer_medicines_only": payload.insurer_medicines_only},
         )
     except CustomerAlreadyExistsError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
@@ -118,6 +120,9 @@ async def edit_customer(
             payment_method_id=payload.payment_method_id,
             withholding_tax_id=payload.withholding_tax_id,
             status=payload.status,
+            insurer=None if payload.is_insurer is None else {
+                "is_insurer": payload.is_insurer, "insurer_coverage_pct": payload.insurer_coverage_pct,
+                "insurer_medicines_only": payload.insurer_medicines_only if payload.insurer_medicines_only is not None else True},
         )
     except CustomerAlreadyExistsError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))

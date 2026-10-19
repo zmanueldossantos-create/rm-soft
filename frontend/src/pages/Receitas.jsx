@@ -3,7 +3,9 @@ import { FileText, Loader2, Printer, Search } from 'lucide-react';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
 import { extractErrorMessage } from '../utils/errors';
-import { listPrescriptions, fetchPrescriptionsPdf, getPsychotropicRegister, fetchPsychotropicsPdf } from '../api/pharmacy';
+import { listPrescriptions, fetchPrescriptionsPdf, getPsychotropicRegister, fetchPsychotropicsPdf, listInsuranceShares, fetchInsuranceSharesPdf } from '../api/pharmacy';
+import { listCustomers } from '../api/customers';
+import { formatKz } from '../utils/format';
 
 // Farmácia - the registers (pharmacy_register_service): the registo de receitas (every sale dispensed against a
 // receita, its medicines and lots) and the registo de psicotrópicos e estupefacientes (per medicine of receita
@@ -24,7 +26,10 @@ function monthStart() {
 
 export default function Receitas() {
   const [tab, setTab] = useState('receitas');
-  const [filters, setFilters] = useState({ dateFrom: monthStart(), dateTo: iso(new Date()), special: 'todas', q: '' });
+  const [filters, setFilters] = useState({ dateFrom: monthStart(), dateTo: iso(new Date()), special: 'todas', q: '', insurerId: '' });
+  const [shares, setShares] = useState(null); // Comparticipações: the sales shared with insurers
+  const [insurers, setInsurers] = useState([]);
+  useEffect(() => { listCustomers().then((list) => setInsurers(list.filter((c) => c.is_insurer))).catch(() => setInsurers([])); }, []);
   const [prescriptions, setPrescriptions] = useState(null);
   const [register, setRegister] = useState(null);
   const [error, setError] = useState('');
@@ -41,6 +46,11 @@ export default function Receitas() {
       }, 250);  // the search box: one request once the typing stops
       return () => clearTimeout(timer);
     }
+    if (tab === 'comparticipacoes') {
+      setShares(null);
+      listInsuranceShares(filters).then(setShares).catch((err) => { setShares([]); setError(extractErrorMessage(err, 'Erro ao carregar as comparticipações')); });
+      return undefined;
+    }
     setRegister(null);
     getPsychotropicRegister(filters).then(setRegister).catch((err) => { setRegister([]); setError(extractErrorMessage(err, 'Erro ao carregar o registo')); });
     return undefined;
@@ -48,14 +58,15 @@ export default function Receitas() {
 
   async function print() {
     try {
-      const url = tab === 'receitas' ? await fetchPrescriptionsPdf(filters) : await fetchPsychotropicsPdf(filters);
-      setPdf({ url, title: tab === 'receitas' ? 'Registo de receitas' : 'Registo de psicotrópicos e estupefacientes' });
+      const url = tab === 'receitas' ? await fetchPrescriptionsPdf(filters)
+        : tab === 'comparticipacoes' ? await fetchInsuranceSharesPdf(filters) : await fetchPsychotropicsPdf(filters);
+      setPdf({ url, title: tab === 'receitas' ? 'Registo de receitas' : tab === 'comparticipacoes' ? 'Relação de comparticipações' : 'Registo de psicotrópicos e estupefacientes' });
     } catch (err) {
       setError(extractErrorMessage(err, 'Erro ao gerar o PDF'));
     }
   }
 
-  const loading = tab === 'receitas' ? prescriptions === null : register === null;
+  const loading = tab === 'receitas' ? prescriptions === null : tab === 'comparticipacoes' ? shares === null : register === null;
 
   return (
     <main className="max-w-[1600px] mx-auto px-4 sm:px-6 md:px-8 py-6 sm:py-9">
@@ -63,10 +74,10 @@ export default function Receitas() {
         <FileText size={22} className="text-accent" />
         Receitas e registos
       </h2>
-      <p className="text-text-muted text-sm mb-6">As vendas com receita médica e o registo dos psicotrópicos e estupefacientes, para a inspeção</p>
+      <p className="text-text-muted text-sm mb-6">As vendas com receita médica, o registo dos psicotrópicos e estupefacientes, e as comparticipações das seguradoras</p>
 
       <div className="flex gap-1 border-b border-border mb-5">
-        {[['receitas', 'Receitas'], ['psicotropicos', 'Psicotrópicos e estupefacientes']].map(([key, label]) => (
+        {[['receitas', 'Receitas'], ['psicotropicos', 'Psicotrópicos e estupefacientes'], ['comparticipacoes', 'Comparticipações']].map(([key, label]) => (
           <button key={key} type="button" onClick={() => setTab(key)} className={'px-3.5 py-2 text-[13px] font-medium border-b-2 -mb-px transition-colors cursor-pointer ' + (tab === key ? 'border-accent text-text-primary' : 'border-transparent text-text-muted hover:text-text-primary')}>
             {label}
           </button>
@@ -87,6 +98,11 @@ export default function Receitas() {
               <input value={filters.q} onChange={(e) => set('q', e.target.value)} placeholder="N.º, médico, utente, medicamento..." className={inputCls + ' pl-9 font-sans'} />
             </div>
           </>
+        )}
+        {tab === 'comparticipacoes' && (
+          <div className="w-64"><label className={labelCls}>Entidade</label>
+            <Select value={filters.insurerId} onChange={(v) => set('insurerId', v)} options={[{ value: '', label: 'Todas as entidades' }, ...insurers.map((c) => ({ value: c.id, label: c.name }))]} />
+          </div>
         )}
         <button type="button" onClick={print} disabled={loading} className="ml-auto flex items-center gap-1.5 bg-accent hover:bg-accent-hover disabled:opacity-50 text-white text-sm font-semibold rounded-md px-4 py-2.5 cursor-pointer">
           <Printer size={15} /> Imprimir
@@ -180,6 +196,43 @@ export default function Receitas() {
             ))}
           </div>
         )
+      )}
+
+      {!loading && tab === 'comparticipacoes' && (
+        <div className="bg-bg-elevated border border-border rounded-lg overflow-x-auto">
+          {shares.length === 0 ? (
+            <p className="text-center py-14 text-text-muted text-sm">Nenhuma venda comparticipada neste período</p>
+          ) : (
+            <table className="w-full text-sm min-w-[1150px]">
+              <thead><tr className="border-b border-border">
+                <th className={th + ' text-left'}>Data</th><th className={th + ' text-left'}>Entidade</th><th className={th + ' text-left'}>Fatura entidade</th>
+                <th className={th + ' text-left'}>Documento utente</th><th className={th + ' text-left'}>Beneficiário · cartão</th><th className={th + ' text-left'}>Receita</th>
+                <th className={th + ' text-right'}>Taxa</th><th className={th + ' text-right'}>Parte do utente</th><th className={th + ' text-right'}>Entidade</th><th className={th + ' text-right'}>Por receber</th>
+              </tr></thead>
+              <tbody>
+                {shares.map((r) => (
+                  <tr key={r.id} className="border-b border-border last:border-0">
+                    <td className="px-3 py-2.5 font-mono text-text-muted whitespace-nowrap">{day(r.date)}</td>
+                    <td className="px-3 py-2.5 text-text-primary">{r.insurer}</td>
+                    <td className="px-3 py-2.5 font-mono text-text-primary whitespace-nowrap">{r.insurer_reference}</td>
+                    <td className="px-3 py-2.5 font-mono text-text-primary whitespace-nowrap">{r.patient_reference || '-'}</td>
+                    <td className="px-3 py-2.5 text-text-primary">{r.beneficiary_name || '-'}<span className="block font-mono text-[12px] text-text-muted">{r.card_number}</span></td>
+                    <td className="px-3 py-2.5 font-mono text-text-primary">{r.prescription || ''}</td>
+                    <td className="px-3 py-2.5 font-mono text-text-muted text-right">{r.coverage_pct}%</td>
+                    <td className="px-3 py-2.5 font-mono text-text-primary text-right whitespace-nowrap">{formatKz(r.patient_amount)}</td>
+                    <td className="px-3 py-2.5 font-mono text-text-primary text-right whitespace-nowrap">{formatKz(r.insurer_amount)}</td>
+                    <td className={'px-3 py-2.5 font-mono text-right whitespace-nowrap ' + (r.amount_due > 0 ? 'text-danger' : 'text-success')}>{formatKz(r.amount_due)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot><tr className="border-t border-border bg-bg-inset/40 font-semibold">
+                <td colSpan={8} className="px-3 py-2.5 text-text-primary">Total ({shares.length} venda{shares.length === 1 ? '' : 's'})</td>
+                <td className="px-3 py-2.5 font-mono text-text-primary text-right whitespace-nowrap">{formatKz(shares.reduce((a, r) => a + r.insurer_amount, 0))}</td>
+                <td className={'px-3 py-2.5 font-mono text-right whitespace-nowrap ' + (shares.some((r) => r.amount_due > 0) ? 'text-danger' : 'text-success')}>{formatKz(shares.reduce((a, r) => a + r.amount_due, 0))}</td>
+              </tr></tfoot>
+            </table>
+          )}
+        </div>
       )}
 
       <Modal open={!!pdf} onClose={() => { if (pdf?.url) URL.revokeObjectURL(pdf.url); setPdf(null); }} title={pdf?.title || ''} maxWidthClass="max-w-6xl">

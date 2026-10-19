@@ -60,6 +60,7 @@ export async function checkout(posId, customerId, lines, payments, invoiceType =
     })),
     payments: payments.map((p) => ({ payment_method_id: p.paymentMethodId, amount: p.amount })),
     prescription: ftDetails.prescription || null,  // the receita of a pharmacy sale
+    insurance: ftDetails.insurance || null,  // a sale shared with an insurer (Farmácia)
   });
   return res.data;
 }

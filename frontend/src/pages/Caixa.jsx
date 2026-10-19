@@ -2,7 +2,7 @@ import { formatKz } from '../utils/format';
 import { guessLegalPersonType, isPessoaColetiva, LEGAL_PERSON_OPTIONS } from '../utils/customerType';
 import { API_ORIGIN } from '../api/config';
 import DateInput from '../components/DateInput';
-import { useState, useEffect, useRef, Fragment } from 'react';
+import { useState, useEffect, useRef, useMemo, Fragment } from 'react';
 import usePosDocumentTypes from '../utils/posDocumentTypes';
 import { useCan } from '../utils/permissions';
 import { listDenominations, recordDenominationCount, getLatestDenominationCount } from '../api/moedeiro';
@@ -911,7 +911,14 @@ export default function Caixa() {
   const [saleConfirmModalOpen, setSaleConfirmModalOpen] = useState(false);
   // Farmácia: the receita of a sale holding a medicine on prescription - asked before the sale is confirmed.
   const [prescriptionPolicy, setPrescriptionPolicy] = useState('OBRIGATORIA');
-  useEffect(() => { getPharmacyContext().then((c) => setPrescriptionPolicy(c.prescription_policy || 'OBRIGATORIA')).catch(() => {}); }, []);
+  const [pharmacyEnabled, setPharmacyEnabled] = useState(false);
+  useEffect(() => {
+    getPharmacyContext().then((c) => { setPrescriptionPolicy(c.prescription_policy || 'OBRIGATORIA'); setPharmacyEnabled(!!c.enabled); }).catch(() => {});
+  }, []);
+  // Farmácia: a sale shared with an insurer (comparticipação) - the patient pays his part, the insurer gets a Fatura
+  // for the rest (insurance_service). { insurerId, name, pct, medicinesOnly, cardNumber, beneficiaryName } or null.
+  const [insurance, setInsurance] = useState(null);
+  const [insuranceForm, setInsuranceForm] = useState(null); // the open "Seguradora" modal's fields
   const [prescription, setPrescription] = useState(null);
   const [prescriptionNeed, setPrescriptionNeed] = useState(null);
   function startConfirmation() {
@@ -958,9 +965,24 @@ export default function Caixa() {
   // a withholding for a real pessoa coletiva only - never the Consumidor final (NIF 999999999)
   const isCustomerPessoaColetiva = isPessoaColetiva(customers.find((c) => c.id === selectedCustomerId));
 
+  // With an insurer: a covered line costs the patient his part of the price (the insurer's to the cent, as the server).
+  const productsById = useMemo(() => Object.fromEntries(products.map((p) => [p.id, p])), [products]);
+  function isCovered(line) {
+    if (!insurance) return false;
+    return !insurance.medicinesOnly || !!(line.productId && productsById[line.productId]?.is_medicine);
+  }
+  function insurerUnit(line) {
+    return isCovered(line) ? round2(line.price * insurance.pct / 100) : 0;
+  }
+  const insurerShare = cart.reduce((acc, line) => {
+    const vatRate = vatRates.find((v) => v.id === line.vatId)?.rate || 0;
+    const sub = insurerUnit(line) * line.quantity * (1 - line.discountPercent / 100);
+    return acc + sub * (1 + vatRate / 100);
+  }, 0);
+
   const cartCalculation = cart.reduce((acc, line) => {
     const vatRate = vatRates.find((v) => v.id === line.vatId)?.rate || 0;
-    const grossLine = line.price * line.quantity;
+    const grossLine = (line.price - insurerUnit(line)) * line.quantity;
     const lineDiscountAmount = grossLine * (line.discountPercent / 100);
     const lineSubtotal = grossLine - lineDiscountAmount;
     const lineVat = lineSubtotal * (vatRate / 100);
@@ -983,6 +1005,26 @@ export default function Caixa() {
   // what the customer pays: the total minus the withholding he keeps (the same on the pro-forma and on the invoice it becomes)
   const paymentDueTotal = paymentMode === 'liquidation' && liquidationTarget ? round2(Number(liquidationTarget.total) - Number(liquidationTarget.retention_total || 0)) : cartTotal;
 
+  function insurancePayload() {
+    if (!insurance || selectedInvoiceType === 'PRO_FORMA') return null;
+    return { insurer_id: insurance.insurerId, card_number: insurance.cardNumber, beneficiary_name: insurance.beneficiaryName || null, coverage_pct: insurance.pct };
+  }
+
+  const insurers = customers.filter((c) => c.is_insurer && c.is_active !== false);
+  function openInsurance() {
+    setInsuranceForm(insurance
+      ? { insurerId: insurance.insurerId, pct: String(insurance.pct), cardNumber: insurance.cardNumber, beneficiaryName: insurance.beneficiaryName || '' }
+      : { insurerId: '', pct: '', cardNumber: '', beneficiaryName: '' });
+  }
+  function applyInsurance() {
+    const insurer = insurers.find((c) => c.id === insuranceForm.insurerId);
+    setInsurance({
+      insurerId: insurer.id, name: insurer.name, pct: parseFloat(insuranceForm.pct), medicinesOnly: insurer.insurer_medicines_only !== false,
+      cardNumber: insuranceForm.cardNumber.trim(), beneficiaryName: insuranceForm.beneficiaryName.trim(),
+    });
+    setInsuranceForm(null);
+  }
+
   async function handleConfirmFt() {
     setCheckoutError('');
     setCheckoutSaving(true);
@@ -993,7 +1035,7 @@ export default function Caixa() {
         [],
         'FACTURA',
         globalDiscountPercent,
-        { paymentTermId: ftPaymentTermId || null, dueDate: ftDueDate || null, prescription },
+        { paymentTermId: ftPaymentTermId || null, dueDate: ftDueDate || null, prescription, insurance: insurancePayload() },
       );
       setLastInvoice(invoice);
       setSuccessModalOpen(true);
@@ -1005,6 +1047,7 @@ export default function Caixa() {
       setSelectedCustomerId('');
       setGlobalDiscountPercent(0);
       setPrescription(null);
+      setInsurance(null);
       setFtModalOpen(false);
     } catch (err) {
       setCheckoutError(extractErrorMessage(err, 'Erro ao faturar'));
@@ -1164,7 +1207,7 @@ export default function Caixa() {
           validPayments,
           selectedInvoiceType,
           globalDiscountPercent,
-          { prescription },
+          { prescription, insurance: insurancePayload() },
         );
         setLastInvoice(invoice);
         setSuccessModalOpen(true);
@@ -1177,6 +1220,7 @@ export default function Caixa() {
         setGlobalDiscountPercent(0);
         setPayments([]);
         setPrescription(null);
+        setInsurance(null);
       }
     } catch (err) {
       setCheckoutError(extractErrorMessage(err, paymentMode === 'liquidation' ? 'Erro ao liquidar pro-forma' : 'Erro ao finalizar venda'));
@@ -1544,6 +1588,24 @@ export default function Caixa() {
                 </button>
               </div>
 
+              {pharmacyEnabled && insurers.length > 0 && selectedInvoiceType !== 'PRO_FORMA' && (
+                <div className="mb-3 -mt-1">
+                  {insurance ? (
+                    <div className="flex items-center justify-between gap-2 border border-accent/40 bg-accent/5 rounded-md px-3 py-2">
+                      <button type="button" onClick={openInsurance} className="text-left text-[12px] text-text-primary cursor-pointer min-w-0">
+                        <span className="font-semibold">{insurance.name} · {insurance.pct}%</span>
+                        <span className="block text-text-muted truncate">Cartão n.º {insurance.cardNumber}{insurance.beneficiaryName ? ' · ' + insurance.beneficiaryName : ''}</span>
+                      </button>
+                      <button type="button" onClick={() => setInsurance(null)} aria-label="Retirar seguradora" className="shrink-0 text-text-muted hover:text-danger cursor-pointer"><X size={15} /></button>
+                    </div>
+                  ) : (
+                    <button type="button" onClick={openInsurance} className="flex items-center gap-1 text-accent hover:text-accent-hover text-[12px] font-medium cursor-pointer">
+                      <Plus size={13} /> Seguradora / convénio
+                    </button>
+                  )}
+                </div>
+              )}
+
               {cart.length === 0 ? (
                 <p className="flex-1 text-text-muted text-[12px] text-center py-8">Carrinho vazio</p>
               ) : (
@@ -1659,8 +1721,14 @@ export default function Caixa() {
                     <span className="font-mono text-danger text-[12px]">-{formatKz(cartCalculation.retention)} Kz</span>
                   </div>
                 )}
+                {insurance && insurerShare > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-text-muted text-[12px]">{insurance.name} ({insurance.pct}%) - Fatura à parte</span>
+                    <span className="font-mono text-accent text-[12px]">{formatKz(insurerShare)} Kz</span>
+                  </div>
+                )}
                 <div className="flex items-center justify-between pt-1.5 border-t border-border">
-                  <span className="text-text-primary text-[13px] font-medium">Total</span>
+                  <span className="text-text-primary text-[13px] font-medium">{insurance ? 'Utente paga' : 'Total'}</span>
                   <span className="font-mono font-semibold text-text-primary text-lg">{formatKz(cartTotal)} Kz</span>
                 </div>
               </div>
@@ -1968,6 +2036,43 @@ export default function Caixa() {
         </div>
       </Modal>
 
+      <Modal open={!!insuranceForm} onClose={() => setInsuranceForm(null)} title="Seguradora / convénio" maxWidthClass="max-w-xl">
+        {insuranceForm && (
+          <div className="flex flex-col gap-4">
+            <div>
+              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Entidade *</label>
+              <Select value={insuranceForm.insurerId} onChange={(v) => {
+                const insurer = insurers.find((c) => c.id === v);
+                setInsuranceForm((f) => ({ ...f, insurerId: v, pct: insurer?.insurer_coverage_pct != null ? String(insurer.insurer_coverage_pct) : f.pct }));
+              }} options={insurers.map((c) => ({ value: c.id, label: c.name }))} placeholder="Selecionar" />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">N.º do cartão do beneficiário *</label>
+                <input value={insuranceForm.cardNumber} onChange={(e) => setInsuranceForm((f) => ({ ...f, cardNumber: e.target.value }))} className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent" />
+              </div>
+              <div>
+                <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Taxa de comparticipação (%) *</label>
+                <input type="number" min="0.01" max="100" step="0.01" value={insuranceForm.pct} onChange={(e) => setInsuranceForm((f) => ({ ...f, pct: e.target.value }))} className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent" />
+              </div>
+            </div>
+            <div>
+              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Nome do beneficiário</label>
+              <input value={insuranceForm.beneficiaryName} onChange={(e) => setInsuranceForm((f) => ({ ...f, beneficiaryName: e.target.value }))} className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent" />
+            </div>
+            {insurers.find((c) => c.id === insuranceForm.insurerId)?.insurer_medicines_only !== false && insuranceForm.insurerId && (
+              <p className="text-[12px] text-text-muted -mt-1">Esta entidade comparticipa apenas medicamentos: os outros artigos são pagos inteiramente pelo utente.</p>
+            )}
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setInsuranceForm(null)} className="border border-border hover:border-accent text-text-primary text-sm font-medium rounded-md px-4 py-2.5 cursor-pointer">Cancelar</button>
+              <button type="button" onClick={applyInsurance}
+                disabled={!insuranceForm.insurerId || !insuranceForm.cardNumber.trim() || !(parseFloat(insuranceForm.pct) > 0 && parseFloat(insuranceForm.pct) <= 100)}
+                className="bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-sm rounded-md px-5 py-2.5 cursor-pointer">Aplicar</button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
       <PrescriptionModal
         need={prescriptionNeed}
         required={prescriptionPolicy === 'OBRIGATORIA'}
@@ -2091,6 +2196,13 @@ export default function Caixa() {
             {lastInvoice && (
               <>
                 <p className="text-text-muted text-[13px] font-mono mt-1">{lastInvoice.series}/{lastInvoice.number} - {formatKz(lastInvoice.total)} Kz</p>
+                {lastInvoice.insurer_invoice_reference && lastInvoice.insurer_invoice_id !== lastInvoice.id && (
+                  <div className="mt-3 flex items-center justify-center gap-2 text-[13px]">
+                    <span className="text-text-muted font-mono whitespace-nowrap">{'Fatura da entidade '}{lastInvoice.insurer_invoice_reference} - {formatKz(lastInvoice.insurer_invoice_total)} Kz</span>
+                    <button type="button" onClick={() => openPdfViewer(lastInvoice.insurer_invoice_id, 'a4', lastInvoice.insurer_invoice_reference.replace('/', '-') + ' (A4)')}
+                      className="border border-border hover:border-accent text-text-primary text-[12px] rounded-md py-1 px-2.5 cursor-pointer whitespace-nowrap">Ver A4</button>
+                  </div>
+                )}
                 {Number(lastInvoice.retention_total) > 0 && (
                   <p className="text-text-muted text-[12px] font-mono mt-0.5">
                     Retenção {formatKz(lastInvoice.retention_total)} Kz - recebido {formatKz(lastInvoice.total - lastInvoice.retention_total)} Kz

@@ -85,3 +85,21 @@ export async function fetchPsychotropicsPdf(filters) {
   const res = await apiClient.get('/pharmacy/psychotropics/pdf', { params: { date_from: filters.dateFrom, date_to: filters.dateTo }, responseType: 'blob' });
   return URL.createObjectURL(res.data);
 }
+
+// ---------- Comparticipações (livraison 4): the sales shared with insurers
+
+function shareParams(filters) {
+  const params = { date_from: filters.dateFrom, date_to: filters.dateTo };
+  if (filters.insurerId) params.insurer_id = filters.insurerId;
+  return params;
+}
+
+export async function listInsuranceShares(filters) {
+  const res = await apiClient.get('/pharmacy/insurance-shares', { params: shareParams(filters) });
+  return res.data;
+}
+
+export async function fetchInsuranceSharesPdf(filters) {
+  const res = await apiClient.get('/pharmacy/insurance-shares/pdf', { params: shareParams(filters), responseType: 'blob' });
+  return URL.createObjectURL(res.data);
+}

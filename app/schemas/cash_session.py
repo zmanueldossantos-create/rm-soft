@@ -85,6 +85,14 @@ class CheckoutLineInput(InvoiceLineCreateRequest):
         return v
 
 
+class InsuranceInput(BaseModel):
+    """A counter sale shared with an insurer - see insurance_service.shared_sale."""
+    insurer_id: uuid.UUID
+    card_number: str
+    beneficiary_name: str | None = None
+    coverage_pct: float | None = None  # empty: the insurer's own share
+
+
 class CheckoutRequest(BaseModel):
     customer_id: uuid.UUID | None = None
     invoice_type: str = "FACTURA"
@@ -96,6 +104,7 @@ class CheckoutRequest(BaseModel):
     lines: list[CheckoutLineInput]
     payments: list[CheckoutPaymentInput] = []
     prescription: PrescriptionInput | None = None  # the receita of a pharmacy sale
+    insurance: InsuranceInput | None = None  # a sale shared with an insurer (Farmácia)
 
     @field_validator("lines")
     @classmethod

@@ -180,3 +180,31 @@ def generate_psychotropics_pdf(products: list[dict], company: dict, date_from, d
     c.setFont("Helvetica", 8.5)
     c.drawString(MARGIN, p.y - 4.5 * mm, "O diretor técnico (farmacêutico responsável)")
     return _finish(buffer, c)
+
+
+def _kz(value) -> str:
+    return f"{float(value or 0):,.2f}".replace(",", " ").replace(".", ",")
+
+
+def generate_insurance_statement_pdf(rows: list[dict], company: dict, date_from, date_to, insurer_name: str | None) -> bytes:
+    """The statement of the sales shared with an insurer over a period - sent to it with its Faturas."""
+    period = f"{_day(date_from)} a {_day(date_to)}"
+    total = sum(r["insurer_amount"] for r in rows)
+    due = sum(r["amount_due"] for r in rows)
+    buffer, c, p = _start("RELAÇÃO DE COMPARTICIPAÇÕES", "Comparticipações " + (insurer_name or "") + " " + period, company,
+                          [insurer_name or "Todas as entidades", period],
+                          [("Vendas", str(len(rows))), ("Total comparticipado", _kz(total) + " Kz"), ("Por receber", _kz(due) + " Kz")])
+    table_rows = [[_day(r["date"]), r["insurer_reference"], r["patient_reference"] or "-", r["beneficiary_name"] or "",
+                   r["card_number"], r["prescription"] or "", f"{r['coverage_pct']:g} %", _kz(r["patient_amount"]),
+                   _kz(r["insurer_amount"]), _kz(r["amount_due"])] for r in rows]
+    headers = ["Data", "Fatura entidade", "Documento utente", "Beneficiário", "Cartão n.º", "Receita", "Taxa",
+               "Parte utente (Kz)", "Entidade (Kz)", "Por receber (Kz)"]
+    widths = [0.07, 0.11, 0.11, 0.15, 0.11, 0.08, 0.05, 0.10, 0.11, 0.11]
+    if insurer_name is None:  # every insurer: its name before the beneficiary
+        headers.insert(1, "Entidade")
+        widths = [0.07, 0.10, 0.10, 0.10, 0.12, 0.10, 0.07, 0.05, 0.09, 0.10, 0.10]
+        for row, r in zip(table_rows, rows):
+            row.insert(1, r["insurer"])
+    _table(p, headers, table_rows, widths, ["l"] * (len(headers) - 4) + ["r"] * 4, size=7,
+           total=[""] * (len(headers) - 3) + ["Total", _kz(total), _kz(due)])
+    return _finish(buffer, c)

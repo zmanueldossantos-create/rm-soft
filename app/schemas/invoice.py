@@ -130,6 +130,9 @@ class InvoiceResponse(BaseModel):
     customer_name: str | None = None
     amount_paid: float = 0
     amount_due: float = 0  # attached: what is really still owed, credit notes deducted
+    insurer_invoice_id: uuid.UUID | None = None  # attached by a sale shared with an insurer: its Fatura
+    insurer_invoice_reference: str | None = None  # its series/number, shown by the Caixa
+    insurer_invoice_total: float | None = None
     amount_credited: float = 0  # attached: net value of the credit notes issued against it
     converted_to_invoice_id: uuid.UUID | None = None
     atcud: str

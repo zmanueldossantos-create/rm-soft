@@ -72,9 +72,12 @@ async def checkout(
     stay_sale: bool = False,
     observations: str | None = None,
     prescription: dict | None = None,
+    insurance: dict | None = None,
 ) -> Invoice:
     """
     prescription: the receita of a pharmacy sale (see pharmacy_service.check_prescription).
+    insurance: a sale shared with an insurer (insurance_service.shared_sale) - the patient's document is returned (the
+    insurer's when it pays everything), with insurer_invoice_id attached.
     observations: the Observações of the document (a hotel stay: guest, room and dates - see stay_text).
     stay_sale: the sale of a room with its rate (hotel_service.walk_in, or a stay's account closed) - the only sales
     where a room rate may appear (see _ensure_no_stay_rate).
@@ -98,6 +101,20 @@ async def checkout(
     await _ensure_sellable_at_pos(db, company_id, lines_input)
     if not stay_sale:
         await _ensure_no_stay_rate(db, company_id, lines_input)
+
+    if insurance:
+        from app.services.insurance_service import shared_sale
+        patient_invoice, insurer_invoice = await shared_sale(
+            db, company_id, session.activity_id, session.id, customer_id, invoice_type, lines_input, payments,
+            insurance, discount_global_percent=discount_global_percent, prescription=prescription,
+            observations=observations,
+        )
+        invoice = patient_invoice or insurer_invoice
+        # the Caixa shows (and prints) the insurer's Fatura too
+        invoice.insurer_invoice_id = insurer_invoice.id
+        invoice.insurer_invoice_reference = f"{insurer_invoice.series}/{insurer_invoice.number}"
+        invoice.insurer_invoice_total = float(insurer_invoice.total)
+        return invoice
 
     invoice = await create_invoice(
         db, company_id, session.activity_id, customer_id, invoice_type=invoice_type,

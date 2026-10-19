@@ -183,3 +183,36 @@ async def get_psychotropics_pdf(date_from: date, date_to: date, db: AsyncSession
         raise _register_error(e)
     return _pdf(generate_psychotropics_pdf(products, await _company(db, current_user.company_id), date_from, date_to),
                 f"Registo_psicotropicos_{date_from}_{date_to}")
+
+
+# ---------- Comparticipações (livraison 4): the sales shared with insurers
+
+@router.get("/insurance-shares")
+async def get_insurance_shares(date_from: date, date_to: date, insurer_id: uuid.UUID | None = None,
+                               db: AsyncSession = Depends(get_db),
+                               current_user: User = Depends(require_permission("pharmacy:registers"))):
+    """The sales shared with an insurer (or every insurer) over a period - the monthly statement."""
+    from app.services.insurance_service import list_shares
+    try:
+        return await list_shares(db, current_user.company_id, date_from, date_to, insurer_id)
+    except RegisterError as e:
+        raise _register_error(e)
+
+
+@router.get("/insurance-shares/pdf")
+async def get_insurance_shares_pdf(date_from: date, date_to: date, insurer_id: uuid.UUID | None = None,
+                                   db: AsyncSession = Depends(get_db),
+                                   current_user: User = Depends(require_permission("pharmacy:registers"))):
+    from app.models.customer import Customer
+    from app.services.insurance_service import list_shares
+    from app.utils.pharmacy_pdf import generate_insurance_statement_pdf
+    try:
+        rows = await list_shares(db, current_user.company_id, date_from, date_to, insurer_id)
+    except RegisterError as e:
+        raise _register_error(e)
+    insurer_name = None
+    if insurer_id is not None:
+        insurer_name = (await db.execute(select(Customer.name).where(
+            Customer.id == insurer_id, Customer.company_id == current_user.company_id))).scalar_one_or_none()
+    return _pdf(generate_insurance_statement_pdf(rows, await _company(db, current_user.company_id), date_from, date_to, insurer_name),
+                f"Comparticipacoes_{date_from}_{date_to}")

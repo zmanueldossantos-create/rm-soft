@@ -14,7 +14,7 @@ import enum
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import String, Boolean, Date, DateTime, ForeignKey, Enum, func, UniqueConstraint
+from sqlalchemy import String, Boolean, Date, DateTime, ForeignKey, Enum, Numeric, func, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import UUID
 
@@ -72,6 +72,11 @@ class Customer(Base):
     # Only meaningful for pessoa coletiva (Video 2 note).
     withholding_tax_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("withholding_taxes.id"), nullable=True)
 
+    # Farmácia: an insurer or an agreement (ENSA, Fidelidade, a company with a convénio) that pays part of its
+    # beneficiaries' purchases - see insurance_service. Its default share, and whether it covers the medicines only.
+    is_insurer: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    insurer_coverage_pct: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
+    insurer_medicines_only: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
     status: Mapped[CustomerStatus] = mapped_column(Enum(CustomerStatus), nullable=False, default=CustomerStatus.ACTIVO)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

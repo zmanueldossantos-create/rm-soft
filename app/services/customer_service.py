@@ -77,8 +77,9 @@ async def create_customer(
     payment_term_id: uuid.UUID | None = None,
     payment_method_id: uuid.UUID | None = None,
     withholding_tax_id: uuid.UUID | None = None,
+    insurer: dict | None = None,
 ) -> Customer:
-    """Creates a customer within the caller's company."""
+    """Creates a customer within the caller's company. insurer: its insurer fields (Farmácia, insurance_service)."""
     effective_nif = FINAL_CONSUMER_NIF if is_final_consumer else nif
     if is_final_consumer:  # a final consumer is a private person: never a pessoa coletiva (no withholding)
         legal_person_type = "FISICA"
@@ -107,6 +108,9 @@ async def create_customer(
         withholding_tax_id=withholding_tax_id if legal_person_type == "JURIDICA" else None,
         status=CustomerStatus.ACTIVO,
     )
+    from app.services.insurance_service import insurer_fields
+    for field, value in (await insurer_fields(db, company_id, insurer, is_final_consumer)).items():
+        setattr(customer, field, value)
     db.add(customer)
     await db.commit()
     await db.refresh(customer)
@@ -154,6 +158,7 @@ async def update_customer(
     payment_method_id: uuid.UUID | None = None,
     withholding_tax_id: uuid.UUID | None = None,
     status: str = "ACTIVO",
+    insurer: dict | None = None,
 ) -> Customer:
     """Updates a customer's editable fields, scoped to the caller's company."""
     customer = await get_customer_or_raise(db, company_id, customer_id)
@@ -182,6 +187,10 @@ async def update_customer(
     customer.payment_method_id = payment_method_id
     customer.withholding_tax_id = withholding_tax_id if legal_person_type == "JURIDICA" else None
     customer.status = CustomerStatus(status)
+    if insurer is not None:  # None: a screen that does not send the insurer fields keeps them
+        from app.services.insurance_service import insurer_fields
+        for field, value in (await insurer_fields(db, company_id, insurer, is_final_consumer)).items():
+            setattr(customer, field, value)
 
     await db.commit()
     await db.refresh(customer)

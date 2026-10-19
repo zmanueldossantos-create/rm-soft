@@ -215,6 +215,7 @@ async def post_checkout(
             bank_account_id=payload.bank_account_id,
             due_date=payload.due_date,
             prescription=payload.prescription.model_dump() if payload.prescription else None,
+            insurance=payload.insurance.model_dump() if payload.insurance else None,
         )
     except NoOpenSessionError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))

@@ -10,6 +10,7 @@ import {
 import { getMyCompanyBankAccounts } from '../api/company';
 import { listInvoices } from '../api/invoices';
 import { extractErrorMessage } from '../utils/errors';
+import { getPharmacyContext } from '../api/pharmacy';
 import { countriesApi, provincesApi, currenciesApi, paymentTermsApi, paymentMethodsApi, withholdingTaxesApi, banksApi } from '../api/catalogs';
 
 function Field({ label, children, hint }) {
@@ -49,6 +50,7 @@ const emptyForm = {
   email: '', phone: '', description: '', registrationDate: new Date().toISOString().slice(0, 10),
   fiscalName: '', currencyId: '', countryId: '', provinceId: '', city: '', address: '',
   paymentTermId: '', paymentMethodId: '', withholdingTaxId: '', status: 'ACTIVO',
+  isInsurer: false, insurerCoveragePct: '', insurerMedicinesOnly: true, // Farmácia: entidade comparticipante
 };
 
 export default function Customers() {
@@ -67,6 +69,9 @@ export default function Customers() {
   const [createdMessage, setCreatedMessage] = useState('');
   const [nifLookupLoading, setNifLookupLoading] = useState(false);
   const [nifLookupMessage, setNifLookupMessage] = useState('');
+  // Farmácia (only with the Farmácia sector): a customer may be an insurer / agreement paying part of the sales.
+  const [pharmacyEnabled, setPharmacyEnabled] = useState(false);
+  useEffect(() => { getPharmacyContext().then((c) => setPharmacyEnabled(!!c.enabled)).catch(() => setPharmacyEnabled(false)); }, []);
 
   const [countries, setCountries] = useState([]);
   const [provinces, setProvinces] = useState([]);
@@ -162,6 +167,9 @@ export default function Customers() {
       paymentMethodId: customer.payment_method_id || '',
       withholdingTaxId: customer.withholding_tax_id || '',
       status: customer.status,
+      isInsurer: !!customer.is_insurer,
+      insurerCoveragePct: customer.insurer_coverage_pct != null ? String(customer.insurer_coverage_pct) : '',
+      insurerMedicinesOnly: customer.insurer_medicines_only !== false,
     });
     setFormError('');
     setNifLookupMessage('');
@@ -287,6 +295,11 @@ export default function Customers() {
       payment_method_id: form.paymentMethodId || null,
       withholding_tax_id: form.legalPersonType === 'JURIDICA' ? (form.withholdingTaxId || null) : null,
       status: form.status,
+      ...(pharmacyEnabled ? {
+        is_insurer: form.isInsurer && !form.isFinalConsumer,
+        insurer_coverage_pct: form.isInsurer && form.insurerCoveragePct !== '' ? parseFloat(form.insurerCoveragePct) : null,
+        insurer_medicines_only: form.insurerMedicinesOnly,
+      } : {}),
     };
   }
 
@@ -342,7 +355,8 @@ export default function Customers() {
     return (bank ? bank.acronym : '?') + ' - ' + account.account_number + ' · ' + account.iban;
   }
 
-  const isFormValid = form.legalPersonType && form.name && (form.isFinalConsumer || form.nif) && (form.isFinalConsumer || form.phone);
+  const isFormValid = form.legalPersonType && form.name && (form.isFinalConsumer || form.nif) && (form.isFinalConsumer || form.phone)
+    && (!(pharmacyEnabled && form.isInsurer && !form.isFinalConsumer) || (parseFloat(form.insurerCoveragePct) > 0 && parseFloat(form.insurerCoveragePct) <= 100));
 
   return (
     <main className="max-w-[1600px] mx-auto px-4 sm:px-6 md:px-8 py-6 sm:py-9">
@@ -435,7 +449,7 @@ export default function Customers() {
         )}
       </div>
 
-      <Modal open={modalOpen} onClose={closeModal} title={editingId ? 'Editar cliente' : 'Novo cliente'} maxWidthClass="max-w-3xl">
+      <Modal open={modalOpen} onClose={closeModal} title={editingId ? 'Editar cliente' : 'Novo cliente'} maxWidthClass="max-w-6xl">
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           {createdMessage && (
             <div className="bg-success/10 border-l-2 border-success text-success px-3.5 py-2.5 text-[13px] rounded-r">{createdMessage}</div>
@@ -460,26 +474,28 @@ export default function Customers() {
 
           {activeTab === 'identificacao' && (
             <div className={TAB_CONTENT_CLASS}>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <Field label="Código do cliente">
                   <input value={form.customerCode} disabled className={readOnlyClass} />
                 </Field>
                 <Field label="Personalidade jurídica *">
                   <Select value={form.legalPersonType} onChange={handleLegalPersonTypeChange} options={[{ value: 'JURIDICA', label: 'Pessoa coletiva' }, { value: 'FISICA', label: 'Pessoa singular' }]} placeholder="Selecionar" />
                 </Field>
+                <div className="sm:col-span-2">
+                  <Field label="Nome *">
+                    <input value={form.name} onChange={(e) => updateField('name', e.target.value)} required className={inputClass} />
+                  </Field>
+                </div>
               </div>
 
               {form.legalPersonType === 'FISICA' && (
-                <label className="flex items-center gap-2.5 cursor-pointer select-none border border-border rounded-md px-3.5 py-3 hover:border-accent transition-colors">
+                <label className="flex items-center gap-2.5 cursor-pointer select-none border border-border rounded-md px-3.5 py-3 hover:border-accent transition-colors self-start">
                   <input type="checkbox" checked={form.isFinalConsumer} onChange={(e) => handleFinalConsumerChange(e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
                   <span className="text-sm text-text-primary">Consumidor Final</span>
                 </label>
               )}
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Field label="Nome *">
-                  <input value={form.name} onChange={(e) => updateField('name', e.target.value)} required className={inputClass} />
-                </Field>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <Field label={form.isFinalConsumer ? 'NIF' : 'NIF *'}>
                   <div className="flex items-center bg-bg-inset border border-border rounded-md overflow-hidden focus-within:border-accent transition-colors">
                     <input
@@ -501,40 +517,38 @@ export default function Customers() {
                   </div>
                   {nifLookupMessage && <p className="text-[11px] text-text-muted mt-1">{nifLookupMessage}</p>}
                 </Field>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Field label="Email">
-                  <input type="email" value={form.email} onChange={(e) => updateField('email', e.target.value)} className={inputClass} />
-                </Field>
                 <Field label={form.isFinalConsumer ? 'Telefone' : 'Telefone *'}>
                   <div className="flex items-center bg-bg-inset border border-border rounded-md overflow-hidden focus-within:border-accent transition-colors">
                     <span className="px-3 py-2.5 text-text-muted border-r border-border font-mono text-sm">+244</span>
-                    <input value={form.phone} onChange={(e) => updateField('phone', e.target.value)} placeholder="923 456 789" required={!form.isFinalConsumer} className="flex-1 bg-transparent border-none px-3 py-2.5 text-sm text-text-primary font-mono outline-none" />
+                    <input value={form.phone} onChange={(e) => updateField('phone', e.target.value)} placeholder="923 456 789" required={!form.isFinalConsumer} className="flex-1 min-w-0 bg-transparent border-none px-3 py-2.5 text-sm text-text-primary font-mono outline-none" />
                   </div>
                 </Field>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Field label="Email">
+                  <input type="email" value={form.email} onChange={(e) => updateField('email', e.target.value)} className={inputClass} />
+                </Field>
                 <Field label="Data de registo">
                   <DateInput value={form.registrationDate} onChange={(e) => updateField('registrationDate', e.target.value)} className={inputClass} />
                 </Field>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {editingId && (
                   <Field label="Estado">
                     <Select value={form.status} onChange={(v) => updateField('status', v)} options={STATUS_OPTIONS} />
                   </Field>
                 )}
+                <div className={editingId ? 'sm:col-span-1 lg:col-span-3' : 'sm:col-span-2 lg:col-span-4'}>
+                  <Field label="Descrição / Observação">
+                    <textarea value={form.description} onChange={(e) => updateField('description', e.target.value)} rows={2} className={inputClass} />
+                  </Field>
+                </div>
               </div>
-
-              <Field label="Descrição / Observação">
-                <textarea value={form.description} onChange={(e) => updateField('description', e.target.value)} rows={2} className={inputClass} />
-              </Field>
             </div>
           )}
 
           {activeTab === 'fiscal' && (
             <div className={TAB_CONTENT_CLASS}>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <Field label="País">
                   <Select value={form.countryId} onChange={handleCountryChange} options={countries.map((c) => ({ value: c.id, label: c.name }))} placeholder="Selecionar" />
                 </Field>
@@ -546,8 +560,6 @@ export default function Customers() {
                     placeholder={form.countryId ? 'Selecionar' : 'Selecione um país primeiro'}
                   />
                 </Field>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Field label="Cidade">
                   <input value={form.city} onChange={(e) => updateField('city', e.target.value)} className={inputClass} />
                 </Field>
@@ -555,17 +567,12 @@ export default function Customers() {
                   <input value={currencies.find((c) => c.id === form.currencyId)?.code || ''} disabled className={readOnlyClass} />
                 </Field>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Field label="Denominação fiscal">
-                  <input value={form.fiscalName} onChange={(e) => updateField('fiscalName', e.target.value)} className={inputClass} />
-                </Field>
-                {form.legalPersonType === 'JURIDICA' && (
-                  <Field label="Retenção">
-                    <Select value={form.withholdingTaxId} onChange={(v) => updateField('withholdingTaxId', v)} options={withholdingTaxes.map((w) => ({ value: w.id, label: w.name }))} placeholder="Sem retenção" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="sm:col-span-2">
+                  <Field label="Denominação fiscal">
+                    <input value={form.fiscalName} onChange={(e) => updateField('fiscalName', e.target.value)} className={inputClass} />
                   </Field>
-                )}
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                </div>
                 <Field label="Condição de pagamento">
                   <Select value={form.paymentTermId} onChange={(v) => updateField('paymentTermId', v)} options={paymentTerms.map((t) => ({ value: t.id, label: t.name }))} placeholder="Selecionar" />
                 </Field>
@@ -573,9 +580,38 @@ export default function Customers() {
                   <Select value={form.paymentMethodId} onChange={(v) => updateField('paymentMethodId', v)} options={paymentMethods.filter((m) => m.allows_receipt !== false).map((m) => ({ value: m.id, label: m.name }))} placeholder="Selecionar" />
                 </Field>
               </div>
-              <Field label="Morada">
-                <input value={form.address} onChange={(e) => updateField('address', e.target.value)} className={inputClass} />
-              </Field>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className={form.legalPersonType === 'JURIDICA' ? 'sm:col-span-1 lg:col-span-3' : 'sm:col-span-2 lg:col-span-4'}>
+                  <Field label="Morada">
+                    <input value={form.address} onChange={(e) => updateField('address', e.target.value)} className={inputClass} />
+                  </Field>
+                </div>
+                {form.legalPersonType === 'JURIDICA' && (
+                  <Field label="Retenção">
+                    <Select value={form.withholdingTaxId} onChange={(v) => updateField('withholdingTaxId', v)} options={withholdingTaxes.map((w) => ({ value: w.id, label: w.name }))} placeholder="Sem retenção" />
+                  </Field>
+                )}
+              </div>
+              {pharmacyEnabled && !form.isFinalConsumer && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end pt-3 border-t border-border">
+                  <label className="flex items-center gap-2.5 cursor-pointer select-none sm:col-span-2 pb-3">
+                    <input type="checkbox" checked={form.isInsurer} onChange={(e) => updateField('isInsurer', e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
+                    <span className="text-sm font-medium text-text-primary">Entidade comparticipante (seguradora / convénio)</span>
+                  </label>
+                  {form.isInsurer && (
+                    <>
+                      <Field label="Taxa de comparticipação (%) *">
+                        <input type="number" min="0.01" max="100" step="0.01" value={form.insurerCoveragePct} onChange={(e) => updateField('insurerCoveragePct', e.target.value)} placeholder="Ex.: 80" className={inputClass} />
+                      </Field>
+                      <label className="flex items-center gap-2.5 cursor-pointer select-none pb-3">
+                        <input type="checkbox" checked={form.insurerMedicinesOnly} onChange={(e) => updateField('insurerMedicinesOnly', e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
+                        <span className="text-sm text-text-primary">Comparticipa apenas medicamentos</span>
+                      </label>
+                      <p className="sm:col-span-2 lg:col-span-4 text-[12px] text-text-muted -mt-2">Na Caixa, botão «Seguradora / convénio»: o utente paga a sua parte numa Fatura/Recibo e a entidade recebe uma Fatura com o resto, paga depois por recibo.</p>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           )}
 

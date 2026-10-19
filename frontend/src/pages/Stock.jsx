@@ -559,7 +559,7 @@ export default function Stock() {
           </button>
         ))}
       </div>
-      <div className="relative max-w-sm w-full sm:w-auto sm:min-w-[320px]">
+      <div className="relative max-w-md w-full sm:w-auto sm:min-w-[400px]">
         <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" />
         <input
           type="text"
