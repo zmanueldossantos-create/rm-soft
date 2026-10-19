@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Package2, Plus, Loader2, Search, AlertTriangle, ArrowDownToLine, SlidersHorizontal, Warehouse, Pencil, Check, X, ArrowRightLeft, Trash2, Power, ClipboardCheck, MapPin } from 'lucide-react';
 import Modal from '../components/Modal';
 import MovementForm from '../components/MovementForm';
@@ -148,6 +148,18 @@ export default function Stock() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
   const [formSuccess, setFormSuccess] = useState('');
+  // After a movement, the page shows the warehouse it changed, with a confirmation - never another warehouse's stock
+  // that would look as if nothing had been recorded.
+  const [pageNotice, setPageNotice] = useState('');
+  const noticeTimer = useRef(null);
+  function showMovedWarehouse(warehouseId, message) {
+    if (warehouseId && warehouseId !== selectedWarehouseId) setSelectedWarehouseId(warehouseId);  // its levels load on change
+    else if (selectedWarehouseId) loadLevels(selectedWarehouseId);
+    const name = warehouses.find((w) => w.id === warehouseId)?.name;
+    setPageNotice(message + (name ? ' em ' + name : '') + '.');
+    clearTimeout(noticeTimer.current);
+    noticeTimer.current = setTimeout(() => setPageNotice(''), 6000);
+  }
 
   async function loadWarehouses() {
     try {
@@ -197,7 +209,8 @@ export default function Stock() {
   const filteredLevels = levels.filter((l) => {
     if (!search.trim()) return true;
     const q = search.toLowerCase();
-    return l.product_code.toLowerCase().includes(q) || l.product_name.toLowerCase().includes(q);
+    return l.product_code.toLowerCase().includes(q) || l.product_name.toLowerCase().includes(q)
+      || (l.active_substance || '').toLowerCase().includes(q);
   });
 
   function openReceiveModal() {
@@ -404,7 +417,7 @@ export default function Stock() {
       setQuantity(''); setCountLines(EMPTY_COUNT);
       setReason('');
       setFormSuccess('Transferência registada com sucesso.');
-      await loadLevels(selectedWarehouseId);
+      showMovedWarehouse(transferToWarehouseId, 'Transferência registada: entrada');
     } catch (err) {
       setFormError(extractErrorMessage(err, 'Erro ao transferir stock'));
     } finally {
@@ -423,7 +436,7 @@ export default function Stock() {
       setQuantity(''); setCountLines(EMPTY_COUNT);
       setReason('');
       setFormSuccess('Perda registada com sucesso.');
-      await loadLevels(selectedWarehouseId);
+      showMovedWarehouse(opWarehouseId, 'Perda registada');
     } catch (err) {
       setFormError(extractErrorMessage(err, 'Erro ao registar perda'));
     } finally {
@@ -443,7 +456,7 @@ export default function Stock() {
       setQuantity(''); setCountLines(EMPTY_COUNT);
       setReason('');
       setFormSuccess('Stock ajustado com sucesso.');
-      await loadLevels(selectedWarehouseId);
+      showMovedWarehouse(opWarehouseId, 'Stock ajustado');
     } catch (err) {
       setFormError(extractErrorMessage(err, 'Erro ao ajustar stock'));
     } finally {
@@ -533,6 +546,7 @@ export default function Stock() {
         </div>
       </div>
 
+      {pageNotice && <div className="bg-success/10 border-l-2 border-success text-success px-3.5 py-2.5 text-[13px] rounded-r mb-4">{pageNotice}</div>}
       {selectedWarehouse && view === 'niveis' && <div className="mb-5"><WarehouseCard key={selectedWarehouse.id} warehouse={selectedWarehouse} isCentral={selectedWarehouse.id === centralWarehouse?.id} onEditClick={openEditWarehouseModal} onToggleStatus={handleToggleWarehouseStatus} togglingId={togglingWarehouseId} onLocationsClick={setLocationsOf} locationCount={whLocations.length} /></div>}
 
       <div className="flex items-center gap-3 mb-5 flex-wrap">
@@ -549,7 +563,7 @@ export default function Stock() {
         <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" />
         <input
           type="text"
-          placeholder="Pesquisar por código ou nome..."
+          placeholder={levels.some((l) => l.active_substance) ? "Pesquisar por código, nome ou substância..." : "Pesquisar por código ou nome..."}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="w-full bg-bg-elevated border border-border rounded-md pl-10 pr-4 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors"
@@ -657,7 +671,10 @@ export default function Stock() {
       <Modal open={receiveModalOpen} onClose={() => setReceiveModalOpen(false)} title="Registar Receção de Stock" maxWidthClass="max-w-6xl">
         <MovementForm
           filterDirection="ENTRADA"
-          onSuccess={() => { setReceiveModalOpen(false); loadWarehouses(); if (selectedWarehouseId) loadLevels(selectedWarehouseId); }}
+          onSuccess={(done) => {
+            setReceiveModalOpen(false); loadWarehouses();
+            showMovedWarehouse(done?.warehouseId, 'Entrada registada' + (done?.lineCount ? ' (' + done.lineCount + (done.lineCount === 1 ? ' linha)' : ' linhas)') : ''));
+          }}
           onCancel={() => setReceiveModalOpen(false)}
         />
       </Modal>

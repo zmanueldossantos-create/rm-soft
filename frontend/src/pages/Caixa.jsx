@@ -36,7 +36,8 @@ import {
 import { listUsers } from '../api/users';
 import { useAuthStore } from '../store/authStore';
 import { extractErrorMessage } from '../utils/errors';
-import { medicineSearchText, medicineSummary } from '../api/pharmacy';
+import { medicineSearchText, medicineSummary, getPharmacyContext } from '../api/pharmacy';
+import PrescriptionModal, { prescriptionNeedOf } from '../components/PrescriptionModal';
 
 import { dueDateFor, isProntoTerm } from '../utils/paymentTerms';
 
@@ -908,6 +909,18 @@ export default function Caixa() {
   const [globalDiscountPercent, setGlobalDiscountPercent] = useState(0);
   const [expandedDiscountKey, setExpandedDiscountKey] = useState(null);
   const [saleConfirmModalOpen, setSaleConfirmModalOpen] = useState(false);
+  // Farmácia: the receita of a sale holding a medicine on prescription - asked before the sale is confirmed.
+  const [prescriptionPolicy, setPrescriptionPolicy] = useState('OBRIGATORIA');
+  useEffect(() => { getPharmacyContext().then((c) => setPrescriptionPolicy(c.prescription_policy || 'OBRIGATORIA')).catch(() => {}); }, []);
+  const [prescription, setPrescription] = useState(null);
+  const [prescriptionNeed, setPrescriptionNeed] = useState(null);
+  function startConfirmation() {
+    setPayments([]);
+    const need = selectedInvoiceType === 'PRO_FORMA' ? null : prescriptionNeedOf(cart, Object.fromEntries(products.map((p) => [p.id, p])));
+    if (need) { setPrescriptionNeed(need); return; }
+    setPrescription(null);
+    setSaleConfirmModalOpen(true);
+  }
   const [selectedInvoiceType, setSelectedInvoiceType] = useState('FACTURA_RECIBO');
   const { typeOptions: posTypeOptions, liquidationOptions: posLiquidationOptions, defaultPaidType } = usePosDocumentTypes();
   const ruleOf = useDocumentRules();
@@ -980,7 +993,7 @@ export default function Caixa() {
         [],
         'FACTURA',
         globalDiscountPercent,
-        { paymentTermId: ftPaymentTermId || null, dueDate: ftDueDate || null },
+        { paymentTermId: ftPaymentTermId || null, dueDate: ftDueDate || null, prescription },
       );
       setLastInvoice(invoice);
       setSuccessModalOpen(true);
@@ -991,6 +1004,7 @@ export default function Caixa() {
       setCart([]);
       setSelectedCustomerId('');
       setGlobalDiscountPercent(0);
+      setPrescription(null);
       setFtModalOpen(false);
     } catch (err) {
       setCheckoutError(extractErrorMessage(err, 'Erro ao faturar'));
@@ -1150,6 +1164,7 @@ export default function Caixa() {
           validPayments,
           selectedInvoiceType,
           globalDiscountPercent,
+          { prescription },
         );
         setLastInvoice(invoice);
         setSuccessModalOpen(true);
@@ -1161,6 +1176,7 @@ export default function Caixa() {
         setSelectedCustomerId('');
         setGlobalDiscountPercent(0);
         setPayments([]);
+        setPrescription(null);
       }
     } catch (err) {
       setCheckoutError(extractErrorMessage(err, paymentMode === 'liquidation' ? 'Erro ao liquidar pro-forma' : 'Erro ao finalizar venda'));
@@ -1313,7 +1329,7 @@ export default function Caixa() {
                     <span>Numerário na gaveta</span><span className="font-mono">{formatKz(currentBalance)} Kz</span>
                   </div>
                   {sessionSummary.pending_in > 0 && (
-                    <div className="flex justify-between gap-3 text-amber-500">
+                    <div className="flex justify-between gap-3 text-amber-500 [.light_&]:text-amber-700">
                       <span>A receber (por confirmar)</span><span className="font-mono">{formatKz(sessionSummary.pending_in)} Kz</span>
                     </div>
                   )}
@@ -1379,7 +1395,7 @@ export default function Caixa() {
             // A session of a previous day still sells (closing is a user's choice), but a daily count is advised.
             const old = session.business_date && session.business_date < localToday();
             return (
-              <p className={'text-[12px] font-mono mb-5 ' + (old ? 'text-amber-500' : 'text-text-muted')}>
+              <p className={'text-[12px] font-mono mb-5 ' + (old ? 'text-amber-500 [.light_&]:text-amber-700' : 'text-text-muted')}>
                 {old
                   ? 'Sess\u00e3o aberta desde ' + new Date(session.business_date + 'T00:00:00').toLocaleDateString('pt-PT') + ' \u00e0s ' + time + ' \u2013 recomenda-se fechar e contar a caixa'
                   : 'Sess\u00e3o aberta \u00e0s ' + time}
@@ -1467,7 +1483,7 @@ export default function Caixa() {
                         {p.is_medicine && (
                           <p className="text-[11px] text-text-muted -mt-1 mb-1.5 line-clamp-1 flex items-center gap-1" title={medicineSummary(p)}>
                             {p.cold_storage && <Snowflake size={11} className="text-sky-400 shrink-0" />}
-                            {p.dispensing_regime && p.dispensing_regime !== 'LIVRE' && <span className={'font-semibold ' + (p.dispensing_regime === 'RECEITA_ESPECIAL' ? 'text-danger' : 'text-accent')}>Rx</span>}
+                            {p.dispensing_regime && p.dispensing_regime !== 'LIVRE' && <span className={'font-semibold ' + (p.dispensing_regime === 'RECEITA_ESPECIAL' ? 'text-danger' : 'text-amber-500 [.light_&]:text-amber-700')}>Rx</span>}
                             <span className="truncate">{medicineSummary(p)}</span>
                           </p>
                         )}
@@ -1654,7 +1670,7 @@ export default function Caixa() {
               )}
 
               <button
-                onClick={() => { setPayments([]); setSaleConfirmModalOpen(true); }}
+                onClick={startConfirmation}
                 disabled={cart.length === 0 || proFormaSaving || checkoutSaving || (selectedInvoiceType === 'PRO_FORMA' ? !can('pos:proforma') : !can('pos:checkout'))}
                 className="bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer"
               >
@@ -1935,7 +1951,7 @@ export default function Caixa() {
                         {diff > 0 ? '+' : ''}{formatKz(diff)} Kz
                       </span>
                     ) : (
-                      <span className="text-[11px] text-amber-500 whitespace-nowrap">Aberta</span>
+                      <span className="text-[11px] text-amber-500 [.light_&]:text-amber-700 whitespace-nowrap">Aberta</span>
                     )}
                     <button
                       onClick={() => printClosingReport(s.id)}
@@ -1951,6 +1967,14 @@ export default function Caixa() {
           ))}
         </div>
       </Modal>
+
+      <PrescriptionModal
+        need={prescriptionNeed}
+        required={prescriptionPolicy === 'OBRIGATORIA'}
+        initial={prescription}
+        onCancel={() => setPrescriptionNeed(null)}
+        onConfirm={(data) => { setPrescription(data); setPrescriptionNeed(null); setSaleConfirmModalOpen(true); }}
+      />
 
       <Modal open={saleConfirmModalOpen} onClose={() => setSaleConfirmModalOpen(false)} title="Confirmar operação">
         <div className="flex flex-col gap-4">

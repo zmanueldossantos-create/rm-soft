@@ -193,7 +193,8 @@ def generate_invoice_pdf_thermal(invoice: dict, lines: list[dict], company: dict
     # names / "Motivo" text wrap onto extra lines unpredictably, so a tight height risks
     # clipping the QR code / footer at the bottom (see the "8 100,00" example that clipped).
     height = (150 + len(lines) * 16 + len(vat_groups) * 8 + (12 if invoice.get("observations") else 0)
-              + 6 * len(_reference_texts(invoice))) * mm + logo_extra
+              + 6 * len(_reference_texts(invoice)) + 4 * sum(len(l.get("lots") or []) for l in lines)
+              + (12 if invoice.get("prescription") else 0)) * mm + logo_extra
 
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=(width, height))
@@ -269,6 +270,11 @@ def generate_invoice_pdf_thermal(invoice: dict, lines: list[dict], company: dict
         for text_line in _wrap_to_width(c, "Obs.: " + str(invoice["observations"]), "Helvetica", 7, width - 2 * margin)[:4]:
             left(text_line, size=7)
             y -= 3 * mm
+    # Farmácia: the receita the sale was dispensed against
+    if invoice.get("prescription"):
+        for text_line in _wrap_to_width(c, str(invoice["prescription"]), "Helvetica", 7, width - 2 * margin)[:3]:
+            left(text_line, size=7)
+            y -= 3 * mm
     y -= 1 * mm
 
     # --- Document type/number, date, attendant ---
@@ -309,6 +315,12 @@ def generate_invoice_pdf_thermal(invoice: dict, lines: list[dict], company: dict
         c.drawString(col_vat, y, f"{l['vat_rate_snapshot']:.0f}")
         c.drawRightString(col_total, y, fmt(l["line_total"]))
         y -= 3.6 * mm
+        for lot_text in l.get("lots") or []:  # the lots the goods left in: Lote L001 · Val. 31/12/2027
+            c.setFont("Helvetica", 6.3)
+            c.setFillColor(TEXT_MUTED)
+            c.drawString(margin + 2 * mm, y + 0.6 * mm, lot_text[:52])
+            c.setFillColor(TEXT_PRIMARY)
+            y -= 3 * mm
 
     dashed_line()
 
@@ -622,10 +634,15 @@ def generate_factura_style_a4(invoice, lines, company, customer):
     vat_groups = {}
     total_iliquido = 0.0
     total_discount_amount = 0.0
+    lot_h = 3.2 * mm  # one more text line under a line per lot it took (Lote L001 · Val. 31/12/2027)
+    table_h = 0.0
     for i, l in enumerate(lines):
+        line_lots = l.get("lots") or []
+        this_h = row_h + len(line_lots) * lot_h
+        table_h += this_h
         if i % 2 == 1:
             c.setFillColor(TABLE_ROW_ALT)
-            c.rect(margin, y - row_h, page_width - 2 * margin, row_h, fill=1, stroke=0)
+            c.rect(margin, y - this_h, page_width - 2 * margin, this_h, fill=1, stroke=0)
 
         gross = l["quantity"] * l["unit_price"]
         line_discount_amount = gross * (l.get("discount_percent", 0) / 100)
@@ -656,11 +673,18 @@ def generate_factura_style_a4(invoice, lines, company, customer):
         c.drawCentredString(col_iselo + tax_w / 6, ty, fmt(l.get("iselo_amount", 0)))
         c.setFont("Helvetica", 7.5)
         c.drawRightString(col_total - 1 * mm, ty, fmt(l["line_total"]))
-        y -= row_h
+        ly = ty - lot_h
+        for lot_text in line_lots:
+            c.setFillColor(TEXT_MUTED)
+            c.setFont("Helvetica", 6.5)
+            c.drawString(col_desc + 1 * mm, ly, _fit_text(c, lot_text, "Helvetica", 6.5, col_iec - col_desc - 2 * mm))
+            ly -= lot_h
+        c.setFillColor(TEXT_PRIMARY)
+        y -= this_h
 
     c.setStrokeColor(BORDER)
     c.setLineWidth(0.6)
-    c.rect(margin, y, page_width - 2 * margin, header_h + row_h * len(lines), fill=0, stroke=1)
+    c.rect(margin, y, page_width - 2 * margin, header_h + table_h, fill=0, stroke=1)
     y -= 6 * mm
 
     # Legend: the official reason of each exemption code used on a 0%-VAT line - the table only
@@ -780,6 +804,18 @@ def generate_factura_style_a4(invoice, lines, company, customer):
             c.drawRightString(margin + left_w, y, fmt(p["amount"]) + " Kz")
             y -= 3.8 * mm
         y -= 2 * mm
+
+    if invoice.get("prescription"):  # Farmácia: the receita the sale was dispensed against
+        c.setFillColor(ACCENT)
+        c.setFont("Helvetica-Bold", 8)
+        c.drawString(margin, y, "Receita médica:")
+        y -= 4.5 * mm
+        c.setFillColor(TEXT_PRIMARY)
+        c.setFont("Helvetica", 7.5)
+        for text_line in _wrap_to_width(c, str(invoice["prescription"]), "Helvetica", 7.5, left_w)[:2]:
+            c.drawString(margin, y, text_line)
+            y -= 3.8 * mm
+        y -= 1.2 * mm
 
     if invoice.get("observations"):
         c.setFillColor(ACCENT)

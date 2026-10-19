@@ -8,7 +8,7 @@ from datetime import date, datetime
 from pydantic import BaseModel, field_validator
 
 
-from app.schemas.invoice import InvoiceLineCreateRequest
+from app.schemas.invoice import InvoiceLineCreateRequest, PrescriptionInput
 
 
 class OpenSessionRequest(BaseModel):
@@ -95,6 +95,7 @@ class CheckoutRequest(BaseModel):
     due_date: date | None = None
     lines: list[CheckoutLineInput]
     payments: list[CheckoutPaymentInput] = []
+    prescription: PrescriptionInput | None = None  # the receita of a pharmacy sale
 
     @field_validator("lines")
     @classmethod

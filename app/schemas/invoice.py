@@ -38,6 +38,15 @@ def line_inputs(lines) -> list[dict]:
     return [line.model_dump() for line in lines]
 
 
+class PrescriptionInput(BaseModel):
+    """The receita of a pharmacy sale - see pharmacy_service.check_prescription."""
+    number: str | None = None
+    prescriber: str | None = None
+    health_unit: str | None = None
+    patient_name: str | None = None
+    patient_document: str | None = None
+
+
 class InvoiceCreateRequest(BaseModel):
     activity_id: uuid.UUID
     customer_id: uuid.UUID | None = None
@@ -53,6 +62,7 @@ class InvoiceCreateRequest(BaseModel):
     observations: str | None = None
     document_reference: str | None = None
     discount_global_percent: float = 0
+    prescription: PrescriptionInput | None = None  # the receita of a pharmacy sale
     lines: list[InvoiceLineCreateRequest]
 
     @field_validator("lines")

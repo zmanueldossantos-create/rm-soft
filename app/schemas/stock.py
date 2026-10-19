@@ -23,6 +23,7 @@ class StockLevelResponse(BaseModel):
     expired_quantity: float = 0  # in expired lots - never sold
     location_id: uuid.UUID | None = None  # emplacements (optional): where it is kept in this warehouse
     location_code: str | None = None
+    active_substance: str | None = None  # Farmácia: a medicine is found by its substance (DCI)
 
 
 class StockAdjustRequest(BaseModel):

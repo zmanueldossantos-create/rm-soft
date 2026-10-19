@@ -288,3 +288,41 @@ async def lots_of_movements(db: AsyncSession, movement_ids: list) -> dict:
     for movement_id, number, expiry, quantity in rows:
         out.setdefault(movement_id, []).append(f"{lot_label(number, expiry)} · {_fmt(float(quantity))}")
     return {k: ", ".join(v) for k, v in out.items()}
+
+
+def document_lot_text(lot_number: str | None, expiry_date: date | None) -> str:
+    """How a lot is printed under a document line: 'Lote L001 · Val. 31/12/2027' (or one of the two)."""
+    parts = []
+    if lot_number:
+        parts.append(f"Lote {lot_number}")
+    if expiry_date:
+        parts.append(f"Val. {expiry_date.strftime('%d/%m/%Y')}")
+    return " · ".join(parts)
+
+
+async def lots_of_document(db: AsyncSession, company_id: uuid.UUID, reference: str, warehouse_id: uuid.UUID | None = None) -> dict:
+    """
+    The lots the goods of a document (its stock reference: FT FT2026/9, GR GR2026/3) left in: product id -> printed
+    texts, the first to expire first - one per lot taken ('Lote L001 · Val. 31/12/2027'), with the quantity when the
+    line took several lots. Only the exits (a sale, a guide's goods leaving its warehouse), never a cancellation's
+    return. Nothing for a product not followed by lot.
+    """
+    from app.models.stock_movement import MovementType
+    query = (
+        select(StockMovement.product_id, StockLot.lot_number, StockLot.expiry_date, func.sum(StockMovementLot.quantity))
+        .join(StockMovementLot, StockMovementLot.movement_id == StockMovement.id)
+        .join(StockLot, StockLot.id == StockMovementLot.lot_id)
+        .where(StockMovement.company_id == company_id, StockMovement.reference == reference,
+               (StockMovement.movement_type == MovementType.SAIDA)
+               | ((StockMovement.movement_type == MovementType.TRANSFERENCIA) & StockMovement.is_transfer_source.is_(True)))
+        .group_by(StockMovement.product_id, StockLot.lot_number, StockLot.expiry_date)
+        .order_by(StockLot.expiry_date.asc().nulls_last(), StockLot.lot_number)
+    )
+    if warehouse_id is not None:
+        query = query.where(StockMovement.warehouse_id == warehouse_id)
+    grouped: dict = {}
+    for product_id, number, expiry, quantity in (await db.execute(query)).all():
+        text = document_lot_text(number, expiry)
+        if text:
+            grouped.setdefault(product_id, []).append((text, float(quantity)))
+    return {pid: [t if len(parts) == 1 else f"{t} ({_fmt(q)})" for t, q in parts] for pid, parts in grouped.items()}

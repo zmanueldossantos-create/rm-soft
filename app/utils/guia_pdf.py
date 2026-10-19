@@ -46,9 +46,13 @@ def generate_guia_pdf(data: dict, company: dict) -> bytes:
 
     _section_title(p, "Mercadoria")
     with_vat = data["movement_type"] == "GR"
-    rows = [[l["product_code"], l["description"], _qty(l["quantity"]) + (f" {l['unit']}" if l["unit"] else ""),
-             kz(l["unit_price"]), (f"{l['tax_code']} {l['vat_rate']:g} %" + (f" {l['exemption_code']}" if l["exemption_code"] else "")) if with_vat else "-",
-             kz(l["line_net"])] for l in data["lines"]]
+    rows = []
+    for l in data["lines"]:
+        rows.append([l["product_code"], l["description"], _qty(l["quantity"]) + (f" {l['unit']}" if l["unit"] else ""),
+                     kz(l["unit_price"]), (f"{l['tax_code']} {l['vat_rate']:g} %" + (f" {l['exemption_code']}" if l["exemption_code"] else "")) if with_vat else "-",
+                     kz(l["line_net"])])
+        for lot_text in l.get("lots") or []:  # the lots the goods left in: Lote L001 · Val. 31/12/2027
+            rows.append(["", "   " + lot_text, "", "", "", ""])
     _table(p, ["Código", "Descrição", "Quantidade", "Preço", "IVA", "Valor"], rows,
            [0.13, 0.33, 0.14, 0.14, 0.11, 0.15], ["l", "l", "r", "r", "l", "r"],
            total=["", "Total com IVA" if with_vat else "Total", "", "", kz(data["vat_total"]) if with_vat else "", kz(data["gross_total"])])

@@ -11,6 +11,7 @@ import { listActivities, createActivity, updateActivity, toggleActivityStatus, l
 import apiClient from '../api/client';
 import { extractErrorMessage } from '../utils/errors';
 import { useCan } from '../utils/permissions';
+import { getPharmacyContext } from '../api/pharmacy';
 import { listUsers } from '../api/users';
 import { listCashPointAssociations, assignUserToCashPoint, unassignUserFromCashPoint } from '../api/tesouraria';
 
@@ -73,6 +74,10 @@ export default function CompanySettings() {
   const [stockCheckAtPeriodEnd, setStockCheckAtPeriodEnd] = useState(false); // Stock à data (late exits)
   const [inventoryBeforeClose, setInventoryBeforeClose] = useState(false); // Inventário obrigatório antes do fecho
   const [expiryAlertDays, setExpiryAlertDays] = useState('30'); // lots: days of warning before an expiry date
+  // Farmácia (only with the Farmácia sector): is the prescription's number required at the sale?
+  const [pharmacyEnabled, setPharmacyEnabled] = useState(false);
+  const [prescriptionPolicy, setPrescriptionPolicy] = useState('OBRIGATORIA');
+  useEffect(() => { getPharmacyContext().then((c) => setPharmacyEnabled(!!c.enabled)).catch(() => setPharmacyEnabled(false)); }, []);
   const [saleUnitChecks, setSaleUnitChecks] = useState({ sale_unit_check_above_base: 'warn', sale_unit_check_below_cost: 'warn', sale_unit_check_same_factor: 'warn' });
   const [suggestsLastDocumentDate, setSuggestsLastDocumentDate] = useState(false);
   const [issuanceMode, setIssuanceMode] = useState('MANUAL');
@@ -178,6 +183,7 @@ export default function CompanySettings() {
       setStockCheckAtPeriodEnd(!!data.stock_check_at_period_end);
       setInventoryBeforeClose(!!data.inventory_before_close);
       setExpiryAlertDays(String(data.expiry_alert_days ?? 30));
+      setPrescriptionPolicy(data.prescription_policy || 'OBRIGATORIA');
       setIssuanceMode(data.issuance_mode || 'MANUAL');
       setElectronicSignatureKey(data.electronic_signature_key || '');
     } catch (err) {
@@ -508,6 +514,7 @@ export default function CompanySettings() {
         stock_check_at_period_end: stockCheckAtPeriodEnd,
         inventory_before_close: inventoryBeforeClose,
         expiry_alert_days: parseInt(expiryAlertDays, 10) || 30,
+        ...(pharmacyEnabled ? { prescription_policy: prescriptionPolicy } : {}),
         issuance_mode: issuanceMode, electronic_signature_key: issuanceMode === 'ELETRONICA' ? (electronicSignatureKey || null) : null,
       });
       setSaved(true);
@@ -874,6 +881,24 @@ export default function CompanySettings() {
                   <span className="text-[12px] text-text-muted block">Um lote passa a «a expirar» este número de dias antes da sua validade (Stock → Validades e Resumo de Stock). Os lotes expirados nunca são vendidos.</span>
                 </span>
               </div>
+              {pharmacyEnabled && (
+                <div className="flex flex-col gap-2.5 border border-border rounded-md px-3.5 py-3">
+                  <span>
+                    <span className="text-sm text-text-primary block">Farmácia - receita médica</span>
+                    <span className="text-[12px] text-text-muted block">Na venda de um medicamento sujeito a receita médica. A receita especial (psicotrópicos e estupefacientes) é sempre obrigatória, com o utente e o documento de identificação.</span>
+                  </span>
+                  {[['OBRIGATORIA', 'Obrigatória', 'Sem o n.º da receita, a venda é recusada.'],
+                    ['SE_APRESENTADA', 'Registar se apresentada', 'A receita é pedida e registada se o cliente a tiver; a venda nunca é bloqueada.']].map(([value, label, hint]) => (
+                    <label key={value} className="flex items-start gap-2.5 cursor-pointer select-none">
+                      <input type="radio" name="prescription_policy" checked={prescriptionPolicy === value} onChange={() => setPrescriptionPolicy(value)} className="w-4 h-4 mt-0.5 accent-accent cursor-pointer" />
+                      <span>
+                        <span className="text-[13px] text-text-primary block">{label}</span>
+                        <span className="text-[12px] text-text-muted block">{hint}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
               </div>
             </div>
           </div>

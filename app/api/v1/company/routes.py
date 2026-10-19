@@ -103,6 +103,11 @@ async def update_my_company_contact(
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                                 detail="O alerta de validade deve estar entre 1 e 365 dias")
         company.expiry_alert_days = payload.expiry_alert_days
+    if payload.prescription_policy is not None:  # Farmácia: is the prescription's number required?
+        from app.services.pharmacy_service import PRESCRIPTION_POLICIES
+        if payload.prescription_policy not in PRESCRIPTION_POLICIES:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Regra de receita médica inválida")
+        company.prescription_policy = payload.prescription_policy
     company.issuance_mode = payload.issuance_mode
     company.electronic_signature_key = payload.electronic_signature_key if payload.issuance_mode == "ELETRONICA" else None
 

@@ -278,7 +278,7 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection }) {
           expiry_date: lotRule(l) ? l.expiry_date || null : null,
         })),
       });
-      onSuccess?.();
+      onSuccess?.({ warehouseId, lineCount: lines.length });  // the screen can show the warehouse the goods went to
     } catch (err) {
       setFormError(extractErrorMessage(err, 'Erro ao criar movimento'));
     } finally {

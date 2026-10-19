@@ -71,8 +71,10 @@ async def checkout(
     due_date=None,
     stay_sale: bool = False,
     observations: str | None = None,
+    prescription: dict | None = None,
 ) -> Invoice:
     """
+    prescription: the receita of a pharmacy sale (see pharmacy_service.check_prescription).
     observations: the Observações of the document (a hotel stay: guest, room and dates - see stay_text).
     stay_sale: the sale of a room with its rate (hotel_service.walk_in, or a stay's account closed) - the only sales
     where a room rate may appear (see _ensure_no_stay_rate).
@@ -109,6 +111,7 @@ async def checkout(
         payment_method_id=payment_method_id,
         bank_account_id=bank_account_id,
         due_date=due_date,
+        prescription=prescription,
     )
     return invoice
 

@@ -96,6 +96,7 @@ async def create_new_invoice(
             document_reference=payload.document_reference,
             discount_global_percent=payload.discount_global_percent,
             lines_input=line_inputs(payload.lines),
+            prescription=payload.prescription.model_dump() if payload.prescription else None,
         )
     except PeriodClosedError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
@@ -418,6 +419,18 @@ async def get_invoice_detail(
     )
 
 
+def _line_lots(line, doc_lots: dict, guide_lots: dict, printed: set) -> list[str]:
+    """The lots printed under one line of the document - once per product (and guide)."""
+    if not line.product_id:
+        return []
+    source = guide_lots.get(line.goods_movement_id, {}) if getattr(line, "goods_movement_id", None) else doc_lots
+    key = (line.product_id, getattr(line, "goods_movement_id", None))
+    if key in printed:
+        return []
+    printed.add(key)
+    return source.get(line.product_id, [])
+
+
 @router.get("/{invoice_id}/pdf")
 async def download_invoice_pdf(
     invoice_id: uuid.UUID,
@@ -557,6 +570,23 @@ async def download_invoice_pdf(
         "payments": payments_list,
         "created_by_name": created_by_name,  # the ticket's "Atendido por"
     }
+    # Farmácia: the receita the sale was dispensed against, printed under the lines.
+    from app.models.prescription import Prescription
+    from app.services.pharmacy_service import prescription_text
+    invoice_dict["prescription"] = prescription_text((await db.execute(
+        select(Prescription).where(Prescription.invoice_id == invoice.id))).scalar_one_or_none())
+    # The lots the goods left in, printed under each line of a product followed by lot: the sale's own exits, or the
+    # guides the invoice bills (their goods left with the guide).
+    from app.services.stock_lot_service import lots_of_document
+    doc_lots = await lots_of_document(db, current_user.company_id, f"{invoice_dict['invoice_type']} {invoice.series}/{invoice.number}")
+    guide_ids = {l.goods_movement_id for l in lines if getattr(l, "goods_movement_id", None)}
+    guide_lots: dict = {}
+    if guide_ids:
+        from app.models.goods_movement import GoodsMovement
+        from app.services.goods_movement_service import reference as guide_reference
+        for guide in (await db.execute(select(GoodsMovement).where(GoodsMovement.id.in_(guide_ids)))).scalars().all():
+            guide_lots[guide.id] = await lots_of_document(db, current_user.company_id, guide_reference(guide), guide.origin_warehouse_id)
+    lots_printed: set = set()  # a product on two lines: its lots under the first one
     product_ids = [l.product_id for l in lines if l.product_id]
     service_ids = [l.service_id for l in lines if l.service_id]
     products_by_id = {}
@@ -603,6 +633,7 @@ async def download_invoice_pdf(
             "exemption_code": l.exemption_code, "exemption_reason": l.exemption_reason_snapshot,
             "iec_amount": float(l.iec_amount or 0),
             "iselo_amount": float(l.iselo_amount or 0),
+            "lots": _line_lots(l, doc_lots, guide_lots, lots_printed),
         })
     company_dict = {"name": company.name, "nif": company.nif, "address": company.address, "phone_number": company.phone_number, "phone_number_2": company.phone_number_2, "email": company.email, "website": company.website, "logo_path": company.logo_path, "bank_accounts": bank_accounts_list}
 

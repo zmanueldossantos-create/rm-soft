@@ -97,7 +97,9 @@ async def pharmacy_context(db: AsyncSession, company_id: uuid.UUID) -> dict:
         ))).scalars().first()
         if row is not None:
             motive = {"id": str(row.id), "code": row.code, "name": row.name}
-    return {"enabled": enabled, "medicine_exemption": motive,
+    from app.models.company import Company
+    policy = (await db.execute(select(Company.prescription_policy).where(Company.id == company_id))).scalar_one_or_none()
+    return {"enabled": enabled, "medicine_exemption": motive, "prescription_policy": policy or "OBRIGATORIA",
             "forms": [{"id": str(f.id), "name": f.name, "is_active": f.is_active}
                       for f in await list_forms(db, company_id)] if enabled else []}
 
@@ -155,3 +157,67 @@ async def toggle_form(db: AsyncSession, company_id: uuid.UUID, form_id: uuid.UUI
     await db.commit()
     await db.refresh(form)
     return form
+
+
+# ---------- The prescription (receita) of a sale
+
+PRESCRIPTION_POLICIES = ("OBRIGATORIA", "SE_APRESENTADA")
+
+
+class PrescriptionRequiredError(MedicineError):
+    """A sale of a medicine on prescription without what the prescription must give (a 422, see main.py)."""
+
+
+async def check_prescription(db: AsyncSession, company_id: uuid.UUID, product_ids: list, prescription: dict | None) -> dict | None:
+    """
+    The prescription to record with a sale that hands goods over (FT, FR), checked against its medicines:
+    - no medicine on prescription in the sale: nothing recorded (a prescription sent anyway is ignored);
+    - a RECEITA_ESPECIAL medicine (psychotropic, narcotic): the number, the patient and his identity document, always;
+    - a RECEITA medicine: the number when the company's policy is OBRIGATORIA (the default); with SE_APRESENTADA,
+      whatever the customer shows is recorded and nothing is required.
+    Returns the cleaned fields (with is_special) or None when there is nothing to record.
+    """
+    from app.models.company import Company
+    from app.models.product import Product
+    ids = {pid for pid in product_ids if pid}
+    if not ids:
+        return None
+    regimes = set((await db.execute(select(Product.dispensing_regime).where(
+        Product.id.in_(ids), Product.company_id == company_id, Product.is_medicine.is_(True),
+        Product.dispensing_regime.in_(("RECEITA", "RECEITA_ESPECIAL")),
+    ))).scalars().all())
+    if not regimes:
+        return None
+    data = {key: _clean((prescription or {}).get(key)) for key in
+            ("number", "prescriber", "health_unit", "patient_name", "patient_document")}
+    special = "RECEITA_ESPECIAL" in regimes
+    if special:
+        missing = [label for key, label in (("number", "o n.º da receita"), ("patient_name", "o nome do utente"),
+                                            ("patient_document", "o documento de identificação"))
+                   if data[key] is None]
+        if missing:
+            raise PrescriptionRequiredError(
+                "Esta venda tem um medicamento de receita especial (psicotrópico ou estupefaciente): indique "
+                + ", ".join(missing))
+    else:
+        policy = (await db.execute(select(Company.prescription_policy).where(Company.id == company_id))).scalar_one_or_none()
+        if (policy or "OBRIGATORIA") == "OBRIGATORIA" and data["number"] is None:
+            raise PrescriptionRequiredError(
+                "Esta venda tem um medicamento sujeito a receita médica: indique o n.º da receita")
+    if not any(data.values()):
+        return None
+    return {**data, "is_special": special}
+
+
+def prescription_text(prescription) -> str:
+    """'Receita n.º 12345 · Dr. X · Utente Y' - printed on the document."""
+    if prescription is None:
+        return ""
+    parts = [("Receita especial" if prescription.is_special else "Receita") + (f" n.º {prescription.number}" if prescription.number else "")]
+    if prescription.prescriber:
+        parts.append(prescription.prescriber)
+    if prescription.health_unit:
+        parts.append(prescription.health_unit)
+    if prescription.patient_name:
+        parts.append("Utente: " + prescription.patient_name + (f" ({prescription.patient_document})" if prescription.patient_document else ""))
+    return " · ".join(parts)

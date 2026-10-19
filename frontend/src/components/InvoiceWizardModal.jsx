@@ -14,7 +14,8 @@ import { paymentTermsApi, paymentMethodsApi, unitsApi, documentRulesApi, banksAp
 import { getMyCompany, getMyCompanyBankAccounts } from '../api/company';
 import { listDocumentSeries } from '../api/documentSeries';
 import { extractErrorMessage } from '../utils/errors';
-import { medicineSummary } from '../api/pharmacy';
+import { medicineSummary, getPharmacyContext } from '../api/pharmacy';
+import PrescriptionModal, { prescriptionNeedOf } from './PrescriptionModal';
 
 import { dueDateFor, isProntoTerm } from '../utils/paymentTerms';
 import { useAuthStore } from '../store/authStore';
@@ -537,9 +538,21 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
     }
   }
 
-  async function handleSubmit() {
+  // Farmácia: the receita of a Fatura / Fatura-Recibo holding a medicine on prescription - asked before it is issued.
+  const [prescriptionPolicy, setPrescriptionPolicy] = useState('OBRIGATORIA');
+  useEffect(() => { if (open) getPharmacyContext().then((c) => setPrescriptionPolicy(c.prescription_policy || 'OBRIGATORIA')).catch(() => {}); }, [open]);
+  const [prescriptionNeed, setPrescriptionNeed] = useState(null);
+  const [lastPrescription, setLastPrescription] = useState(null);
+
+  async function handleSubmit(prescription) {
     if (mode === 'nc') return handleNcSubmit();
     if (mode === 'nd') return handleNdSubmit();
+    const handsGoodsOver = invoiceType === 'FACTURA' || invoiceType === 'FACTURA_RECIBO';
+    const need = handsGoodsOver ? prescriptionNeedOf(lines.filter((l) => l.item_type !== 'service'), productById) : null;
+    if (need && prescription === undefined) {
+      setPrescriptionNeed(need);
+      return;
+    }
     setFormError('');
     setSaving(true);
     try {
@@ -587,6 +600,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
           document_reference: documentReference || null,
           discount_global_percent: parseFloat(discountGlobalPercent) || 0,
           lines: commonLines,
+          prescription: need ? prescription : null,
         });
       }
       onCreated?.();
@@ -654,7 +668,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
             Seguinte <ArrowRight size={14} />
           </button>
         ) : (
-          <button type="button" onClick={handleSubmit} disabled={isSubmitDisabled} className={'flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-sm px-5 py-2 rounded-md transition-colors cursor-pointer ' + (mode === 'nc' ? 'bg-danger hover:opacity-90' : 'bg-accent hover:bg-accent-hover')}>
+          <button type="button" onClick={() => handleSubmit()} disabled={isSubmitDisabled} className={'flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-sm px-5 py-2 rounded-md transition-colors cursor-pointer ' + (mode === 'nc' ? 'bg-danger hover:opacity-90' : 'bg-accent hover:bg-accent-hover')}>
             {saving ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
             {saving ? 'A emitir...' : submitLabel}
           </button>
@@ -1283,6 +1297,14 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
           </button>
         </div>
       </Modal>
+
+      <PrescriptionModal
+        need={prescriptionNeed}
+        required={prescriptionPolicy === 'OBRIGATORIA'}
+        initial={lastPrescription}
+        onCancel={() => setPrescriptionNeed(null)}
+        onConfirm={(data) => { setLastPrescription(data); setPrescriptionNeed(null); handleSubmit(data); }}
+      />
     </>
   );
 }

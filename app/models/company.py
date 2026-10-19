@@ -81,6 +81,10 @@ class Company(Base):
     # Lots et péremption: a lot is shown as "a expirar" this many days before its expiry date (Stock > Validades,
     # the stock dashboard) - see stock_lot_service.list_expiring. 30 by default, chosen by the gestor.
     expiry_alert_days: Mapped[int] = mapped_column(Integer, default=30, server_default="30", nullable=False)
+    # Farmácia: a medicine sold on prescription (RECEITA) needs the prescription's number (OBRIGATORIA) or records it
+    # only when the customer shows one (SE_APRESENTADA). A RECEITA_ESPECIAL always needs it - see
+    # pharmacy_service.check_prescription.
+    prescription_policy: Mapped[str] = mapped_column(String(20), default="OBRIGATORIA", server_default="OBRIGATORIA", nullable=False)
 
     # Fiscal issuance mode - electronic mode requires the AGT-issued private
     # key and turns OFF auto_series_year (series are solicited from AGT instead).

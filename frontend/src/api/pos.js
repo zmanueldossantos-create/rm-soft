@@ -59,6 +59,7 @@ export async function checkout(posId, customerId, lines, payments, invoiceType =
       discount_percent: l.discountPercent || 0,
     })),
     payments: payments.map((p) => ({ payment_method_id: p.paymentMethodId, amount: p.amount })),
+    prescription: ftDetails.prescription || null,  // the receita of a pharmacy sale
   });
   return res.data;
 }

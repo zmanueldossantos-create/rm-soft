@@ -248,8 +248,12 @@ async def create_invoice(
     deduct_stock: bool = True,
     commit: bool = True,
     keep_line_prices: bool = False,
+    prescription: dict | None = None,
 ) -> Invoice:
     """
+    prescription: the receita a pharmacy sale is dispensed against (number, prescriber, health_unit, patient_name,
+    patient_document) - required or not by the medicines sold and the company's policy, see
+    pharmacy_service.check_prescription.
     deduct_stock=False: the goods already left the stock (an invoice of guias de remessa) - the lines then carry
     their goods_movement_id. keep_line_prices (and deduct_stock=False): a line's own unit_price is charged - the price
     of the guide, pro-forma or orçamento the invoice comes from - instead of the article's current one.
@@ -302,6 +306,14 @@ async def create_invoice(
     if doc_type is None:
         raise DocumentTypeNotConfiguredError(f"Tipo de documento '{doc_code}' não existe no catálogo da plataforma")
     rules = rules_from_row(doc_type)
+
+    # Farmácia: the goods handed over now (FT, FR) - a medicine on prescription needs its receita, before any number
+    # is taken.
+    prescription_data = None
+    if rules.deducts_stock and deduct_stock:
+        from app.services.pharmacy_service import check_prescription
+        prescription_data = await check_prescription(
+            db, company_id, [l.get("product_id") for l in lines_input if not l.get("service_id")], prescription)
 
     company_result = await db.execute(select(Company).where(Company.id == company_id))
     company = company_result.scalar_one()
@@ -555,6 +567,9 @@ async def create_invoice(
     for line in line_objects:
         line.invoice_id = invoice.id
         db.add(line)
+    if prescription_data is not None:
+        from app.models.prescription import Prescription
+        db.add(Prescription(company_id=company_id, invoice_id=invoice.id, **prescription_data))
 
     if payments is not None:
         for p in payments:

@@ -432,6 +432,17 @@ async def get_goods_movement(db: AsyncSession, company_id: uuid.UUID, movement_i
         party_nif = (await db.execute(select(Customer.nif).where(Customer.id == movement.customer_id))).scalar_one()
     elif movement.supplier_id:
         party_nif = (await db.execute(select(Supplier.nif).where(Supplier.id == movement.supplier_id))).scalar_one()
+    # The lots the goods left in (a product followed by lot), printed under its line - once per product.
+    from app.services.stock_lot_service import lots_of_document
+    guide_lots = await lots_of_document(db, company_id, reference(movement), movement.origin_warehouse_id)
+    lots_printed: set = set()
+
+    def line_lots(product_id) -> list:
+        if product_id in lots_printed:
+            return []
+        lots_printed.add(product_id)
+        return guide_lots.get(product_id, [])
+
     return {
         **_summary(movement, names), "party_nif": party_nif,
         "destination_warehouse": names["warehouses"].get(movement.destination_warehouse_id),
@@ -445,6 +456,6 @@ async def get_goods_movement(db: AsyncSession, company_id: uuid.UUID, movement_i
             "position": l.position, "product_code": l.product_code, "description": l.description, "unit": l.unit_code,
             "quantity": float(l.quantity), "unit_price": float(l.unit_price), "vat_rate": float(l.vat_rate),
             "tax_code": l.tax_code, "exemption_code": l.exemption_code, "line_net": float(l.line_net),
-            "line_vat": float(l.line_vat),
+            "line_vat": float(l.line_vat), "lots": line_lots(l.product_id),
         } for l in lines],
     }

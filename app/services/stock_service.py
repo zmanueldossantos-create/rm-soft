@@ -573,6 +573,7 @@ async def list_stock_levels(db: AsyncSession, company_id: uuid.UUID, warehouse_i
             "product_id": product.id,
             "product_code": product.code,
             "product_name": product.name,
+            "active_substance": product.active_substance if product.is_medicine else None,  # Farmácia: found by its DCI
             "quantity": float(stock.quantity),
             "min_stock_threshold": float(product.min_stock_threshold),
             "is_low": float(stock.quantity) <= float(product.min_stock_threshold),

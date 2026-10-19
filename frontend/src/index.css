@@ -21,11 +21,12 @@
   font-display: swap;
 }
 
-/* Accent (bordeaux, Angola flag) - identical in both themes, saturated enough
-   to stay legible on both dark and light backgrounds. */
+/* Accent (blue) - one shade per theme, both checked for contrast (WCAG): on the dark theme a lighter blue, readable
+   as text on the dark surfaces (4.1-4.8:1) and under white bold button text (3.9:1); on the light theme a deeper blue
+   (5:1 on the light surfaces, 5.8:1 under white text). Red stays for errors and dangers only (--danger). */
 :root {
-  --accent: #8B3A3A;
-  --accent-hover: #712E2E;
+  --accent: #3D7FE6;
+  --accent-hover: #2F6BCC;
 }
 
 /* Dark theme (default) */
@@ -40,8 +41,10 @@
   --border: #2A3336;
 }
 
-/* Light theme - accent stays the same as dark, only surfaces/text invert */
+/* Light theme - surfaces/text invert, the accent deepens */
 :root.light {
+  --accent: #1F5FD1;
+  --accent-hover: #1A4FB0;
   --bg-primary: #F7F6F3;
   --bg-elevated: #F0EEE8;
   --bg-inset: #EFEDE8;

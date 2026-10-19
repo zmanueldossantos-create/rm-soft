@@ -433,7 +433,7 @@ export default function Products() {
                         {p.barcode && <Barcode size={13} className="text-text-muted" />}
                         {p.unit_is_fractional && <Scale size={13} className="text-text-muted" />}
                         {p.is_medicine && p.dispensing_regime !== 'LIVRE' && (
-                          <span title={DISPENSING_REGIMES.find((r) => r.value === p.dispensing_regime)?.label} className={'text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded ' + (p.dispensing_regime === 'RECEITA_ESPECIAL' ? 'bg-danger/10 text-danger' : 'bg-accent/10 text-accent')}>
+                          <span title={DISPENSING_REGIMES.find((r) => r.value === p.dispensing_regime)?.label} className={'text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded ' + (p.dispensing_regime === 'RECEITA_ESPECIAL' ? 'bg-danger/10 text-danger' : 'bg-amber-500/10 text-amber-500 [.light_&]:text-amber-700')}>
                             {p.dispensing_regime === 'RECEITA_ESPECIAL' ? 'Receita especial' : 'Receita'}
                           </span>
                         )}
