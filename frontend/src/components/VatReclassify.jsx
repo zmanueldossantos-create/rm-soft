@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { getReclassification, reclassifyArticles } from '../api/vat';
 import { extractErrorMessage } from '../utils/errors';
 import Modal from './Modal';
+import ExemptionMotiveField from './ExemptionMotiveField';
 
 // Grouped VAT reclassification of products or services (kind = 'products' | 'services'): the banner of the articles
 // left behind by a regime change (they cannot be sold until reclassified), the action bar of the selection, and the
@@ -34,7 +35,7 @@ export default function VatReclassify({ kind, selectedIds, setSelectedIds, vatRa
         product_ids: kind === 'products' ? selectedIds : [],
         service_ids: kind === 'services' ? selectedIds : [],
         vat_id: vatId,
-        exemption_reason_id: isExempt && !imposed ? motiveId || null : null,
+        exemption_reason_id: isExempt ? motiveId || null : null,  // with an imposed motive: empty = the imposed one
       });
       setOpen(false);
       setSelectedIds([]);
@@ -77,17 +78,7 @@ export default function VatReclassify({ kind, selectedIds, setSelectedIds, vatRa
           {isExempt && (
             <div>
               <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">{'Motivo de isen\u00e7\u00e3o *'}</label>
-              {imposed ? (
-                <>
-                  <div className={field + ' opacity-80 cursor-not-allowed truncate'}>{imposed.code + ' - ' + imposed.name}</div>
-                  <p className="text-[11px] text-text-muted mt-1">{'Imposto pelo ' + (articleVatRule.regime || 'regime da empresa')}</p>
-                </>
-              ) : (
-                <select value={motiveId} onChange={(e) => setMotiveId(e.target.value)} className={field}>
-                  <option value="">Selecionar motivo</option>
-                  {vatCodes.map((c) => <option key={c.id} value={c.id}>{c.code + ' - ' + c.name}</option>)}
-                </select>
-              )}
+              <ExemptionMotiveField rule={articleVatRule} value={motiveId} onChange={setMotiveId} vatCodes={vatCodes} lockedClass={field} />
             </div>
           )}
           {error && <p className="text-[12px] text-danger">{error}</p>}

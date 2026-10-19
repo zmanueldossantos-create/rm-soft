@@ -41,7 +41,10 @@ async def resolve_article_vat(
     if vat.tax_category != "ISE":
         return None
     if regime is not None and regime.required_exemption_id is not None:
-        return regime.required_exemption_id
+        # the motive the regime imposes - unless the article is exempt for its own reason and the regime keeps that
+        # exemption (M11 medicines, M10 basic food: kept_exemption_ids)
+        if exemption_reason_id is None or exemption_reason_id not in (regime.kept_exemption_ids or []):
+            return regime.required_exemption_id
     if exemption_reason_id is None:
         raise ArticleVatError("Motivo de isenção obrigatório para um artigo isento de IVA")
     motive = (await db.execute(
@@ -61,12 +64,18 @@ async def imposed_exemption(db: AsyncSession, company_id: uuid.UUID) -> dict:
     regime = None
     if company is not None and company.fiscal_regime_id is not None:
         regime = (await db.execute(select(FiscalRegime).where(FiscalRegime.id == company.fiscal_regime_id))).scalar_one_or_none()
-    exemption = None
+    exemption, kept = None, []
     if regime is not None and regime.required_exemption_id is not None:
         motive = (await db.execute(select(VatCode).where(VatCode.id == regime.required_exemption_id))).scalar_one_or_none()
         if motive is not None:
             exemption = {"id": str(motive.id), "code": motive.code, "name": motive.name}
-    return {"regime": regime.name if regime is not None else None, "exemption": exemption}
+        # the exemptions the regime keeps: the form then offers them next to the imposed motive
+        if regime.kept_exemption_ids:
+            kept = [{"id": str(m.id), "code": m.code, "name": m.name} for m in (await db.execute(
+                select(VatCode).where(VatCode.id.in_(regime.kept_exemption_ids), VatCode.is_active.is_(True))
+                .order_by(VatCode.code)
+            )).scalars().all()]
+    return {"regime": regime.name if regime is not None else None, "exemption": exemption, "kept": kept}
 
 
 
@@ -89,20 +98,25 @@ async def _company_vat_context(db: AsyncSession, company_id: uuid.UUID):
     return regime, active_rates, imposed, others
 
 
-def _needs_reclassification(article, active_rates: dict, others: set) -> bool:
-    """THE test: a sold article whose rate is no longer active, or exempt with a motive another regime imposes."""
+def _needs_reclassification(article, active_rates: dict, others: set, regime=None) -> bool:
+    """THE test: a sold article whose rate is no longer active, or exempt with a motive another regime imposes, or -
+    under a regime imposing a motive - exempt with a motive the regime neither imposes nor keeps."""
     if article.vat_id is None:
         return False  # a raw material, never sold
     vat = active_rates.get(article.vat_id)
     if vat is None:
         return True
-    return vat.tax_category == "ISE" and article.exemption_reason_id in others
+    if vat.tax_category != "ISE":
+        return False
+    if regime is not None and regime.required_exemption_id is not None:
+        return article.exemption_reason_id not in {regime.required_exemption_id, *(regime.kept_exemption_ids or [])}
+    return article.exemption_reason_id in others
 
 
 async def ensure_article_sellable(db: AsyncSession, article) -> None:
     """An article left behind by a regime change cannot be sold until it is reclassified."""
-    _, active_rates, _, others = await _company_vat_context(db, article.company_id)
-    if _needs_reclassification(article, active_rates, others):
+    regime, active_rates, _, others = await _company_vat_context(db, article.company_id)
+    if _needs_reclassification(article, active_rates, others, regime):
         raise ArticleVatError(
             f"O artigo {article.name} tem de ser reclassificado (IVA) após a mudanca de regime da empresa"
         )
@@ -112,19 +126,20 @@ async def articles_to_reclassify(db: AsyncSession, company_id: uuid.UUID) -> dic
     """The products and services to reclassify after a regime change, for the banner and the grouped action."""
     from app.models.product import Product
     from app.models.service import Service
-    _, active_rates, _, others = await _company_vat_context(db, company_id)
+    regime, active_rates, _, others = await _company_vat_context(db, company_id)
     result = {}
     for key, model in (("products", Product), ("services", Service)):
         rows = (await db.execute(select(model).where(model.company_id == company_id))).scalars().all()
         result[key] = [{"id": str(a.id), "code": a.code, "name": a.name} for a in rows
-                       if _needs_reclassification(a, active_rates, others)]
+                       if _needs_reclassification(a, active_rates, others, regime)]
     return result
 
 
 async def auto_reclassify(db: AsyncSession, company_id: uuid.UUID, regime) -> None:
     """
     Under a regime that imposes a motive (Simplificado M00, Exclusao M04) there is no choice: every sold article takes
-    the company's exempt (ISE) rate and that motive. Any other regime leaves the articles to the user. No commit.
+    the company's exempt (ISE) rate and that motive - except an article exempt for a reason the regime keeps (M11
+    medicines...), which keeps its motive. Any other regime leaves the articles to the user. No commit.
     """
     if regime is None or regime.required_exemption_id is None:
         return
@@ -140,7 +155,8 @@ async def auto_reclassify(db: AsyncSession, company_id: uuid.UUID, regime) -> No
             select(model).where(model.company_id == company_id, model.vat_id.is_not(None))
         )).scalars().all():
             article.vat_id = exempt.id
-            article.exemption_reason_id = regime.required_exemption_id
+            if article.exemption_reason_id not in (regime.kept_exemption_ids or []):
+                article.exemption_reason_id = regime.required_exemption_id
 
 
 async def reclassify_articles(

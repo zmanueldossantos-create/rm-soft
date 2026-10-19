@@ -29,6 +29,7 @@ from app.models.company_module import CompanyModule
 from app.models.activity import Activity
 from app.models.resource_type_catalog import ResourceTypeCatalog
 from app.models.consumption_reason_catalog import ConsumptionReasonCatalog
+from app.models.pharmaceutical_form import PharmaceuticalForm
 from app.models.internal_consumption import InternalConsumption
 from app.models.resource import Resource
 from app.models.open_account import OpenAccount

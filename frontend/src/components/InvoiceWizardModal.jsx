@@ -14,6 +14,7 @@ import { paymentTermsApi, paymentMethodsApi, unitsApi, documentRulesApi, banksAp
 import { getMyCompany, getMyCompanyBankAccounts } from '../api/company';
 import { listDocumentSeries } from '../api/documentSeries';
 import { extractErrorMessage } from '../utils/errors';
+import { medicineSummary } from '../api/pharmacy';
 
 import { dueDateFor, isProntoTerm } from '../utils/paymentTerms';
 import { useAuthStore } from '../store/authStore';
@@ -1048,7 +1049,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                                 {line.item_type === 'service' ? (
                                   <Select value={line.service_id} onChange={(v) => updateLine(idx, 'service_id', v)} options={services.map((s) => ({ value: s.id, label: s.code + ' - ' + s.name }))} placeholder="Selecionar serviço" />
                                 ) : (
-                                  <div className="flex items-center gap-1.5"><div className="flex-1 min-w-0"><Select value={line.product_id} onChange={(v) => updateLine(idx, 'product_id', v)} options={products.map((pr) => ({ value: pr.id, label: pr.code + ' - ' + pr.name }))} placeholder="Selecionar produto" /></div>{(productById[line.product_id]?.sale_units || []).length > 0 && (<div className="w-28 shrink-0"><Select value={line.sale_unit_id || 'base'} onChange={(v) => updateLine(idx, 'sale_unit_id', v === 'base' ? '' : v)} options={[{ value: 'base', label: productById[line.product_id]?.unit_of_measure_code || 'Unidade base' }, ...productById[line.product_id].sale_units.map((u) => ({ value: u.id, label: u.unit_of_measure_code + ' (' + u.factor + ')' }))]} /></div>)}</div>
+                                  <div className="flex items-center gap-1.5"><div className="flex-1 min-w-0"><Select value={line.product_id} onChange={(v) => updateLine(idx, 'product_id', v)} options={products.map((pr) => ({ value: pr.id, label: pr.code + ' - ' + pr.name + (pr.is_medicine ? ' (' + medicineSummary(pr) + ')' : '') }))} placeholder="Selecionar produto" /></div>{(productById[line.product_id]?.sale_units || []).length > 0 && (<div className="w-28 shrink-0"><Select value={line.sale_unit_id || 'base'} onChange={(v) => updateLine(idx, 'sale_unit_id', v === 'base' ? '' : v)} options={[{ value: 'base', label: productById[line.product_id]?.unit_of_measure_code || 'Unidade base' }, ...productById[line.product_id].sale_units.map((u) => ({ value: u.id, label: u.unit_of_measure_code + ' (' + u.factor + ')' }))]} /></div>)}</div>
                                 )}
                               </td>
                               <td className="py-2 px-2">

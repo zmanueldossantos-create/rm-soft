@@ -2,8 +2,10 @@ import { formatKz } from '../utils/format';
 import { API_ORIGIN } from '../api/config';
 import { useCan } from '../utils/permissions';
 import VatReclassify from '../components/VatReclassify';
+import ExemptionMotiveField from '../components/ExemptionMotiveField';
+import { getPharmacyContext, createPharmaceuticalForm, DISPENSING_REGIMES, medicineSearchText, medicineSummary } from '../api/pharmacy';
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { Package, Plus, Loader2, Search, Pencil, Barcode, Scale, Upload, X } from 'lucide-react';
+import { Package, Plus, Loader2, Search, Pencil, Barcode, Scale, Upload, X, Pill, Snowflake } from 'lucide-react';
 import Modal from '../components/Modal';
 import CostHistory from '../components/CostHistory';
 
@@ -53,6 +55,8 @@ const emptyForm = {
   managedByBatch: false, managedByStock: true, managedByExpiry: false,
   notAvailablePos: false, preparedInKitchen: false, internalUseOnly: false, status: 'ACTIVO',
   exemptionReasonId: '',
+  // Farmácia (only with the Farmácia sector)
+  isMedicine: false, activeSubstance: '', pharmaceuticalFormId: '', dosage: '', dispensingRegime: 'LIVRE', coldStorage: false,
 };
 
 export default function Products() {
@@ -65,6 +69,15 @@ export default function Products() {
   useEffect(() => {
     getArticleVatRule().then(setArticleVatRule).catch(() => setArticleVatRule({ regime: null, exemption: null }));
   }, []);
+  // The Farmácia: is it on, its pharmaceutical forms and the motive proposed for a medicine (M11).
+  const [pharmacy, setPharmacy] = useState({ enabled: false, medicine_exemption: null, forms: [] });
+  useEffect(() => {
+    getPharmacyContext().then(setPharmacy).catch(() => setPharmacy({ enabled: false, medicine_exemption: null, forms: [] }));
+  }, []);
+  const [formModalOpen, setFormModalOpen] = useState(false);
+  const [newFormName, setNewFormName] = useState('');
+  const [formSaving, setFormSaving] = useState(false);
+  const [newFormError, setNewFormError] = useState('');
   const [categories, setCategories] = useState([]);
   const [units, setUnits] = useState([]);
   const [vatCodes, setVatCodes] = useState([]);
@@ -122,6 +135,7 @@ export default function Products() {
     const q = search.toLowerCase();
     return products.filter(
       (p) => p.code.toLowerCase().includes(q) || p.name.toLowerCase().includes(q) || (p.barcode && p.barcode.includes(q))
+        || medicineSearchText(p).includes(q)
     );
   }, [products, search]);
 
@@ -157,6 +171,12 @@ export default function Products() {
       internalUseOnly: product.internal_use_only,
       status: product.status,
       exemptionReasonId: product.exemption_reason_id || '',
+      isMedicine: !!product.is_medicine,
+      activeSubstance: product.active_substance || '',
+      pharmaceuticalFormId: product.pharmaceutical_form_id || '',
+      dosage: product.dosage || '',
+      dispensingRegime: product.dispensing_regime || 'LIVRE',
+      coldStorage: !!product.cold_storage,
     });
     setFormError('');
     setModalOpen(true);
@@ -173,6 +193,44 @@ export default function Products() {
 
   function updateField(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }));
+  }
+
+  // Ticking "Medicamento": followed by stock, lot and expiry (forced), and the VAT of a medicine proposed - exempt,
+  // motive M11 (CIVA art. 12.º nº1 b) - when the regime lets the article choose it. Everything stays editable.
+  function setMedicine(checked) {
+    setForm((prev) => {
+      const next = { ...prev, isMedicine: checked };
+      if (!checked) return next;
+      next.managedByStock = true;
+      next.managedByBatch = true;
+      next.managedByExpiry = true;
+      const exempt = vatRates.find((v) => v.tax_category === 'ISE' && v.is_active !== false);
+      const motive = pharmacy.medicine_exemption;
+      if (exempt) {
+        next.vat_id = exempt.id;
+        const imposed = articleVatRule.exemption;
+        const kept = (articleVatRule.kept || []).map((k) => k.id);
+        if (motive && (!imposed || kept.includes(motive.id))) next.exemptionReasonId = motive.id;
+      }
+      return next;
+    });
+  }
+
+  async function handleCreateForm(e) {
+    e.preventDefault();
+    setNewFormError('');
+    setFormSaving(true);
+    try {
+      const created = await createPharmaceuticalForm(newFormName);
+      setPharmacy((prev) => ({ ...prev, forms: [...prev.forms, created] }));
+      updateField('pharmaceuticalFormId', created.id);
+      setFormModalOpen(false);
+      setNewFormName('');
+    } catch (err) {
+      setNewFormError(extractErrorMessage(err, 'Erro ao criar a forma farmacêutica'));
+    } finally {
+      setFormSaving(false);
+    }
   }
 
   async function handleImageSelect(e) {
@@ -224,6 +282,7 @@ export default function Products() {
     setFormError('');
     setSaving(true);
 
+    const medicineOn = pharmacy.enabled && form.isMedicine;
     const payload = {
       code: form.code,
       name: form.name,
@@ -244,6 +303,12 @@ export default function Products() {
       internal_use_only: form.internalUseOnly,
       status: form.status,
       exemption_reason_id: form.exemptionReasonId || null,
+      is_medicine: medicineOn,
+      active_substance: medicineOn ? form.activeSubstance : null,
+      pharmaceutical_form_id: medicineOn ? form.pharmaceuticalFormId || null : null,
+      dosage: medicineOn ? form.dosage : null,
+      dispensing_regime: medicineOn ? form.dispensingRegime : null,
+      cold_storage: medicineOn && form.coldStorage,
     };
 
     try {
@@ -277,7 +342,12 @@ export default function Products() {
   const isExemptVat = selectedVat && selectedVat.tax_category === 'ISE';
   const imposedExemption = isExemptVat ? articleVatRule.exemption : null;
 
-  const isFormValid = form.code && form.name && form.unitOfMeasureId && form.vat_id && form.price !== '' && (!isExemptVat || imposedExemption || form.exemptionReasonId);
+  const medicineOn = pharmacy.enabled && form.isMedicine;
+  const isFormValid = form.code && form.name && form.unitOfMeasureId && form.vat_id && form.price !== '' && (!isExemptVat || imposedExemption || form.exemptionReasonId)
+    && (!medicineOn || (form.activeSubstance.trim() && form.dispensingRegime));
+  const medicineVatHint = medicineOn && pharmacy.medicine_exemption && form.exemptionReasonId === pharmacy.medicine_exemption.id
+    ? 'IVA proposto para um medicamento: isento, ' + pharmacy.medicine_exemption.code + ' (art. 12.º nº1 b) do CIVA). Pode alterar.' : '';
+  const formOptions = pharmacy.forms.filter((f) => f.is_active || f.id === form.pharmaceuticalFormId).map((f) => ({ value: f.id, label: f.name }));
 
   return (
     <main className="max-w-[1600px] mx-auto px-4 sm:px-6 md:px-8 py-6 sm:py-9">
@@ -294,11 +364,11 @@ export default function Products() {
       )}
 
       <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
-        <div className="relative max-w-sm w-full sm:w-auto sm:min-w-[260px]">
+        <div className="relative max-w-md w-full sm:w-auto sm:min-w-[380px]">
           <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" />
           <input
             type="text"
-            placeholder="Pesquisar por código, nome ou código de barras..."
+                        placeholder={pharmacy.enabled ? 'Pesquisar por código, nome, substância ativa ou código de barras...' : 'Pesquisar por código, nome ou código de barras...'}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full bg-bg-elevated border border-border rounded-md pl-10 pr-4 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors"
@@ -362,7 +432,14 @@ export default function Products() {
                         {p.name}
                         {p.barcode && <Barcode size={13} className="text-text-muted" />}
                         {p.unit_is_fractional && <Scale size={13} className="text-text-muted" />}
+                        {p.is_medicine && p.dispensing_regime !== 'LIVRE' && (
+                          <span title={DISPENSING_REGIMES.find((r) => r.value === p.dispensing_regime)?.label} className={'text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded ' + (p.dispensing_regime === 'RECEITA_ESPECIAL' ? 'bg-danger/10 text-danger' : 'bg-accent/10 text-accent')}>
+                            {p.dispensing_regime === 'RECEITA_ESPECIAL' ? 'Receita especial' : 'Receita'}
+                          </span>
+                        )}
+                        {p.is_medicine && p.cold_storage && <span title="Conservar no frio"><Snowflake size={13} className="text-sky-400" /></span>}
                       </div>
+                      {p.is_medicine && <p className="text-[12px] font-normal text-text-muted mt-0.5">{medicineSummary(p)}</p>}
                     </td>
                     <td className="px-6 py-4 font-mono text-text-primary">{p.price.toFixed(2)} Kz</td>
                     <td className="px-6 py-4 font-mono text-text-primary">{p.purchase_price != null ? formatKz(p.purchase_price) : '-'}</td>
@@ -479,14 +556,7 @@ export default function Products() {
             </Field>
             {isExemptVat && (
               <Field label="Motivo de isenção *">
-                {imposedExemption ? (
-                  <>
-                    <div className={inputClass + ' opacity-80 cursor-not-allowed truncate'}>{imposedExemption.code + ' - ' + imposedExemption.name}</div>
-                    <p className="text-[11px] text-text-muted mt-1">{'Imposto pelo ' + (articleVatRule.regime || 'regime da empresa')}</p>
-                  </>
-                ) : (
-                  <Select value={form.exemptionReasonId} onChange={(v) => updateField('exemptionReasonId', v)} options={vatCodes.map((c) => ({ value: c.id, label: c.code + ' - ' + c.name }))} placeholder="Selecionar motivo" />
-                )}
+                <ExemptionMotiveField rule={articleVatRule} value={form.exemptionReasonId} onChange={(v) => updateField('exemptionReasonId', v)} vatCodes={vatCodes} lockedClass={inputClass} />
               </Field>
             )}
             {editingId && (
@@ -496,18 +566,61 @@ export default function Products() {
             )}
           </div>
 
+          {medicineVatHint && <p className="text-[12px] text-text-muted -mt-2">{medicineVatHint}</p>}
+
+          {pharmacy.enabled && (
+            <div className="flex flex-col gap-3 pt-3 border-t border-border">
+              <label className="flex items-center gap-2.5 cursor-pointer select-none self-start">
+                <input type="checkbox" checked={form.isMedicine} onChange={(e) => setMedicine(e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
+                <Pill size={15} className="text-accent" />
+                <span className="text-sm font-medium text-text-primary">Medicamento</span>
+                <span className="text-[12px] text-text-muted">- gerido por lote e validade; vendido primeiro o lote que expira primeiro</span>
+              </label>
+              {form.isMedicine && (
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                  <Field label="Substância ativa (DCI) *" hint="Permite encontrar todas as marcas no POS">
+                    <input value={form.activeSubstance} onChange={(e) => updateField('activeSubstance', e.target.value)} placeholder="Ex.: Paracetamol" className={inputClass} />
+                  </Field>
+                  <Field label="Forma farmacêutica">
+                    <div className="flex items-center gap-1.5">
+                      <div className="flex-1 min-w-0">
+                        <Select value={form.pharmaceuticalFormId} onChange={(v) => updateField('pharmaceuticalFormId', v)} options={formOptions} placeholder="Selecionar" />
+                      </div>
+                      {can('pharmaceutical_forms:manage') && (
+                        <button type="button" onClick={() => setFormModalOpen(true)} title="Nova forma farmacêutica" className="flex items-center justify-center w-10 h-10 rounded-md border border-border text-text-muted hover:text-accent hover:border-accent transition-colors cursor-pointer shrink-0">
+                          <Plus size={15} />
+                        </button>
+                      )}
+                    </div>
+                  </Field>
+                  <Field label="Dosagem">
+                    <input value={form.dosage} onChange={(e) => updateField('dosage', e.target.value)} placeholder="Ex.: 500 mg" className={inputClass} />
+                  </Field>
+                  <Field label="Regime de dispensa *">
+                    <Select value={form.dispensingRegime} onChange={(v) => updateField('dispensingRegime', v)} options={DISPENSING_REGIMES} />
+                  </Field>
+                  <label className="flex items-center gap-2.5 cursor-pointer select-none sm:col-span-4">
+                    <input type="checkbox" checked={form.coldStorage} onChange={(e) => updateField('coldStorage', e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
+                    <Snowflake size={14} className="text-sky-400" />
+                    <span className="text-sm text-text-primary">Conservar no frio</span>
+                  </label>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="grid grid-cols-3 gap-2 pt-2 border-t border-border">
             <label className="flex items-center gap-2.5 cursor-pointer select-none">
-              <input type="checkbox" checked={form.managedByStock} onChange={(e) => updateField('managedByStock', e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
+              <input type="checkbox" disabled={medicineOn} checked={form.managedByStock} onChange={(e) => updateField('managedByStock', e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer disabled:cursor-not-allowed" />
               <span className="text-sm text-text-primary">Gerido por stocks</span>
             </label>
             {/* followed by lot / expiry: the lot is entered on every entry, exits take the first to expire (FEFO) */}
             <label className={'flex items-center gap-2.5 select-none ' + (form.managedByStock ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed')} title="Número de lote obrigatório em cada entrada de stock. Só pode ser alterado com o stock a zero.">
-              <input type="checkbox" disabled={!form.managedByStock} checked={form.managedByBatch && form.managedByStock} onChange={(e) => updateField('managedByBatch', e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer disabled:cursor-not-allowed" />
+              <input type="checkbox" disabled={!form.managedByStock || medicineOn} checked={form.managedByBatch && form.managedByStock} onChange={(e) => updateField('managedByBatch', e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer disabled:cursor-not-allowed" />
               <span className="text-sm text-text-primary">Gerido por lotes</span>
             </label>
             <label className={'flex items-center gap-2.5 select-none ' + (form.managedByStock ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed')} title="Data de validade obrigatória em cada entrada de stock; um lote expirado nunca é vendido. Só pode ser alterado com o stock a zero.">
-              <input type="checkbox" disabled={!form.managedByStock} checked={form.managedByExpiry && form.managedByStock} onChange={(e) => updateField('managedByExpiry', e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer disabled:cursor-not-allowed" />
+              <input type="checkbox" disabled={!form.managedByStock || medicineOn} checked={form.managedByExpiry && form.managedByStock} onChange={(e) => updateField('managedByExpiry', e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer disabled:cursor-not-allowed" />
               <span className="text-sm text-text-primary">Gerido por validade</span>
             </label>
             <label className="flex items-center gap-2.5 cursor-pointer select-none">
@@ -541,6 +654,21 @@ export default function Products() {
           >
             {saving ? <Loader2 size={17} className="animate-spin" /> : <Plus size={17} />}
             {saving ? 'A guardar...' : editingId ? 'Guardar alterações' : 'Criar produto'}
+          </button>
+        </form>
+      </Modal>
+
+      <Modal open={formModalOpen} onClose={() => { setFormModalOpen(false); setNewFormError(''); }} title="Nova forma farmacêutica">
+        <form onSubmit={handleCreateForm} className="flex flex-col gap-4">
+          <Field label="Nome *">
+            <input value={newFormName} onChange={(e) => setNewFormName(e.target.value)} placeholder="Ex.: Comprimido" required className={inputClass} />
+          </Field>
+          {newFormError && (
+            <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{newFormError}</div>
+          )}
+          <button type="submit" disabled={formSaving || !newFormName.trim()} className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer">
+            {formSaving ? <Loader2 size={17} className="animate-spin" /> : <Plus size={17} />}
+            Criar forma farmacêutica
           </button>
         </form>
       </Modal>

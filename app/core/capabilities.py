@@ -58,6 +58,10 @@ CAPABILITIES: dict[str, Capability] = {
             ("kitchen",), ("/cozinha", "/cozinha/historico"),
         ),
         Capability(
+            "PHARMACY", "Farmácia", "Medicamentos: substância ativa, forma farmacêutica, dosagem e regime de dispensa",
+            ("STOCK",), ("pharmaceutical_forms",), (),
+        ),
+        Capability(
             "HOTEL_STAY", "Estadia de hotel", "Check-in, check-out e ocupação", ("BOOKINGS", "OPEN_ACCOUNTS"),
             ("hotel",), (),
         ),
@@ -115,7 +119,7 @@ SECTORS: tuple[Sector, ...] = (
     Sector("SPA_SALAO", "Spa / Salão / Consultório", "Marcações por praticante, duração dos serviços e agenda", ("RESOURCES", "BOOKINGS")),
     Sector("COMERCIO", "Comércio geral", "Venda ao balcão e stock", ("STOCK",)),
     Sector("SERVICOS", "Prestação de serviços", "Faturação de serviços", ()),
-    Sector("FARMACIA", "Farmácia", "Venda e stock de medicamentos", ("STOCK",), False, "Em desenvolvimento: falta o controlo de lotes e validades"),
+    Sector("FARMACIA", "Farmácia", "Venda e stock de medicamentos, por lote e validade", ("STOCK", "PHARMACY")),
     Sector("RH", "Recursos Humanos", "Gestão de colaboradores e salários", (), False, "Em desenvolvimento"),
     Sector("HOSPITAL", "Hospital", "Pacientes, consultas e faturação", (), False, "Em desenvolvimento"),
     Sector("ESCOLA", "Escola", "Alunos, matrículas e propinas", (), False, "Em desenvolvimento"),

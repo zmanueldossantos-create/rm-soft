@@ -17,7 +17,7 @@ from datetime import datetime
 
 from sqlalchemy import Numeric, String, Boolean, DateTime, func
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import ARRAY, UUID
 
 from app.core.database import Base
 
@@ -45,6 +45,10 @@ class FiscalRegime(Base):
     # Exemption motive every exempt article must carry under this regime (M00 Simplificado, M04 Exclusao) - set
     # by the SUPER_ADMIN, never written in the code; None = each article chooses its own motive.
     required_exemption_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("vat_codes.id"), nullable=True)
+    # Under a regime that imposes a motive: the exemptions that still apply (an article exempt for its own reason - M11
+    # medicines, M10 basic food - keeps its motive and its sales stay out of the turnover base). Empty = the imposed
+    # motive on every article. Data, never code: the SUPER_ADMIN fills it after the accountant's answer.
+    kept_exemption_ids: Mapped[list[uuid.UUID]] = mapped_column(ARRAY(UUID(as_uuid=True)), nullable=False, default=list, server_default="{}")
     # The share of the VAT paid on purchases a company of this regime may deduct (IVA dedutível), in % - the rest is a
     # cost of the purchase. Data, never code: set per regime by SUPER_ADMIN (purchase_invoice_service).
     input_vat_deductible_pct: Mapped[float] = mapped_column(Numeric(5, 2), default=100, server_default="100", nullable=False)

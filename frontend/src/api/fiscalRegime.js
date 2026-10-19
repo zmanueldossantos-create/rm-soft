@@ -6,7 +6,7 @@ export async function listFiscalRegimes() {
   return res.data;
 }
 
-export async function createFiscalRegime(name, description, allowsNor, allowsRed, allowsIse, allowsInt, allowsOut, requiredExemptionId, inputVatDeductiblePct, turnoverVatPct) {
+export async function createFiscalRegime(name, description, allowsNor, allowsRed, allowsIse, allowsInt, allowsOut, requiredExemptionId, inputVatDeductiblePct, turnoverVatPct, keptExemptionIds = []) {
   const res = await apiClient.post('/admin/fiscal-regimes', {
     name,
     description: description || null,
@@ -18,11 +18,12 @@ export async function createFiscalRegime(name, description, allowsNor, allowsRed
     required_exemption_id: requiredExemptionId || null,
     input_vat_deductible_pct: inputVatDeductiblePct === '' || inputVatDeductiblePct == null ? 100 : Number(inputVatDeductiblePct),
     turnover_vat_pct: turnoverVatPct === '' || turnoverVatPct == null ? 0 : Number(turnoverVatPct),
+    kept_exemption_ids: requiredExemptionId ? keptExemptionIds || [] : [],
   });
   return res.data;
 }
 
-export async function updateFiscalRegime(regimeId, name, description, allowsNor, allowsRed, allowsIse, allowsInt, allowsOut, requiredExemptionId, inputVatDeductiblePct, turnoverVatPct) {
+export async function updateFiscalRegime(regimeId, name, description, allowsNor, allowsRed, allowsIse, allowsInt, allowsOut, requiredExemptionId, inputVatDeductiblePct, turnoverVatPct, keptExemptionIds = []) {
   const res = await apiClient.patch('/admin/fiscal-regimes/' + regimeId, {
     name,
     description: description || null,
@@ -34,6 +35,7 @@ export async function updateFiscalRegime(regimeId, name, description, allowsNor,
     required_exemption_id: requiredExemptionId || null,
     input_vat_deductible_pct: inputVatDeductiblePct === '' || inputVatDeductiblePct == null ? 100 : Number(inputVatDeductiblePct),
     turnover_vat_pct: turnoverVatPct === '' || turnoverVatPct == null ? 0 : Number(turnoverVatPct),
+    kept_exemption_ids: requiredExemptionId ? keptExemptionIds || [] : [],
   });
   return res.data;
 }

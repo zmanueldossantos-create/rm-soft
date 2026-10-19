@@ -246,7 +246,7 @@ async def create_new_fiscal_regime(
         db, payload.name, payload.description, payload.allows_nor, payload.allows_red, payload.allows_ise,
         payload.allows_int, payload.allows_out,
         required_exemption_id=payload.required_exemption_id,
-        input_vat_deductible_pct=payload.input_vat_deductible_pct, turnover_vat_pct=payload.turnover_vat_pct,
+        input_vat_deductible_pct=payload.input_vat_deductible_pct, turnover_vat_pct=payload.turnover_vat_pct, kept_exemption_ids=payload.kept_exemption_ids,
     )
 
 
@@ -263,7 +263,7 @@ async def edit_fiscal_regime(
             db, regime_id, payload.name, payload.description, payload.allows_nor, payload.allows_red, payload.allows_ise,
             payload.allows_int, payload.allows_out,
             required_exemption_id=payload.required_exemption_id,
-            input_vat_deductible_pct=payload.input_vat_deductible_pct, turnover_vat_pct=payload.turnover_vat_pct,
+            input_vat_deductible_pct=payload.input_vat_deductible_pct, turnover_vat_pct=payload.turnover_vat_pct, kept_exemption_ids=payload.kept_exemption_ids,
         )
     except FiscalRegimeNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))

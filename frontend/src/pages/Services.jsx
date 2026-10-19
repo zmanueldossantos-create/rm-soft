@@ -1,4 +1,5 @@
 import VatReclassify from '../components/VatReclassify';
+import ExemptionMotiveField from '../components/ExemptionMotiveField';
 import { useState, useEffect, useMemo } from 'react';
 import { Wrench, Plus, Loader2, Search, Pencil } from 'lucide-react';
 import Modal from '../components/Modal';
@@ -375,14 +376,7 @@ export default function Services() {
             {isExemptVat && (
               <div className="col-span-2">
                 <Field label="Motivo de isenção *">
-                  {imposedExemption ? (
-                    <>
-                      <div className={inputClass + ' opacity-80 cursor-not-allowed truncate'}>{imposedExemption.code + ' - ' + imposedExemption.name}</div>
-                      <p className="text-[11px] text-text-muted mt-1">{'Imposto pelo ' + (articleVatRule.regime || 'regime da empresa')}</p>
-                    </>
-                  ) : (
-                    <Select value={form.exemptionReasonId} onChange={(v) => updateField('exemptionReasonId', v)} options={vatCodes.map((c) => ({ value: c.id, label: c.code + ' - ' + c.name }))} placeholder="Selecionar motivo" />
-                  )}
+                  <ExemptionMotiveField rule={articleVatRule} value={form.exemptionReasonId} onChange={(v) => updateField('exemptionReasonId', v)} vatCodes={vatCodes} lockedClass={inputClass} />
                 </Field>
               </div>
             )}

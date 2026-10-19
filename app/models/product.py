@@ -92,6 +92,15 @@ class Product(Base):
     managed_by_batch: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)  # gerido por lotes
     managed_by_stock: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)  # gerido por stocks
     managed_by_expiry: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)  # gerido por validade
+    # Farmácia (capability PHARMACY): a medicine is always followed by lot and expiry (product_service). Its active
+    # substance (DCI) lets the counter find every brand of it; the dispensing regime says whether a prescription is
+    # asked at the sale (LIVRE, RECEITA, RECEITA_ESPECIAL - psychotropics and narcotics).
+    is_medicine: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    active_substance: Mapped[str | None] = mapped_column(String(150), nullable=True)  # substância ativa (DCI)
+    pharmaceutical_form_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("pharmaceutical_forms.id"), nullable=True)
+    dosage: Mapped[str | None] = mapped_column(String(60), nullable=True)  # dosagem (500 mg, 250 mg/5 ml)
+    dispensing_regime: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    cold_storage: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)  # conservar no frio
     not_available_pos: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     # shown to the kitchen once sent from an open account (a dish) - unrelated to the stock
     prepared_in_kitchen: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

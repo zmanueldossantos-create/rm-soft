@@ -78,6 +78,12 @@ async def create_new_product(
             internal_use_only=payload.internal_use_only,
             status=payload.status,
             exemption_reason_id=payload.exemption_reason_id,
+            is_medicine=payload.is_medicine,
+            active_substance=payload.active_substance,
+            pharmaceutical_form_id=payload.pharmaceutical_form_id,
+            dosage=payload.dosage,
+            dispensing_regime=payload.dispensing_regime,
+            cold_storage=payload.cold_storage,
         )
     except ProductAlreadyExistsError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
@@ -131,6 +137,12 @@ async def edit_product(
             internal_use_only=payload.internal_use_only,
             status=payload.status,
             exemption_reason_id=payload.exemption_reason_id,
+            is_medicine=payload.is_medicine,
+            active_substance=payload.active_substance,
+            pharmaceutical_form_id=payload.pharmaceutical_form_id,
+            dosage=payload.dosage,
+            dispensing_regime=payload.dispensing_regime,
+            cold_storage=payload.cold_storage,
         )
     except ProductAlreadyExistsError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))

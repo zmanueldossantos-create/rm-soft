@@ -15,6 +15,7 @@ import { getPosStockLevels } from '../api/pos';
 import { withholdingTaxesApi } from '../api/catalogs';
 import { withholdingOf } from '../utils/withholding';
 import { extractErrorMessage } from '../utils/errors';
+import { medicineSearchText } from '../api/pharmacy';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
 
@@ -509,7 +510,7 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
   // the catalogue: by name, code or barcode (a package's too), within the chosen category
   const searchText = itemSearch.trim().toLowerCase();
   const filteredProducts = products.filter((p) => (!itemCategory || p.category_id === itemCategory) && (!searchText
-    || p.name.toLowerCase().includes(searchText) || (p.code || '').toLowerCase().includes(searchText)
+    || p.name.toLowerCase().includes(searchText) || (p.code || '').toLowerCase().includes(searchText) || medicineSearchText(p).includes(searchText)
     || (p.barcode || '').includes(searchText) || (p.sale_units || []).some((u) => (u.barcode || '').includes(searchText))));
   // a room rate goes on a stay's account only (hotel check-in); a table's or counter's account never offers it
   const filteredServices = services.filter((s) => (!s.is_stay_rate || detailAccount?.booking_id) && (!searchText || s.name.toLowerCase().includes(searchText)

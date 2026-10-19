@@ -33,6 +33,8 @@ EDITABLE_ROLES = ("CAIXA", "ATENDENTE", "COZINHA", "ARMAZENISTA", "CONTABILISTA"
 PERMISSION_CATALOG: list[tuple[str, str, str, list[str]]] = [
     ("consumption_reasons:view", "Ver motivos de consumo interno", "Consumo Interno", ["ARMAZENISTA"]),
     ("consumption_reasons:manage", "Criar/editar motivos de consumo interno", "Consumo Interno", []),
+    ("pharmaceutical_forms:view", "Ver formas farmacêuticas", "Farmácia", ["ARMAZENISTA"]),
+    ("pharmaceutical_forms:manage", "Criar/editar formas farmacêuticas", "Farmácia", []),
     ("internal_consumption:view", "Ver histórico de consumo interno", "Consumo Interno", ["ARMAZENISTA"]),
     ("internal_consumption:record", "Registar consumo interno", "Consumo Interno", ["ARMAZENISTA"]),
     ("stock:view", "Ver níveis, movimentos e resumo de stock", "Stock", ["ARMAZENISTA"]),

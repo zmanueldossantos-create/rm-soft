@@ -14,7 +14,7 @@ import useDocumentRules, { DOC_CODE_BY_TYPE } from '../utils/documentRules';
 import { getMyCompanyBankAccounts } from '../api/company';
 import { createProFormaFromPos, getPosStock } from '../api/pos';
 import { listPaymentMethodPreferences } from '../api/tesouraria';
-import { Wallet, Plus, Minus, Trash2, Loader2, Search, X, ShoppingCart, LogOut, CheckCircle2, FileSearch, ArrowLeftRight, Coins, Receipt, Printer, FileText, ChevronLeft } from 'lucide-react';
+import { Wallet, Plus, Minus, Trash2, Loader2, Search, X, ShoppingCart, LogOut, CheckCircle2, FileSearch, ArrowLeftRight, Coins, Receipt, Printer, FileText, ChevronLeft, Snowflake } from 'lucide-react';
 import Modal from '../components/Modal';
 import DenominationGrid, { denominationLines, denominationTotal } from '../components/DenominationGrid';
 import OpenAccountsPanel from '../components/OpenAccountsPanel';
@@ -36,6 +36,7 @@ import {
 import { listUsers } from '../api/users';
 import { useAuthStore } from '../store/authStore';
 import { extractErrorMessage } from '../utils/errors';
+import { medicineSearchText, medicineSummary } from '../api/pharmacy';
 
 import { dueDateFor, isProntoTerm } from '../utils/paymentTerms';
 
@@ -697,7 +698,7 @@ export default function Caixa() {
     if (activeCategoryId !== 'all' && activeCategoryId !== 'services' && p.category_id !== activeCategoryId) return false;
     if (!productSearch.trim()) return true;
     const q = productSearch.toLowerCase();
-    return p.code.toLowerCase().includes(q) || p.name.toLowerCase().includes(q)
+    return p.code.toLowerCase().includes(q) || p.name.toLowerCase().includes(q) || medicineSearchText(p).includes(q)
       || (p.barcode || '').includes(q) || (p.sale_units || []).some((u) => (u.barcode || '').includes(q));
   });
 
@@ -1463,6 +1464,13 @@ export default function Caixa() {
                       <div className="p-3 relative">
                         <p className="font-mono text-[10px] text-text-muted mb-1">{p.code}</p>
                         <p className="font-display font-medium text-[13px] text-text-primary mb-1.5 line-clamp-2">{p.name}</p>
+                        {p.is_medicine && (
+                          <p className="text-[11px] text-text-muted -mt-1 mb-1.5 line-clamp-1 flex items-center gap-1" title={medicineSummary(p)}>
+                            {p.cold_storage && <Snowflake size={11} className="text-sky-400 shrink-0" />}
+                            {p.dispensing_regime && p.dispensing_regime !== 'LIVRE' && <span className={'font-semibold ' + (p.dispensing_regime === 'RECEITA_ESPECIAL' ? 'text-danger' : 'text-accent')}>Rx</span>}
+                            <span className="truncate">{medicineSummary(p)}</span>
+                          </p>
+                        )}
                         <div className="flex items-end justify-between">
                           <p className="font-mono text-accent text-[13px] font-semibold">{formatKz(p.price)} Kz</p>
                           {p.managed_by_stock && (
@@ -2568,7 +2576,7 @@ export default function Caixa() {
           </div>
           <div className="flex flex-col gap-2 max-h-[420px] overflow-y-auto scrollbar-thin">
             {products
-              .filter((p) => !articleSearchQuery.trim() || p.code.toLowerCase().includes(articleSearchQuery.toLowerCase()) || p.name.toLowerCase().includes(articleSearchQuery.toLowerCase()))
+              .filter((p) => !articleSearchQuery.trim() || p.code.toLowerCase().includes(articleSearchQuery.toLowerCase()) || p.name.toLowerCase().includes(articleSearchQuery.toLowerCase()) || medicineSearchText(p).includes(articleSearchQuery.toLowerCase()))
               .map((p) => (
                 <button
                   key={p.id}
@@ -2578,6 +2586,7 @@ export default function Caixa() {
                   <div>
                     <p className="font-mono text-[10px] text-text-muted">{p.code}</p>
                     <p className="text-[13px] text-text-primary">{p.name}</p>
+                    {p.is_medicine && <p className="text-[11px] text-text-muted">{medicineSummary(p)}</p>}
                   </div>
                   <span className="font-mono text-accent text-[13px] font-semibold">{Number(p.price).toFixed(2)} Kz</span>
                 </button>

@@ -43,6 +43,7 @@ from app.api.v1.establishments.routes import router as establishments_router
 from app.api.v1.document_series.routes import router as document_series_router
 from app.api.v1.tesouraria.routes import router as tesouraria_router
 from app.api.v1.moedeiro.routes import router as moedeiro_router
+from app.api.v1.pharmacy.routes import router as pharmacy_router
 from app.core.database import AsyncSessionLocal
 from app.models.company import Company
 from app.services.permission_service import seed_permission_catalog, seed_default_role_permissions
@@ -134,6 +135,7 @@ app.include_router(establishments_router)
 app.include_router(document_series_router)
 app.include_router(tesouraria_router)
 app.include_router(moedeiro_router)
+app.include_router(pharmacy_router)
 
 # Serve uploaded files (company logos, etc.) - local storage for Phase 1.
 os.makedirs("uploads/logos", exist_ok=True)
@@ -328,4 +330,13 @@ from app.services.product_service import ArticleUnitRequiredError as _ArticleUni
 
 @app.exception_handler(_ArticleUnitRequiredError)
 async def _article_unit_handler(request: _Request, exc: _ArticleUnitRequiredError):
+    return _JSONResponse(status_code=422, content={"detail": str(exc)})
+
+
+# A medicine sheet that cannot be saved (missing substance or regime, unknown form, company without the Farmácia): 422.
+from app.services.pharmacy_service import MedicineError as _MedicineError  # noqa: E402
+
+
+@app.exception_handler(_MedicineError)
+async def _medicine_handler(request: _Request, exc: _MedicineError):
     return _JSONResponse(status_code=422, content={"detail": str(exc)})

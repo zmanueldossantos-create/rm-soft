@@ -109,9 +109,25 @@ async def create_product(
     internal_use_only: bool = False,
     status: str = "ACTIVO",
     exemption_reason_id: uuid.UUID | None = None,
+    is_medicine: bool = False,
+    active_substance: str | None = None,
+    pharmaceutical_form_id: uuid.UUID | None = None,
+    dosage: str | None = None,
+    dispensing_regime: str | None = None,
+    cold_storage: bool = False,
 ) -> Product:
     """Creates a product within the caller's company."""
     await _check_all_fields_available(db, company_id, code, name, barcode)
+    from app.services.pharmacy_service import medicine_fields
+    medicine = await medicine_fields(
+        db, company_id, is_medicine=is_medicine, active_substance=active_substance,
+        pharmaceutical_form_id=pharmaceutical_form_id, dosage=dosage, dispensing_regime=dispensing_regime,
+        cold_storage=cold_storage, is_raw_material=is_raw_material,
+    )
+    # a medicine is always followed by stock, lot and expiry
+    managed_by_stock = medicine.pop("managed_by_stock", managed_by_stock)
+    managed_by_batch = medicine.pop("managed_by_batch", managed_by_batch)
+    managed_by_expiry = medicine.pop("managed_by_expiry", managed_by_expiry)
     if unit_of_measure_id is None:  # every article has a base unit: the SAF-T and the documents show it
         raise ArticleUnitRequiredError("A unidade base é obrigatória")
     _check_vat_rule(vat_id, is_raw_material)
@@ -143,6 +159,7 @@ async def create_product(
         internal_use_only=internal_use_only,
         status=status,
         exemption_reason_id=exemption_reason_id,
+        **medicine,
     )
     db.add(product)
     await db.commit()
@@ -190,6 +207,17 @@ async def list_products(db: AsyncSession, company_id: uuid.UUID) -> list[Product
             })
     for a in products:
         a.sale_units = by_product.get(a.id, [])
+    # The pharmaceutical form's name travels with a medicine (the counter shows "Comprimido 500 mg").
+    form_ids = {a.pharmaceutical_form_id for a in products if a.pharmaceutical_form_id}
+    if form_ids:
+        from app.models.pharmaceutical_form import PharmaceuticalForm
+        form_names = dict((await db.execute(
+            select(PharmaceuticalForm.id, PharmaceuticalForm.name).where(PharmaceuticalForm.id.in_(form_ids))
+        )).all())
+    else:
+        form_names = {}
+    for a in products:
+        a.pharmaceutical_form_name = form_names.get(a.pharmaceutical_form_id)
     return products
 
 
@@ -287,10 +315,26 @@ async def update_product(
     internal_use_only: bool = False,
     status: str = "ACTIVO",
     exemption_reason_id: uuid.UUID | None = None,
+    is_medicine: bool = False,
+    active_substance: str | None = None,
+    pharmaceutical_form_id: uuid.UUID | None = None,
+    dosage: str | None = None,
+    dispensing_regime: str | None = None,
+    cold_storage: bool = False,
 ) -> Product:
     """Updates a product's editable fields, scoped to the caller's company."""
     product = await get_product_or_raise(db, company_id, product_id)
     await _check_all_fields_available(db, company_id, code, name, barcode, exclude_id=product_id)
+    from app.services.pharmacy_service import medicine_fields
+    medicine = await medicine_fields(
+        db, company_id, is_medicine=is_medicine, active_substance=active_substance,
+        pharmaceutical_form_id=pharmaceutical_form_id, dosage=dosage, dispensing_regime=dispensing_regime,
+        cold_storage=cold_storage, is_raw_material=is_raw_material, current_form_id=product.pharmaceutical_form_id,
+    )
+    # a medicine is always followed by stock, lot and expiry
+    managed_by_stock = medicine.pop("managed_by_stock", managed_by_stock)
+    managed_by_batch = medicine.pop("managed_by_batch", managed_by_batch)
+    managed_by_expiry = medicine.pop("managed_by_expiry", managed_by_expiry)
     if unit_of_measure_id is None:  # every article has a base unit: the SAF-T and the documents show it
         raise ArticleUnitRequiredError("A unidade base é obrigatória")
     _check_vat_rule(vat_id, is_raw_material)
@@ -322,6 +366,8 @@ async def update_product(
     product.internal_use_only = internal_use_only
     product.status = status
     product.exemption_reason_id = exemption_reason_id
+    for field, value in medicine.items():
+        setattr(product, field, value)
 
     await db.commit()
     await db.refresh(product)

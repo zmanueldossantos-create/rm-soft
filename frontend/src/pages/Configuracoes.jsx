@@ -14,8 +14,8 @@ import { listModules, createModule, updateModule, toggleModuleStatus } from '../
 
 const fiscalRegimesApi = {
   list: () => listFiscalRegimes(),
-  create: (p) => createFiscalRegime(p.name, p.description, p.allows_nor, p.allows_red, p.allows_ise, p.allows_int, p.allows_out, p.required_exemption_id, p.input_vat_deductible_pct, p.turnover_vat_pct),
-  update: (id, p) => updateFiscalRegime(id, p.name, p.description, p.allows_nor, p.allows_red, p.allows_ise, p.allows_int, p.allows_out, p.required_exemption_id, p.input_vat_deductible_pct, p.turnover_vat_pct),
+  create: (p) => createFiscalRegime(p.name, p.description, p.allows_nor, p.allows_red, p.allows_ise, p.allows_int, p.allows_out, p.required_exemption_id, p.input_vat_deductible_pct, p.turnover_vat_pct, p.kept_exemption_ids),
+  update: (id, p) => updateFiscalRegime(id, p.name, p.description, p.allows_nor, p.allows_red, p.allows_ise, p.allows_int, p.allows_out, p.required_exemption_id, p.input_vat_deductible_pct, p.turnover_vat_pct, p.kept_exemption_ids),
   toggle: (id) => toggleFiscalRegimeStatus(id),
 };
 
@@ -299,7 +299,7 @@ export default function Configuracoes() {
       case 'withholding_taxes': return { name: '', rate: 0, tax_type: '' };
 
       case 'legal_vat_rates': return { tax_category: '', name: '', rate: 0 };
-      case 'fiscal_regimes': return { name: '', description: '', allows_nor: true, allows_red: true, allows_ise: true, allows_int: false, allows_out: false, required_exemption_id: '', input_vat_deductible_pct: 100, turnover_vat_pct: 0 };
+      case 'fiscal_regimes': return { name: '', description: '', allows_nor: true, allows_red: true, allows_ise: true, allows_int: false, allows_out: false, required_exemption_id: '', input_vat_deductible_pct: 100, turnover_vat_pct: 0, kept_exemption_ids: [] };
       case 'modules': return { name: '', description: '' };
       case 'denominations': return { currency_id: '', value: '', denomination_type: 'NOTA' };
       default: return {};
@@ -604,6 +604,24 @@ export default function Configuracoes() {
               {exemptionMotives.filter((x) => x.is_active).map((x) => <option key={x.id} value={x.id}>{x.code + ' - ' + x.name}</option>)}
             </select>
           </Field>
+          {form.required_exemption_id && (
+            <Field label="Isenções que continuam a aplicar-se neste regime">
+              <p className="text-[11px] text-text-muted -mt-0.5 mb-2">
+                Um artigo isento por uma destas razões guarda o seu motivo (em vez do motivo obrigatório) e as suas vendas ficam fora da base do IVA sobre o volume de negócios. Deixe vazio se todas as vendas entram na base.
+              </p>
+              <div className="max-h-44 overflow-y-auto scrollbar-thin border border-border rounded-md p-2 flex flex-col gap-1.5">
+                {exemptionMotives.filter((x) => x.is_active && x.id !== form.required_exemption_id).map((x) => {
+                  const kept = (form.kept_exemption_ids || []).includes(x.id);
+                  return (
+                    <label key={x.id} className="flex items-start gap-2 text-[12px] text-text-primary cursor-pointer">
+                      <input type="checkbox" className="mt-0.5" checked={kept} onChange={(e) => updateField('kept_exemption_ids', e.target.checked ? [...(form.kept_exemption_ids || []), x.id] : (form.kept_exemption_ids || []).filter((id) => id !== x.id))} />
+                      <span><span className="font-mono">{x.code}</span>{' - ' + x.name}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </Field>
+          )}
           <Field label={'IVA dedut\u00edvel nas compras (%)'}>
             <input type="number" min="0" max="100" step="0.01" value={form.input_vat_deductible_pct ?? 100} onChange={(e) => updateField('input_vat_deductible_pct', e.target.value)} className={inputClass} />
           </Field>

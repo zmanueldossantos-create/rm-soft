@@ -48,6 +48,13 @@ class ProductCreateRequest(BaseModel):
     internal_use_only: bool = False
     status: str = "ACTIVO"
     exemption_reason_id: uuid.UUID | None = None
+    # Farmácia (pharmacy_service): only for a company with the Farmácia capability
+    is_medicine: bool = False
+    active_substance: str | None = None
+    pharmaceutical_form_id: uuid.UUID | None = None
+    dosage: str | None = None
+    dispensing_regime: str | None = None
+    cold_storage: bool = False
 
     @field_validator("code")
     @classmethod
@@ -105,6 +112,13 @@ class ProductUpdateRequest(BaseModel):
     internal_use_only: bool = False
     status: str = "ACTIVO"
     exemption_reason_id: uuid.UUID | None = None
+    # Farmácia (pharmacy_service): only for a company with the Farmácia capability
+    is_medicine: bool = False
+    active_substance: str | None = None
+    pharmaceutical_form_id: uuid.UUID | None = None
+    dosage: str | None = None
+    dispensing_regime: str | None = None
+    cold_storage: bool = False
 
     @field_validator("code")
     @classmethod
@@ -173,6 +187,13 @@ class ProductResponse(BaseModel):
     internal_use_only: bool
     status: str
     exemption_reason_id: uuid.UUID | None
+    is_medicine: bool = False
+    active_substance: str | None = None
+    pharmaceutical_form_id: uuid.UUID | None = None
+    pharmaceutical_form_name: str | None = None  # attached by the list
+    dosage: str | None = None
+    dispensing_regime: str | None = None
+    cold_storage: bool = False
 
     class Config:
         from_attributes = True

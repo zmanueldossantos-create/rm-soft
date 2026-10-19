@@ -110,7 +110,7 @@ async def test_set_capabilities_adds_dependencies_and_keeps_every_row(db):
 async def test_sectors_in_development_cannot_be_granted(db, company_with_essentials):
     await seed_sector_catalog(db)
     company_id = company_with_essentials["company"].id
-    pharmacy, bakery = await _module(db, "FARMACIA"), await _module(db, "PADARIA")
+    pharmacy, bakery = await _module(db, "RH"), await _module(db, "PADARIA")
     pharmacy_id, bakery_id = pharmacy.id, bakery.id
     before = (await db.execute(select(func.count()).select_from(CompanyModule).where(CompanyModule.company_id == company_id))).scalar_one()
 
@@ -125,7 +125,7 @@ async def test_sectors_in_development_cannot_be_granted(db, company_with_essenti
 @pytest.mark.asyncio
 async def test_create_company_refuses_a_sector_in_development(db):
     await seed_sector_catalog(db)
-    pharmacy = await _module(db, "FARMACIA")
+    pharmacy = await _module(db, "RH")  # a sector still in development
     with pytest.raises(ModuleNotAvailableError):
         await create_company(
             db, name="Farmácia Teste Lda", nif="5000123999", email="farmácia@teste.co.ao", phone_number="+244923000101",

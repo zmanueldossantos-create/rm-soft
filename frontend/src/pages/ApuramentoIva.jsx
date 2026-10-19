@@ -161,7 +161,10 @@ export default function ApuramentoIva() {
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Kpi label="IVA liquidado (vendas)" value={kz(data.output_vat + data.turnover_vat)}
-              hint={data.turnover_vat_pct > 0 ? `inclui ${kz(data.turnover_vat)} sobre o volume de negócios` : `base ${kz(data.sales_base)}`} />
+              hint={data.turnover_vat_pct > 0
+                ? `inclui ${kz(data.turnover_vat)} sobre o volume de negócios (base ${kz(data.turnover_base)}`
+                  + (data.turnover_excluded ? `, sem ${kz(data.turnover_excluded)} isentos ${data.turnover_excluded_codes.join(', ')}` : '') + ')'
+                : `base ${kz(data.sales_base)}`} />
             <Kpi label="IVA dedutível (compras)" value={kz(data.deductible_vat)} tone="text-success" hint={`suportado ${kz(data.input_vat)}`} />
             <Kpi label={resultLabel} value={kz(resultValue)} tone={data.no_return ? 'text-text-muted' : data.result >= 0 ? 'text-danger' : 'text-success'}
               hint={data.no_return ? 'O regime da empresa não tem apuramento de IVA' : data.result < 0 ? 'O reporte para o mês seguinte não é calculado aqui' : null} />

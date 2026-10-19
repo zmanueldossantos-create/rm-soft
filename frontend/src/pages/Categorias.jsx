@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Tags, Wrench, Plus, Pencil, Loader2, X, PiggyBank, CreditCard, Boxes, PackageMinus } from 'lucide-react';
+import { Tags, Wrench, Plus, Pencil, Loader2, X, PiggyBank, CreditCard, Boxes, PackageMinus, Pill } from 'lucide-react';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
 import { listProductCategories, createProductCategory, updateProductCategory, toggleProductCategoryStatus } from '../api/productCategories';
@@ -7,6 +7,7 @@ import { listServiceTypes, createServiceType, updateServiceType, toggleServiceTy
 import { listCashMovementReasons, createCashMovementReason, updateCashMovementReason, toggleCashMovementReasonStatus, listPaymentMethodPreferences, setPaymentMethodPreference, listDocumentTypePaymentTermPreferences, setDocumentTypePaymentTermPreference } from '../api/tesouraria';
 import { listResourceTypes, createResourceType, updateResourceType, toggleResourceTypeStatus } from '../api/booking';
 import { listConsumptionReasons, createConsumptionReason, updateConsumptionReason, toggleConsumptionReasonStatus } from '../api/internalConsumption';
+import { getPharmacyContext, listPharmaceuticalForms, createPharmaceuticalForm, updatePharmaceuticalForm, togglePharmaceuticalFormStatus } from '../api/pharmacy';
 import { extractErrorMessage } from '../utils/errors';
 import { useCan } from '../utils/permissions';
 
@@ -43,6 +44,12 @@ const CATALOGS = [
     update: (id, p) => updateConsumptionReason(id, p.name),
     toggle: (id) => toggleConsumptionReasonStatus(id),
   } },
+  { key: 'pharmaceutical_forms', label: 'Formas Farmacêuticas', icon: Pill, pharmacyOnly: true, api: {
+    list: () => listPharmaceuticalForms(),
+    create: (p) => createPharmaceuticalForm(p.name),
+    update: (id, p) => updatePharmaceuticalForm(id, p.name),
+    toggle: (id) => togglePharmaceuticalFormStatus(id),
+  } },
 ];
 
 // Permission codes per catalog: 'view' decides whether its card is shown, 'manage' whether
@@ -53,7 +60,11 @@ const CATALOG_PERMS = {
   cash_movement_reasons: { view: 'tesouraria:reasons_view', manage: 'tesouraria:reasons_manage' },
   resource_types: { view: 'resource_types:view', manage: 'resource_types:manage' },
   consumption_reasons: { view: 'consumption_reasons:view', manage: 'consumption_reasons:manage' },
+  pharmaceutical_forms: { view: 'pharmaceutical_forms:view', manage: 'pharmaceutical_forms:manage' },
 };
+
+// Name-only catalogs: no other field in their form.
+const NAME_ONLY = ['consumption_reasons', 'pharmaceutical_forms'];
 
 const emptyForm = { name: '', not_available_purchases: false, not_available_pos: false, not_available_sales: false };
 const emptyNameOnlyForm = { name: '', requires_service: false, default_start_time: '', default_end_time: '' };
@@ -61,7 +72,10 @@ const emptyReasonForm = { name: '', direction: 'SAIDA' };
 
 export default function Categorias() {
   const can = useCan();
-  const visibleCatalogs = CATALOGS.filter((c) => can(CATALOG_PERMS[c.key].view));
+  // The Farmácia's catalogs only for a company with the Farmácia sector (read from its modules).
+  const [pharmacyEnabled, setPharmacyEnabled] = useState(false);
+  useEffect(() => { getPharmacyContext().then((c) => setPharmacyEnabled(!!c.enabled)).catch(() => setPharmacyEnabled(false)); }, []);
+  const visibleCatalogs = CATALOGS.filter((c) => can(CATALOG_PERMS[c.key].view) && (!c.pharmacyOnly || pharmacyEnabled));
   const [counts, setCounts] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -101,6 +115,8 @@ export default function Categorias() {
       setLoading(false);
     }
   }
+
+  useEffect(() => { if (pharmacyEnabled) loadCounts(); }, [pharmacyEnabled]); // its catalogs appear once known
 
   useEffect(() => {
     loadCounts();
@@ -195,7 +211,7 @@ export default function Categorias() {
   function openCreateForm() {
     setEditingId(null);
     if (activeCatalog?.key === 'cash_movement_reasons') setForm(emptyReasonForm);
-    else if (activeCatalog?.key === 'resource_types' || activeCatalog?.key === 'consumption_reasons') setForm(emptyNameOnlyForm);
+    else if (activeCatalog?.key === 'resource_types' || NAME_ONLY.includes(activeCatalog?.key)) setForm(emptyNameOnlyForm);
     else setForm(emptyForm);
     setFormError('');
     setFormOpen(true);
@@ -207,7 +223,7 @@ export default function Categorias() {
       setForm({ name: item.name, direction: item.direction });
     } else if (activeCatalog?.key === 'resource_types') {
       setForm({ name: item.name, requires_service: item.requires_service, default_start_time: (item.default_start_time || '').slice(0, 5), default_end_time: (item.default_end_time || '').slice(0, 5) });
-    } else if (activeCatalog?.key === 'consumption_reasons') {
+    } else if (NAME_ONLY.includes(activeCatalog?.key)) {
       setForm({ name: item.name });
     } else {
       setForm({
@@ -419,7 +435,7 @@ export default function Categorias() {
                 </div>
                 <p className="text-[11px] text-text-muted -mt-1">Opcional - propostas na reserva. Saída antes da entrada = dia seguinte (ex.: quarto 14:00 - 12:00).</p>
               </div>
-            ) : activeCatalog?.key === 'consumption_reasons' ? null : (
+            ) : NAME_ONLY.includes(activeCatalog?.key) ? null : (
               <div className="flex flex-col gap-2">
                 <label className="flex items-center gap-2.5 cursor-pointer select-none">
                   <input type="checkbox" checked={form.not_available_purchases} onChange={(e) => updateField('not_available_purchases', e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />

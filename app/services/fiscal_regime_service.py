@@ -23,6 +23,18 @@ def _check_required_exemption(allows_ise: bool, required_exemption_id) -> None:
         raise FiscalRegimeInvalidError("Um regime com motivo de isenção obrigatório tem de permitir a taxa ISE (isenta)")
 
 
+def _kept_exemptions(required_exemption_id, kept_exemption_ids) -> list:
+    """The exemptions that still apply under a regime imposing a motive - meaningless without one (every article then
+    chooses its own motive anyway), and never the imposed motive itself. Without duplicates, in the order given."""
+    if required_exemption_id is None:
+        return []
+    kept = []
+    for motive_id in kept_exemption_ids or []:
+        if motive_id != required_exemption_id and motive_id not in kept:
+            kept.append(motive_id)
+    return kept
+
+
 def _check_deductible_pct(pct: float) -> None:
     if pct < 0 or pct > 100:
         raise ValueError("A percentagem de IVA dedutível deve estar entre 0 e 100")
@@ -45,6 +57,7 @@ async def create_fiscal_regime(
     required_exemption_id: uuid.UUID | None = None,
     input_vat_deductible_pct: float = 100,
     turnover_vat_pct: float = 0,
+    kept_exemption_ids: list | None = None,
 ) -> FiscalRegime:
     _check_required_exemption(allows_ise, required_exemption_id)
     _check_deductible_pct(input_vat_deductible_pct)
@@ -60,6 +73,7 @@ async def create_fiscal_regime(
         allows_int=allows_int,
         allows_out=allows_out,
         required_exemption_id=required_exemption_id,
+        kept_exemption_ids=_kept_exemptions(required_exemption_id, kept_exemption_ids),
     )
     db.add(regime)
     await db.commit()
@@ -88,6 +102,7 @@ async def update_fiscal_regime(
     required_exemption_id: uuid.UUID | None = None,
     input_vat_deductible_pct: float | None = None,
     turnover_vat_pct: float | None = None,
+    kept_exemption_ids: list | None = None,
 ) -> FiscalRegime:
     _check_required_exemption(allows_ise, required_exemption_id)
     regime = await get_fiscal_regime_or_raise(db, regime_id)
@@ -105,6 +120,8 @@ async def update_fiscal_regime(
     regime.allows_int = allows_int
     regime.allows_out = allows_out
     regime.required_exemption_id = required_exemption_id
+    regime.kept_exemption_ids = _kept_exemptions(
+        required_exemption_id, kept_exemption_ids if kept_exemption_ids is not None else regime.kept_exemption_ids)
     # Its companies follow at once: rates of the categories it now allows or forbids.
     from app.services.company_service import propagate_regime_rates
     await propagate_regime_rates(db, regime.id)

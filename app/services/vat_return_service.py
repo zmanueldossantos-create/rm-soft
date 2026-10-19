@@ -12,7 +12,8 @@ on its purchases, and the result (to pay, or a credit).
 - The formula follows the company's regime - data of the regime, never code:
       to pay = IVA liquidado + sales base x turnover_vat_pct - IVA dedutível
   Regime Geral (0 %, 100 % deductible): liquidado - dedutível. Simplificado (sales exempt M00, 7 % of the turnover,
-  7 % deductible): turnover x 7 % - IVA suportado x 7 %. Exclusão (0 %, 0 %): nothing - no return in this regime.
+  7 % deductible): turnover x 7 % - IVA suportado x 7 %, the turnover leaving out the sales exempt for a reason the
+  regime keeps (kept_exemption_ids: M11 medicines...). Exclusão (0 %, 0 %): nothing - no return in this regime.
   Positive: IVA a pagar; negative: crédito de IVA (its carry-over to the next month is not handled here).
 """
 import uuid
@@ -155,7 +156,15 @@ async def get_vat_return(db: AsyncSession, company_id: uuid.UUID, period_id: uui
         regime = (await db.execute(select(FiscalRegime).join(Company, Company.fiscal_regime_id == FiscalRegime.id)
                                    .where(Company.id == company_id))).scalar_one_or_none()
     turnover_pct = float(regime.turnover_vat_pct) if regime is not None else 0.0
-    turnover_vat = _money(sales_base * turnover_pct / 100)
+    # The sales exempt for a reason the regime keeps (M11 medicines...) stay out of the turnover base.
+    kept_codes: set[str] = set()
+    if regime is not None and regime.kept_exemption_ids:
+        kept_codes = set((await db.execute(
+            select(VatCode.code).where(VatCode.id.in_(regime.kept_exemption_ids))
+        )).scalars().all())
+    turnover_excluded = _money(sum(l["base"] for l in sales_lines if l["exemption_code"] in kept_codes))
+    turnover_base = _money(sales_base - turnover_excluded)
+    turnover_vat = _money(turnover_base * turnover_pct / 100)
     result = _money(output_vat + turnover_vat - deductible)
     # no VAT charged, none on the turnover and none deductible: the regime has no return (Exclusão)
     no_return = regime is not None and turnover_pct == 0 and float(regime.input_vat_deductible_pct) == 0 and output_vat == 0
@@ -167,6 +176,8 @@ async def get_vat_return(db: AsyncSession, company_id: uuid.UUID, period_id: uui
         "input_vat_deductible_pct": float(regime.input_vat_deductible_pct) if regime is not None else 100.0,
         "sales": sales_lines, "purchases": purchase_lines,
         "sales_base": sales_base, "output_vat": output_vat, "turnover_vat": turnover_vat,
+        "turnover_base": turnover_base, "turnover_excluded": turnover_excluded,
+        "turnover_excluded_codes": sorted(kept_codes) if turnover_excluded else [],
         "purchases_base": _money(sum(l["base"] for l in purchase_lines)), "input_vat": input_vat, "deductible_vat": deductible,
         "result": result, "to_pay": max(result, 0.0), "credit": max(-result, 0.0), "no_return": no_return,
     }
