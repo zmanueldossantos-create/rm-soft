@@ -12,6 +12,9 @@ import { listModules, getCompanyModules, setCompanyModules, getAdminOverview } f
 import { resetUserPassword } from '../api/users';
 import { listCompanyVatRates } from '../api/vat';
 import { countriesApi, provincesApi, municipalitiesApi, currenciesApi, banksApi } from '../api/catalogs';
+import { getCompanyAi, updateCompanyAi } from '../api/ai';
+
+const emptyAi = { aiEnabled: false, whatsappEnabled: false, telegramEnabled: false, emailEnabled: false, monthlyLimit: '', platformLimit: 300, platformConfigured: true, loaded: false };
 
 function ToggleSwitch({ checked, onChange, disabled }) {
   const trackClass = 'relative w-10 h-5.5 rounded-full transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ' + (checked ? 'bg-success' : 'bg-border');
@@ -94,6 +97,9 @@ export default function AdminCompanies() {
   const [bankRows, setBankRows] = useState([]);
   const [existingBankAccounts, setExistingBankAccounts] = useState([]);
   const [bankRowSaving, setBankRowSaving] = useState(null);
+
+  // The AI assistant of the company being edited (saved with the other tabs)
+  const [ai, setAi] = useState(emptyAi);
 
   const [resetModalOpen, setResetModalOpen] = useState(false);
   const [resetPassword, setResetPassword] = useState('');
@@ -226,6 +232,12 @@ export default function AdminCompanies() {
     getCompanyModules(company.id).then((data) => setForm((prev) => ({ ...prev, moduleIds: data.map((m) => m.id) }))).catch(() => {});
     listBankAccounts(company.id).then(setExistingBankAccounts).catch(() => setExistingBankAccounts([]));
     loadCompanyVatRates(company.id);
+    setAi(emptyAi);
+    getCompanyAi(company.id).then((d) => setAi({
+      aiEnabled: d.ai_enabled, whatsappEnabled: d.whatsapp_enabled, telegramEnabled: d.telegram_enabled, emailEnabled: d.email_enabled,
+      monthlyLimit: d.monthly_limit === null ? '' : String(d.monthly_limit),
+      platformLimit: d.platform_monthly_limit, platformConfigured: d.platform_configured, loaded: true,
+    })).catch(() => {});
   }
 
   async function loadCompanyVatRates(companyId) {
@@ -369,6 +381,12 @@ export default function AdminCompanies() {
       if (editingId) {
         await updateCompany(editingId, buildPayload());
         await setCompanyModules(editingId, form.moduleIds);
+        if (ai.loaded) {
+          await updateCompanyAi(editingId, {
+            ai_enabled: ai.aiEnabled, whatsapp_enabled: ai.whatsappEnabled, telegram_enabled: ai.telegramEnabled,
+            email_enabled: ai.emailEnabled, monthly_limit: ai.monthlyLimit === '' ? null : parseInt(ai.monthlyLimit, 10),
+          });
+        }
       } else {
         const fullGestorPhone = form.gestorPhone.startsWith('+') ? form.gestorPhone : '+244' + form.gestorPhone.replace(/\s/g, '');
         const validBankRows = bankRows.filter((r) => r.bankId && r.accountNumber && r.iban && r.currencyId);
@@ -508,6 +526,7 @@ export default function AdminCompanies() {
                         ['bancarias', 'Coordenadas Bancárias'],
               ...(editingId ? [['iva', 'Taxas de IVA']] : []),
               ['modulos', 'Módulos'],
+              ...(editingId ? [['ia', 'Assistente IA']] : []),
             ].map(([key, label]) => (
               <button
                 key={key}
@@ -723,6 +742,40 @@ export default function AdminCompanies() {
                   );
                 })}
               </div>
+            </div>
+          )}
+
+          {activeTab === 'ia' && (
+            <div className="flex flex-col gap-4 min-h-[420px]">
+              {!ai.platformConfigured && (
+                <div className="bg-amber-500/10 border-l-2 border-amber-500 text-amber-500 [.light_&]:text-amber-700 px-3.5 py-2.5 text-[13px] rounded-r">
+                  O assistente ainda não está configurado na plataforma (Configurações → Assistente IA): pode ativá-lo aqui, mas só responderá depois.
+                </div>
+              )}
+              <label className="flex items-center justify-between gap-3 border border-border rounded-md px-3.5 py-3">
+                <div>
+                  <p className="text-sm font-medium text-text-primary">Assistente IA ativo</p>
+                  <p className="text-[12px] text-text-muted">O gestor pode fazer perguntas e pedir ações sobre a sua empresa</p>
+                </div>
+                <ToggleSwitch checked={ai.aiEnabled} onChange={() => setAi((p) => ({ ...p, aiEnabled: !p.aiEnabled }))} />
+              </label>
+              <div>
+                <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-2 block">Canais (além da aplicação)</label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {[['whatsappEnabled', 'WhatsApp'], ['telegramEnabled', 'Telegram'], ['emailEnabled', 'Email']].map(([key, label]) => (
+                    <label key={key} className={'flex items-center gap-2.5 select-none border border-border rounded-md px-3 py-2.5 transition-colors ' + (ai.aiEnabled ? 'cursor-pointer hover:border-accent' : 'opacity-50 cursor-not-allowed')}>
+                      <input type="checkbox" checked={ai.aiEnabled && ai[key]} disabled={!ai.aiEnabled} onChange={(e) => setAi((p) => ({ ...p, [key]: e.target.checked }))} className="w-4 h-4 accent-accent cursor-pointer" />
+                      <span className="text-sm text-text-primary">{label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <Field label="Mensagens por mês" hint="Vazio = o limite da plataforma">
+                  <input type="number" min="0" value={ai.monthlyLimit} disabled={!ai.aiEnabled} onChange={(e) => setAi((p) => ({ ...p, monthlyLimit: e.target.value }))} placeholder={String(ai.platformLimit)} className={inputClass + ' disabled:opacity-50'} />
+                </Field>
+              </div>
+              <p className="text-[12px] text-text-muted">Guardado com o botão «Guardar alterações». As confirmações antes de emitir ou enviar documentos são escolhidas pelo gestor em Definições da Empresa.</p>
             </div>
           )}
 

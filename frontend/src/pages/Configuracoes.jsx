@@ -1,6 +1,6 @@
 import DateInput from '../components/DateInput';
 import { useState, useEffect } from 'react';
-import { Settings, Globe, DollarSign, MapPin, Building2, Landmark, CreditCard, Calendar, Percent, Plus, Pencil, Loader2, X, FileText, Ruler, ShieldMinus, LayoutGrid, ShieldCheck, Save, Check, ArrowLeftRight, PiggyBank } from 'lucide-react';
+import { Settings, Globe, DollarSign, MapPin, Building2, Landmark, CreditCard, Calendar, Percent, Plus, Pencil, Loader2, X, FileText, Ruler, ShieldMinus, LayoutGrid, ShieldCheck, Save, Check, ArrowLeftRight, PiggyBank, Bot, Zap } from 'lucide-react';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
 import {
@@ -28,6 +28,135 @@ const modulesApi = {
 
 import { extractErrorMessage } from '../utils/errors';
 import { getPlatformSettings, updatePlatformSettings } from '../api/admin';
+import { getPlatformAi, updatePlatformAi, testPlatformAi } from '../api/ai';
+
+// The AI assistant: one provider, model and key for every company (the platform pays), a monthly message limit per
+// company (each company's own limit, if any, is set in Empresas > Assistente IA). The key is never shown back.
+function AiSettingsCard() {
+  const [values, setValues] = useState({ provider: '', model: '', apiKey: '', monthlyLimit: '300' });
+  const [info, setInfo] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState('');
+  const [error, setError] = useState('');
+
+  function load(data) {
+    setInfo(data);
+    setValues({ provider: data.provider || '', model: data.model || '', apiKey: '', monthlyLimit: String(data.monthly_limit) });
+  }
+
+  useEffect(() => {
+    getPlatformAi().then(load).catch(() => setInfo({ providers: [] }));
+  }, []);
+
+  function updateValue(field, value) {
+    setValues((prev) => ({ ...prev, [field]: value }));
+    setSaved(false);
+  }
+
+  async function handleSave(extra = {}) {
+    setError('');
+    setTestResult('');
+    setSaving(true);
+    try {
+      load(await updatePlatformAi({
+        provider: values.provider, model: values.model.trim(),
+        apiKey: values.apiKey.trim() ? values.apiKey.trim() : null,
+        monthlyLimit: parseInt(values.monthlyLimit, 10) || 0, ...extra,
+      }));
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (err) {
+      setError(extractErrorMessage(err, 'Erro ao guardar'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleTest() {
+    setError('');
+    setTestResult('');
+    setTesting(true);
+    try {
+      const result = await testPlatformAi();
+      setTestResult('Ligação estabelecida em ' + result.seconds + ' s - resposta: «' + result.answer + '»');
+    } catch (err) {
+      setError(extractErrorMessage(err, 'Falha no teste'));
+    } finally {
+      setTesting(false);
+    }
+  }
+
+  if (!info) return null;
+  const fieldClass = 'w-full bg-bg-inset border border-border rounded-md px-3 py-2 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors';
+  const labelClass = 'text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1 block';
+
+  return (
+    <div className="bg-bg-elevated border border-border rounded-lg px-5 py-4 mb-6">
+      <div className="flex items-center gap-2.5 mb-4">
+        <div className="w-9 h-9 rounded-md bg-accent/10 flex items-center justify-center shrink-0">
+          <Bot size={17} className="text-accent" />
+        </div>
+        <div>
+          <p className="text-[11px] uppercase tracking-wide text-text-muted">Assistente IA</p>
+          <p className="text-[11px] text-text-muted/70">Um fornecedor e uma chave para todas as empresas - ativar por empresa em Empresas</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+        <div>
+          <label className={labelClass}>Fornecedor</label>
+          <Select value={values.provider} onChange={(v) => updateValue('provider', v)} options={(info.providers || []).map((p) => ({ value: p.value, label: p.label }))} placeholder="Nenhum" />
+        </div>
+        <div>
+          <label className={labelClass}>Modelo</label>
+          <input value={values.model} onChange={(e) => updateValue('model', e.target.value)} placeholder={values.provider === 'ANTHROPIC' ? 'Ex: claude-sonnet-4-5' : values.provider === 'OPENROUTER' ? 'Ex: openai/gpt-4o-mini' : 'Ex: gpt-4o-mini'} className={fieldClass} />
+        </div>
+        <div>
+          <label className={labelClass}>Chave de acesso (API)</label>
+          <input type="password" autoComplete="new-password" value={values.apiKey} onChange={(e) => updateValue('apiKey', e.target.value)} placeholder={info.api_key_hint || 'Colar a chave'} className={fieldClass} />
+          {info.has_api_key && <p className="text-[11px] text-text-muted mt-1">Deixe vazio para manter a chave atual</p>}
+        </div>
+        <div>
+          <label className={labelClass}>Mensagens / mês por empresa</label>
+          <input type="number" min="0" value={values.monthlyLimit} onChange={(e) => updateValue('monthlyLimit', e.target.value)} className={fieldClass} />
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3 flex-wrap">
+        <button
+          onClick={() => handleSave()}
+          disabled={saving}
+          className="flex items-center gap-1.5 bg-accent hover:bg-accent-hover disabled:opacity-50 text-white text-sm font-medium px-3.5 py-2 rounded-md transition-colors cursor-pointer"
+        >
+          {saving ? <Loader2 size={14} className="animate-spin" /> : saved ? <Check size={14} /> : <Save size={14} />}
+          {saved ? 'Guardado' : 'Guardar'}
+        </button>
+        <button
+          onClick={handleTest}
+          disabled={testing || !info.has_api_key || !info.provider}
+          title={!info.has_api_key || !info.provider ? 'Guarde primeiro o fornecedor, o modelo e a chave' : undefined}
+          className="flex items-center gap-1.5 border border-border hover:border-accent disabled:opacity-50 disabled:cursor-not-allowed text-text-primary text-sm font-medium px-3.5 py-2 rounded-md transition-colors cursor-pointer"
+        >
+          {testing ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
+          Testar ligação
+        </button>
+        {info.has_api_key && (
+          <button
+            onClick={() => handleSave({ apiKey: '' })}
+            disabled={saving}
+            className="text-[12px] text-text-muted hover:text-danger transition-colors cursor-pointer"
+          >
+            Remover a chave
+          </button>
+        )}
+        {testResult && <div className="bg-success/10 border-l-2 border-success text-success px-3 py-2 text-[12px] rounded-r">{testResult}</div>}
+        {error && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3 py-2 text-[12px] rounded-r">{error}</div>}
+      </div>
+    </div>
+  );
+}
 
 function PlatformSettingsCard() {
   const [values, setValues] = useState({ softwareValidationNumber: '', vendorTaxId: '', productId: '', productVersion: '' });
@@ -661,6 +790,7 @@ export default function Configuracoes() {
       </p>
 
       <PlatformSettingsCard />
+      <AiSettingsCard />
 
       {error && (
         <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r mb-4">{error}</div>

@@ -1,6 +1,6 @@
 import { API_ORIGIN } from '../api/config';
 import { useState, useEffect, useRef } from 'react';
-import { Building2, Loader2, Save, Lock, Image, Upload, Store, Plus, Pencil, Landmark, X, Check, Trash2, FileStack, Sparkles, ChevronDown, CreditCard, Link2, Unlink, Users } from 'lucide-react';
+import { Building2, Loader2, Save, Lock, Image, Upload, Store, Plus, Pencil, Landmark, X, Check, Trash2, FileStack, Sparkles, ChevronDown, CreditCard, Link2, Unlink, Users, Bot } from 'lucide-react';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
 import { getMyCompany, updateMyCompanyContact, uploadMyCompanyLogo, removeMyCompanyLogo, getMyCompanyBankAccounts, addMyCompanyBankAccount, updateMyCompanyBankAccount, toggleMyCompanyBankAccountStatus } from '../api/company';
@@ -12,6 +12,8 @@ import apiClient from '../api/client';
 import { extractErrorMessage } from '../utils/errors';
 import { useCan } from '../utils/permissions';
 import { getPharmacyContext } from '../api/pharmacy';
+import { getMyCompanyAi } from '../api/ai';
+import AiCompanySettingsTab from '../components/AiCompanySettingsTab';
 import { listUsers } from '../api/users';
 import { listCashPointAssociations, assignUserToCashPoint, unassignUserFromCashPoint } from '../api/tesouraria';
 
@@ -42,6 +44,11 @@ const emptyBankForm = { bankId: '', accountNumber: '', iban: '', currencyId: '' 
 
 export default function CompanySettings() {
   const can = useCan();
+  // The AI assistant: its tab only when the platform switched it on for the company
+  const [aiInfo, setAiInfo] = useState(null);
+  useEffect(() => {
+    getMyCompanyAi().then(setAiInfo).catch(() => setAiInfo(null));
+  }, []);
   const [activeTab, setActiveTab] = useState('dados');
 
   const [company, setCompany] = useState(null);
@@ -698,6 +705,7 @@ export default function CompanySettings() {
           ['estabelecimentos', 'Estabelecimentos', Store],
           ['bancarias', 'Coordenadas Bancárias', Landmark],
           ['series', 'Séries de Facturação', FileStack],
+          ...(aiInfo?.ai_enabled ? [['ia', 'Assistente IA', Bot]] : []),
         ].map(([key, label, Icon]) => (
           <button
             key={key}
@@ -1067,6 +1075,10 @@ export default function CompanySettings() {
             </div>
           )}
         </div>
+      )}
+
+      {activeTab === 'ia' && aiInfo?.ai_enabled && (
+        <AiCompanySettingsTab info={aiInfo} onChange={setAiInfo} canManage={can('company:manage')} />
       )}
 
       {activeTab === 'bancarias' && (

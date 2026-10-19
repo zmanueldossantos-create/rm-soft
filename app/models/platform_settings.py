@@ -8,7 +8,7 @@ SUPER_ADMIN, regardless of Mode A (local) or Mode B (SaaS) deployment.
 import uuid
 from datetime import datetime
 
-from sqlalchemy import String, DateTime, func
+from sqlalchemy import DateTime, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import UUID
 
@@ -31,6 +31,12 @@ class PlatformSettings(Base):
     product_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     # SAF-T Header.ProductVersion
     product_version: Mapped[str | None] = mapped_column(String(20), nullable=True)
+
+    # The AI assistant: one provider and one key for every company (the platform pays), a message limit per company
+    ai_provider: Mapped[str | None] = mapped_column(String(20), nullable=True)  # OPENAI | ANTHROPIC | OPENROUTER
+    ai_model: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    ai_api_key_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)  # app.core.secret_box
+    ai_monthly_limit: Mapped[int] = mapped_column(Integer, default=300, server_default="300", nullable=False)
 
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
