@@ -44,3 +44,44 @@ export function medicineSummary(p) {
   if (!p || !p.is_medicine) return '';
   return [p.active_substance, p.pharmaceutical_form_name, p.dosage].filter(Boolean).join(' · ');
 }
+
+// ---------- Registers (livraison 3)
+
+// Where one lot came from and where it went - every sector (a recall).
+export async function traceLot(lotId) {
+  const res = await apiClient.get('/pharmacy/lots/' + lotId + '/trace');
+  return res.data;
+}
+
+export async function fetchLotTracePdf(lotId) {
+  const res = await apiClient.get('/pharmacy/lots/' + lotId + '/trace/pdf', { responseType: 'blob' });
+  return URL.createObjectURL(res.data);
+}
+
+function registerParams(filters) {
+  const params = { date_from: filters.dateFrom, date_to: filters.dateTo };
+  if (filters.special === 'especial') params.special = true;
+  if (filters.special === 'normal') params.special = false;
+  if (filters.q && filters.q.trim()) params.q = filters.q.trim();
+  return params;
+}
+
+export async function listPrescriptions(filters) {
+  const res = await apiClient.get('/pharmacy/prescriptions', { params: registerParams(filters) });
+  return res.data;
+}
+
+export async function fetchPrescriptionsPdf(filters) {
+  const res = await apiClient.get('/pharmacy/prescriptions/pdf', { params: registerParams(filters), responseType: 'blob' });
+  return URL.createObjectURL(res.data);
+}
+
+export async function getPsychotropicRegister(filters) {
+  const res = await apiClient.get('/pharmacy/psychotropics', { params: { date_from: filters.dateFrom, date_to: filters.dateTo } });
+  return res.data;
+}
+
+export async function fetchPsychotropicsPdf(filters) {
+  const res = await apiClient.get('/pharmacy/psychotropics/pdf', { params: { date_from: filters.dateFrom, date_to: filters.dateTo }, responseType: 'blob' });
+  return URL.createObjectURL(res.data);
+}

@@ -475,7 +475,7 @@ export default function Stock() {
         Stock
       </h2>
       <p className="text-text-muted text-sm mb-6">
-        Níveis de stock por armazém - a receção entra no armazém central é distribuída por transferência interna
+        Níveis de stock por armazém
       </p>
 
       <div className="flex items-end justify-between mb-4 flex-wrap gap-3">

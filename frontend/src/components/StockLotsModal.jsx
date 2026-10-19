@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import Modal from './Modal';
 import { listProductLots } from '../api/stock';
+import LotTraceModal from './LotTraceModal';
+import { useCan } from '../utils/permissions';
 import { extractErrorMessage } from '../utils/errors';
 
 const th = 'text-[11px] uppercase tracking-wide text-text-muted font-medium px-4 py-2.5';
@@ -28,6 +30,8 @@ function LotState({ lot }) {
 export default function StockLotsModal({ product, onClose }) {
   const [lots, setLots] = useState(null);
   const [error, setError] = useState('');
+  const can = useCan();
+  const [tracing, setTracing] = useState(null); // the lot whose path is shown (Rastrear)
 
   useEffect(() => {
     if (!product) return;
@@ -41,6 +45,8 @@ export default function StockLotsModal({ product, onClose }) {
   const total = (lots || []).reduce((s, l) => s + l.quantity, 0);
 
   return (
+    <>
+    <LotTraceModal lot={tracing} onClose={() => setTracing(null)} />
     <Modal open={!!product} onClose={onClose} title={product ? 'Lotes - ' + product.product_name : ''} maxWidthClass="max-w-4xl">
       {error && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{error}</div>}
       {!error && lots === null && <div className="flex justify-center py-10"><Loader2 size={22} className="animate-spin text-accent" /></div>}
@@ -52,6 +58,7 @@ export default function StockLotsModal({ product, onClose }) {
               <thead><tr className="border-b border-border">
                 <th className={th + ' text-left'}>Armazém</th><th className={th + ' text-left'}>Lote</th>
                 <th className={th + ' text-left'}>Validade</th><th className={th + ' text-right'}>Quantidade</th><th className={th + ' text-left'}>Estado</th>
+                {can('stock:lot_trace') && <th className={th + ' text-right'}>Ações</th>}
               </tr></thead>
               <tbody>
                 {lots.map((l) => (
@@ -61,6 +68,11 @@ export default function StockLotsModal({ product, onClose }) {
                     <td className="px-4 py-2.5 font-mono text-text-muted">{day(l.expiry_date)}</td>
                     <td className="px-4 py-2.5 font-mono text-text-primary text-right">{qty(l.quantity)}</td>
                     <td className="px-4 py-2.5"><LotState lot={l} /></td>
+                    {can('stock:lot_trace') && (
+                      <td className="px-4 py-2.5 text-right">
+                        <button type="button" onClick={() => setTracing(l)} className="text-[12px] border border-border hover:border-accent text-text-primary px-2.5 py-1 rounded-md cursor-pointer whitespace-nowrap">Rastrear</button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -72,5 +84,6 @@ export default function StockLotsModal({ product, onClose }) {
         </div>
       )}
     </Modal>
+    </>
   );
 }

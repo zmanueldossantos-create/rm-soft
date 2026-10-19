@@ -21,6 +21,7 @@ import StockMovements from './pages/StockMovements';
 import Users from './pages/Users';
 import Tesouraria from './pages/Tesouraria';
 import ApuramentoIva from './pages/ApuramentoIva';
+import Receitas from './pages/Receitas';
 import Compras from './pages/Compras';
 import PagamentosFornecedores from './pages/PagamentosFornecedores';
 import Guias from './pages/Guias';
@@ -88,6 +89,7 @@ export default function App() {
           <Route path="/users" element={<GestorRoute><Users /></GestorRoute>} />
           <Route path="/tesouraria" element={<RequirePermission perm="tesouraria:overview"><Tesouraria /></RequirePermission>} />
           <Route path="/apuramento-iva" element={<RequirePermission perm="vat:return"><ApuramentoIva /></RequirePermission>} />
+          <Route path="/receitas" element={<RequirePermission perm="pharmacy:registers"><Receitas /></RequirePermission>} />
           <Route path="/recursos" element={<RequirePermission perm="resources:manage"><Recursos /></RequirePermission>} />
           <Route path="/reservas" element={<RequirePermission perm="bookings:view"><Reservas /></RequirePermission>} />
           <Route path="/recursos/historico" element={<RequirePermission perm="resources:history"><HistoricoRecursos /></RequirePermission>} />

@@ -7,6 +7,7 @@ import { useAuthStore } from '../store/authStore';
 import { useThemeStore } from '../store/themeStore';
 import { getCurrentPeriod } from '../api/fiscal';
 import { getMyPermissions } from '../api/permissions';
+import { getPharmacyContext } from '../api/pharmacy';
 import { useCan } from '../utils/permissions';
 import Footer from './Footer';
 
@@ -141,6 +142,14 @@ export default function Layout() {
     }
   }, [user?.role]);
 
+  // The Farmácia's screens only for a company with the Farmácia sector (read from its modules).
+  const [pharmacyEnabled, setPharmacyEnabled] = useState(false);
+  useEffect(() => {
+    if (user?.role && user.role !== 'SUPER_ADMIN') {
+      getPharmacyContext().then((c) => setPharmacyEnabled(!!c.enabled)).catch(() => setPharmacyEnabled(false));
+    }
+  }, [user?.role]);
+
   function handleLogout() {
     logout();
     navigate('/login');
@@ -155,6 +164,7 @@ export default function Layout() {
         { to: '/caixa', icon: Wallet, label: 'Caixa', show: can('pos:view') },
         { to: '/invoices', icon: Receipt, label: 'Faturas', show: user?.role === 'GESTOR' && can('invoices:view') },
         { to: '/customers', icon: Users, label: 'Clientes', show: can('customers:manage') },
+        { to: '/receitas', icon: FileText, label: 'Receitas e registos', show: pharmacyEnabled && can('pharmacy:registers') },
         { to: '/contas-abertas', icon: Wallet2, label: 'Contas Abertas', show: can('open_accounts:view') },
         { to: '/cozinha', icon: ChefHat, label: 'Cozinha - pedidos em curso', show: can('kitchen:view') },
         { to: '/cozinha/historico', icon: KitchenHistoryIcon, label: 'Cozinha - histórico', show: can('kitchen:history') },

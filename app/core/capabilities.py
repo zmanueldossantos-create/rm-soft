@@ -59,7 +59,7 @@ CAPABILITIES: dict[str, Capability] = {
         ),
         Capability(
             "PHARMACY", "Farmácia", "Medicamentos: substância ativa, forma farmacêutica, dosagem e regime de dispensa",
-            ("STOCK",), ("pharmaceutical_forms",), (),
+            ("STOCK",), ("pharmaceutical_forms", "pharmacy"), ("/receitas",),
         ),
         Capability(
             "HOTEL_STAY", "Estadia de hotel", "Check-in, check-out e ocupação", ("BOOKINGS", "OPEN_ACCOUNTS"),

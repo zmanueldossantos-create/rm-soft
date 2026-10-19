@@ -94,9 +94,12 @@ def _table(p: _Page, headers, rows, widths, aligns, total=None) -> None:
     p.y -= 4 * mm
 
 
-def _draw_header(p: "_Page", company: dict, title: str, right_lines: list[str], details: list[tuple[str, str]]) -> None:
-    """Logo and title on top, then the company box (as on the invoices) and the report's details side by side."""
+def _draw_header(p: "_Page", company: dict, title: str, right_lines: list[str], details: list[tuple[str, str]],
+                 margin: float = MARGIN, content_w: float = CONTENT_W) -> None:
+    """Logo and title on top, then the company box (as on the invoices) and the report's details side by side.
+    margin / content_w: another page format (the landscape registers of the Farmácia)."""
     c = p.c
+    MARGIN, CONTENT_W = margin, content_w  # noqa: N806 - the page format of this report
     logo = _resolve_logo_path(company)
     if logo:
         c.drawImage(ImageReader(logo), MARGIN, p.y - 18 * mm, width=40 * mm, height=18 * mm,
