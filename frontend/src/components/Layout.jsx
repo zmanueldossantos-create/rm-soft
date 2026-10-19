@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { ChefHat, History as KitchenHistoryIcon } from 'lucide-react';
 import { Link, useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { createPortal } from 'react-dom';
-import { Building2, LogOut, LayoutDashboard, Sun, Moon, Package, Users, Calendar, Receipt, Settings, Package2, UserCog, History, FileText, Landmark, LayoutGrid, Store, Wheat, Factory, Wallet, SlidersHorizontal, Tags, Wrench, ChevronDown, Cog, Plus, ArrowLeftRight, Calculator, ClipboardList, Gauge, PiggyBank, CreditCard, Boxes, CalendarClock, Wallet2, PackageMinus, Truck, ShieldCheck, FileInput, Send, HandCoins } from 'lucide-react';
+import { Building2, LogOut, LayoutDashboard, Sun, Moon, Package, Users, Calendar, Receipt, Settings, Package2, UserCog, History, FileText, Landmark, LayoutGrid, Store, Wheat, Factory, Wallet, SlidersHorizontal, Tags, Wrench, ChevronDown, Cog, Plus, ArrowLeftRight, Calculator, ClipboardList, Gauge, PiggyBank, CreditCard, Boxes, CalendarClock, Wallet2, PackageMinus, Truck, ShieldCheck, FileInput, Send, HandCoins, Bot } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useThemeStore } from '../store/themeStore';
 import { getCurrentPeriod } from '../api/fiscal';
@@ -10,6 +10,8 @@ import { getMyPermissions } from '../api/permissions';
 import { getPharmacyContext } from '../api/pharmacy';
 import { useCan } from '../utils/permissions';
 import Footer from './Footer';
+import AssistantPanel from './AssistantPanel';
+import { getAssistantStatus } from '../api/ai';
 
 function NavLink({ to, icon: Icon, label, active }) {
   return (
@@ -122,6 +124,18 @@ export default function Layout() {
   const can = useCan();
   const [periodLabel, setPeriodLabel] = useState(null);
   const [partialLabel, setPartialLabel] = useState(null); // the soft-closed period, if any
+
+  // The AI assistant: its button only for a role allowed to use it, in a company where it is switched on
+  const canUseAssistant = can('assistant:use');
+  const [assistantStatus, setAssistantStatus] = useState(null);
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  useEffect(() => {
+    if (!canUseAssistant || user?.role === 'SUPER_ADMIN') {
+      setAssistantStatus(null);
+      return;
+    }
+    getAssistantStatus().then(setAssistantStatus).catch(() => setAssistantStatus(null));
+  }, [canUseAssistant, user?.role]);
 
   useEffect(() => {
     if (user?.role && user.role !== 'SUPER_ADMIN') {
@@ -278,6 +292,17 @@ export default function Layout() {
               {periodLabel}{partialLabel && <span className="ml-1.5 text-amber-500">· {partialLabel} (parcial)</span>}
             </span>
           )}
+          {assistantStatus?.enabled && (
+            <button
+              onClick={() => setAssistantOpen((v) => !v)}
+              aria-label="Assistente IA"
+              title="Assistente IA"
+              className={'flex items-center gap-1.5 h-9 px-2.5 border rounded-md transition-colors cursor-pointer ' + (assistantOpen ? 'border-accent text-accent bg-accent/10' : 'border-border hover:border-accent text-text-primary')}
+            >
+              <Bot size={16} />
+              <span className="hidden lg:inline text-[12px] font-semibold uppercase tracking-wide">Assistente</span>
+            </button>
+          )}
           <button
             onClick={toggleTheme}
             aria-label="Alternar tema"
@@ -299,6 +324,10 @@ export default function Layout() {
       <div className="pt-14 pb-11 min-h-screen">
         <Outlet />
       </div>
+
+      {assistantStatus?.enabled && (
+        <AssistantPanel open={assistantOpen} onClose={() => setAssistantOpen(false)} status={assistantStatus} onStatus={setAssistantStatus} />
+      )}
 
       <Footer />
     </div>

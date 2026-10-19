@@ -36,6 +36,7 @@ PERMISSION_CATALOG: list[tuple[str, str, str, list[str]]] = [
     ("pharmaceutical_forms:view", "Ver formas farmacêuticas", "Farmácia", ["ARMAZENISTA"]),
     ("pharmaceutical_forms:manage", "Criar/editar formas farmacêuticas", "Farmácia", []),
     ("pharmacy:registers", "Ver registos da farmácia (receitas, psicotrópicos)", "Farmácia", []),
+    ("assistant:use", "Usar o Assistente IA (perguntas sobre a empresa)", "Assistente IA", []),
     ("internal_consumption:view", "Ver histórico de consumo interno", "Consumo Interno", ["ARMAZENISTA"]),
     ("internal_consumption:record", "Registar consumo interno", "Consumo Interno", ["ARMAZENISTA"]),
     ("stock:view", "Ver níveis, movimentos e resumo de stock", "Stock", ["ARMAZENISTA"]),

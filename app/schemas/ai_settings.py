@@ -1,4 +1,7 @@
 """Schemas of the AI assistant's settings (platform and per company)."""
+import uuid
+from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 
@@ -52,3 +55,45 @@ class CompanyAiSwitchesRequest(BaseModel):
 class CompanyAiConfirmationsRequest(BaseModel):
     confirm_documents: bool = True
     confirm_sends: bool = True
+
+
+# ---------- The assistant's conversation
+
+class AssistantStatusResponse(BaseModel):
+    enabled: bool
+    available: bool
+    used: int
+    limit: int
+
+
+class AskRequest(BaseModel):
+    message: str
+    conversation_id: uuid.UUID | None = None
+
+
+class AiMessageResponse(BaseModel):
+    id: uuid.UUID
+    role: str
+    content: str
+    tools_used: list[str] | None = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AiConversationResponse(BaseModel):
+    id: uuid.UUID
+    title: str
+    channel: str
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AskResponse(BaseModel):
+    conversation: AiConversationResponse
+    message: AiMessageResponse
+    used: int
+    limit: int

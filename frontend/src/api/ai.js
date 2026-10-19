@@ -39,3 +39,25 @@ export async function updateMyCompanyAi(confirmations) {
   const res = await apiClient.put('/company/me/ai-settings', confirmations);
   return res.data;
 }
+
+// ---------- The assistant itself
+
+export async function getAssistantStatus() {
+  const res = await apiClient.get('/ai/status');
+  return res.data;
+}
+
+export async function listAiConversations() {
+  const res = await apiClient.get('/ai/conversations');
+  return res.data;
+}
+
+export async function getAiMessages(conversationId) {
+  const res = await apiClient.get('/ai/conversations/' + conversationId + '/messages');
+  return res.data;
+}
+
+export async function askAssistant(message, conversationId) {
+  const res = await apiClient.post('/ai/ask', { message, conversation_id: conversationId || null }, { timeout: 180000 });
+  return res.data;
+}

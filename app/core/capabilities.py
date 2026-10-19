@@ -72,7 +72,7 @@ CAPABILITIES: dict[str, Capability] = {
 CORE_PREFIXES: frozenset[str] = frozenset({
     "pos", "moedeiro", "tesouraria", "invoices", "documents", "document_series", "customers", "services",
     "service_types", "product_categories", "catalogs", "fiscal_periods", "saf_t", "company",
-    "company_bank_accounts", "establishments", "dashboard", "vat", "activities", "pos_terminals",
+    "company_bank_accounts", "establishments", "dashboard", "vat", "activities", "pos_terminals", "assistant",
 })
 
 
