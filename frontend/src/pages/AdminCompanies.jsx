@@ -5,7 +5,8 @@ import Select from '../components/Select';
 import {
   listCompanies, createCompany, updateCompany, toggleCompanyStatus,
   getCompanyGestor,
-  listBankAccounts, addBankAccount, updateBankAccount, toggleBankAccountStatus, getCompanyRegimeHistory } from '../api/admin';
+  listBankAccounts, addBankAccount, updateBankAccount, toggleBankAccountStatus, getCompanyRegimeHistory, getCompanySetup } from '../api/admin';
+import SetupChecklist from '../components/SetupChecklist';
 import { extractErrorMessage } from '../utils/errors';
 import { listFiscalRegimes } from '../api/fiscalRegime';
 import { listModules, getCompanyModules, setCompanyModules, getAdminOverview } from '../api/module';
@@ -76,6 +77,15 @@ export default function AdminCompanies() {
     }
     getCompanyRegimeHistory(editingId).then((h) => setRegimeHistory(Array.isArray(h) ? h : [])).catch(() => setRegimeHistory([]));
   }, [editingId]);
+  // Configuração inicial of the company being edited (read only), loaded when its tab is opened
+  const [setup, setSetup] = useState(null);
+  const [setupError, setSetupError] = useState('');
+  useEffect(() => {
+    if (!editingId || activeTab !== 'configuracao') return;
+    setSetup(null);
+    setSetupError('');
+    getCompanySetup(editingId).then(setSetup).catch((err) => setSetupError(extractErrorMessage(err, 'Erro ao carregar a configuração')));
+  }, [editingId, activeTab]);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
@@ -527,6 +537,7 @@ export default function AdminCompanies() {
               ...(editingId ? [['iva', 'Taxas de IVA']] : []),
               ['modulos', 'Módulos'],
               ...(editingId ? [['ia', 'Assistente IA']] : []),
+              ...(editingId ? [['configuracao', 'Configuração inicial']] : []),
             ].map(([key, label]) => (
               <button
                 key={key}
@@ -742,6 +753,17 @@ export default function AdminCompanies() {
                   );
                 })}
               </div>
+            </div>
+          )}
+
+          {activeTab === 'configuracao' && (
+            <div className="flex flex-col gap-3 min-h-[420px]">
+              <p className="text-[12px] text-text-muted">Onde a empresa está na sua configuração - cada passo é lido dos dados reais. Os passos «RM SOFT» são definidos aqui, no separador Dados da Empresa.</p>
+              {setupError && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{setupError}</div>}
+              {!setup && !setupError && (
+                <div className="flex items-center justify-center py-16 text-text-muted text-sm"><Loader2 size={18} className="animate-spin mr-2" />A carregar...</div>
+              )}
+              {setup && <SetupChecklist data={setup} readOnly />}
             </div>
           )}
 

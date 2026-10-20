@@ -1,8 +1,57 @@
 import { useState, useEffect } from 'react';
-import { LayoutDashboard, TrendingUp, Receipt, AlertTriangle, Loader2, Package2, Send, Clock, CheckCircle2, XCircle } from 'lucide-react';
+import { LayoutDashboard, TrendingUp, Receipt, AlertTriangle, Loader2, Package2, Send, Clock, CheckCircle2, XCircle, ListChecks } from 'lucide-react';
 import { getDashboardSummary } from '../api/dashboard';
+import { getMyCompanySetup } from '../api/company';
 import { useAuthStore } from '../store/authStore';
 import { extractErrorMessage } from '../utils/errors';
+import { useCan } from '../utils/permissions';
+import SetupChecklist from '../components/SetupChecklist';
+
+// "Esconder" is remembered per user in this browser; only offered once the required steps are done.
+const hiddenKey = (userId) => 'rmsoft.setup.hidden.' + userId;
+function readHidden(userId) {
+  try { return localStorage.getItem(hiddenKey(userId)) === '1'; } catch { return false; }
+}
+function writeHidden(userId) {
+  try { localStorage.setItem(hiddenKey(userId), '1'); } catch { /* the card simply comes back next time */ }
+}
+
+// Configuração inicial on the gestor's dashboard: shown until every step is done (or hidden once the required ones are).
+function SetupCard({ userId }) {
+  const [setup, setSetup] = useState(null);
+  const [hidden, setHidden] = useState(() => readHidden(userId));
+  useEffect(() => {
+    getMyCompanySetup().then(setSetup).catch(() => setSetup(null));
+  }, []);
+  if (!setup || setup.all_done || (hidden && setup.complete)) return null;
+  return (
+    <div className="bg-bg-elevated border border-border rounded-lg p-5 mb-6">
+      <div className="flex items-start justify-between gap-3 mb-4">
+        <div>
+          <h3 className="font-display font-semibold text-[16px] text-text-primary flex items-center gap-2">
+            <ListChecks size={18} className="text-accent" />
+            Configuração inicial
+          </h3>
+          <p className="text-[12px] text-text-muted mt-0.5">
+            {setup.complete
+              ? 'Os passos obrigatórios estão concluídos. Os recomendados melhoram os documentos e o trabalho da equipa.'
+              : 'Conclua estes passos para começar a faturar. Cada passo fica marcado sozinho quando estiver feito.'}
+          </p>
+        </div>
+        {setup.complete && (
+          <button
+            type="button"
+            onClick={() => { writeHidden(userId); setHidden(true); }}
+            className="shrink-0 px-3 py-1.5 rounded-md border border-border text-[12px] font-medium text-text-muted hover:text-text-primary transition-colors cursor-pointer"
+          >
+            Esconder
+          </button>
+        )}
+      </div>
+      <SetupChecklist data={setup} />
+    </div>
+  );
+}
 
 function formatMoney(value) {
   return new Intl.NumberFormat('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value) + ' Kz';
@@ -21,6 +70,7 @@ const STATUS_STYLE = {
 
 export default function Dashboard() {
   const user = useAuthStore((state) => state.user);
+  const can = useCan();
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -60,6 +110,8 @@ export default function Dashboard() {
       <p className="text-text-muted text-sm mb-6">
         Olá, {user?.full_name}
       </p>
+
+      {can('company:manage') && <SetupCard userId={user?.id} />}
 
       {loading && (
         <div className="flex items-center justify-center py-16 text-text-muted text-sm">

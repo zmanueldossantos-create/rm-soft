@@ -67,3 +67,9 @@ export async function getCompanyRegimeHistory(companyId) {
   const res = await apiClient.get(`/admin/companies/${companyId}/regime-history`);
   return res.data;
 }
+
+// Configuração inicial of a client company (read only for the platform).
+export async function getCompanySetup(companyId) {
+  const res = await apiClient.get(`/admin/companies/${companyId}/setup`);
+  return res.data;
+}

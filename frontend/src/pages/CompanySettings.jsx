@@ -1,5 +1,6 @@
 import { API_ORIGIN } from '../api/config';
 import { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Building2, Loader2, Save, Lock, Image, Upload, Store, Plus, Pencil, Landmark, X, Check, Trash2, FileStack, Sparkles, ChevronDown, CreditCard, Link2, Unlink, Users, Bot, Mail } from 'lucide-react';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
@@ -50,7 +51,13 @@ export default function CompanySettings() {
   useEffect(() => {
     getMyCompanyAi().then(setAiInfo).catch(() => setAiInfo(null));
   }, []);
-  const [activeTab, setActiveTab] = useState('dados');
+  // ?tab=series (from the Configuração inicial "Ir" buttons) opens that tab directly
+  const [searchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'dados');
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab) setActiveTab(tab);
+  }, [searchParams]);
 
   const [company, setCompany] = useState(null);
   const [loading, setLoading] = useState(true);

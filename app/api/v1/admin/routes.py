@@ -41,6 +41,7 @@ from app.services.sector_service import (
     UnknownCapabilityError, NoSectorDefaultsError,
 )
 from app.services.company_service import get_company_gestor
+from app.services.setup_checklist_service import get_setup_checklist
 from app.schemas.auth import UserResponse
 from app.services.company_service import (
     FiscalRegimeNotFoundError,
@@ -50,6 +51,7 @@ from app.services.company_service import (
     toggle_company_status,
     CompanyAlreadyExistsError,
     CompanyNotFoundError,
+    get_company_or_raise,
     InvalidCurrencySelectionError,
     list_bank_accounts,
     add_bank_account,
@@ -361,6 +363,20 @@ async def get_gestor_for_company(
     if gestor is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gestor não encontrado para esta empresa")
     return gestor
+
+
+@router.get("/companies/{company_id}/setup")
+async def get_company_setup(
+    company_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role("SUPER_ADMIN")),
+):
+    """Configuração inicial of a client company - lets the platform follow where each one stands."""
+    try:
+        await get_company_or_raise(db, company_id)
+    except CompanyNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    return await get_setup_checklist(db, company_id)
 
 
 @router.get("/companies/{company_id}/bank-accounts", response_model=list[BankAccountResponse])

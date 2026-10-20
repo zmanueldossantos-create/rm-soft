@@ -44,3 +44,9 @@ export async function removeMyCompanyLogo() {
   const res = await apiClient.delete('/company/me/logo');
   return res.data;
 }
+
+// Configuração inicial: the company's set-up steps, each ticked from the real data.
+export async function getMyCompanySetup() {
+  const res = await apiClient.get('/company/me/setup');
+  return res.data;
+}

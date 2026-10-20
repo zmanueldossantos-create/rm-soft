@@ -20,6 +20,7 @@ from app.schemas.company_settings import CompanyContactUpdateRequest, CompanyCon
 from app.schemas.admin import BankAccountResponse
 from app.services.company_service import list_bank_accounts, add_bank_account, update_bank_account, toggle_bank_account, BankAccountNotFoundError
 from app.schemas.admin import BankAccountInput
+from app.services.setup_checklist_service import get_setup_checklist
 
 router = APIRouter(prefix="/api/v1/company", tags=["company"])
 
@@ -40,6 +41,15 @@ async def get_my_company_bank_accounts(
 ):
     """Read-only - GESTOR (and CAIXA, needed for the Caixa screen's FT payment block) see their own company's bank accounts; management stays SUPER_ADMIN-only."""
     return await list_bank_accounts(db, current_user.company_id)
+
+
+@router.get("/me/setup")
+async def get_my_company_setup(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("company:manage")),
+):
+    """Configuração inicial: the set-up steps of the caller's company, each read from the real data."""
+    return await get_setup_checklist(db, current_user.company_id)
 
 
 @router.get("/me", response_model=CompanyContactResponse)
