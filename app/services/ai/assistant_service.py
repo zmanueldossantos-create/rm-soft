@@ -11,11 +11,15 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.ai_conversation import AiConversation, AiMessage
+from app.models.ai_pending_action import AiPendingAction
 from app.models.company import Company
 from app.models.company_ai_settings import CompanyAiSettings
 from app.models.user import User
 from app.services.ai import provider_client
 from app.services.ai.provider_client import AiProviderError
+from app.services.ai.actions import (
+    ActionContext, ActionError, action_tools_for, decide_action, is_action_tool, run_action_tool,
+)
 from app.services.ai.tools import run_tool, tools_for
 from app.services.ai_settings_service import AiSettingsError, get_company_ai, platform_ai_credentials
 from app.services.company_module_service import list_company_modules
@@ -52,24 +56,32 @@ async def assistant_status(db: AsyncSession, company_id: uuid.UUID) -> dict:
             "used": await questions_this_month(db, company_id), "limit": settings["effective_monthly_limit"]}
 
 
-async def _system_prompt(db: AsyncSession, company_id: uuid.UUID, user: User) -> str:
+async def _system_prompt(db: AsyncSession, company_id: uuid.UUID, user_name: str) -> str:
     company = await db.get(Company, company_id)
     modules = ", ".join(m.name for m in await list_company_modules(db, company_id)) or "-"
     today = datetime.now(LUANDA).date()
     return (
         "És o assistente do RM SOFT, um ERP angolano (faturação certificada AGT, caixa, stock, compras, tesouraria). "
-        f"Falas com {user.full_name}, da empresa «{company.name}» (NIF {company.nif}). Módulos da empresa: {modules}. "
+        f"Falas com {user_name}, da empresa «{company.name}» (NIF {company.nif}). Módulos da empresa: {modules}. "
         f"Hoje é {today.isoformat()} ({_weekday(today)}), em Luanda.\n\n"
         "Regras:\n"
         "- Responde na língua da pergunta (português de Portugal por omissão).\n"
         "- Para qualquer número da empresa (stock, vendas, dívidas, caixas, documentos) usa SEMPRE as ferramentas; "
         "nunca inventes nem estimes valores. Se nenhuma ferramenta responde, diz claramente que ainda não sabes fazer isso.\n"
         "- Só tens acesso aos dados desta empresa. Não respondas sobre outras empresas.\n"
-        "- Ainda não podes emitir, alterar nem enviar documentos: se te pedirem, explica que essa função virá em breve "
-        "e indica o ecrã da aplicação onde se faz.\n"
+        "- Podes preparar Faturas, Pró-formas e Orçamentos (preparar_documento) e enviar documentos por email "
+        "(enviar_documento_email). Se a ferramenta responde «a_aguardar_confirmacao», diz que o documento está pronto e "
+        "que o utilizador o confirma com o botão Confirmar (ou respondendo SIM); nunca digas que foi emitido ou enviado "
+        "antes de a ferramenta responder «feito». Fatura/Recibo, notas de crédito, recibos e alterações de dados "
+        "fazem-se nos ecrãs da aplicação: indica qual.\n"
         "- Valores em kwanzas no formato 1 234,56 Kz; datas no formato DD/MM/AAAA.\n"
         "- Sê curto e claro: primeiro a resposta, depois o detalhe útil. Podes usar listas com «- » e **negrito**.\n"
-        "- Para «ontem», «esta semana», «este mês», calcula as datas a partir de hoje."
+        "- Para «ontem», «esta semana», «este mês», calcula as datas a partir de hoje.\n"
+        "- Para indicar um ecrã, usa só estes caminhos do menu (nunca inventes outro): Vendas → Caixa, Faturas, Clientes; "
+        "Catálogo → Produtos, Serviços, Matéria-prima; Stock → Armazéns e Stock, Histórico de Movimentos, Fornecedores, "
+        "Faturas de compra, Pagamentos a fornecedores, Guias; Finanças → Tesouraria, Períodos/Exercício, Apuramento do "
+        "IVA, SAF-T; Administração → Empresa (Definições da Empresa: dados, atividades, séries, email, assistente), "
+        "Utilizadores, Permissões. Alguns só aparecem conforme os módulos e os direitos do utilizador."
     )
 
 
@@ -118,18 +130,42 @@ async def ask(db: AsyncSession, user: User, question: str, conversation_id: uuid
     except AiSettingsError as e:
         raise AssistantError(str(e))
 
+    # plain ids from here: a refused action rolls the session back and expires the loaded objects
+    user_id, role, user_name = user.id, user.role.value, user.full_name
     asked_at = datetime.now(LUANDA)
-    conversation = await get_conversation(db, company_id, user.id, conversation_id) if conversation_id else None
+    conversation = await get_conversation(db, company_id, user_id, conversation_id) if conversation_id else None
+    conversation_id = conversation.id if conversation is not None else None
+
+    # SIM / NÃO answering the action waiting in this conversation: done without the AI
+    answer_to_action = _yes_no(question)
+    if conversation_id is not None and answer_to_action is not None:
+        waiting = (await db.execute(select(AiPendingAction).where(
+            AiPendingAction.conversation_id == conversation_id, AiPendingAction.user_id == user_id,
+            AiPendingAction.status == "PENDENTE").order_by(AiPendingAction.created_at.desc()))).scalars().first()
+        if waiting is not None:
+            db.add(AiMessage(conversation_id=conversation_id, company_id=company_id, role="user", content=question,
+                             created_at=asked_at))
+            await db.commit()
+            try:
+                action, _ = await decide_action(db, company_id, user_id, waiting.id, answer_to_action)
+            except ActionError as e:
+                raise AssistantError(str(e))
+            message = (await db.execute(select(AiMessage).where(AiMessage.conversation_id == conversation_id)
+                                        .order_by(AiMessage.created_at.desc()).limit(1))).scalar_one()
+            return await get_conversation(db, company_id, user_id, conversation_id), message
+
     transcript: list[dict] = []
-    if conversation is not None:
-        earlier = (await db.execute(select(AiMessage).where(AiMessage.conversation_id == conversation.id)
+    if conversation_id is not None:
+        earlier = (await db.execute(select(AiMessage).where(AiMessage.conversation_id == conversation_id)
                                     .order_by(AiMessage.created_at.desc(), AiMessage.role).limit(HISTORY_MESSAGES))).scalars().all()
         transcript = [{"role": m.role, "content": m.content} for m in reversed(earlier)]
     transcript.append({"role": "user", "content": question})
 
-    permissions = set(await list_my_permissions(db, company_id, user.role.value))
-    tools = tools_for(permissions)
-    system = await _system_prompt(db, company_id, user)
+    permissions = set(await list_my_permissions(db, company_id, role))
+    tools = tools_for(permissions) + action_tools_for(permissions)
+    ctx = ActionContext(company_id=company_id, user_id=user_id, permissions=permissions, conversation_id=conversation_id,
+                        confirm_documents=settings.confirm_documents, confirm_sends=settings.confirm_sends)
+    system = await _system_prompt(db, company_id, user_name)
     used: list[str] = []
     answer = ""
     try:
@@ -141,7 +177,10 @@ async def ask(db: AsyncSession, user: User, question: str, conversation_id: uuid
             transcript.append({"role": "assistant", "content": reply.text, "tool_calls": reply.tool_calls, "extra": reply.extra})
             for call in reply.tool_calls:
                 used.append(call["name"])
-                result = await run_tool(db, company_id, permissions, call["name"], call["arguments"])
+                if is_action_tool(call["name"]):
+                    result = await run_action_tool(db, ctx, call["name"], call["arguments"])
+                else:
+                    result = await run_tool(db, company_id, permissions, call["name"], call["arguments"])
                 transcript.append({"role": "tool", "tool_call_id": call["id"], "name": call["name"], "content": result})
         else:
             answer = ""
@@ -152,16 +191,34 @@ async def ask(db: AsyncSession, user: User, question: str, conversation_id: uuid
         await db.rollback()
         raise AssistantError("O assistente não conseguiu responder - reformule a pergunta")
 
-    if conversation is None:
-        conversation = AiConversation(company_id=company_id, user_id=user.id, title=question[:120], channel=channel)
+    if conversation_id is None:
+        conversation = AiConversation(company_id=company_id, user_id=user_id, title=question[:120], channel=channel)
         db.add(conversation)
         await db.flush()
-    db.add(AiMessage(conversation_id=conversation.id, company_id=company_id, role="user", content=question, created_at=asked_at))
-    message = AiMessage(conversation_id=conversation.id, company_id=company_id, role="assistant", content=answer,
-                        tools_used=sorted(set(used)) or None, created_at=max(datetime.now(LUANDA), asked_at))
+        conversation_id = conversation.id
+    else:
+        conversation = await get_conversation(db, company_id, user_id, conversation_id)
+    for action_id in ctx.actions:  # the actions prepared before the conversation existed now belong to it
+        action = await db.get(AiPendingAction, action_id)
+        if action is not None and action.conversation_id is None:
+            action.conversation_id = conversation_id
+    db.add(AiMessage(conversation_id=conversation_id, company_id=company_id, role="user", content=question, created_at=asked_at))
+    message = AiMessage(conversation_id=conversation_id, company_id=company_id, role="assistant", content=answer,
+                        tools_used=sorted(set(used)) or None, created_at=max(datetime.now(LUANDA), asked_at),
+                        action_id=ctx.actions[-1] if ctx.actions else None)
     db.add(message)
     conversation.updated_at = datetime.now(LUANDA)
     await db.commit()
     await db.refresh(conversation)
     await db.refresh(message)
     return conversation, message
+
+
+def _yes_no(text: str) -> bool | None:
+    """SIM -> True, NÃO -> False, anything else None (a real question for the AI)."""
+    word = text.strip().lower().rstrip(".!")
+    if word in ("sim", "s", "confirmo", "confirmar", "confirma", "ok", "yes", "oui"):
+        return True
+    if word in ("não", "nao", "n", "cancelar", "cancela", "cancelo", "no", "non"):
+        return False
+    return None

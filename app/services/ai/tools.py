@@ -274,6 +274,36 @@ async def caixas(db: AsyncSession, company_id: uuid.UUID, arguments: dict) -> di
     }
 
 
+async def consultar_clientes(db: AsyncSession, company_id: uuid.UUID, arguments: dict) -> dict:
+    from app.services.invoice_service import attach_amount_due
+    search = " ".join(str(arguments.get("pesquisa") or "").split())
+    query = select(Customer).where(Customer.company_id == company_id)
+    if search:
+        pattern = f"%{search}%"
+        query = query.where(or_(Customer.name.ilike(pattern), Customer.nif == search, Customer.customer_code.ilike(pattern),
+                                Customer.email.ilike(pattern), Customer.phone_number.ilike(pattern)))
+    total = (await db.execute(select(func.count()).select_from(query.subquery()))).scalar_one()
+    customers = (await db.execute(query.order_by(Customer.is_active.desc(), Customer.name).limit(30))).scalars().all()
+    # what each one still owes (its open Faturas)
+    due: dict = {}
+    if customers:
+        accepts = {code for code, ok in (await db.execute(select(DocumentType.code, DocumentType.accepts_receipt))).all() if ok}
+        types = [InvoiceType(t) for t, code in DOC_CODE_BY_INVOICE_TYPE.items() if code in accepts]
+        invoices = (await db.execute(select(Invoice).where(
+            Invoice.company_id == company_id, Invoice.customer_id.in_([c.id for c in customers]),
+            Invoice.invoice_type.in_(types), Invoice.document_status != DocumentLifecycleStatus.ANULADO))).scalars().all()
+        await attach_amount_due(db, invoices)
+        for inv in invoices:
+            due[inv.customer_id] = due.get(inv.customer_id, 0.0) + inv.amount_due
+    return {
+        "total_encontrados": total, "mostrados": len(customers),
+        "clientes": [{"codigo": c.customer_code, "nome": c.name, "nif": c.nif, "telefone": c.phone_number, "email": c.email,
+                      "cidade": c.city, "ativo": c.is_active, "consumidor_final": c.is_final_consumer,
+                      "entidade_comparticipante": bool(getattr(c, "is_insurer", False)),
+                      "por_receber": _money(due.get(c.id))} for c in customers],
+    }
+
+
 async def consultar_documento(db: AsyncSession, company_id: uuid.UUID, arguments: dict) -> dict:
     from app.services.invoice_service import attach_amount_due
     text = " ".join(str(arguments.get("numero") or "").upper().split())
@@ -341,6 +371,10 @@ TOOLS = [
     ("caixas", "tesouraria:overview", caixas,
      "As caixas: abertas ou fechadas, quem abriu, e o numerário em cada gaveta.",
      {"type": "object", "properties": {}}),
+    ("consultar_clientes", "customers:view", consultar_clientes,
+     "Os clientes da empresa (todos, ou por nome, NIF, código, email ou telefone): contactos e o que cada um deve. "
+     "Mostra no máximo 30 - com mais, indica o total e sugere uma pesquisa.",
+     {"type": "object", "properties": {"pesquisa": {"type": "string", "description": "Parte do nome, NIF... (vazio = todos)"}}}),
     ("consultar_documento", "invoices:view", consultar_documento,
      "Um documento pelo seu número (ex.: FT2026/2, FR2026/6): cliente, linhas, totais, pagamentos e o que falta receber.",
      {"type": "object", "properties": {"numero": {"type": "string", "description": "Número, ex.: FT2026/2"}},

@@ -75,6 +75,11 @@ async def test_the_tools_answer_for_the_company_only(db, company_with_essentials
     assert document["cliente"] == "Hotel Presidente" and document["por_receber"] == float(ft.total)
     assert document["linhas"][0]["artigo"] == "Panadol 500"
     assert "caixas" in json.loads(await call("caixas"))
+    clients = json.loads(await tools.run_tool(db, company_id, EVERYTHING | {"customers:view"}, "consultar_clientes", {}))
+    presidente = next(c for c in clients["clientes"] if c["nome"] == "Hotel Presidente")
+    assert (presidente["nif"], presidente["por_receber"]) == ("5417000001", float(ft.total))
+    found = json.loads(await tools.run_tool(db, company_id, {"customers:view"}, "consultar_clientes", {"pesquisa": "presid"}))
+    assert [c["nome"] for c in found["clientes"]] == ["Hotel Presidente"]
     assert json.loads(await call("fornecedores_a_pagar"))["total_a_pagar"] == 0.0
 
     # refused arguments come back as an error for the AI, never an exception
@@ -93,6 +98,8 @@ async def test_the_tools_answer_for_the_company_only(db, company_with_essentials
     assert json.loads(await other_call("resumo_vendas", data_inicio=TODAY.isoformat(), data_fim=TODAY.isoformat()))[
         "documentos_de_venda"] == 0
     assert json.loads(await other_call("clientes_em_divida"))["clientes"] == []
+    assert json.loads(await tools.run_tool(db, other_id, {"customers:view"}, "consultar_clientes", {"pesquisa": "Presidente"}))[
+        "clientes"] == []
     assert json.loads(await other_call("alertas_stock"))["lotes_a_expirar"] == []
     assert "nota" in json.loads(await other_call("consultar_documento", numero=f"{ft.series}/{ft.number}"))
 

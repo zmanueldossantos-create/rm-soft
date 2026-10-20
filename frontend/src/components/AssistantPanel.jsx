@@ -1,7 +1,28 @@
 import { useState, useEffect, useRef } from 'react';
-import { Bot, X, Send, Loader2, Plus, MessageSquare, ChevronDown } from 'lucide-react';
-import { listAiConversations, getAiMessages, askAssistant } from '../api/ai';
+import { Bot, X, Send, Loader2, Plus, MessageSquare, ChevronDown, Check, FileText, Mail } from 'lucide-react';
+import { listAiConversations, getAiMessages, askAssistant, decideAiAction } from '../api/ai';
 import { extractErrorMessage } from '../utils/errors';
+import { formatKz } from '../utils/format';
+
+// What survives a page reload, in this browser only: the conversation in progress (the panel reopens on it).
+const STORED_CONVERSATION = 'rm.assistant.conversation';
+
+export function readStored(key) {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+export function writeStored(key, value) {
+  try {
+    if (value) window.localStorage.setItem(key, value);
+    else window.localStorage.removeItem(key);
+  } catch {
+    // storage refused (private window): nothing is remembered, nothing breaks
+  }
+}
 
 const SUGGESTIONS = [
   'Quanto vendi hoje?',
@@ -71,6 +92,79 @@ function Answer({ text }) {
   return <div className="flex flex-col gap-1.5">{blocks}</div>;
 }
 
+function kz(value) {
+  return formatKz(value) + ' Kz';
+}
+
+function day(iso) {
+  return iso ? iso.split('-').reverse().join('/') : '';
+}
+
+const ACTION_STATUS = {
+  PENDENTE: ['A aguardar confirmação', 'text-amber-500 [.light_&]:text-amber-700'],
+  FEITA: ['Feito', 'text-success'],
+  CANCELADA: ['Cancelado', 'text-text-muted'],
+  EXPIRADA: ['Expirado', 'text-text-muted'],
+  FALHOU: ['Falhou', 'text-danger'],
+};
+
+// What the assistant prepared, shown before anything is done: the document (lines, VAT, total) or the email, with
+// Confirmar / Cancelar while it waits. The application does it - never the AI.
+function ActionCard({ action, onDecide, deciding }) {
+  const s = action.summary || {};
+  const expired = action.status === 'PENDENTE' && new Date(action.expires_at) < new Date();
+  const [label, color] = ACTION_STATUS[expired ? 'EXPIRADA' : action.status] || [action.status, 'text-text-muted'];
+  const Icon = action.kind === 'SEND_EMAIL' ? Mail : FileText;
+  return (
+    <div className="mt-2 border border-border rounded-lg bg-bg-elevated overflow-hidden text-[12px]">
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
+        <Icon size={14} className="text-accent shrink-0" />
+        <span className="font-semibold text-text-primary flex-1 min-w-0 truncate">{s.titulo}</span>
+        <span className={'shrink-0 font-medium ' + color}>{label}</span>
+      </div>
+      <div className="px-3 py-2 flex flex-col gap-1.5">
+        {action.kind === 'ISSUE_DOCUMENT' ? (
+          <>
+            <p className="text-text-muted">{s.cliente}{s.nif ? ' · NIF ' + s.nif : ''} · {s.atividade}{s.receita ? ' · Receita ' + s.receita : ''}</p>
+            <table className="w-full">
+              <tbody>
+                {(s.linhas || []).map((l, i) => (
+                  <tr key={i} className="border-t border-border first:border-0">
+                    <td className="py-1 pr-2 text-text-primary">{l.artigo}</td>
+                    <td className="py-1 pr-2 text-right font-mono text-text-muted whitespace-nowrap">{l.quantidade} × {kz(l.preco)}</td>
+                    <td className="py-1 text-right font-mono text-text-primary whitespace-nowrap">{kz(l.total)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="flex justify-between font-mono text-text-muted border-t border-border pt-1.5"><span>Sem IVA {kz(s.sem_iva)} · IVA {kz(s.iva)}</span></div>
+            <div className="flex justify-between items-baseline">
+              <span className="text-text-muted">{s.validade ? 'Válido até ' + day(s.validade) : s.vencimento ? 'Vencimento ' + day(s.vencimento) : ''}</span>
+              <span className="font-mono font-semibold text-sm text-text-primary">{kz(s.total)}</span>
+            </div>
+          </>
+        ) : (
+          <p className="text-text-primary">{s.documento} · {s.cliente} · {kz(s.total)}<br /><span className="text-text-muted">Para: {s.para}</span></p>
+        )}
+        {action.status === 'FEITA' && action.result?.documento && <p className="text-success font-medium">{action.result.documento} emitido</p>}
+        {action.status === 'FALHOU' && action.result?.erro && <p className="text-danger">{action.result.erro}</p>}
+      </div>
+      {action.status === 'PENDENTE' && !expired && (
+        <div className="flex gap-2 px-3 py-2 border-t border-border">
+          <button type="button" disabled={deciding} onClick={() => onDecide(action, true)}
+            className="flex-1 flex items-center justify-center gap-1.5 bg-accent hover:bg-accent-hover text-white font-semibold rounded-md py-2 cursor-pointer disabled:opacity-50">
+            {deciding ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}Confirmar
+          </button>
+          <button type="button" disabled={deciding} onClick={() => onDecide(action, false)}
+            className="flex-1 border border-border hover:border-danger hover:text-danger text-text-primary rounded-md py-2 cursor-pointer disabled:opacity-50">
+            Cancelar
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // The AI assistant, in a panel on the right: the user's conversations, a question, the answer. The company and the
 // permissions are the server's business - the panel only shows what comes back.
 export default function AssistantPanel({ open, onClose, status, onStatus }) {
@@ -81,14 +175,26 @@ export default function AssistantPanel({ open, onClose, status, onStatus }) {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [decidingId, setDecidingId] = useState(null);
   const endRef = useRef(null);
   const inputRef = useRef(null);
+  const restored = useRef(false);
 
   useEffect(() => {
     if (!open) return;
     listAiConversations().then(setConversations).catch(() => setConversations([]));
     setTimeout(() => inputRef.current?.focus(), 50);
+    // the first opening after a reload goes back to the conversation in progress
+    if (!restored.current) {
+      restored.current = true;
+      const stored = readStored(STORED_CONVERSATION);
+      if (stored) getAiMessages(stored).then((m) => { setMessages(m); setConversationId(stored); }).catch(() => writeStored(STORED_CONVERSATION, null));
+    }
   }, [open]);
+
+  useEffect(() => {
+    if (restored.current) writeStored(STORED_CONVERSATION, conversationId);
+  }, [conversationId]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -124,6 +230,7 @@ export default function AssistantPanel({ open, onClose, status, onStatus }) {
       const result = await askAssistant(message, conversationId);
       setMessages((prev) => [...prev.filter((m) => m.id !== 'pending'), { id: 'q' + result.message.id, role: 'user', content: message }, result.message]);
       setConversationId(result.conversation.id);
+      getAiMessages(result.conversation.id).then(setMessages).catch(() => {}); // a SIM may have settled an earlier card
       onStatus({ ...status, used: result.used, limit: result.limit });
       if (!conversationId) listAiConversations().then(setConversations).catch(() => {});
     } catch (err) {
@@ -133,6 +240,19 @@ export default function AssistantPanel({ open, onClose, status, onStatus }) {
     } finally {
       setSending(false);
       setTimeout(() => inputRef.current?.focus(), 50);
+    }
+  }
+
+  async function decide(action, confirm) {
+    setError('');
+    setDecidingId(action.id);
+    try {
+      await decideAiAction(action.id, confirm);
+    } catch (err) {
+      setError(extractErrorMessage(err, 'Não foi possível concluir'));
+    } finally {
+      setDecidingId(null);
+      if (conversationId) getAiMessages(conversationId).then(setMessages).catch(() => {});
     }
   }
 
@@ -189,7 +309,7 @@ export default function AssistantPanel({ open, onClose, status, onStatus }) {
       <div className="flex-1 overflow-y-auto scrollbar-thin px-4 py-4 flex flex-col gap-3">
         {messages.length === 0 && !sending && (
           <div className="flex flex-col gap-3 mt-2">
-            <p className="text-[13px] text-text-muted">Pergunte sobre o stock, as vendas, as dívidas de clientes e fornecedores, as caixas ou um documento.</p>
+            <p className="text-[13px] text-text-muted">Pergunte sobre o stock, as vendas, as dívidas de clientes e fornecedores, as caixas ou um documento. Também posso preparar faturas, pró-formas e orçamentos, e enviar documentos por email.</p>
             <div className="flex flex-col gap-2">
               {SUGGESTIONS.map((s) => (
                 <button key={s} type="button" disabled={limitReached || !status.available} onClick={() => send(s)}
@@ -205,6 +325,7 @@ export default function AssistantPanel({ open, onClose, status, onStatus }) {
             <div className={'text-[13px] leading-relaxed rounded-lg px-3.5 py-2.5 ' + (m.role === 'user' ? 'bg-accent text-white whitespace-pre-wrap' : 'bg-bg-inset text-text-primary border border-border')}>
               {m.role === 'user' ? m.content : <Answer text={m.content} />}
             </div>
+            {m.action && <ActionCard action={m.action} onDecide={decide} deciding={decidingId === m.action.id} />}
           </div>
         ))}
         {sending && (

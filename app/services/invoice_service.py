@@ -1615,8 +1615,10 @@ async def create_pro_forma(
     discount_global_percent: float = 0,
     invoice_type: str = "PRO_FORMA",
     valid_until: date | None = None,
+    commit: bool = True,
 ) -> Invoice:
     """
+    commit=False: only flushed - the caller commits or rolls back (the AI assistant's preview).
     invoice_type ORCAMENTO: an Orçamento (OR) - the same working document, addressed to a customer (mandatory) and
     valid until a date (30 days when not given), after which it is no longer converted into an invoice.
 
@@ -1823,6 +1825,9 @@ async def create_pro_forma(
         line.invoice_id = pro_forma.id
         db.add(line)
 
+    if not commit:
+        await db.flush()
+        return pro_forma
     await db.commit()
     await db.refresh(pro_forma)
 

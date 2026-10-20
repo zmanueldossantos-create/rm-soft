@@ -10,7 +10,7 @@ import { getMyPermissions } from '../api/permissions';
 import { getPharmacyContext } from '../api/pharmacy';
 import { useCan } from '../utils/permissions';
 import Footer from './Footer';
-import AssistantPanel from './AssistantPanel';
+import AssistantPanel, { readStored, writeStored } from './AssistantPanel';
 import { getAssistantStatus } from '../api/ai';
 
 function NavLink({ to, icon: Icon, label, active }) {
@@ -128,7 +128,10 @@ export default function Layout() {
   // The AI assistant: its button only for a role allowed to use it, in a company where it is switched on
   const canUseAssistant = can('assistant:use');
   const [assistantStatus, setAssistantStatus] = useState(null);
-  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [assistantOpen, setAssistantOpen] = useState(() => readStored('rm.assistant.open') === '1'); // reopened after a reload
+  useEffect(() => {
+    writeStored('rm.assistant.open', assistantOpen ? '1' : null);
+  }, [assistantOpen]);
   useEffect(() => {
     if (!canUseAssistant || user?.role === 'SUPER_ADMIN') {
       setAssistantStatus(null);

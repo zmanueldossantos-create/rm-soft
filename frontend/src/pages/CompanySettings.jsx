@@ -1,6 +1,6 @@
 import { API_ORIGIN } from '../api/config';
 import { useState, useEffect, useRef } from 'react';
-import { Building2, Loader2, Save, Lock, Image, Upload, Store, Plus, Pencil, Landmark, X, Check, Trash2, FileStack, Sparkles, ChevronDown, CreditCard, Link2, Unlink, Users, Bot } from 'lucide-react';
+import { Building2, Loader2, Save, Lock, Image, Upload, Store, Plus, Pencil, Landmark, X, Check, Trash2, FileStack, Sparkles, ChevronDown, CreditCard, Link2, Unlink, Users, Bot, Mail } from 'lucide-react';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
 import { getMyCompany, updateMyCompanyContact, uploadMyCompanyLogo, removeMyCompanyLogo, getMyCompanyBankAccounts, addMyCompanyBankAccount, updateMyCompanyBankAccount, toggleMyCompanyBankAccountStatus } from '../api/company';
@@ -14,6 +14,7 @@ import { useCan } from '../utils/permissions';
 import { getPharmacyContext } from '../api/pharmacy';
 import { getMyCompanyAi } from '../api/ai';
 import AiCompanySettingsTab from '../components/AiCompanySettingsTab';
+import EmailSettingsTab from '../components/EmailSettingsTab';
 import { listUsers } from '../api/users';
 import { listCashPointAssociations, assignUserToCashPoint, unassignUserFromCashPoint } from '../api/tesouraria';
 
@@ -705,6 +706,7 @@ export default function CompanySettings() {
           ['estabelecimentos', 'Estabelecimentos', Store],
           ['bancarias', 'Coordenadas Bancárias', Landmark],
           ['series', 'Séries de Facturação', FileStack],
+          ['email', 'Email', Mail],
           ...(aiInfo?.ai_enabled ? [['ia', 'Assistente IA', Bot]] : []),
         ].map(([key, label, Icon]) => (
           <button
@@ -1076,6 +1078,8 @@ export default function CompanySettings() {
           )}
         </div>
       )}
+
+      {activeTab === 'email' && <EmailSettingsTab canManage={can('company:manage')} />}
 
       {activeTab === 'ia' && aiInfo?.ai_enabled && (
         <AiCompanySettingsTab info={aiInfo} onChange={setAiInfo} canManage={can('company:manage')} />

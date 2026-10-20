@@ -88,3 +88,5 @@ from app.models.goods_movement import GoodsMovement, GoodsMovementLine  # noqa: 
 from app.models.supplier_payment import SupplierPayment, SupplierPaymentAllocation  # noqa: E402,F401 - supplier payments (conta corrente)
 from app.models.company_ai_settings import CompanyAiSettings  # noqa: E402,F401 - the AI assistant per company
 from app.models.ai_conversation import AiConversation, AiMessage  # noqa: E402,F401 - the AI assistant's conversations
+from app.models.ai_pending_action import AiPendingAction  # noqa: E402,F401 - actions prepared by the AI assistant
+from app.models.company_email_settings import CompanyEmailSettings  # noqa: E402,F401 - the company's email account

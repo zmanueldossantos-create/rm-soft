@@ -61,3 +61,27 @@ export async function askAssistant(message, conversationId) {
   const res = await apiClient.post('/ai/ask', { message, conversation_id: conversationId || null }, { timeout: 180000 });
   return res.data;
 }
+
+// confirm: true = Confirmar, false = Cancelar
+export async function decideAiAction(actionId, confirm) {
+  const res = await apiClient.post('/ai/actions/' + actionId + '/' + (confirm ? 'confirm' : 'cancel'), null, { timeout: 120000 });
+  return res.data;
+}
+
+// ---------- The company's email account
+
+export async function getEmailSettings() {
+  const res = await apiClient.get('/company/me/email-settings');
+  return res.data;
+}
+
+// password: null = unchanged, '' = removed
+export async function updateEmailSettings(settings) {
+  const res = await apiClient.put('/company/me/email-settings', settings);
+  return res.data;
+}
+
+export async function testEmailSettings(to) {
+  const res = await apiClient.post('/company/me/email-settings/test', { to }, { timeout: 60000 });
+  return res.data;
+}

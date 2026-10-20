@@ -33,4 +33,6 @@ class AiMessage(Base):
     role: Mapped[str] = mapped_column(String(10), nullable=False)  # user | assistant
     content: Mapped[str] = mapped_column(Text, nullable=False)
     tools_used: Mapped[list | None] = mapped_column(JSONB, nullable=True)  # the tools behind an answer, for the record
+    # the action this answer prepared (its card, Confirmar / Cancelar)
+    action_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("ai_pending_actions.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)

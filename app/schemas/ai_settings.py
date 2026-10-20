@@ -71,12 +71,25 @@ class AskRequest(BaseModel):
     conversation_id: uuid.UUID | None = None
 
 
+class AiActionResponse(BaseModel):
+    id: uuid.UUID
+    kind: str
+    summary: dict
+    status: str
+    result: dict | None = None
+    expires_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class AiMessageResponse(BaseModel):
     id: uuid.UUID
     role: str
     content: str
     tools_used: list[str] | None = None
     created_at: datetime
+    action: AiActionResponse | None = None  # attached: the card of the action this answer prepared
 
     class Config:
         from_attributes = True
@@ -97,3 +110,36 @@ class AskResponse(BaseModel):
     message: AiMessageResponse
     used: int
     limit: int
+
+
+class ActionDecisionResponse(BaseModel):
+    action: AiActionResponse
+    message: str
+
+
+class EmailSettingsResponse(BaseModel):
+    configured: bool
+    smtp_host: str
+    smtp_port: int
+    security: str
+    username: str
+    from_email: str
+    from_name: str
+    has_password: bool
+    password_hint: str | None
+    is_active: bool
+
+
+class EmailSettingsRequest(BaseModel):
+    smtp_host: str
+    smtp_port: int = 587
+    security: str = "STARTTLS"
+    username: str | None = None
+    password: str | None = None  # None = unchanged, "" = removed
+    from_email: str
+    from_name: str | None = None
+    is_active: bool = True
+
+
+class EmailTestRequest(BaseModel):
+    to: str
