@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { ChefHat, History as KitchenHistoryIcon } from 'lucide-react';
 import { Link, useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { createPortal } from 'react-dom';
-import { Building2, LogOut, LayoutDashboard, Sun, Moon, Package, Users, Calendar, Receipt, Settings, Package2, UserCog, History, FileText, Landmark, LayoutGrid, Store, Wheat, Factory, Wallet, SlidersHorizontal, Tags, Wrench, ChevronDown, Cog, Plus, ArrowLeftRight, Calculator, ClipboardList, Gauge, PiggyBank, CreditCard, Boxes, CalendarClock, Wallet2, PackageMinus, Truck, ShieldCheck, FileInput, Send, HandCoins, Bot } from 'lucide-react';
+import { Building2, LogOut, LayoutDashboard, Sun, Moon, Package, Users, Calendar, Receipt, Settings, Package2, UserCog, History, FileText, Landmark, LayoutGrid, Store, Wheat, Factory, Wallet, SlidersHorizontal, Tags, Wrench, ChevronDown, Cog, Plus, ArrowLeftRight, Calculator, ClipboardList, Gauge, PiggyBank, CreditCard, Boxes, CalendarClock, Wallet2, PackageMinus, Truck, ShieldCheck, FileInput, Send, HandCoins, Bot, HelpCircle } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useThemeStore } from '../store/themeStore';
 import { getCurrentPeriod } from '../api/fiscal';
@@ -11,7 +11,24 @@ import { getPharmacyContext } from '../api/pharmacy';
 import { useCan } from '../utils/permissions';
 import Footer from './Footer';
 import AssistantPanel, { readStored, writeStored } from './AssistantPanel';
+import HelpPanel from './HelpPanel';
 import { getAssistantStatus } from '../api/ai';
+
+// A square icon button of the top bar, its name shown below it on hover (keeps the bar narrow).
+function IconButton({ icon: Icon, label, active, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      aria-label={label}
+      className={'group relative flex items-center justify-center w-9 h-9 border rounded-md transition-colors cursor-pointer ' + (active ? 'border-accent text-accent bg-accent/10' : 'border-border hover:border-accent text-text-primary')}
+    >
+      <Icon size={16} />
+      <span className="pointer-events-none absolute top-full mt-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-bg-elevated border border-border px-2.5 py-1 text-[12px] text-text-primary shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-50">
+        {label}
+      </span>
+    </button>
+  );
+}
 
 function NavLink({ to, icon: Icon, label, active }) {
   return (
@@ -132,6 +149,13 @@ export default function Layout() {
   useEffect(() => {
     writeStored('rm.assistant.open', assistantOpen ? '1' : null);
   }, [assistantOpen]);
+  // The Ajuda panel: same place as the assistant's, so opening one closes the other
+  const [helpOpen, setHelpOpen] = useState(() => readStored('rm.help.open') === '1' && readStored('rm.assistant.open') !== '1');
+  useEffect(() => {
+    writeStored('rm.help.open', helpOpen ? '1' : null);
+  }, [helpOpen]);
+  const toggleHelp = () => { setHelpOpen((v) => !v); setAssistantOpen(false); };
+  const toggleAssistant = () => { setAssistantOpen((v) => !v); setHelpOpen(false); };
   useEffect(() => {
     if (!canUseAssistant || user?.role === 'SUPER_ADMIN') {
       setAssistantStatus(null);
@@ -295,16 +319,11 @@ export default function Layout() {
               {periodLabel}{partialLabel && <span className="ml-1.5 text-amber-500">· {partialLabel} (parcial)</span>}
             </span>
           )}
+          {user?.role && user.role !== 'SUPER_ADMIN' && (
+            <IconButton icon={HelpCircle} label="Ajuda" active={helpOpen} onClick={toggleHelp} />
+          )}
           {assistantStatus?.enabled && (
-            <button
-              onClick={() => setAssistantOpen((v) => !v)}
-              aria-label="Assistente IA"
-              title="Assistente IA"
-              className={'flex items-center gap-1.5 h-9 px-2.5 border rounded-md transition-colors cursor-pointer ' + (assistantOpen ? 'border-accent text-accent bg-accent/10' : 'border-border hover:border-accent text-text-primary')}
-            >
-              <Bot size={16} />
-              <span className="hidden lg:inline text-[12px] font-semibold uppercase tracking-wide">Assistente</span>
-            </button>
+            <IconButton icon={Bot} label="Assistente IA" active={assistantOpen} onClick={toggleAssistant} />
           )}
           <button
             onClick={toggleTheme}
@@ -327,6 +346,8 @@ export default function Layout() {
       <div className="pt-14 pb-11 min-h-screen">
         <Outlet />
       </div>
+
+      {user?.role && user.role !== 'SUPER_ADMIN' && <HelpPanel open={helpOpen} onClose={() => setHelpOpen(false)} />}
 
       {assistantStatus?.enabled && (
         <AssistantPanel open={assistantOpen} onClose={() => setAssistantOpen(false)} status={assistantStatus} onStatus={setAssistantStatus} />

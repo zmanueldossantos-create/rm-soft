@@ -35,7 +35,8 @@ function Row({ item, readOnly, onGo }) {
   );
 }
 
-export default function SetupChecklist({ data, readOnly = false }) {
+// compact = one column (the narrow Ajuda panel)
+export default function SetupChecklist({ data, readOnly = false, compact = false }) {
   const navigate = useNavigate();
   const required = data.items.filter((i) => i.required);
   const recommended = data.items.filter((i) => !i.required);
@@ -54,7 +55,7 @@ export default function SetupChecklist({ data, readOnly = false }) {
           <div className={'h-full rounded-full transition-all ' + (data.complete ? 'bg-success' : 'bg-accent')} style={{ width: percent + '%' }} />
         </div>
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className={'grid grid-cols-1 gap-4' + (compact ? '' : ' lg:grid-cols-2')}>
         {[['Obrigatório', required], ['Recomendado', recommended]].map(([title, list]) => (
           <div key={title} className="border border-border rounded-md overflow-hidden">
             <p className="px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-text-muted bg-bg-inset border-b border-border">{title}</p>

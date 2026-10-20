@@ -26,6 +26,7 @@ from app.models.supplier import Supplier
 from app.models.unit_of_measure_catalog import UnitOfMeasureCatalog
 from app.models.warehouse import Warehouse
 from app.services.document_rules import DOC_CODE_BY_INVOICE_TYPE
+from app.services.help_guides import guide_as_text, search_guides, visible_guides
 
 MAX_DAYS = 400  # a period longer than about a year is refused (the answer would be too long to be useful)
 
@@ -375,6 +376,12 @@ TOOLS = [
      "Os clientes da empresa (todos, ou por nome, NIF, código, email ou telefone): contactos e o que cada um deve. "
      "Mostra no máximo 30 - com mais, indica o total e sugere uma pesquisa.",
      {"type": "object", "properties": {"pesquisa": {"type": "string", "description": "Parte do nome, NIF... (vazio = todos)"}}}),
+    # the guides the user may read (Ajuda) - run by run_tool itself, which knows his permissions and role
+    ("consultar_ajuda", "assistant:use", None,
+     "Os guias de utilização do RM SOFT: como funciona um circuito (compras, caixa, stock, fim do mês...) ou como se "
+     "usa um ecrã, com os passos e os botões. Use-o para perguntas «como faço...?», «onde...?», «para que serve...?».",
+     {"type": "object", "properties": {"pergunta": {"type": "string", "description": "O que o utilizador quer fazer, em poucas palavras e em português (ex.: fechar o período)"}},
+      "required": ["pergunta"]}),
     ("consultar_documento", "invoices:view", consultar_documento,
      "Um documento pelo seu número (ex.: FT2026/2, FR2026/6): cliente, linhas, totais, pagamentos e o que falta receber.",
      {"type": "object", "properties": {"numero": {"type": "string", "description": "Número, ex.: FT2026/2"}},
@@ -388,14 +395,25 @@ def tools_for(permissions: set[str]) -> list[dict]:
             for name, permission, _, description, parameters in TOOLS if permission in permissions]
 
 
-async def run_tool(db: AsyncSession, company_id: uuid.UUID, permissions: set[str], name: str, arguments: dict) -> str:
+def _help(permissions: set[str], role: str | None, arguments: dict) -> dict:
+    found = search_guides(visible_guides(permissions, role), str(arguments.get("pergunta") or ""))
+    if not found:
+        return {"erro": "Nenhum guia fala disso - diga ao utilizador que ainda não há guia para essa pergunta"}
+    return {"guias": [guide_as_text(g) for g in found]}
+
+
+async def run_tool(db: AsyncSession, company_id: uuid.UUID, permissions: set[str], name: str, arguments: dict,
+                   role: str | None = None) -> str:
     """Runs one tool for the signed-in user's company and returns its result as JSON text for the AI. A tool the role may
     not use, unknown or refused, answers with an error the AI can explain - never an exception."""
     entry = next((t for t in TOOLS if t[0] == name), None)
     if entry is None or entry[1] not in permissions:
         return json.dumps({"erro": "Ferramenta não disponível para este utilizador"}, ensure_ascii=False)
     try:
-        result = await entry[2](db, company_id, arguments or {})
+        if name == "consultar_ajuda":
+            result = _help(permissions, role, arguments or {})
+        else:
+            result = await entry[2](db, company_id, arguments or {})
     except ToolError as e:
         result = {"erro": str(e)}
     except (ValueError, TypeError):

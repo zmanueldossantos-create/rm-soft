@@ -82,14 +82,18 @@ async def _system_prompt(db: AsyncSession, company_id: uuid.UUID, user_name: str
         "antes de a ferramenta responder «feito». Fatura/Recibo, notas de crédito, recibos e alterações de clientes "
         "ou produtos "
         "fazem-se nos ecrãs da aplicação: indica qual.\n"
+        "- Para «como faço…?», «onde…?» ou «para que serve…?», consulta SEMPRE os guias (consultar_ajuda) e responde com "
+        "os passos e os nomes dos botões que eles dão - nunca inventes um procedimento. O utilizador encontra os mesmos "
+        "guias no botão Ajuda (ícone ?), no topo da aplicação.\n"
         "- Valores em kwanzas no formato 1 234,56 Kz; datas no formato DD/MM/AAAA.\n"
         "- Sê curto e claro: primeiro a resposta, depois o detalhe útil. Podes usar listas com «- » e **negrito**.\n"
         "- Para «ontem», «esta semana», «este mês», calcula as datas a partir de hoje.\n"
-        "- Para indicar um ecrã, usa só estes caminhos do menu (nunca inventes outro): Vendas → Caixa, Faturas, Clientes; "
-        "Catálogo → Produtos, Serviços, Matéria-prima; Stock → Armazéns e Stock, Histórico de Movimentos, Fornecedores, "
-        "Faturas de compra, Pagamentos a fornecedores, Guias; Finanças → Tesouraria, Períodos/Exercício, Apuramento do "
-        "IVA, SAF-T; Administração → Empresa (Definições da Empresa: dados, atividades, séries, email, assistente), "
-        "Utilizadores, Permissões. Alguns só aparecem conforme os módulos e os direitos do utilizador."
+        "- Para indicar um ecrã, usa só estes caminhos do menu (nunca inventes outro): Vendas → Caixa, Faturas, Clientes, "
+        "Receitas e registos, Contas Abertas, Cozinha; Catálogo → Produtos, Serviços, Matéria-prima, Produtos "
+        "configurados, Resumo de Produção; Stock → Resumo de Stock, Armazéns e Stock, Histórico de Movimentos, Consumo "
+        "Interno, Fornecedores, Faturas de compra, Pagamentos a fornecedores, Guias; Reservas → Recursos, Reservas, "
+        "Histórico; Finanças → Tesouraria, Períodos/Exercício, Apuramento do IVA, SAF-T; Administração → Empresa "
+        "(Definições da Empresa: dados, atividades, séries, email, assistente), Catálogos, Utilizadores, Permissões. Alguns só aparecem conforme os módulos e os direitos do utilizador."
     )
 
 
@@ -188,7 +192,7 @@ async def ask(db: AsyncSession, user: User, question: str, conversation_id: uuid
                 if is_action_tool(call["name"]):
                     result = await run_action_tool(db, ctx, call["name"], call["arguments"])
                 else:
-                    result = await run_tool(db, company_id, permissions, call["name"], call["arguments"])
+                    result = await run_tool(db, company_id, permissions, call["name"], call["arguments"], role=role)
                 transcript.append({"role": "tool", "tool_call_id": call["id"], "name": call["name"], "content": result})
         else:
             answer = ""
