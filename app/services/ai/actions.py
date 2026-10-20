@@ -8,6 +8,7 @@ Preparing a document runs the real creation inside a savepoint that is rolled ba
 would be issued (prices, VAT, exemptions), and every rule refuses there, before the user is asked.
 """
 import json
+import re
 import logging
 import uuid
 from dataclasses import dataclass, field
@@ -53,7 +54,9 @@ class ActionContext:
     conversation_id: uuid.UUID | None
     confirm_documents: bool
     confirm_sends: bool
+    channel: str = "APP"  # APP | TELEGRAM | WHATSAPP
     actions: list[uuid.UUID] = field(default_factory=list)  # prepared during this question
+    outbox: list[tuple[str, bytes, str]] = field(default_factory=list)  # files for the chat: (name, content, caption)
 
 
 def _money(value) -> float:
@@ -264,6 +267,92 @@ async def enviar_documento_email(db: AsyncSession, ctx: ActionContext, arguments
     return await _propose(db, ctx, "SEND_EMAIL", payload, summary, ctx.confirm_sends)
 
 
+# ---------- Creating a customer
+
+async def criar_cliente(db: AsyncSession, ctx: ActionContext, arguments: dict) -> dict:
+    """A new customer, checked as the Clientes screen does (NIF unique in the company), created on confirmation."""
+    from app.services.customer_service import CustomerAlreadyExistsError, _check_nif_available
+    from app.services.email_service import valid_email
+    if "customers:create" not in ctx.permissions:
+        raise ActionError("Não tem permissão para criar clientes")
+    name = " ".join(str(arguments.get("nome") or "").split())
+    nif = re.sub(r"\s", "", str(arguments.get("nif") or "")).upper()
+    if len(name) < 2:
+        raise ActionError("Indique o nome do cliente")
+    if not nif:
+        raise ActionError("Indique o NIF do cliente (para um particular sem NIF, use o Consumidor final)")
+    if not re.fullmatch(r"[0-9A-Z]{6,20}", nif):
+        raise ActionError(f"NIF inválido: {nif}")
+    kind = str(arguments.get("tipo") or "").upper()
+    if kind not in ("COLETIVA", "SINGULAR"):
+        kind = "SINGULAR" if len(nif) == 14 else "COLETIVA"  # a BI number (14) is a person, a 10-digit NIF a company
+    email = str(arguments.get("email") or "").strip() or None
+    if email and not valid_email(email):
+        raise ActionError(f"Email inválido: {email}")
+    phone = re.sub(r"[^\d+]", "", str(arguments.get("telefone") or "")) or None
+    if phone and not phone.startswith("+"):
+        phone = "+244" + phone if len(phone) == 9 else "+" + phone
+    try:
+        await _check_nif_available(db, ctx.company_id, nif)
+    except CustomerAlreadyExistsError as e:
+        raise ActionError(f"{e} - use o cliente existente")
+    payload = {"name": name, "nif": nif, "legal_person_type": "JURIDICA" if kind == "COLETIVA" else "FISICA",
+               "email": email, "phone_number": phone,
+               "address": str(arguments.get("morada") or "").strip() or None,
+               "city": str(arguments.get("cidade") or "").strip() or None}
+    summary = {"titulo": f"Novo cliente: {name}", "nome": name, "nif": nif,
+               "tipo": "Pessoa coletiva" if kind == "COLETIVA" else "Pessoa singular",
+               "telefone": phone, "email": email, "morada": payload["address"], "cidade": payload["city"]}
+    return await _propose(db, ctx, "CREATE_CUSTOMER", payload, summary, ctx.confirm_documents)
+
+
+# ---------- A document's PDF in the user's own chat (WhatsApp / Telegram)
+
+async def enviar_pdf_no_chat(db: AsyncSession, ctx: ActionContext, arguments: dict) -> dict:
+    """The PDF goes to the user himself, in the chat he is writing from - he forwards it if he wants: nothing leaves
+    to anybody else, so no confirmation."""
+    from app.services.invoice_pdf_service import render_invoice_pdf
+    if ctx.channel == "APP":
+        raise ActionError("No ecrã, o PDF abre-se em Faturas → o documento → A4")
+    text = " ".join(str(arguments.get("numero") or "").upper().split())
+    if "/" not in text:
+        raise ActionError("Indique o número completo do documento, por exemplo FT2026/2")
+    series, _, number = text.rpartition("/")
+    try:
+        number = int(number)
+    except ValueError:
+        raise ActionError("Número de documento inválido")
+    invoice = (await db.execute(select(Invoice).where(
+        Invoice.company_id == ctx.company_id, func.upper(Invoice.series) == series.split(" ")[-1], Invoice.number == number,
+    ))).scalars().first()
+    if invoice is None:
+        raise ActionError(f"Documento {text} não encontrado")
+    pdf, filename = await render_invoice_pdf(db, ctx.company_id, invoice.id, "a4")
+    ctx.outbox.append((filename, pdf, _reference(invoice)))
+    return {"estado": "feito", "nota": f"O PDF de {_reference(invoice)} segue nesta conversa"}
+
+
+def action_text(action: AiPendingAction) -> str:
+    """The card, for a chat: what will be done, then how to answer."""
+    s = action.summary or {}
+
+    def kz(value) -> str:
+        return f"{float(value or 0):,.2f}".replace(",", " ").replace(".", ",") + " Kz"
+    if action.kind == "CREATE_CUSTOMER":
+        lines = [f"**{s.get('titulo')}**", f"NIF {s.get('nif')} · {s.get('tipo')}"]
+        lines += [v for v in (s.get("telefone"), s.get("email"), ", ".join(x for x in (s.get("morada"), s.get("cidade")) if x)) if v]
+    elif action.kind == "ISSUE_DOCUMENT":
+        lines = [f"**{s.get('titulo')}**", f"{s.get('cliente')}" + (f" · NIF {s['nif']}" if s.get("nif") else "")
+                 + (f" · Receita {s['receita']}" if s.get("receita") else "")]
+        lines += [f"- {l['quantidade']:g} × {l['artigo']} — {kz(l['total'])}" for l in s.get("linhas", [])]
+        lines.append(f"IVA {kz(s.get('iva'))} · **Total {kz(s.get('total'))}**")
+        if s.get("validade"):
+            lines.append(f"Válido até {s['validade']}")
+    else:
+        lines = [f"**{s.get('titulo')}**", f"Para: {s.get('para')}"]
+    return "\n".join(lines) + "\n\nResponda **SIM** para confirmar ou **NÃO** para cancelar."
+
+
 # ---------- Proposing, confirming, cancelling
 
 async def _propose(db: AsyncSession, ctx: ActionContext, kind: str, payload: dict, summary: dict, confirm: bool) -> dict:
@@ -290,6 +379,14 @@ async def execute_action(db: AsyncSession, action: AiPendingAction, user_id: uui
         if action.kind == "ISSUE_DOCUMENT":
             invoice = await _issue(db, company_id, action.payload, commit=True)
             action.result = {"documento": _reference(invoice), "invoice_id": str(invoice.id), "total": _money(invoice.total)}
+        elif action.kind == "CREATE_CUSTOMER":
+            from app.services.customer_service import create_customer, suggest_next_customer_code
+            p = action.payload
+            customer = await create_customer(
+                db, company_id, p["name"], p["nif"], email=p.get("email"), phone_number=p.get("phone_number"),
+                address=p.get("address"), city=p.get("city"), legal_person_type=p["legal_person_type"],
+                customer_code=await suggest_next_customer_code(db, company_id))
+            action.result = {"cliente": customer.name, "codigo": customer.customer_code, "customer_id": str(customer.id)}
         elif action.kind == "SEND_EMAIL":
             pdf, filename = await render_invoice_pdf(db, company_id, uuid.UUID(action.payload["invoice_id"]), "a4")
             await send_email(db, company_id, action.payload["to"], action.payload["subject"], action.payload["body"],
@@ -361,6 +458,8 @@ def outcome_text(action: AiPendingAction) -> str:
         return "Ação cancelada - nada foi feito."
     if action.status == "FALHOU":
         return f"Não foi possível concluir: {result.get('erro', 'erro desconhecido')}"
+    if action.kind == "CREATE_CUSTOMER":
+        return f"Cliente **{result.get('cliente')}** criado (código {result.get('codigo')})."
     if action.kind == "ISSUE_DOCUMENT":
         total = f"{result.get('total', 0):,.2f}".replace(",", " ").replace(".", ",")
         return f"**{result.get('documento')}** emitido - {total} Kz."
@@ -397,12 +496,29 @@ ACTION_TOOLS = [
          "email": {"type": "string", "description": "Destinatário (vazio = o email do cliente)"},
          "mensagem": {"type": "string", "description": "Texto curto antes da menção do anexo (opcional)"}},
       "required": ["numero"]}),
+    ("criar_cliente", ("customers:create",), criar_cliente,
+     "Cria um cliente novo: nome e NIF obrigatórios (o NIF é único na empresa); tipo COLETIVA (empresa) ou SINGULAR "
+     "(particular); telefone, email, morada e cidade se o utilizador os der - não inventes nenhum dado. Confirmado pelo "
+     "utilizador se a empresa o exigir. Para faturar a seguir a um cliente novo, espera que a criação esteja feita.",
+     {"type": "object", "properties": {
+         "nome": {"type": "string"}, "nif": {"type": "string"},
+         "tipo": {"type": "string", "enum": ["COLETIVA", "SINGULAR"]},
+         "telefone": {"type": "string"}, "email": {"type": "string"}, "morada": {"type": "string"},
+         "cidade": {"type": "string"}},
+      "required": ["nome", "nif"]}),
+    ("enviar_pdf_no_chat", ("invoices:view",), enviar_pdf_no_chat,
+     "Envia o PDF de um documento ao próprio utilizador, nesta conversa de WhatsApp / Telegram (para ver ou reencaminhar).",
+     {"type": "object", "properties": {"numero": {"type": "string", "description": "Ex.: FT2026/3"}}, "required": ["numero"]}),
 ]
 
 
-def action_tools_for(permissions: set[str]) -> list[dict]:
+CHAT_ONLY = {"enviar_pdf_no_chat"}  # offered in a WhatsApp / Telegram chat only
+
+
+def action_tools_for(permissions: set[str], channel: str = "APP") -> list[dict]:
     return [{"name": name, "description": description, "parameters": parameters}
-            for name, needed, _, description, parameters in ACTION_TOOLS if any(p in permissions for p in needed)]
+            for name, needed, _, description, parameters in ACTION_TOOLS
+            if any(p in permissions for p in needed) and (channel != "APP" or name not in CHAT_ONLY)]
 
 
 def is_action_tool(name: str) -> bool:

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Bot, X, Send, Loader2, Plus, MessageSquare, ChevronDown, Check, FileText, Mail } from 'lucide-react';
+import { Bot, X, Send, Loader2, Plus, MessageSquare, ChevronDown, Check, FileText, Mail, UserPlus } from 'lucide-react';
 import { listAiConversations, getAiMessages, askAssistant, decideAiAction } from '../api/ai';
 import { extractErrorMessage } from '../utils/errors';
 import { formatKz } from '../utils/format';
@@ -114,7 +114,7 @@ function ActionCard({ action, onDecide, deciding }) {
   const s = action.summary || {};
   const expired = action.status === 'PENDENTE' && new Date(action.expires_at) < new Date();
   const [label, color] = ACTION_STATUS[expired ? 'EXPIRADA' : action.status] || [action.status, 'text-text-muted'];
-  const Icon = action.kind === 'SEND_EMAIL' ? Mail : FileText;
+  const Icon = action.kind === 'SEND_EMAIL' ? Mail : action.kind === 'CREATE_CUSTOMER' ? UserPlus : FileText;
   return (
     <div className="mt-2 border border-border rounded-lg bg-bg-elevated overflow-hidden text-[12px]">
       <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
@@ -123,7 +123,14 @@ function ActionCard({ action, onDecide, deciding }) {
         <span className={'shrink-0 font-medium ' + color}>{label}</span>
       </div>
       <div className="px-3 py-2 flex flex-col gap-1.5">
-        {action.kind === 'ISSUE_DOCUMENT' ? (
+        {action.kind === 'CREATE_CUSTOMER' ? (
+          <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+            {[['NIF', s.nif], ['Tipo', s.tipo], ['Telefone', s.telefone], ['Email', s.email], ['Morada', [s.morada, s.cidade].filter(Boolean).join(', ')]]
+              .filter(([, v]) => v).map(([k, v]) => (
+                <span key={k} className="contents"><span className="text-text-muted">{k}</span><span className="text-text-primary font-mono">{v}</span></span>
+              ))}
+          </div>
+        ) : action.kind === 'ISSUE_DOCUMENT' ? (
           <>
             <p className="text-text-muted">{s.cliente}{s.nif ? ' · NIF ' + s.nif : ''} · {s.atividade}{s.receita ? ' · Receita ' + s.receita : ''}</p>
             <table className="w-full">
@@ -147,6 +154,7 @@ function ActionCard({ action, onDecide, deciding }) {
           <p className="text-text-primary">{s.documento} · {s.cliente} · {kz(s.total)}<br /><span className="text-text-muted">Para: {s.para}</span></p>
         )}
         {action.status === 'FEITA' && action.result?.documento && <p className="text-success font-medium">{action.result.documento} emitido</p>}
+        {action.status === 'FEITA' && action.result?.codigo && <p className="text-success font-medium">Cliente criado - código {action.result.codigo}</p>}
         {action.status === 'FALHOU' && action.result?.erro && <p className="text-danger">{action.result.erro}</p>}
       </div>
       {action.status === 'PENDENTE' && !expired && (
@@ -298,7 +306,10 @@ export default function AssistantPanel({ open, onClose, status, onStatus }) {
             {conversations.map((c) => (
               <button key={c.id} type="button" onClick={() => openConversation(c.id)}
                 className={'w-full text-left px-3 py-2 text-[12px] hover:bg-bg-inset cursor-pointer border-b border-border last:border-0 ' + (c.id === conversationId ? 'text-accent' : 'text-text-primary')}>
-                <span className="block truncate">{c.title}</span>
+                <span className="block truncate">
+                  {c.channel && c.channel !== 'APP' && <span className="mr-1.5 text-[10px] font-semibold uppercase tracking-wide text-accent">{c.channel === 'TELEGRAM' ? 'Telegram' : c.channel === 'WHATSAPP' ? 'WhatsApp' : c.channel}</span>}
+                  {c.title}
+                </span>
                 <span className="block text-[11px] text-text-muted font-mono">{new Date(c.updated_at).toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short' })}</span>
               </button>
             ))}

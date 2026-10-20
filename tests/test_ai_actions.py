@@ -253,3 +253,37 @@ async def test_a_medicine_on_prescription_needs_its_receita(db, company_with_ess
     recorded = (await db.execute(select(Prescription).where(
         Prescription.invoice_id == uuid.UUID(action.result["invoice_id"])))).scalar_one()
     assert (recorded.number, recorded.prescriber) == ("R-778", "Dr. Silva")
+
+
+@pytest.mark.asyncio
+async def test_a_customer_created_by_the_assistant(db, company_with_essentials):
+    from app.models.customer import Customer
+    ctx = company_with_essentials
+    company_id = ctx["company"].id
+    await _setup(db, ctx)  # Hotel Presidente, NIF 5417000001, exists
+    action_ctx = _ctx(ctx, permissions=ALL | {"customers:create"})
+
+    async def tool(arguments):
+        return json.loads(await run_action_tool(db, action_ctx, "criar_cliente", arguments))
+
+    assert "já existe" in (await tool({"nome": "Outro", "nif": "5417000001"}))["erro"].lower()
+    assert "inválido" in (await tool({"nome": "Hotel Baía", "nif": "5417000099", "email": "nada"}))["erro"]
+    assert "NIF" in (await tool({"nome": "Hotel Baía"}))["erro"]
+    action_ctx.permissions = ALL
+    assert "não disponível" in (await tool({"nome": "Hotel Baía", "nif": "5417000099"}))["erro"]
+    action_ctx.permissions = ALL | {"customers:create"}
+
+    ready = await tool({"nome": " Hotel  Baía ", "nif": "5417 000 099", "telefone": "923 111 222", "email": "geral@baia.ao",
+                        "cidade": "Luanda"})
+    assert ready["estado"] == "a_aguardar_confirmacao"
+    assert (ready["resumo"]["nome"], ready["resumo"]["nif"], ready["resumo"]["tipo"], ready["resumo"]["telefone"]) == (
+        "Hotel Baía", "5417000099", "Pessoa coletiva", "+244923111222")
+    assert (await db.execute(select(Customer).where(Customer.nif == "5417000099"))).scalar_one_or_none() is None
+    action, text = await decide_action(db, company_id, ctx["gestor"].id, action_ctx.actions[-1], True)
+    customer = (await db.execute(select(Customer).where(Customer.nif == "5417000099"))).scalar_one()
+    assert (customer.company_id, customer.legal_person_type.value if hasattr(customer.legal_person_type, "value")
+            else customer.legal_person_type, customer.email, customer.city) == (company_id, "JURIDICA", "geral@baia.ao", "Luanda")
+    assert customer.customer_code and customer.customer_code in text and action.result["cliente"] == "Hotel Baía"
+    # a 14-character BI is a private person
+    person = await tool({"nome": "Ana Paulo", "nif": "004512345LA041"})
+    assert person["resumo"]["tipo"] == "Pessoa singular"

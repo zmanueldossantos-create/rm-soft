@@ -17,6 +17,8 @@ class PlatformAiResponse(BaseModel):
     has_api_key: bool
     api_key_hint: str | None
     providers: list[ProviderOption]
+    telegram_configured: bool = False
+    telegram_bot_username: str | None = None
 
 
 class PlatformAiUpdateRequest(BaseModel):
@@ -143,3 +145,50 @@ class EmailSettingsRequest(BaseModel):
 
 class EmailTestRequest(BaseModel):
     to: str
+
+
+class TelegramTokenRequest(BaseModel):
+    token: str  # "" removes the bot
+
+
+class TelegramBotResponse(BaseModel):
+    configured: bool
+    username: str | None
+
+
+class ChannelStatus(BaseModel):
+    enabled: bool
+    linked: bool
+    name: str | None
+    linked_at: datetime | None
+
+
+class ChannelsResponse(BaseModel):
+    channels: dict[str, ChannelStatus]
+    telegram_bot_username: str | None
+    whatsapp_configured: bool = False  # the RM SOFT WhatsApp number is set
+    whatsapp_number: str | None = None  # where the gestor sends LIGAR <code>
+
+
+class LinkCodeResponse(BaseModel):
+    code: str
+    expires_at: datetime
+    link: str | None  # Telegram: opens the bot with the code
+
+
+class WhatsAppSettingsResponse(BaseModel):
+    configured: bool
+    phone_number_id: str | None
+    display_number: str | None
+    has_access_token: bool
+    access_token_hint: str | None
+    has_app_secret: bool
+    verify_token: str | None
+    webhook_path: str
+
+
+class WhatsAppSettingsRequest(BaseModel):
+    phone_number_id: str | None = None
+    display_number: str | None = None
+    access_token: str | None = None  # None = unchanged, "" = removed
+    app_secret: str | None = None  # None = unchanged, "" = removed

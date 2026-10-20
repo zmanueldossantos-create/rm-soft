@@ -85,3 +85,38 @@ export async function testEmailSettings(to) {
   const res = await apiClient.post('/company/me/email-settings/test', { to }, { timeout: 60000 });
   return res.data;
 }
+
+// ---------- The assistant on WhatsApp / Telegram
+
+// token: '' removes the bot
+export async function setTelegramBot(token) {
+  const res = await apiClient.put('/admin/ai-settings/telegram', { token }, { timeout: 30000 });
+  return res.data;
+}
+
+export async function getMyChannels() {
+  const res = await apiClient.get('/ai/channels');
+  return res.data;
+}
+
+export async function newChannelCode(channel) {
+  const res = await apiClient.post('/ai/channels/' + channel + '/code');
+  return res.data;
+}
+
+export async function unlinkChannel(channel) {
+  await apiClient.post('/ai/channels/' + channel + '/unlink');
+}
+
+export async function getWhatsAppSettings() {
+  const res = await apiClient.get('/admin/ai-settings/whatsapp');
+  return res.data;
+}
+
+// accessToken / appSecret: null = unchanged, '' = removed
+export async function updateWhatsAppSettings({ phoneNumberId, displayNumber, accessToken, appSecret }) {
+  const res = await apiClient.put('/admin/ai-settings/whatsapp', {
+    phone_number_id: phoneNumberId || null, display_number: displayNumber || null, access_token: accessToken, app_secret: appSecret,
+  });
+  return res.data;
+}

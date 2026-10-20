@@ -3,9 +3,10 @@ The AI assistant of the signed-in user's company: what the platform switched on,
 assistant itself (its status, the user's conversations, a question). The platform settings (SUPER_ADMIN) are in
 app/api/v1/admin/ai_routes.py.
 """
+import json
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_permission
@@ -16,8 +17,11 @@ from sqlalchemy import select
 from app.models.ai_pending_action import AiPendingAction
 from app.schemas.ai_settings import (
     ActionDecisionResponse, AiConversationResponse, AiMessageResponse, AskRequest, AskResponse, AssistantStatusResponse, AiActionResponse,
-    CompanyAiConfirmationsRequest, CompanyAiResponse, EmailSettingsRequest, EmailSettingsResponse, EmailTestRequest,
+    ChannelsResponse, CompanyAiConfirmationsRequest, CompanyAiResponse, EmailSettingsRequest, EmailSettingsResponse,
+    EmailTestRequest, LinkCodeResponse,
 )
+from app.services.ai.channels import CHANNELS, ChannelError, create_link_code, list_links, unlink
+from app.services.platform_settings_service import get_or_create_platform_settings
 from app.services.ai.actions import ActionError, decide_action
 from app.services.email_service import EmailError, get_email_settings, send_test_email, update_email_settings
 from app.services.ai.assistant_service import (
@@ -133,3 +137,85 @@ async def test_email_settings(payload: EmailTestRequest, db: AsyncSession = Depe
     except EmailError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     return {"sent_to": payload.to}
+
+
+
+# ---------- The assistant on WhatsApp / Telegram (the user's own chats)
+
+@router.get("/ai/channels", response_model=ChannelsResponse)
+async def read_my_channels(db: AsyncSession = Depends(get_db),
+                           current_user: User = Depends(require_permission("assistant:use"))):
+    platform = await get_or_create_platform_settings(db)
+    from app.services.ai.whatsapp import settings_view
+    wa = settings_view(platform)
+    return {"channels": await list_links(db, current_user.company_id, current_user.id),
+            "telegram_bot_username": platform.telegram_bot_username if platform.telegram_bot_token_encrypted else None,
+            "whatsapp_configured": wa["configured"], "whatsapp_number": wa["display_number"] if wa["configured"] else None}
+
+
+@router.post("/ai/channels/{channel}/code", response_model=LinkCodeResponse)
+async def new_link_code(channel: str, db: AsyncSession = Depends(get_db),
+                        current_user: User = Depends(require_permission("assistant:use"))):
+    channel = channel.upper()
+    platform = await get_or_create_platform_settings(db)
+    if channel == "TELEGRAM" and not platform.telegram_bot_token_encrypted:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="O bot do Telegram ainda não está configurado na plataforma")
+    if channel == "WHATSAPP":
+        from app.services.ai.whatsapp import settings_view
+        if not settings_view(platform)["configured"]:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="O WhatsApp ainda não está configurado na plataforma")
+    try:
+        code = await create_link_code(db, current_user.company_id, current_user.id, channel)
+    except ChannelError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    link = None
+    if channel == "TELEGRAM" and platform.telegram_bot_username:
+        link = f"https://t.me/{platform.telegram_bot_username}?start={code['code']}"
+    elif channel == "WHATSAPP" and platform.whatsapp_display_number:  # opens WhatsApp with «LIGAR 123456» typed
+        link = f"https://wa.me/{platform.whatsapp_display_number.lstrip('+')}?text=LIGAR%20{code['code']}"
+    return {**code, "link": link}
+
+
+@router.post("/ai/channels/{channel}/unlink", status_code=status.HTTP_204_NO_CONTENT)
+async def unlink_my_channel(channel: str, db: AsyncSession = Depends(get_db),
+                            current_user: User = Depends(require_permission("assistant:use"))):
+    if channel.upper() not in CHANNELS:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Canal desconhecido")
+    await unlink(db, current_user.company_id, current_user.id, channel.upper())
+
+
+@router.post("/channels/telegram/webhook", include_in_schema=False)
+async def telegram_webhook(update: dict, background: BackgroundTasks, db: AsyncSession = Depends(get_db),
+                           x_telegram_bot_api_secret_token: str | None = Header(default=None)):
+    """SaaS: Telegram calls here (the secret set with the webhook proves it). Answered at once, handled after."""
+    from app.services.ai.telegram import process_update
+    platform = await get_or_create_platform_settings(db)
+    if not platform.telegram_webhook_secret or x_telegram_bot_api_secret_token != platform.telegram_webhook_secret:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    background.add_task(process_update, update)
+    return {"ok": True}
+
+
+
+@router.get("/channels/whatsapp/webhook", include_in_schema=False)
+async def whatsapp_verify(request: Request, db: AsyncSession = Depends(get_db)):
+    """Meta registering the webhook: answers its challenge when our verify token is given."""
+    from app.services.ai.whatsapp import verify_subscription
+    params = request.query_params
+    challenge = verify_subscription(await get_or_create_platform_settings(db), params.get("hub.mode"),
+                                    params.get("hub.verify_token"), params.get("hub.challenge"))
+    if challenge is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    return Response(content=challenge, media_type="text/plain")
+
+
+@router.post("/channels/whatsapp/webhook", include_in_schema=False)
+async def whatsapp_webhook(request: Request, background: BackgroundTasks, db: AsyncSession = Depends(get_db)):
+    """Meta's calls, signed with the app secret: answered at once, each message handled after."""
+    from app.services.ai.whatsapp import incoming_messages, process_message, signature_valid
+    body = await request.body()
+    if not signature_valid(await get_or_create_platform_settings(db), body, request.headers.get("x-hub-signature-256")):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    for message in incoming_messages(json.loads(body or b"{}")):
+        background.add_task(process_message, message)
+    return {"ok": True}

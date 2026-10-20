@@ -37,6 +37,16 @@ class PlatformSettings(Base):
     ai_model: Mapped[str | None] = mapped_column(String(100), nullable=True)
     ai_api_key_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)  # app.core.secret_box
     ai_monthly_limit: Mapped[int] = mapped_column(Integer, default=300, server_default="300", nullable=False)
+    # The assistant on Telegram: one RM SOFT bot (in a local installation, the installation's own bot)
+    telegram_bot_token_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    telegram_bot_username: Mapped[str | None] = mapped_column(String(100), nullable=True)  # read from Telegram (getMe)
+    telegram_webhook_secret: Mapped[str | None] = mapped_column(String(64), nullable=True)  # SaaS: checks Telegram's calls
+    # The assistant on WhatsApp: one RM SOFT number (WhatsApp Cloud API, Meta)
+    whatsapp_phone_number_id: Mapped[str | None] = mapped_column(String(40), nullable=True)  # Meta's id of the number
+    whatsapp_display_number: Mapped[str | None] = mapped_column(String(20), nullable=True)  # +244..., shown to the gestor
+    whatsapp_access_token_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    whatsapp_app_secret_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)  # checks Meta's signature
+    whatsapp_verify_token: Mapped[str | None] = mapped_column(String(64), nullable=True)  # given to Meta for the webhook
 
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

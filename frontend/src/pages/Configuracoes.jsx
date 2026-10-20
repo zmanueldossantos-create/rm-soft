@@ -28,7 +28,7 @@ const modulesApi = {
 
 import { extractErrorMessage } from '../utils/errors';
 import { getPlatformSettings, updatePlatformSettings } from '../api/admin';
-import { getPlatformAi, updatePlatformAi, testPlatformAi } from '../api/ai';
+import { getPlatformAi, updatePlatformAi, testPlatformAi, setTelegramBot, getWhatsAppSettings, updateWhatsAppSettings } from '../api/ai';
 
 // The AI assistant: one provider, model and key for every company (the platform pays), a monthly message limit per
 // company (each company's own limit, if any, is set in Empresas > Assistente IA). The key is never shown back.
@@ -152,6 +152,131 @@ function AiSettingsCard() {
           </button>
         )}
         {testResult && <div className="bg-success/10 border-l-2 border-success text-success px-3 py-2 text-[12px] rounded-r">{testResult}</div>}
+        {error && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3 py-2 text-[12px] rounded-r">{error}</div>}
+      </div>
+
+      <TelegramBotRow info={info} onChange={(t) => setInfo((p) => ({ ...p, telegram_configured: t.configured, telegram_bot_username: t.username }))} />
+      <WhatsAppRow />
+    </div>
+  );
+}
+
+// The Telegram bot of the assistant: its token (from @BotFather), checked with Telegram and kept encrypted.
+function TelegramBotRow({ info, onChange }) {
+  const [token, setToken] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  async function save(value) {
+    setError('');
+    setSaving(true);
+    try {
+      onChange(await setTelegramBot(value));
+      setToken('');
+    } catch (err) {
+      setError(extractErrorMessage(err, 'Erro ao guardar'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="mt-4 pt-4 border-t border-border flex items-end gap-3 flex-wrap">
+      <div className="flex-1 min-w-[260px]">
+        <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1 block">Bot do Telegram (token do @BotFather)</label>
+        <input type="password" autoComplete="new-password" value={token} onChange={(e) => setToken(e.target.value)}
+          placeholder={info.telegram_configured ? 'Bot ligado - colar um novo token para trocar' : 'Ex.: 123456789:AAH...'}
+          className="w-full bg-bg-inset border border-border rounded-md px-3 py-2 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors" />
+      </div>
+      <button onClick={() => save(token.trim())} disabled={saving || !token.trim()}
+        className="flex items-center gap-1.5 bg-accent hover:bg-accent-hover disabled:opacity-50 text-white text-sm font-medium px-3.5 py-2 rounded-md transition-colors cursor-pointer">
+        {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}Guardar bot
+      </button>
+      {info.telegram_configured && (
+        <>
+          <span className="text-[12px] text-success font-medium py-2">Ligado: @{info.telegram_bot_username}</span>
+          <button onClick={() => save('')} disabled={saving} className="text-[12px] text-text-muted hover:text-danger transition-colors cursor-pointer py-2">Remover o bot</button>
+        </>
+      )}
+      {error && <div className="w-full bg-danger/10 border-l-2 border-danger text-danger px-3 py-2 text-[12px] rounded-r">{error}</div>}
+    </div>
+  );
+}
+
+// The RM SOFT number on WhatsApp (WhatsApp Cloud API, Meta): the values of Meta's «API Setup» page, the token and the
+// app secret kept encrypted; Meta's webhook is registered with the address and the verify token shown here.
+function WhatsAppRow() {
+  const [info, setInfo] = useState(null);
+  const [form, setForm] = useState({ phoneNumberId: '', displayNumber: '', accessToken: '', appSecret: '' });
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState('');
+
+  function load(data) {
+    setInfo(data);
+    setForm({ phoneNumberId: data.phone_number_id || '', displayNumber: data.display_number || '', accessToken: '', appSecret: '' });
+  }
+
+  useEffect(() => {
+    getWhatsAppSettings().then(load).catch(() => {});
+  }, []);
+
+  async function save() {
+    setError('');
+    setSaving(true);
+    try {
+      load(await updateWhatsAppSettings({
+        phoneNumberId: form.phoneNumberId, displayNumber: form.displayNumber,
+        accessToken: form.accessToken.trim() ? form.accessToken.trim() : null, appSecret: form.appSecret.trim() ? form.appSecret.trim() : null,
+      }));
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (err) {
+      setError(extractErrorMessage(err, 'Erro ao guardar'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!info) return null;
+  const field = 'w-full bg-bg-inset border border-border rounded-md px-3 py-2 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors';
+  const label = 'text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1 block';
+  const webhook = 'https://<endereço público do servidor>' + info.webhook_path;
+
+  return (
+    <div className="mt-4 pt-4 border-t border-border flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <p className="text-[11px] font-medium uppercase tracking-wide text-text-muted">WhatsApp RM SOFT (WhatsApp Cloud API - Meta)</p>
+        <span className={'text-[12px] font-medium ' + (info.configured ? 'text-success' : 'text-text-muted')}>{info.configured ? 'Configurado' : 'Não configurado'}</span>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div>
+          <label className={label}>Phone number ID</label>
+          <input value={form.phoneNumberId} onChange={(e) => setForm((p) => ({ ...p, phoneNumberId: e.target.value }))} placeholder="Página API Setup da Meta" className={field} />
+        </div>
+        <div>
+          <label className={label}>Número (mostrado ao gestor)</label>
+          <input value={form.displayNumber} onChange={(e) => setForm((p) => ({ ...p, displayNumber: e.target.value }))} placeholder="+244 9..." className={field} />
+        </div>
+        <div>
+          <label className={label}>Access token</label>
+          <input type="password" autoComplete="new-password" value={form.accessToken} onChange={(e) => setForm((p) => ({ ...p, accessToken: e.target.value }))} placeholder={info.access_token_hint || 'Token permanente'} className={field} />
+        </div>
+        <div>
+          <label className={label}>App secret</label>
+          <input type="password" autoComplete="new-password" value={form.appSecret} onChange={(e) => setForm((p) => ({ ...p, appSecret: e.target.value }))} placeholder={info.has_app_secret ? '••••••• (guardado)' : 'App → Definições → Básico'} className={field} />
+        </div>
+      </div>
+      {info.verify_token && (
+        <div className="bg-bg-inset border border-border rounded-md px-3 py-2.5 text-[12px] text-text-muted flex flex-col gap-1">
+          <span>Na Meta (WhatsApp → Configuração → Webhook): <span className="text-text-primary">Callback URL</span> <span className="font-mono text-text-primary select-all">{webhook}</span> (o servidor da aplicação: em SaaS o seu domínio, para testar um túnel)</span>
+          <span><span className="text-text-primary">Verify token</span> <span className="font-mono text-text-primary select-all">{info.verify_token}</span> - depois subscrever o campo «messages».</span>
+        </div>
+      )}
+      <div className="flex items-center gap-3">
+        <button onClick={save} disabled={saving} className="flex items-center gap-1.5 bg-accent hover:bg-accent-hover disabled:opacity-50 text-white text-sm font-medium px-3.5 py-2 rounded-md transition-colors cursor-pointer">
+          {saving ? <Loader2 size={14} className="animate-spin" /> : saved ? <Check size={14} /> : <Save size={14} />}{saved ? 'Guardado' : 'Guardar WhatsApp'}
+        </button>
         {error && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3 py-2 text-[12px] rounded-r">{error}</div>}
       </div>
     </div>

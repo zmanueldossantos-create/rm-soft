@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
+    # --- Assistant IA sur Telegram ---
+    # Mode local : l application lit elle-meme les messages du bot (aucune adresse publique necessaire).
+    # Mode SaaS : Telegram appelle le webhook. False pour couper la lecture (un seul serveur par bot).
+    TELEGRAM_POLLING: bool = True
+
     # --- Licence (mode local uniquement) ---
     LICENSE_NIF: str | None = None
 

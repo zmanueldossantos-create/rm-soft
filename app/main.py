@@ -96,6 +96,18 @@ async def seed_permissions_on_startup() -> None:
         for (company_id,) in companies_result.all():
             await seed_default_role_permissions(db, company_id)
 
+
+@app.on_event("startup")
+async def start_telegram_polling() -> None:
+    """Local installation: the application reads the Telegram bot's messages itself (it waits while no bot is set).
+    In SaaS Telegram calls the webhook instead. One reader per bot: TELEGRAM_POLLING=false on any other server."""
+    import asyncio
+    from app.services.ai.telegram import polling_loop
+    settings = get_settings()
+    if settings.TELEGRAM_POLLING and not settings.is_saas:
+        app.state.telegram_polling = asyncio.create_task(polling_loop())
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"] if settings.DEBUG else [],

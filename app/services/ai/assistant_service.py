@@ -56,7 +56,7 @@ async def assistant_status(db: AsyncSession, company_id: uuid.UUID) -> dict:
             "used": await questions_this_month(db, company_id), "limit": settings["effective_monthly_limit"]}
 
 
-async def _system_prompt(db: AsyncSession, company_id: uuid.UUID, user_name: str) -> str:
+async def _system_prompt(db: AsyncSession, company_id: uuid.UUID, user_name: str, channel: str = "APP") -> str:
     company = await db.get(Company, company_id)
     modules = ", ".join(m.name for m in await list_company_modules(db, company_id)) or "-"
     today = datetime.now(LUANDA).date()
@@ -66,13 +66,21 @@ async def _system_prompt(db: AsyncSession, company_id: uuid.UUID, user_name: str
         f"Hoje é {today.isoformat()} ({_weekday(today)}), em Luanda.\n\n"
         "Regras:\n"
         "- Responde na língua da pergunta (português de Portugal por omissão).\n"
-        "- Para qualquer número da empresa (stock, vendas, dívidas, caixas, documentos) usa SEMPRE as ferramentas; "
+        + (f"- Estás a falar por {channel.title()}: respostas curtas, sem tabelas (usa listas). Para dar o PDF de um "
+           "documento ao utilizador, usa enviar_pdf_no_chat.\n" if channel != "APP" else "")
+        + "- Para qualquer número da empresa (stock, vendas, dívidas, caixas, documentos) usa SEMPRE as ferramentas; "
         "nunca inventes nem estimes valores. Se nenhuma ferramenta responde, diz claramente que ainda não sabes fazer isso.\n"
         "- Só tens acesso aos dados desta empresa. Não respondas sobre outras empresas.\n"
-        "- Podes preparar Faturas, Pró-formas e Orçamentos (preparar_documento) e enviar documentos por email "
-        "(enviar_documento_email). Se a ferramenta responde «a_aguardar_confirmacao», diz que o documento está pronto e "
-        "que o utilizador o confirma com o botão Confirmar (ou respondendo SIM); nunca digas que foi emitido ou enviado "
-        "antes de a ferramenta responder «feito». Fatura/Recibo, notas de crédito, recibos e alterações de dados "
+        "- Podes criar clientes (criar_cliente), preparar Faturas, Pró-formas e Orçamentos (preparar_documento) e "
+        "enviar documentos por email "
+        "(enviar_documento_email). Se a ferramenta responde «a_aguardar_confirmacao», "
+        + ("diz que o documento está pronto e que o utilizador o confirma com o botão Confirmar (ou respondendo SIM); "
+           if channel == "APP" else
+           "diz numa só frase que está pronto - o resumo e o pedido de SIM / NÃO seguem logo a seguir, não os repitas "
+           "(aqui não há botões); ")
+        + "nunca digas que foi emitido ou enviado "
+        "antes de a ferramenta responder «feito». Fatura/Recibo, notas de crédito, recibos e alterações de clientes "
+        "ou produtos "
         "fazem-se nos ecrãs da aplicação: indica qual.\n"
         "- Valores em kwanzas no formato 1 234,56 Kz; datas no formato DD/MM/AAAA.\n"
         "- Sê curto e claro: primeiro a resposta, depois o detalhe útil. Podes usar listas com «- » e **negrito**.\n"
@@ -162,10 +170,10 @@ async def ask(db: AsyncSession, user: User, question: str, conversation_id: uuid
     transcript.append({"role": "user", "content": question})
 
     permissions = set(await list_my_permissions(db, company_id, role))
-    tools = tools_for(permissions) + action_tools_for(permissions)
+    tools = tools_for(permissions) + action_tools_for(permissions, channel)
     ctx = ActionContext(company_id=company_id, user_id=user_id, permissions=permissions, conversation_id=conversation_id,
-                        confirm_documents=settings.confirm_documents, confirm_sends=settings.confirm_sends)
-    system = await _system_prompt(db, company_id, user_name)
+                        confirm_documents=settings.confirm_documents, confirm_sends=settings.confirm_sends, channel=channel)
+    system = await _system_prompt(db, company_id, user_name, channel)
     used: list[str] = []
     answer = ""
     try:
@@ -211,6 +219,7 @@ async def ask(db: AsyncSession, user: User, question: str, conversation_id: uuid
     await db.commit()
     await db.refresh(conversation)
     await db.refresh(message)
+    message.outbox = ctx.outbox  # files for a WhatsApp / Telegram chat (not stored)
     return conversation, message
 
 

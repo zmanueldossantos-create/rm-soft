@@ -129,7 +129,10 @@ def test_every_api_route_is_protected():
     from app.main import app
 
     guards = {"role_checker", "permission_checker", "get_current_user"}
-    public = {"/api/v1/auth/login", "/api/v1/auth/refresh"}
+    # login, and the messaging platforms' webhooks - called by Telegram / WhatsApp, which prove themselves with the
+    # secret the platform holds (checked in the route), never by a user's token
+    public = {"/api/v1/auth/login", "/api/v1/auth/refresh", "/api/v1/channels/telegram/webhook",
+              "/api/v1/channels/whatsapp/webhook"}
 
     def dependency_names(dependant) -> set[str]:
         names: set[str] = set()

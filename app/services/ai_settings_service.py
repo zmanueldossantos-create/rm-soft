@@ -28,6 +28,8 @@ def platform_ai_view(settings) -> dict:
         "has_api_key": bool(settings.ai_api_key_encrypted),
         "api_key_hint": secret_hint(key) if key else ("Ilegível - introduza de novo" if settings.ai_api_key_encrypted else None),
         "providers": [{"value": k, "label": v} for k, v in PROVIDERS.items()],
+        "telegram_configured": bool(settings.telegram_bot_token_encrypted),
+        "telegram_bot_username": settings.telegram_bot_username,
     }
 
 
