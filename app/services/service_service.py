@@ -5,6 +5,9 @@ validade/barcode - a distinct table avoids polluting Product with
 irrelevant fields).
 Every query is scoped to the caller's company_id (multi-tenant isolation).
 """
+from app.models.resource_type_catalog import ResourceTypeCatalog
+from app.models.service_type import ServiceType
+from app.services.ownership import ensure_owned
 from app.services.product_service import ArticleUnitRequiredError
 from app.services.vat_rule_service import resolve_article_vat
 import uuid
@@ -66,6 +69,8 @@ async def create_service(
     duration_minutes: int | None = None,
 ) -> Service:
     await _check_fields_available(db, company_id, code, name)
+    await ensure_owned(db, company_id, ServiceType, service_type_id, "Tipo de serviço não encontrado")
+    await ensure_owned(db, company_id, ResourceTypeCatalog, resource_type_id, "Tipo de recurso não encontrado")
     if unit_of_measure_id is None:  # every article has a base unit: the SAF-T and the documents show it
         raise ArticleUnitRequiredError("A unidade base é obrigatória")
     exemption_reason_id = await resolve_article_vat(db, company_id, vat_id, exemption_reason_id)
@@ -137,6 +142,8 @@ async def update_service(
 ) -> Service:
     service = await get_service_or_raise(db, company_id, service_id)
     await _check_fields_available(db, company_id, code, name, exclude_id=service_id)
+    await ensure_owned(db, company_id, ServiceType, service_type_id, "Tipo de serviço não encontrado")
+    await ensure_owned(db, company_id, ResourceTypeCatalog, resource_type_id, "Tipo de recurso não encontrado")
     if unit_of_measure_id is None:  # every article has a base unit: the SAF-T and the documents show it
         raise ArticleUnitRequiredError("A unidade base é obrigatória")
     exemption_reason_id = await resolve_article_vat(db, company_id, vat_id, exemption_reason_id)

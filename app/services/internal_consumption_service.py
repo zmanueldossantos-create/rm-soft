@@ -13,6 +13,7 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.ownership import ensure_owned
 from app.models.internal_consumption import InternalConsumption
 from app.models.product import Product
 from app.models.resource import Resource
@@ -42,6 +43,7 @@ async def record_consumption(
         raise NoWarehouseError("Esta atividade não tem um armazem associado")
 
     reason = await get_consumption_reason_or_raise(db, company_id, reason_id)
+    await ensure_owned(db, company_id, Resource, resource_id, "Recurso não encontrado")
 
     product_result = await db.execute(select(Product).where(Product.id == product_id, Product.company_id == company_id))
     product = product_result.scalar_one_or_none()

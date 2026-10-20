@@ -153,7 +153,10 @@ async def get_customer_bank_links(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("customers:manage")),
 ):
-    return await list_customer_bank_links(db, current_user.company_id, customer_id)
+    try:
+        return await list_customer_bank_links(db, current_user.company_id, customer_id)
+    except CustomerNotFoundError as e:  # another company's customer, or none: never a 500
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
 @router.post("/{customer_id}/bank-links", response_model=CustomerBankLinkResponse, status_code=status.HTTP_201_CREATED)

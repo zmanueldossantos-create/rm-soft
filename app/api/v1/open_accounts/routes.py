@@ -38,7 +38,7 @@ async def post_open_account(
             db, current_user.company_id, payload.activity_id, payload.pos_id, current_user.id,
             payload.label, payload.resource_id, payload.customer_id, payload.notes,
         )
-    except PosNotFoundError as e:
+    except (PosNotFoundError, ResourceNotFoundError) as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except InvalidLineError as e:  # a hotel room: its account opens at check-in
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
@@ -71,7 +71,10 @@ async def get_account_lines(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("open_accounts:view")),
 ):
-    await get_account_or_raise(db, current_user.company_id, account_id)
+    try:
+        await get_account_or_raise(db, current_user.company_id, account_id)
+    except OpenAccountNotFoundError as e:  # another company's account, or none: never a 500
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     return await list_account_lines(db, account_id)
 
 

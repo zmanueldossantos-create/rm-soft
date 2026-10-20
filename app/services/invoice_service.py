@@ -48,6 +48,8 @@ from app.models.activity import Activity
 from app.models.payment import Payment
 from app.models.payment_method_catalog import PaymentMethodCatalog
 from app.models.company import Company
+from app.models.company_bank_account import CompanyBankAccount
+from app.services.ownership import ensure_owned
 from app.models.document_type import DocumentType
 from app.services.fiscal_period_service import ensure_period_open, PeriodClosedError
 from app.services.stock_service import deduct_stock_for_sale, InsufficientStockError, return_stock_for_credit_note
@@ -270,6 +272,7 @@ async def create_invoice(
     the other is the invoice's single predicted payment method (FT, no real cash yet).
     """
     business_date = business_date or date.today()
+    await ensure_owned(db, company_id, CompanyBankAccount, bank_account_id, "Conta bancária não encontrada")
 
     company_result = await db.execute(select(Company).where(Company.id == company_id))
     company = company_result.scalar_one()

@@ -97,7 +97,7 @@ async def post_record_consumption(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except NoWarehouseError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
-    except ProductNotFoundError as e:
+    except (ProductNotFoundError, ConsumptionReasonNotFoundError) as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except InsufficientStockError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))

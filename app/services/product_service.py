@@ -5,6 +5,8 @@ a GESTOR/ADMIN only ever sees and manages their own company's products.
 Extended (Video 3) with category, brand, image, purchase price, the
 managed-by-lote/stock/validade toggles, and richer status.
 """
+from app.models.product_category import ProductCategory
+from app.services.ownership import ensure_owned
 from app.services.vat_rule_service import resolve_article_vat
 import uuid
 
@@ -118,6 +120,7 @@ async def create_product(
 ) -> Product:
     """Creates a product within the caller's company."""
     await _check_all_fields_available(db, company_id, code, name, barcode)
+    await ensure_owned(db, company_id, ProductCategory, category_id, "Categoria não encontrada")
     from app.services.pharmacy_service import medicine_fields
     medicine = await medicine_fields(
         db, company_id, is_medicine=is_medicine, active_substance=active_substance,
@@ -325,6 +328,7 @@ async def update_product(
     """Updates a product's editable fields, scoped to the caller's company."""
     product = await get_product_or_raise(db, company_id, product_id)
     await _check_all_fields_available(db, company_id, code, name, barcode, exclude_id=product_id)
+    await ensure_owned(db, company_id, ProductCategory, category_id, "Categoria não encontrada")
     from app.services.pharmacy_service import medicine_fields
     medicine = await medicine_fields(
         db, company_id, is_medicine=is_medicine, active_substance=active_substance,

@@ -32,6 +32,7 @@ from app.models.document_series import DocumentSeries, ContingencyIndicator
 from app.models.company import Company
 from app.models.document_type import DocumentType
 from app.models.establishment import Establishment
+from app.services.ownership import ensure_owned
 
 
 class SeriesNotFoundError(Exception):
@@ -183,6 +184,7 @@ async def create_series(
     series_code/description/dates. Returns the list of series rows created.
     """
     year = year or _current_year()
+    await ensure_owned(db, company.id, Establishment, establishment_id, "Estabelecimento não encontrado")
 
     allowed = allowed_series_years()
     if year not in allowed:

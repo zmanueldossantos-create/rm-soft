@@ -3,6 +3,7 @@ Pydantic schemas for the Tesouraria module - CashMovementReason, CashMovement,
 and user <-> POS cash-point associations.
 """
 import uuid
+from typing import Literal
 from datetime import date, datetime
 
 from pydantic import BaseModel, field_validator
@@ -12,7 +13,7 @@ from app.schemas.moedeiro import DenominationCountLineInput
 
 class CashMovementReasonCreateRequest(BaseModel):
     name: str
-    direction: str  # "ENTRADA" or "SAIDA"
+    direction: Literal["ENTRADA", "SAIDA"]
 
 
 class CashMovementReasonResponse(BaseModel):
@@ -27,7 +28,7 @@ class CashMovementReasonResponse(BaseModel):
 
 
 class CashMovementCreateRequest(BaseModel):
-    movement_type: str  # "TRANSFERENCIA" | "ENTRADA_EXTERNA" | "SAIDA_EXTERNA"
+    movement_type: Literal["TRANSFERENCIA", "ENTRADA_EXTERNA", "SAIDA_EXTERNA"]
     amount: float
     source_pos_id: uuid.UUID | None = None
     destination_pos_id: uuid.UUID | None = None

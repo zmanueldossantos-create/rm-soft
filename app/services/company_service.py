@@ -415,9 +415,12 @@ async def add_bank_account(
 
 
 async def update_bank_account(
-    db: AsyncSession, account_id: uuid.UUID, bank_id: uuid.UUID, account_number: str, iban: str, currency_id: uuid.UUID,
+    db: AsyncSession, company_id: uuid.UUID, account_id: uuid.UUID, bank_id: uuid.UUID, account_number: str, iban: str,
+    currency_id: uuid.UUID,
 ) -> CompanyBankAccount:
-    result = await db.execute(select(CompanyBankAccount).where(CompanyBankAccount.id == account_id))
+    # always within the company: another company's account is "not found" (isolation between companies)
+    result = await db.execute(select(CompanyBankAccount).where(
+        CompanyBankAccount.id == account_id, CompanyBankAccount.company_id == company_id))
     account = result.scalar_one_or_none()
     if account is None:
         raise BankAccountNotFoundError("Conta bancária não encontrada")
@@ -430,8 +433,9 @@ async def update_bank_account(
     return account
 
 
-async def toggle_bank_account(db: AsyncSession, account_id: uuid.UUID) -> CompanyBankAccount:
-    result = await db.execute(select(CompanyBankAccount).where(CompanyBankAccount.id == account_id))
+async def toggle_bank_account(db: AsyncSession, company_id: uuid.UUID, account_id: uuid.UUID) -> CompanyBankAccount:
+    result = await db.execute(select(CompanyBankAccount).where(
+        CompanyBankAccount.id == account_id, CompanyBankAccount.company_id == company_id))
     account = result.scalar_one_or_none()
     if account is None:
         raise BankAccountNotFoundError("Conta bancária não encontrada")

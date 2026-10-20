@@ -186,6 +186,15 @@ from app.services.stock_service import StockBlockedError as _StockBlockedError  
 async def _stock_blocked_handler(request: _Request, exc: _StockBlockedError):
     return _JSONResponse(status_code=409, content={"detail": str(exc)})
 
+
+# An id of another company's object in a request (see app.services.ownership): "not found", for every route.
+from app.services.ownership import NotOwnedError as _NotOwnedError  # noqa: E402
+
+
+@app.exception_handler(_NotOwnedError)
+async def _not_owned_handler(request: _Request, exc: _NotOwnedError):
+    return _JSONResponse(status_code=404, content={"detail": str(exc)})
+
 # Request validation errors (a quantity typed "1," in a number field...) in Portuguese, one place for every route: the field
 # is named, the line too when the error comes from a list; our own validators already speak Portuguese and pass as they are.
 # The response keeps its shape (422, a list of {type, loc, msg}) - the screens read msg (utils/errors.js).

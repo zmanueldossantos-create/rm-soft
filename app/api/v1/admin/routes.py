@@ -412,7 +412,7 @@ async def patch_bank_account(
     current_user: User = Depends(require_role("SUPER_ADMIN")),
 ):
     try:
-        return await update_bank_account(db, account_id, payload.bank_id, payload.account_number, payload.iban, payload.currency_id)
+        return await update_bank_account(db, company_id, account_id, payload.bank_id, payload.account_number, payload.iban, payload.currency_id)
     except BankAccountNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
@@ -425,7 +425,7 @@ async def toggle_bank_account_status(
     current_user: User = Depends(require_role("SUPER_ADMIN")),
 ):
     try:
-        return await toggle_bank_account(db, account_id)
+        return await toggle_bank_account(db, company_id, account_id)
     except BankAccountNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 

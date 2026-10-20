@@ -12,7 +12,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.booking import Booking, BookingStatus
 from app.services.resource_service import get_resource_or_raise
 from app.models.resource_type_catalog import ResourceTypeCatalog
+from app.models.customer import Customer
 from app.models.service import Service
+from app.services.ownership import ensure_owned
 
 
 class BookingNotFoundError(Exception):
@@ -104,6 +106,8 @@ async def create_booking(
         raise InvalidBookingRangeError("A data/hora de fim deve ser posterior ao início")
 
     resource = await get_resource_or_raise(db, company_id, resource_id)
+    await ensure_owned(db, company_id, Customer, customer_id, "Cliente não encontrado")
+    await ensure_owned(db, company_id, Service, service_id, "Serviço não encontrado")
     await _validate_service_for_resource(db, company_id, resource, service_id)
 
     if await _has_overlap(db, resource_id, starts_at, ends_at):

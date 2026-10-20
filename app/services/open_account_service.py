@@ -18,7 +18,10 @@ from app.services.document_rules import default_paid_on_issue_type
 from app.models.open_account import OpenAccount, OpenAccountStatus
 from app.models.open_account_line import OpenAccountLine
 from app.models.open_account_transfer import OpenAccountTransfer
+from app.models.activity import Activity
+from app.models.customer import Customer
 from app.models.product import Product
+from app.services.ownership import ensure_owned
 from app.models.service import Service
 from app.services.point_of_sale_service import get_pos_or_raise
 from app.services.resource_service import get_resource_or_raise
@@ -48,6 +51,8 @@ async def open_account(
 ) -> OpenAccount:
     # No till is chosen to open an account: it belongs to the activity. pos_id only records where it was opened
     # (the activity's default till when none is given); the till that closes it is the one that cashes it.
+    await ensure_owned(db, company_id, Activity, activity_id, "Atividade não encontrada")
+    await ensure_owned(db, company_id, Customer, customer_id, "Cliente não encontrado")
     if resource_id is not None and booking_id is None:
         await _ensure_not_a_stay_resource(db, company_id, resource_id)
     if pos_id is None:
