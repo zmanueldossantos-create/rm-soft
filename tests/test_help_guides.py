@@ -8,7 +8,7 @@ import re
 from pathlib import Path
 
 from app.services.ai.tools import run_tool, tools_for
-from app.services.help_guides import MODULES, PAGES, search_guides, visible_guides
+from app.services.help_guides import MODULES, PAGES, PLATFORM_MODULES, PLATFORM_PAGES, search_guides, visible_guides
 from app.services.permission_service import PERMISSION_CATALOG
 
 APP_JSX = (Path(__file__).resolve().parent.parent / "frontend" / "src" / "App.jsx").read_text(encoding="utf-8")
@@ -17,10 +17,11 @@ CATALOG = {entry[0] for entry in PERMISSION_CATALOG}
 
 
 def test_links_screens_and_permissions_exist():
-    ids = [g["id"] for g in MODULES + PAGES]
+    every = MODULES + PLATFORM_MODULES + PAGES + PLATFORM_PAGES
+    ids = [g["id"] for g in every]
     assert len(ids) == len(set(ids)), "duplicate guide ids"
-    module_ids = {m["id"] for m in MODULES}
-    for guide in MODULES + PAGES:
+    module_ids = {m["id"] for m in MODULES + PLATFORM_MODULES}
+    for guide in every:
         assert set(guide.get("perms", [])) | set(guide.get("requires", [])) <= CATALOG, guide["id"]
         assert guide.get("perms") or guide.get("roles"), f"{guide['id']} is shown to everybody"
         if "path" in guide:
@@ -54,7 +55,11 @@ def test_each_user_sees_the_guides_of_his_screens():
     # a page's circuit the user cannot see is not pointed to
     alone = visible_guides({"pos:view"}, "CAIXA") + visible_guides({"vat:return"}, "CONTABILISTA")
     assert next(g for g in alone if g["id"] == "apuramento-iva")["module"] == "fim-do-mes"
-    assert visible_guides(CATALOG, "SUPER_ADMIN") == []
+    # the platform has its own guides, and only them
+    platform = visible_guides(set(), "SUPER_ADMIN")
+    assert {g["id"] for g in platform} == {"novo-cliente", "manter-clientes", "empresas", "configuracoes", "visao-global"}
+    assert next(g for g in platform if g["id"] == "empresas")["module"] == "novo-cliente"
+    assert not {"empresas", "novo-cliente"} & {g["id"] for g in visible_guides(CATALOG, "GESTOR")}
 
 
 def test_search_ignores_accents_and_ranks_the_title():

@@ -319,7 +319,7 @@ export default function Layout() {
               {periodLabel}{partialLabel && <span className="ml-1.5 text-amber-500">· {partialLabel} (parcial)</span>}
             </span>
           )}
-          {user?.role && user.role !== 'SUPER_ADMIN' && (
+          {user?.role && (
             <IconButton icon={HelpCircle} label="Ajuda" active={helpOpen} onClick={toggleHelp} />
           )}
           {assistantStatus?.enabled && (
@@ -347,7 +347,7 @@ export default function Layout() {
         <Outlet />
       </div>
 
-      {user?.role && user.role !== 'SUPER_ADMIN' && <HelpPanel open={helpOpen} onClose={() => setHelpOpen(false)} />}
+      {user?.role && <HelpPanel open={helpOpen} onClose={() => setHelpOpen(false)} />}
 
       {assistantStatus?.enabled && (
         <AssistantPanel open={assistantOpen} onClose={() => setAssistantOpen(false)} status={assistantStatus} onStatus={setAssistantStatus} />

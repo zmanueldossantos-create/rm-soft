@@ -167,6 +167,53 @@ MODULES = [
     },
 ]
 
+# The platform's own guides (SUPER_ADMIN): creating and following the client companies, the platform's settings.
+PLATFORM_MODULES = [
+    {
+        "id": "novo-cliente", "title": "Novo cliente: da criação à primeira fatura", "roles": ["SUPER_ADMIN"],
+        "intro": "Tudo o que a RM SOFT faz para pôr uma empresa cliente a trabalhar: a criação, os seus setores, o "
+                 "endereço, a entrega ao gestor e o acompanhamento da sua configuração.",
+        "steps": [
+            S(text="Antes do primeiro cliente, confira os catálogos da plataforma: regimes fiscais, taxas legais de IVA, "
+                   "tipos de documento e os Módulos (setores) com as funções que cada um dá.", link="/configuracoes"),
+            S(text="Empresas → «Nova empresa». Separador Conta do Gestor: o nome, o telefone e a palavra-passe da pessoa "
+                   "que vai gerir a empresa.", link="/admin/companies"),
+            S(text="Separador Dados da Empresa: NIF, denominação fiscal, nome curto, o endereço (subdomínio, proposto a partir "
+                   "do nome curto), contactos, regime fiscal, n.º de registo comercial (exigido no SAF-T) e o modo de emissão."),
+            S(text="Separador Módulos: os setores contratados (Farmácia, Hotel, Restaurante…). Decidem os menus, os ecrãs e "
+                   "os guias que a empresa vê. Coordenadas Bancárias é opcional."),
+            S(text="«Criar empresa»: a empresa nasce com o seu armazém, as suas taxas de IVA e a conta do gestor."),
+            S(text="Entregue ao gestor o endereço da empresa (ex.: farmacia-da-luz.rmsystem.co.ao), o telefone e a "
+                   "palavra-passe. Ao entrar, ele vê a lista «Configuração inicial» no Painel."),
+            S(text="Acompanhe-o: Empresas → lápis → separador «Configuração inicial» mostra o que falta, lido dos dados reais. "
+                   "Os passos marcados «RM SOFT» (registo comercial, regime fiscal) são seus.", link="/admin/companies"),
+            S(text="Se a empresa contratou o assistente, ative-o no separador Assistente IA (com o limite de mensagens).", link="/admin/companies"),
+        ],
+        "errors": [
+            ("«Já existe uma empresa registada com…»", "NIF, nome, email e telefone da empresa são únicos na plataforma."),
+            ("«O subdomínio … já é usado por outra empresa»", "Cada empresa tem o seu endereço: acrescente a cidade ou um "
+             "número (ex.: farmacia-da-luz-viana)."),
+        ],
+    },
+    {
+        "id": "manter-clientes", "title": "Acompanhar as empresas clientes", "roles": ["SUPER_ADMIN"],
+        "intro": "O dia a dia da plataforma depois da criação: ajudar um gestor, mudar um contrato, suspender uma empresa.",
+        "steps": [
+            S(text="Gestor sem acesso: Empresas → lápis → «Redefinir palavra-passe do Gestor». Os outros utilizadores são "
+                   "geridos pelo próprio gestor (Administração → Utilizadores).", link="/admin/companies"),
+            S(text="Novo setor contratado: separador Módulos da empresa. Antes de retirar um, veja em Visão global → Impacto "
+                   "se a empresa já tem dados nessa função.", link="/visao-global"),
+            S(text="Mudança de regime fiscal: separador Dados da Empresa. Vale a partir de hoje, fica no histórico de regimes e "
+                   "atualiza as taxas de IVA da empresa; os documentos já emitidos não mudam."),
+            S(text="Mudança de endereço: separador Dados da Empresa. O endereço antigo deixa de funcionar de imediato: avise o "
+                   "gestor."),
+            S(text="Suspender uma empresa (falta de pagamento, fim de contrato): desative-a na lista. No serviço hospedado "
+                   "(SaaS), ninguém dessa empresa consegue entrar e as sessões abertas terminam em menos de 30 minutos. Os "
+                   "dados ficam guardados.", link="/admin/companies"),
+        ],
+    },
+]
+
 PAGES = [
     {
         "id": "primeiros-passos", "path": "/dashboard", "title": "Primeiros passos", "perms": ["company:manage"],
@@ -553,6 +600,53 @@ PAGES = [
 ]
 
 
+PLATFORM_PAGES = [
+    {
+        "id": "empresas", "path": "/admin/companies", "title": "Empresas", "module": "novo-cliente", "roles": ["SUPER_ADMIN"],
+        "intro": "As empresas clientes da plataforma: criar, editar, acompanhar e suspender.",
+        "steps": [
+            "«Nova empresa» abre a criação, separador a separador: Conta do Gestor, Dados da Empresa, Coordenadas Bancárias, "
+            "Módulos.",
+            "O lápis abre uma empresa: os mesmos separadores, mais Taxas de IVA, Assistente IA e Configuração inicial. "
+            "«Guardar alterações» grava tudo.",
+            "Por baixo do nome de cada empresa aparece o seu endereço (subdomínio).",
+            "«Redefinir palavra-passe do Gestor» dá uma nova palavra-passe ao gestor da empresa.",
+            "O estado ativa / inativa suspende ou reativa a empresa inteira.",
+        ],
+    },
+    {
+        "id": "configuracoes", "path": "/configuracoes", "title": "Configurações da plataforma", "roles": ["SUPER_ADMIN"],
+        "intro": "O que vale para todas as empresas: a identificação do software na AGT, o assistente IA, os canais e os "
+                 "catálogos comuns.",
+        "steps": [
+            "Identificação do software (SAF-T): n.º de validação AGT, NIF do fornecedor, ProductID e versão - vão em cada "
+            "ficheiro SAF-T de todas as empresas.",
+            "Assistente IA: o fornecedor, o modelo, a chave (nunca mostrada de volta) e as mensagens por mês por empresa. "
+            "Cada empresa é ativada em Empresas → Assistente IA.",
+            "Bot do Telegram e WhatsApp RM SOFT: o token do @BotFather, e os valores da Meta para o WhatsApp.",
+            "Catálogos: países, províncias, moedas, bancos, métodos e condições de pagamento, códigos e taxas legais de IVA, "
+            "regimes fiscais, retenções, tipos de documento (com as suas regras), unidades, tipos de movimento e Módulos "
+            "(os setores).",
+        ],
+        "errors": [
+            ("Uma regra de tipo de documento não se altera", "As regras fiscais fixadas pela AGT estão bloqueadas."),
+        ],
+    },
+    {
+        "id": "visao-global", "path": "/visao-global", "title": "Visão global", "module": "manter-clientes",
+        "roles": ["SUPER_ADMIN"],
+        "intro": "Os setores, as funções e as empresas da plataforma, de um só olhar.",
+        "steps": [
+            "Setores: cada setor (Farmácia, Hotel…) e as funções que dá.",
+            "Empresas: cada empresa com os seus setores e atividades.",
+            "Funções: cada bloco de funcionalidades (stock, reservas, cozinha…), de que depende e os ecrãs que abre.",
+            "Impacto: as empresas que já têm dados numa função que os seus setores não incluem - a verificar antes de "
+            "retirar um setor.",
+        ],
+    },
+]
+
+
 def _normalized(guide: dict, kind: str) -> dict:
     steps = [s if isinstance(s, dict) else {"text": s} for s in guide["steps"]]
     return {"id": guide["id"], "kind": kind, "title": guide["title"], "path": guide.get("path"),
@@ -572,16 +666,15 @@ def _allowed(guide: dict, permissions: set[str], role: str | None) -> bool:
 def visible_guides(permissions: set[str], role: str | None) -> list[dict]:
     """The guides this user may read: the circuits first, then the pages. A page's link to its circuit is kept only
     when that circuit is visible too."""
-    if role == "SUPER_ADMIN":
-        return []
-    modules = [_normalized(g, "module") for g in MODULES if _allowed(g, permissions, role)]
+    all_modules, all_pages = MODULES + PLATFORM_MODULES, PAGES + PLATFORM_PAGES
+    modules = [_normalized(g, "module") for g in all_modules if _allowed(g, permissions, role)]
     module_ids = {m["id"] for m in modules}
-    pages = [_normalized(g, "page") for g in PAGES if _allowed(g, permissions, role)]
+    pages = [_normalized(g, "page") for g in all_pages if _allowed(g, permissions, role)]
     for page in pages:
         if page["module"] not in module_ids:
             page["module"] = None
     # an "Ir" only towards a screen the user may open (each screen's rule is its page guide's)
-    closed = {g["path"] for g in PAGES} - {p["path"] for p in pages}
+    closed = {g["path"] for g in all_pages} - {p["path"] for p in pages}
     for guide in modules + pages:
         for step in guide["steps"]:
             if step["link"] and step["link"].split("?")[0] in closed:

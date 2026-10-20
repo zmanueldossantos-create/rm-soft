@@ -16,7 +16,7 @@ router = APIRouter(prefix="/api/v1/help", tags=["help"])
 @router.get("/guides")
 async def get_guides(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """The guides of the user's screens, filtered with the same permissions as the menu."""
-    if current_user.company_id is None:
-        return []
+    if current_user.company_id is None:  # the platform (SUPER_ADMIN): its own guides
+        return visible_guides(set(), current_user.role.value)
     permissions = set(await list_my_permissions(db, current_user.company_id, current_user.role.value))
     return visible_guides(permissions, current_user.role.value)
