@@ -15,6 +15,11 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     DEPLOYMENT_MODE: str = "local"  # "local" ou "saas"
 
+    # --- Mode SaaS : une adresse par entreprise (<sous-domaine>.BASE_DOMAIN), la plateforme sur ADMIN_SUBDOMAIN ---
+    # En developpement, <sous-domaine>.localhost fonctionne aussi (Chrome, sans DNS).
+    BASE_DOMAIN: str = "rmsystem.co.ao"
+    ADMIN_SUBDOMAIN: str = "admin"
+
     # --- Separation par secteur (voir app.core.capabilities) ---
     # False (defaut) : toutes les permissions d une entreprise fonctionnent, quels que soient ses modules.
     # True : une permission dont la fonction n est donnee par aucun module actif de l entreprise est

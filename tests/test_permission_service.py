@@ -132,7 +132,9 @@ def test_every_api_route_is_protected():
     # login, and the messaging platforms' webhooks - called by Telegram / WhatsApp, which prove themselves with the
     # secret the platform holds (checked in the route), never by a user's token
     public = {"/api/v1/auth/login", "/api/v1/auth/refresh", "/api/v1/channels/telegram/webhook",
-              "/api/v1/channels/whatsapp/webhook"}
+              "/api/v1/channels/whatsapp/webhook",
+              # before the login: whose login screen an address is, and (for the HTTPS proxy) whether it exists
+              "/api/v1/auth/tenant", "/api/v1/auth/domain-check"}
 
     def dependency_names(dependant) -> set[str]:
         names: set[str] = set()

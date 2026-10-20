@@ -4,10 +4,13 @@ See specification v7, section 2.4.
 """
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.database import get_db
+from app.models.company import Company
 from app.core.security import decode_token, create_access_token
 from app.schemas.auth import PhoneLoginRequest, TokenPair, RefreshRequest, UserCreateRequest, UserUpdateRequest, UserResponse, PasswordResetRequest
 from app.services.auth_service import (
@@ -19,34 +22,96 @@ from app.services.auth_service import (
     toggle_user_status,
     reset_user_password,
     AuthenticationError,
+    PLATFORM,
     UserAlreadyExistsError,
     UserNotFoundError,
     PasswordResetNotAllowedError,
 )
 from app.api.deps import get_current_user, require_role
 from app.models.user import User
+from app.services.tenant_service import domain_allowed, host_claim, request_host, resolve_tenant, tenant_claim
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
 
+async def _login_scope(db: AsyncSession, request: Request):
+    """SaaS mode: whose accounts this address knows (a company's, or the platform's), and the session's claim. Refuses
+    an address that is no company's, or a suspended company's. Local mode: every account, no claim."""
+    settings = get_settings()
+    if not settings.is_saas:
+        return None, None
+    tenant = await resolve_tenant(db, request_host(request))
+    if tenant.kind == "admin":
+        return PLATFORM, tenant_claim(tenant)
+    if tenant.kind == "none":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"Abra o endereço da sua empresa (ex.: nome-da-empresa.{settings.BASE_DOMAIN})")
+    if tenant.company is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail="Endereço desconhecido - verifique o endereço da sua empresa")
+    if not tenant.company.is_active:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Esta empresa está suspensa - contacte a RM SOFT")
+    return tenant.company.id, tenant_claim(tenant)
+
+
+@router.get("/domain-check")
+async def domain_check(domain: str = "", db: AsyncSession = Depends(get_db)):
+    """Public, for the HTTPS proxy (Caddy on-demand certificates): 200 for the admin address and an active company's,
+    404 otherwise - so no certificate is ever requested for an invented address."""
+    if not await domain_allowed(db, domain):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Endereço desconhecido")
+    return {"ok": True}
+
+
+@router.get("/tenant")
+async def get_tenant(request: Request, db: AsyncSession = Depends(get_db)):
+    """Public (before the login): whose login screen this is - the company's name and logo, the platform, or (SaaS mode)
+    no company at this address."""
+    settings = get_settings()
+    base = {"mode": settings.DEPLOYMENT_MODE, "base_domain": settings.BASE_DOMAIN}
+    if not settings.is_saas:
+        # an installation has one company: its name on the login; with several (a development machine), none of them
+        active = (await db.execute(select(Company).where(Company.is_active.is_(True)).limit(2))).scalars().all()
+        company = active[0] if len(active) == 1 else None
+        return {**base, "kind": "company" if company else "platform", "name": (company.short_name or company.name) if company else None,
+                "logo_path": company.logo_path if company else None, "active": True}
+    tenant = await resolve_tenant(db, request_host(request))
+    if tenant.kind == "admin":
+        return {**base, "kind": "admin", "name": "Administração RM SOFT", "logo_path": None, "active": True}
+    if tenant.kind == "none" or tenant.company is None:
+        return {**base, "kind": "none", "name": None, "logo_path": None, "active": False}
+    company = tenant.company
+    return {**base, "kind": "company", "name": company.short_name or company.name, "logo_path": company.logo_path,
+            "active": company.is_active}
+
+
 @router.post("/login", response_model=TokenPair)
-async def login(payload: PhoneLoginRequest, db: AsyncSession = Depends(get_db)):
-    """Login with phone number + password."""
+async def login(payload: PhoneLoginRequest, request: Request, db: AsyncSession = Depends(get_db)):
+    """Login with phone number + password - in SaaS mode, among the accounts of the address's company only."""
+    scope, claim = await _login_scope(db, request)
     try:
-        user = await authenticate_user(db, payload.phone_number, payload.password)
+        user = await authenticate_user(db, payload.phone_number, payload.password, scope=scope)
     except AuthenticationError as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
-    access_token, refresh_token = generate_token_pair(user)
+    access_token, refresh_token = generate_token_pair(user, tenant=claim)
     return TokenPair(access_token=access_token, refresh_token=refresh_token)
 
 
 @router.post("/refresh", response_model=TokenPair)
-async def refresh(payload: RefreshRequest):
-    """Refreshes the access token from a valid refresh token."""
+async def refresh(payload: RefreshRequest, request: Request, db: AsyncSession = Depends(get_db)):
+    """Refreshes the access token from a valid refresh token - in SaaS mode, only on the address it was issued for."""
     data = decode_token(payload.refresh_token)
     if data is None or data.get("type") != "refresh":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sessão inválida ou expirada. Por favor, inicie sessão novamente.")
-    new_access_token = create_access_token(subject=data["sub"], company_id=data["company_id"], role=data.get("role", ""))
+    claim = host_claim(request_host(request)) if get_settings().is_saas else None
+    if get_settings().is_saas and (claim is None or data.get("tnt") != claim):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sessão de outro endereço - inicie sessão neste endereço.")
+    if get_settings().is_saas and data.get("company_id") not in (None, "None"):
+        company = await db.get(Company, uuid.UUID(data["company_id"]))
+        if company is None or not company.is_active:  # a suspended company: its sessions end at the next refresh
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Esta empresa está suspensa - contacte a RM SOFT")
+    new_access_token = create_access_token(subject=data["sub"], company_id=data["company_id"], role=data.get("role", ""),
+                                           tenant=data.get("tnt"))
     return TokenPair(access_token=new_access_token, refresh_token=payload.refresh_token)
 
 

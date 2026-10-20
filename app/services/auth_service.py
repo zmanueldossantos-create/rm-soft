@@ -90,34 +90,42 @@ async def update_user(
     return user
 
 
-async def authenticate_user(db: AsyncSession, phone_number: str, password: str) -> User:
+PLATFORM = "PLATFORM"  # authenticate_user scope: the platform's accounts only (SUPER_ADMIN, no company)
+
+
+async def authenticate_user(db: AsyncSession, phone_number: str, password: str,
+                            scope: uuid.UUID | str | None = None) -> User:
     """
-    Looks up by phone number ALONE (the user does not know their company_id at login time).
-    In SaaS mode, the same number can exist under several company_id (section 2.4 v7) -
-    all matching accounts are fetched and the password checked against each.
-    Phase 1 edge case: if two tenants collide with the same password, the first match wins.
-    Acceptable for Phase 1 (SMS verification out of scope).
+    Looks up the active accounts with this phone number and checks the password against each.
+    scope: None = every account (local mode: one company per installation); a company_id = that company's accounts
+    only (SaaS mode: the company is known from its address, so the same number in another company never interferes);
+    PLATFORM = the platform's accounts (the admin address).
     """
-    result = await db.execute(
-        select(User).where(User.phone_number == phone_number, User.is_active == True)
-    )
-    users = result.scalars().all()
+    query = select(User).where(User.phone_number == phone_number, User.is_active == True)  # noqa: E712
+    if scope == PLATFORM:
+        query = query.where(User.company_id.is_(None))
+    elif scope is not None:
+        query = query.where(User.company_id == scope)
+    users = (await db.execute(query)).scalars().all()
     for user in users:
         if verify_password(password, user.password_hash):
             return user
     raise AuthenticationError("Número de telefone ou palavra-passe incorretos")
 
 
-def generate_token_pair(user: User) -> tuple[str, str]:
-    """Generates the access token and refresh token for an authenticated user."""
+def generate_token_pair(user: User, tenant: str | None = None) -> tuple[str, str]:
+    """Generates the access token and refresh token for an authenticated user (tenant: SaaS mode, the address)."""
     access_token = create_access_token(
         subject=str(user.id),
         company_id=str(user.company_id),
         role=user.role.value,
+        tenant=tenant,
     )
     refresh_token = create_refresh_token(
         subject=str(user.id),
         company_id=str(user.company_id),
+        role=user.role.value,
+        tenant=tenant,
     )
     return access_token, refresh_token
 

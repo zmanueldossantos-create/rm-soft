@@ -18,6 +18,7 @@ from app.services.permission_service import grant_default_role_permissions
 from app.services.sector_service import ensure_modules_grantable
 from app.models.role_permission import RolePermission
 from app.models.company_permission_seed import CompanyPermissionSeed
+from app.services.tenant_service import TenantError, ensure_subdomain_available, suggest_subdomain
 from app.models.company import Company, LegalPersonType, InvoiceIssuanceMode
 from app.models.company_bank_account import CompanyBankAccount
 from app.models.vat import VAT
@@ -159,6 +160,7 @@ async def create_company(
     issuance_mode: str = "MANUAL",
     electronic_signature_key: str | None = None,
     bank_accounts: list[dict] | None = None,
+    subdomain: str | None = None,
 ) -> Company:
     """
     Creates a new client company, seeds its VAT rates (limited to what the
@@ -171,6 +173,12 @@ async def create_company(
     await _check_all_fields_available(db, name, nif, email, phone_number)
     _validate_currencies(primary_currency_id, secondary_currency_id)
     await ensure_modules_grantable(db, module_ids or [])
+    # its own address (SaaS): the one typed, else made from the short name
+    try:
+        subdomain = await ensure_subdomain_available(db, subdomain) if (subdomain or "").strip() \
+            else await suggest_subdomain(db, short_name or name)
+    except TenantError as e:
+        raise CompanyAlreadyExistsError(str(e))
 
     company = Company(
         name=name,
@@ -195,6 +203,7 @@ async def create_company(
         suggests_last_document_date=suggests_last_document_date if uses_invoicing else False,
         issuance_mode=InvoiceIssuanceMode(issuance_mode),
         electronic_signature_key=electronic_signature_key if issuance_mode == "ELETRONICA" else None,
+        subdomain=subdomain,
     )
     db.add(company)
 
@@ -298,6 +307,7 @@ async def update_company(
     issuance_mode: str = "MANUAL",
     electronic_signature_key: str | None = None,
     fiscal_regime_id: uuid.UUID | None = None,
+    subdomain: str | None = None,
 ) -> Company:
     """
     Updates a company's editable fields, including NIF, email and phone (all unique).
@@ -315,6 +325,11 @@ async def update_company(
 
     await _check_all_fields_available(db, name, nif, email, phone_number, exclude_id=company_id)
     _validate_currencies(primary_currency_id, secondary_currency_id)
+    if subdomain is not None and subdomain.strip() != (company.subdomain or ""):
+        try:  # a new address: the old one stops working at once (sessions opened there end too)
+            company.subdomain = await ensure_subdomain_available(db, subdomain, company_id)
+        except TenantError as e:
+            raise CompanyAlreadyExistsError(str(e))
 
     company.name = name
     company.nif = nif

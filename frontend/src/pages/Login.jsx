@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Phone, Lock, Eye, EyeOff, LogIn, Mail } from 'lucide-react';
+import { Phone, Lock, Eye, EyeOff, LogIn, Mail, Building2 } from 'lucide-react';
 import apiClient from '../api/client';
+import { API_ORIGIN } from '../api/config';
 import { useAuthStore } from '../store/authStore';
 import { extractErrorMessage } from '../utils/errors';
 import { homeFor } from '../utils/roleHome';
@@ -15,6 +16,13 @@ export default function Login() {
 
   const navigate = useNavigate();
   const login = useAuthStore((state) => state.login);
+
+  // Whose login screen this is: the company of this address (SaaS), the platform, or nobody's
+  const [tenant, setTenant] = useState(null);
+  useEffect(() => {
+    apiClient.get('/auth/tenant').then((r) => setTenant(r.data)).catch(() => setTenant(null));
+  }, []);
+  const closed = tenant?.mode === 'saas' && (tenant.kind === 'none' || !tenant.active);
 
   const supplierName = import.meta.env.VITE_SUPPLIER_NAME;
   const supplierEmail = import.meta.env.VITE_SUPPLIER_EMAIL;
@@ -62,16 +70,31 @@ export default function Login() {
         <div className="relative bg-bg-elevated rounded-lg overflow-hidden shadow-2xl ticket-edge">
           <div className="px-10 pt-9 pb-8">
             <p className="font-mono text-[11px] tracking-[0.14em] uppercase text-accent mb-2">
-              Painel de gestão
+              RM SOFT · Painel de gestão
             </p>
-            <h1 className="font-display font-bold text-[26px] tracking-tight text-text-primary mb-1.5">
-              RM SOFT
-            </h1>
+            <div className="flex items-center gap-3 mb-1.5">
+              {tenant?.logo_path ? (
+                <img src={API_ORIGIN + tenant.logo_path} alt="" className="w-11 h-11 rounded-md object-contain bg-white/90 p-1" />
+              ) : tenant?.kind === 'company' ? (
+                <div className="w-11 h-11 rounded-md bg-accent/10 flex items-center justify-center"><Building2 size={20} className="text-accent" /></div>
+              ) : null}
+              <h1 className="font-display font-bold text-[26px] tracking-tight text-text-primary">
+                {tenant?.name || 'RM SOFT'}
+              </h1>
+            </div>
             <p className="text-text-muted text-sm mb-8">
-              Inicie sessão com o seu número de telefone
+              {closed ? 'Não é possível iniciar sessão neste endereço' : 'Inicie sessão com o seu número de telefone'}
             </p>
 
-            <form onSubmit={handleSubmit} className="flex flex-col">
+            {closed && (
+              <div className="bg-amber-500/10 border-l-2 border-amber-500 text-amber-500 [.light_&]:text-amber-700 px-3.5 py-3 text-[13px] rounded-r">
+                {tenant.kind === 'none'
+                  ? `Este endereço não corresponde a nenhuma empresa. Abra o endereço da sua empresa (ex.: nome-da-empresa.${tenant.base_domain}).`
+                  : 'Esta empresa está suspensa - contacte a RM SOFT.'}
+              </div>
+            )}
+
+            {!closed && <form onSubmit={handleSubmit} className="flex flex-col">
               <label htmlFor="phone" className="text-[11px] font-medium uppercase tracking-wide text-text-muted mt-1 mb-1.5">
                 Número de telefone
               </label>
@@ -130,7 +153,7 @@ export default function Login() {
                 <LogIn size={18} />
                 {loading ? 'A entrar...' : 'Entrar'}
               </button>
-            </form>
+            </form>}
 
             <fieldset className="mt-6 border border-border rounded-md px-4 pb-3 pt-2 bg-bg-inset/50">
               <legend className="font-mono text-[10px] uppercase tracking-wide text-text-muted px-1.5">

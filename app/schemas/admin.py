@@ -71,6 +71,7 @@ class BankAccountResponse(BaseModel):
 
 
 class CompanyCreateRequest(BaseModel):
+    subdomain: str | None = None  # SaaS address; empty = made from the short name
     name: str
     nif: str
     email: str
@@ -147,6 +148,7 @@ class CompanyCreateRequest(BaseModel):
 
 
 class CompanyUpdateRequest(BaseModel):
+    subdomain: str | None = None  # None = unchanged
     name: str
     nif: str
     email: str
@@ -199,6 +201,7 @@ class CompanyUpdateRequest(BaseModel):
 
 class CompanyResponse(BaseModel):
     id: uuid.UUID
+    subdomain: str | None = None
     name: str
     nif: str
     email: str

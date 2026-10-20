@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Building2, Plus, Loader2, Search, Mail, Phone, Pencil, UserCog, Check, X, KeyRound, Landmark } from 'lucide-react';
 import Modal from '../components/Modal';
+import apiClient from '../api/client';
 import Select from '../components/Select';
 import {
   listCompanies, createCompany, updateCompany, toggleCompanyStatus,
@@ -40,7 +41,12 @@ function Field({ label, children, hint }) {
 
 const inputClass = "w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors";
 
+// A name turned into a subdomain, as the server does (Farmácia da Luz -> farmacia-da-luz)
+const slugify = (text) => (text || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40).replace(/-+$/, '');
+
 const emptyForm = {
+  subdomain: '', subdomainTouched: false, originalSubdomain: '',
   name: '', shortName: '', legalPersonType: 'JURIDICA', nif: '', email: '', phone: '', phone2: '',
   website: '', address: '', city: '', countryId: '', provinceId: '', municipalityId: '',
   commercialRegistrationNumber: '',
@@ -211,6 +217,7 @@ export default function AdminCompanies() {
     setEditingId(company.id);
     setActiveTab('dados');
     setForm({
+      subdomain: company.subdomain || '', subdomainTouched: true, originalSubdomain: company.subdomain || '',
       name: company.name,
       shortName: company.short_name || '',
       legalPersonType: company.legal_person_type || 'JURIDICA',
@@ -284,8 +291,19 @@ export default function AdminCompanies() {
   }
 
   function updateField(field, value) {
-    setForm((prev) => ({ ...prev, [field]: value }));
+    setForm((prev) => {
+      const next = { ...prev, [field]: value };
+      // a new company's address follows its short name (or name) until typed by hand
+      if ((field === 'shortName' || field === 'name') && !prev.subdomainTouched) next.subdomain = slugify(next.shortName || next.name);
+      return next;
+    });
   }
+
+  // SaaS: the domain the companies' addresses are under (from the server's settings)
+  const [baseDomain, setBaseDomain] = useState('rmsystem.co.ao');
+  useEffect(() => {
+    apiClient.get('/auth/tenant').then((r) => r.data.base_domain && setBaseDomain(r.data.base_domain)).catch(() => {});
+  }, []);
 
   function handleProvinceChange(provinceId) {
     setForm((prev) => ({ ...prev, provinceId, municipalityId: '' }));
@@ -357,6 +375,7 @@ export default function AdminCompanies() {
     const fullPhone = form.phone.startsWith('+') ? form.phone : '+244' + form.phone.replace(/\s/g, '');
     const fullPhone2 = form.phone2 ? (form.phone2.startsWith('+') ? form.phone2 : '+244' + form.phone2.replace(/\s/g, '')) : null;
     return {
+      subdomain: form.subdomain.trim() || null,
       name: form.name,
       short_name: form.shortName || null,
       legal_person_type: form.legalPersonType,
@@ -494,7 +513,10 @@ export default function AdminCompanies() {
               <tbody>
                 {filteredCompanies.map((c) => (
                   <tr key={c.id} className="border-b border-border last:border-0 hover:bg-bg-inset/40 transition-colors">
-                    <td className="px-6 py-4 font-display font-medium text-text-primary">{c.short_name || c.name}</td>
+                    <td className="px-6 py-4">
+                      <p className="font-display font-medium text-text-primary">{c.short_name || c.name}</p>
+                      {c.subdomain && <p className="text-[11px] font-mono text-text-muted">{c.subdomain}.{baseDomain}</p>}
+                    </td>
                     <td className="px-6 py-4 font-mono text-text-muted">{c.nif}</td>
                     <td className="px-6 py-4">
                       <div className="flex flex-col gap-1 text-[13px] font-mono text-text-muted">
@@ -578,6 +600,23 @@ export default function AdminCompanies() {
                   <input value={form.shortName} onChange={(e) => updateField('shortName', e.target.value)} placeholder="Usado nas listagens" className={inputClass} />
                 </Field>
               </div>
+              <Field label="Endereço da empresa (subdomínio)" hint="Letras minúsculas, números e «-». Único: duas empresas nunca têm o mesmo endereço. Vazio = feito a partir do nome curto.">
+                <div className="flex items-center bg-bg-inset border border-border rounded-md overflow-hidden focus-within:border-accent transition-colors">
+                  <span className="px-3 py-2.5 text-text-muted border-r border-border font-mono text-sm">https://</span>
+                  <input
+                    value={form.subdomain}
+                    onChange={(e) => setForm((prev) => ({ ...prev, subdomain: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''), subdomainTouched: true }))}
+                    placeholder="farmacia-da-luz"
+                    className="flex-1 min-w-0 bg-transparent px-3 py-2.5 text-sm text-text-primary font-mono outline-none"
+                  />
+                  <span className="px-3 py-2.5 text-text-muted border-l border-border font-mono text-sm">.{baseDomain}</span>
+                </div>
+              </Field>
+              {editingId && form.originalSubdomain && form.subdomain !== form.originalSubdomain && (
+                <div className="bg-amber-500/10 border-l-2 border-amber-500 text-amber-500 [.light_&]:text-amber-700 px-3.5 py-2.5 text-[13px] rounded-r">
+                  Ao guardar, o endereço {form.originalSubdomain}.{baseDomain} deixa de funcionar e as sessões abertas nele terminam. Avise a empresa do novo endereço.
+                </div>
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                 <Field label="Email *">
                   <input type="email" value={form.email} onChange={(e) => updateField('email', e.target.value)} required className={inputClass} />

@@ -4,9 +4,13 @@ import { API_BASE_URL } from './config';
 import axios from 'axios';
 import { useAuthStore } from '../store/authStore';
 
+// SaaS mode: the screen's own address tells the backend whose company this is (farmacia-da-luz.rmsystem.co.ao) - sent
+// on every call, since in development the backend has another address than the screens.
+const TENANT_HEADERS = { 'X-Tenant-Host': window.location.hostname };
+
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  headers: { 'Content-Type': 'application/json' },
+  headers: { 'Content-Type': 'application/json', ...TENANT_HEADERS },
 });
 
 // Attaches the JWT access token to every outgoing request, if present.
@@ -42,7 +46,7 @@ apiClient.interceptors.response.use(
         if (!refreshPromise) {
           refreshPromise = axios.post(API_BASE_URL + '/auth/refresh', {
             refresh_token: refreshToken,
-          }).finally(() => {
+          }, { headers: TENANT_HEADERS }).finally(() => {
             refreshPromise = null;
           });
         }

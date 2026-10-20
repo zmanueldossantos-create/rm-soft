@@ -23,10 +23,11 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
 
-def create_access_token(subject: str, company_id: str, role: str) -> str:
+def create_access_token(subject: str, company_id: str, role: str, tenant: str | None = None) -> str:
     """
     Create a short-lived access JWT.
-    Embeds company_id (multi-tenant isolation - section 2.5 v7) and role.
+    Embeds company_id (multi-tenant isolation - section 2.5 v7) and role; in SaaS mode the address it was issued for
+    (tenant: the company's subdomain, or the admin one) - it is refused on any other address.
     """
     expire = datetime.now(timezone.utc) + timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
     payload = {
@@ -36,11 +37,13 @@ def create_access_token(subject: str, company_id: str, role: str) -> str:
         "type": "access",
         "exp": expire,
     }
+    if tenant:
+        payload["tnt"] = tenant
     return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
 
 
-def create_refresh_token(subject: str, company_id: str) -> str:
-    """Create a long-lived refresh JWT."""
+def create_refresh_token(subject: str, company_id: str, role: str | None = None, tenant: str | None = None) -> str:
+    """Create a long-lived refresh JWT (with the role and the address, to issue the same access token again)."""
     expire = datetime.now(timezone.utc) + timedelta(days=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS)
     payload = {
         "sub": subject,
@@ -48,6 +51,10 @@ def create_refresh_token(subject: str, company_id: str) -> str:
         "type": "refresh",
         "exp": expire,
     }
+    if role:
+        payload["role"] = role
+    if tenant:
+        payload["tnt"] = tenant
     return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
 
 

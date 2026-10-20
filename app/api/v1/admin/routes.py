@@ -104,6 +104,7 @@ async def create_new_company(
             issuance_mode=payload.issuance_mode,
             electronic_signature_key=payload.electronic_signature_key,
             bank_accounts=[b.model_dump() for b in payload.bank_accounts],
+            subdomain=payload.subdomain,
         )
     except CompanyAlreadyExistsError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
@@ -156,6 +157,7 @@ async def edit_company(
             issuance_mode=payload.issuance_mode,
             electronic_signature_key=payload.electronic_signature_key,
             fiscal_regime_id=payload.fiscal_regime_id,
+            subdomain=payload.subdomain,
         )
     except CompanyAlreadyExistsError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))

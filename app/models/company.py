@@ -37,6 +37,9 @@ class Company(Base):
     name: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)  # denominacao fiscal
     # Short/display name (nome curto) - falls back to `name` in the UI when not set.
     short_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # SaaS mode: the company's own address, <subdomain>.<BASE_DOMAIN> - the login there only knows this company's
+    # users (see tenant_service). Unique; proposed from the short name at creation, changed only by SUPER_ADMIN.
+    subdomain: Mapped[str | None] = mapped_column(String(63), unique=True, nullable=True, index=True)
     legal_person_type: Mapped[LegalPersonType] = mapped_column(Enum(LegalPersonType), nullable=False, default=LegalPersonType.JURIDICA)
     nif: Mapped[str] = mapped_column(String(20), unique=True, nullable=False, index=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)

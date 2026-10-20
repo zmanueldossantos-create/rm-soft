@@ -11,10 +11,12 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.security import decode_token
 from app.models.user import User
 from app.services.permission_service import has_permission
+from app.services.tenant_service import host_claim, request_host
 
 
 class PortugueseHTTPBearer(HTTPBearer):
@@ -56,6 +58,16 @@ async def get_current_user(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Sessão inválida ou expirada. Por favor, inicie sessão novamente.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # SaaS mode: a session is used only on the address it was opened on (one company's, or the admin one)
+    # (an address that is no company's - the bare domain, an IP - accepts no session at all)
+    claim = host_claim(request_host(request)) if get_settings().is_saas else None
+    if get_settings().is_saas and (claim is None or payload.get("tnt") != claim):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Sessão de outro endereço - inicie sessão neste endereço.",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
