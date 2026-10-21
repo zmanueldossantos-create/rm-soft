@@ -43,6 +43,7 @@ from app.services.sector_service import (
 )
 from app.services.company_service import get_company_gestor
 from app.services.company_backup_service import BackupError, export_company, inspect_backup, restore_company
+from app.services.company_base_service import inspect_base
 from app.services.setup_checklist_service import get_setup_checklist
 from app.services.support_service import SupportError, list_support_sessions, start_support
 from app.schemas.auth import UserResponse
@@ -108,7 +109,11 @@ async def create_new_company(
             electronic_signature_key=payload.electronic_signature_key,
             bank_accounts=[b.model_dump() for b in payload.bank_accounts],
             subdomain=payload.subdomain,
+            base_token=payload.base_token,
+            base_parts=payload.base_parts,
         )
+    except BackupError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     except CompanyAlreadyExistsError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except InvalidCurrencySelectionError as e:
@@ -139,6 +144,20 @@ async def export_company_backup(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     return Response(content=content, media_type="application/zip",
                     headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+
+
+@router.post("/company-base/inspect")
+async def inspect_company_base(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role("SUPER_ADMIN")),
+):
+    """«Nova empresa» > Base: what a backup file can give a new company (its catalog) and the regime it takes; the
+    file is kept an hour under the returned token, for the creation."""
+    try:
+        return await inspect_base(db, await _backup_content(file))
+    except BackupError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
 
 
 @router.post("/companies/restore/inspect")

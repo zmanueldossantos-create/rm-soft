@@ -1,12 +1,12 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Building2, Plus, Loader2, Search, Mail, Phone, Pencil, UserCog, Check, X, KeyRound, Landmark, LifeBuoy, Download, Upload } from 'lucide-react';
+import { Building2, Plus, Loader2, Search, Mail, Phone, Pencil, UserCog, Check, X, KeyRound, Landmark, LifeBuoy, Download, Upload, Copy, FileArchive } from 'lucide-react';
 import Modal from '../components/Modal';
 import apiClient from '../api/client';
 import Select from '../components/Select';
 import {
   listCompanies, createCompany, updateCompany, toggleCompanyStatus,
   getCompanyGestor,
-  listBankAccounts, addBankAccount, updateBankAccount, toggleBankAccountStatus, getCompanyRegimeHistory, getCompanySetup, startSupport, listSupportSessions, downloadCompanyBackup } from '../api/admin';
+  listBankAccounts, addBankAccount, updateBankAccount, toggleBankAccountStatus, getCompanyRegimeHistory, getCompanySetup, startSupport, listSupportSessions, downloadCompanyBackup, inspectCompanyBase } from '../api/admin';
 import RestoreCompanyModal from '../components/RestoreCompanyModal';
 import SupportSessionsList from '../components/SupportSessionsList';
 import SetupChecklist from '../components/SetupChecklist';
@@ -58,6 +58,19 @@ const emptyForm = {
   issuanceMode: 'MANUAL', electronicSignatureKey: '',
   moduleIds: [],
   gestorName: '', gestorPhone: '', gestorPassword: '',
+  baseParts: [],
+};
+
+// «Base»: what a new company can take from a backup file, and what it never takes
+const BASE_PARTS = [
+  { key: 'artigos', label: 'Artigos e categorias', hint: 'Preços, códigos de barras, unidades de venda, receitas e imagens' },
+  { key: 'servicos', label: 'Serviços', hint: 'Tipos de serviço, tipos de recurso e serviços, com os preços' },
+  { key: 'fornecedores', label: 'Fornecedores', hint: 'Nome e contactos' },
+];
+const BASE_COUNT_LABELS = {
+  categorias: ['categoria', 'categorias'], artigos: ['artigo', 'artigos'], unidades_de_venda: ['unidade de venda', 'unidades de venda'],
+  receitas: ['receita', 'receitas'], tipos_de_servico: ['tipo de serviço', 'tipos de serviço'], servicos: ['serviço', 'serviços'],
+  fornecedores: ['fornecedor', 'fornecedores'],
 };
 
 const emptyBankRow = { bankId: '', accountNumber: '', iban: '', currencyId: '' };
@@ -66,6 +79,7 @@ export default function AdminCompanies() {
   const [companies, setCompanies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState(''); // after a creation from a base file: what was copied
   const [search, setSearch] = useState('');
   // Cópia de segurança: «Exportar» one company to a file; «Restaurar empresa» puts one back from its file
   const [exportingId, setExportingId] = useState(null);
@@ -224,9 +238,56 @@ export default function AdminCompanies() {
     setEditingId(null);
     setForm(emptyForm);
     setBankRows([]);
-    setActiveTab('gestor');
+    setActiveTab('base');
     setFormError('');
     setModalOpen(true);
+    setBase(null);
+    setBaseError('');
+  }
+
+  // «Base»: a backup file whose catalog the new company takes (it takes the file company's fiscal regime too)
+  const [base, setBase] = useState(null); // {token, company, counts, fiscal_regime_id, ...} once the file is read
+  const [baseFileName, setBaseFileName] = useState('');
+  const [baseLoading, setBaseLoading] = useState(false);
+  const [baseError, setBaseError] = useState('');
+  async function chooseBaseFile(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setBaseFileName(file.name);
+    setBase(null);
+    setBaseError('');
+    setBaseLoading(true);
+    try {
+      const seen = await inspectCompanyBase(file);
+      setBase(seen);
+      setForm((prev) => ({
+        ...prev,
+        baseParts: BASE_PARTS.filter((p) => seen.counts[p.key] > 0).map((p) => p.key),
+        fiscalRegimeId: seen.fiscal_regime_id || prev.fiscalRegimeId,
+      }));
+    } catch (err) {
+      setBaseError(extractErrorMessage(err, 'Não foi possível ler o ficheiro'));
+    } finally {
+      setBaseLoading(false);
+    }
+  }
+  function clearBase() {
+    setBase(null);
+    setBaseFileName('');
+    setBaseError('');
+    setForm((prev) => ({ ...prev, baseParts: [] }));
+  }
+  function toggleBasePart(key) {
+    setForm((prev) => ({
+      ...prev,
+      baseParts: prev.baseParts.includes(key) ? prev.baseParts.filter((k) => k !== key) : [...prev.baseParts, key],
+    }));
+  }
+  // another regime chosen in «Dados da Empresa»: the base (of the file's regime) is no longer usable
+  function handleRegimeChange(regimeId) {
+    if (base && (base.fiscal_regime_id || '') !== (regimeId || '')) clearBase();
+    updateField('fiscalRegimeId', regimeId);
   }
 
   async function openEditModal(company) {
@@ -488,8 +549,10 @@ export default function AdminCompanies() {
       } else {
         const fullGestorPhone = form.gestorPhone.startsWith('+') ? form.gestorPhone : '+244' + form.gestorPhone.replace(/\s/g, '');
         const validBankRows = bankRows.filter((r) => r.bankId && r.accountNumber && r.iban && r.currencyId);
-        await createCompany({
+        const created = await createCompany({
           ...buildPayload(),
+          base_token: base && !base.problems.length ? base.token : null,
+          base_parts: base && !base.problems.length ? form.baseParts : [],
           fiscal_regime_id: form.fiscalRegimeId || null,
           module_ids: form.moduleIds,
           gestor_full_name: form.gestorName,
@@ -497,6 +560,12 @@ export default function AdminCompanies() {
           gestor_password: form.gestorPassword,
           bank_accounts: validBankRows.map((r) => ({ bank_id: r.bankId, account_number: r.accountNumber, iban: 'AO06' + r.iban, currency_id: r.currencyId })),
         });
+        if (created.base_counts) {
+          const copied = Object.entries(created.base_counts).filter(([, n]) => n > 0)
+            .map(([k, n]) => n + ' ' + (BASE_COUNT_LABELS[k] ? BASE_COUNT_LABELS[k][n === 1 ? 0 : 1] : k));
+          setNotice('«' + (created.short_name || created.name) + '» criada com a base do ficheiro: '
+            + (copied.length ? copied.join(', ') + '.' : 'o ficheiro não tinha nada a copiar.'));
+        }
       }
       closeModal();
       await loadCompanies();
@@ -521,7 +590,8 @@ export default function AdminCompanies() {
 
   const isFormValid = editingId
     ? form.name && form.nif && form.email && form.phone
-    : form.name && form.nif && form.email && form.phone && form.fiscalRegimeId && form.gestorName && form.gestorPhone && form.gestorPassword.length >= 8;
+    : form.name && form.nif && form.email && form.phone && form.fiscalRegimeId && form.gestorName && form.gestorPhone && form.gestorPassword.length >= 8
+      && !baseLoading && !(base && (base.problems.length > 0 || form.baseParts.length === 0));
 
   return (
     <main className="max-w-[1600px] mx-auto px-4 sm:px-6 md:px-8 py-6 sm:py-9">
@@ -559,6 +629,14 @@ export default function AdminCompanies() {
         </button>
         </div>
       </div>
+
+      {notice && (
+        <div className="mb-4 flex items-start gap-3 bg-success/10 border-l-2 border-success text-success px-3.5 py-2.5 text-[13px] rounded-r">
+          <Copy size={15} className="shrink-0 mt-0.5" />
+          <span className="flex-1">{notice}</span>
+          <button type="button" onClick={() => setNotice('')} aria-label="Fechar" className="shrink-0 cursor-pointer hover:text-text-primary"><X size={15} /></button>
+        </div>
+      )}
 
       <div className="bg-bg-elevated border border-border rounded-lg overflow-hidden">
         {loading && (
@@ -649,6 +727,7 @@ export default function AdminCompanies() {
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex items-center bg-bg-inset border border-border rounded-md p-0.5 self-start flex-wrap">
             {[
+              ...(editingId ? [] : [['base', 'Base']]),
               ['gestor', 'Conta do Gestor'],
               ['dados', 'Dados da Empresa'],
                         ['bancarias', 'Coordenadas Bancárias'],
@@ -769,7 +848,10 @@ export default function AdminCompanies() {
               <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
                 <div className="sm:col-span-6">
                   <Field label="Regime fiscal">
-                    <Select value={form.fiscalRegimeId} onChange={(v) => updateField('fiscalRegimeId', v)} options={regimes.map((r) => ({ value: r.id, label: r.name }))} placeholder="Selecionar regime fiscal" />
+                    <Select value={form.fiscalRegimeId} onChange={editingId ? (v) => updateField('fiscalRegimeId', v) : handleRegimeChange} options={regimes.map((r) => ({ value: r.id, label: r.name }))} placeholder="Selecionar regime fiscal" />
+                    {!editingId && base && !base.problems.length && (
+                      <p className="text-[11px] text-text-muted mt-1">O regime da empresa do ficheiro de base - outro regime retira a base.</p>
+                    )}
 
                     {regimeHistory.length > 0 && (
                       <ul className="mt-1.5 flex flex-col gap-0.5 text-[11px] text-text-muted">
@@ -835,6 +917,69 @@ export default function AdminCompanies() {
               <Field label="Palavra-passe *" hint="Mínimo 8 caracteres">
                 <input type="password" value={form.gestorPassword} onChange={(e) => updateField('gestorPassword', e.target.value)} required minLength={8} className={inputClass} />
               </Field>
+            </div>
+          )}
+
+          {activeTab === 'base' && !editingId && (
+            <div className="flex flex-col gap-4 min-h-[420px]">
+              <p className="text-[13px] text-text-muted">
+                Para não configurar tudo de novo: a nova empresa recebe o catálogo de uma cópia exportada (botão de descarga
+                na lista) - ex.: um «Comércio geral» preparado uma vez. Fica com o regime fiscal dessa empresa. Opcional - sem
+                base, a empresa começa vazia.
+              </p>
+              <div className="flex items-center gap-2">
+                <label className={'flex-1 flex items-center justify-center gap-2 border border-dashed border-border hover:border-accent rounded-md py-4 text-[13px] text-text-primary transition-colors ' + (baseLoading ? 'opacity-50 cursor-wait' : 'cursor-pointer')}>
+                  <input type="file" accept=".zip,application/zip" onChange={chooseBaseFile} disabled={baseLoading} className="hidden" />
+                  {baseLoading ? <Loader2 size={17} className="animate-spin" /> : baseFileName ? <FileArchive size={17} className="text-accent" /> : <Upload size={17} className="text-accent" />}
+                  {baseLoading ? 'A ler o ficheiro...' : baseFileName || 'Escolher o ficheiro de base (.zip)'}
+                </label>
+                {(base || baseError) && (
+                  <button type="button" onClick={clearBase} className="shrink-0 border border-border hover:border-danger hover:text-danger text-text-muted text-[13px] rounded-md px-3.5 py-4 cursor-pointer">
+                    Sem base
+                  </button>
+                )}
+              </div>
+              {baseError && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{baseError}</div>}
+              {base && (
+                <>
+                  <div className="text-[13px] text-text-primary">
+                    Base: <span className="font-semibold">{base.company.short_name || base.company.name}</span>
+                    <span className="text-text-muted"> · NIF {base.company.nif} · cópia de {new Date(base.exported_at).toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                    {base.fiscal_regime_name && (
+                      <div className="mt-1">Regime fiscal da nova empresa: <span className="font-semibold">{base.fiscal_regime_name}</span><span className="text-text-muted"> (o da base)</span></div>
+                    )}
+                  </div>
+                  {base.problems.map((problem) => (
+                    <div key={problem} className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{problem}</div>
+                  ))}
+                  {!base.problems.length && (
+                    <div className="flex flex-col gap-2">
+                      <span className="text-[11px] font-medium uppercase tracking-wide text-text-muted">O que copiar</span>
+                      {BASE_PARTS.map((part) => {
+                        const count = base.counts[part.key];
+                        return (
+                          <label key={part.key} className={'flex items-start gap-3 border border-border rounded-md px-3.5 py-2.5 ' + (count ? 'cursor-pointer hover:border-accent' : 'opacity-50')}>
+                            <input type="checkbox" checked={form.baseParts.includes(part.key)} disabled={!count}
+                              onChange={() => toggleBasePart(part.key)} className="w-4 h-4 mt-0.5 accent-accent cursor-pointer disabled:cursor-not-allowed" />
+                            <span className="flex-1">
+                              <span className="text-[13px] text-text-primary font-medium">{part.label}</span>
+                              <span className="text-[12px] text-text-muted"> · {count} no ficheiro</span>
+                              <span className="block text-[12px] text-text-muted">{part.hint}</span>
+                            </span>
+                          </label>
+                        );
+                      })}
+                      {form.baseParts.length === 0 && (
+                        <p className="text-[12px] text-danger">Escolha pelo menos uma parte, ou «Sem base».</p>
+                      )}
+                    </div>
+                  )}
+                  <p className="text-[12px] text-text-muted">
+                    Nunca copiados: clientes (são de outra empresa), stock e custos, documentos, séries, períodos, caixas e
+                    utilizadores. Para repor uma empresa inteira, use «Restaurar empresa».
+                  </p>
+                </>
+              )}
             </div>
           )}
 

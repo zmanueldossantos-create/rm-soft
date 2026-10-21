@@ -8,6 +8,8 @@ import uuid
 from datetime import datetime
 
 import phonenumbers
+from typing import Literal
+
 from pydantic import BaseModel, field_validator
 
 EMAIL_PATTERN = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
@@ -100,6 +102,9 @@ class CompanyCreateRequest(BaseModel):
     issuance_mode: str = "MANUAL"
     electronic_signature_key: str | None = None
     bank_accounts: list[BankAccountInput] = []
+    # «Base»: a company's backup file, uploaded first (/admin/company-base/inspect), whose catalog is copied
+    base_token: str | None = None
+    base_parts: list[Literal["artigos", "servicos", "fornecedores"]] = []
 
     @field_validator("name")
     @classmethod
@@ -202,6 +207,7 @@ class CompanyUpdateRequest(BaseModel):
 class CompanyResponse(BaseModel):
     id: uuid.UUID
     subdomain: str | None = None
+    base_counts: dict[str, int] | None = None  # after a creation from a base file: what was copied (not stored)
     name: str
     nif: str
     email: str

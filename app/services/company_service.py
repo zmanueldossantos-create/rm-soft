@@ -16,6 +16,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.permission_service import grant_default_role_permissions
 from app.services.sector_service import ensure_modules_grantable
+from app.services.company_backup_service import BackupError
+from app.services.company_base_service import base_counts, copy_base, write_images
 from app.models.role_permission import RolePermission
 from app.models.company_permission_seed import CompanyPermissionSeed
 from app.services.tenant_service import TenantError, ensure_subdomain_available, suggest_subdomain
@@ -161,6 +163,8 @@ async def create_company(
     electronic_signature_key: str | None = None,
     bank_accounts: list[dict] | None = None,
     subdomain: str | None = None,
+    base_token: str | None = None,
+    base_parts: list[str] | None = None,
 ) -> Company:
     """
     Creates a new client company, seeds its VAT rates (limited to what the
@@ -168,6 +172,8 @@ async def create_company(
     grants access to the chosen Modules (Hotel/Padaria/Bar/Restaurante -
     see Module/CompanyModule), creates the company's single GESTOR
     account, and optionally its bank accounts - all in one transaction.
+    With a base file (base_token, company_base_service): also the chosen parts of its catalog, in the same
+    transaction - a refused copy creates nothing.
     Only callable by SUPER_ADMIN.
     """
     await _check_all_fields_available(db, name, nif, email, phone_number)
@@ -260,9 +266,21 @@ async def create_company(
         role=UserRole.GESTOR,
     ))
 
+    base_copy = None
+    if base_token:
+        await db.flush()  # the new company's VAT rates: the base's articles take the ones of the same category
+        try:
+            base_copy = await copy_base(db, base_token, company, base_parts or [])
+        except BackupError:
+            await db.rollback()
+            raise
+
     await grant_default_role_permissions(db, company.id)
     await db.commit()
     await db.refresh(company)
+    if base_copy is not None:
+        write_images(base_copy)
+        company.base_counts = base_counts(base_copy)  # shown once, after the creation (not stored)
     return company
 
 

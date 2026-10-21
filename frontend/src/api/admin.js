@@ -117,3 +117,9 @@ export async function restoreCompanyBackup(file) {
   const res = await apiClient.post('/admin/companies/restore', backupForm(file), MULTIPART);
   return res.data;
 }
+
+// «Nova empresa» > Base: what a backup file can give a new company; the file is kept under the returned token.
+export async function inspectCompanyBase(file) {
+  const res = await apiClient.post('/admin/company-base/inspect', backupForm(file), MULTIPART);
+  return res.data;
+}

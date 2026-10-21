@@ -301,6 +301,30 @@ def _typed(table: Table, raw: dict) -> dict:
     return {k: _from_json(table.c[k], v) for k, v in raw.items() if k in table.c}
 
 
+async def map_catalogs(db: AsyncSession, archive: zipfile.ZipFile, add_missing: bool = True) -> dict[str, dict]:
+    """The file's catalog entries here: {table: {id in the file: id here}} - the same entry (same id, else same code or
+    name), else added (add_missing) or left out of the map."""
+    mapped: dict[str, dict] = {}
+    for table in _tables()[2]:
+        for raw in _load(archive, f"catalog/{table.name}.json"):
+            row = _typed(table, raw)
+            if (await db.execute(select(table.c.id).where(table.c.id == row["id"]))).first():
+                mapped.setdefault(table.name, {})[row["id"]] = row["id"]
+                continue
+            match = await _natural_match(db, table, row, mapped)
+            if match is None:
+                if not add_missing:
+                    continue
+                for column in table.c:
+                    target = _fk_target(column)
+                    if target and row.get(column.name) is not None:
+                        row[column.name] = mapped.get(target, {}).get(row[column.name], row[column.name])
+                await db.execute(table.insert().values(**row))
+                match = row["id"]
+            mapped.setdefault(table.name, {})[row["id"]] = match
+    return mapped
+
+
 async def restore_company(db: AsyncSession, content: bytes) -> dict:
     """Puts a backup file back: the company with all its rows, identical. All or nothing; the images are written once
     the restore is committed."""
@@ -315,24 +339,8 @@ async def restore_company(db: AsyncSession, content: bytes) -> dict:
         raise BackupError(problems[0])
 
     owned, children, catalogs = _tables()
-    mapped: dict[str, dict] = {}  # table -> {id in the file: id here}, for the catalogs and the platform users
-
     # 1. the catalog entries: the same entry here, else added
-    for table in catalogs:
-        for raw in _load(archive, f"catalog/{table.name}.json"):
-            row = _typed(table, raw)
-            if (await db.execute(select(table.c.id).where(table.c.id == row["id"]))).first():
-                mapped.setdefault(table.name, {})[row["id"]] = row["id"]
-                continue
-            match = await _natural_match(db, table, row, mapped)
-            if match is None:
-                for column in table.c:
-                    target = _fk_target(column)
-                    if target and row.get(column.name) is not None:
-                        row[column.name] = mapped.get(target, {}).get(row[column.name], row[column.name])
-                await db.execute(table.insert().values(**row))
-                match = row["id"]
-            mapped.setdefault(table.name, {})[row["id"]] = match
+    mapped = await map_catalogs(db, archive)
 
     # 2. the platform users the rows name: the same person here (by phone), else an inactive account with that name
     for raw in _load(archive, "users.json"):

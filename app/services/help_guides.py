@@ -176,8 +176,11 @@ PLATFORM_MODULES = [
         "steps": [
             S(text="Antes do primeiro cliente, confira os catálogos da plataforma: regimes fiscais, taxas legais de IVA, "
                    "tipos de documento e os Módulos (setores) com as funções que cada um dá.", link="/configuracoes"),
-            S(text="Empresas → «Nova empresa». Separador Conta do Gestor: o nome, o telefone e a palavra-passe da pessoa "
-                   "que vai gerir a empresa.", link="/admin/companies"),
+            S(text="Empresas → «Nova empresa». Separador Base (opcional): escolha a cópia exportada de uma empresa já "
+                   "configurada (ex.: um «Comércio geral» preparado uma vez) e marque o que copiar - artigos e categorias, "
+                   "serviços, fornecedores. A nova empresa fica com o regime fiscal dessa empresa. Nunca são copiados "
+                   "clientes, stock, custos nem documentos.", link="/admin/companies"),
+            S(text="Separador Conta do Gestor: o nome, o telefone e a palavra-passe da pessoa que vai gerir a empresa."),
             S(text="Separador Dados da Empresa: NIF, denominação fiscal, nome curto, o endereço (subdomínio, proposto a partir "
                    "do nome curto), contactos, regime fiscal, n.º de registo comercial (exigido no SAF-T) e o modo de emissão."),
             S(text="Separador Módulos: os setores contratados (Farmácia, Hotel, Restaurante…). Decidem os menus, os ecrãs e "
@@ -605,8 +608,8 @@ PLATFORM_PAGES = [
         "id": "empresas", "path": "/admin/companies", "title": "Empresas", "module": "novo-cliente", "roles": ["SUPER_ADMIN"],
         "intro": "As empresas clientes da plataforma: criar, editar, acompanhar e suspender.",
         "steps": [
-            "«Nova empresa» abre a criação, separador a separador: Conta do Gestor, Dados da Empresa, Coordenadas Bancárias, "
-            "Módulos.",
+            "«Nova empresa» abre a criação, separador a separador: Base (o catálogo de uma cópia exportada), Conta do "
+            "Gestor, Dados da Empresa, Coordenadas Bancárias, Módulos.",
             "O lápis abre uma empresa: os mesmos separadores, mais Taxas de IVA, Assistente IA e Configuração inicial. "
             "«Guardar alterações» grava tudo.",
             "Por baixo do nome de cada empresa aparece o seu endereço (subdomínio).",
