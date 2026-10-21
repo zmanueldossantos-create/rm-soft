@@ -1,0 +1,38 @@
+# RM SOFT (SaaS) - one site for every address: <company>.BASE_DOMAIN and admin.BASE_DOMAIN.
+# HTTPS certificates are asked at the first visit of an address ("on demand"), only after the backend confirms that
+# the address exists (an active company, or admin) - no certificate is ever requested for an invented name.
+{
+	email {$ACME_EMAIL}
+	on_demand_tls {
+		ask http://backend:8000/api/v1/auth/domain-check
+	}
+}
+
+https:// {
+	tls {
+		on_demand
+	}
+	encode zstd gzip
+
+	# the API and the companies' files (logos, product images): the backend
+	handle /api/* {
+		reverse_proxy backend:8000
+	}
+	handle /uploads/* {
+		reverse_proxy backend:8000
+	}
+
+	# the screens: every other path is the application (React decides the page)
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "same-origin"
+		-Server
+	}
+}

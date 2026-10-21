@@ -128,6 +128,7 @@ class InvoiceResponse(BaseModel):
     issuance_mode: str
     item_count: int = 0
     customer_name: str | None = None
+    created_by_name: str | None = None  # attached: who issued it
     amount_paid: float = 0
     amount_due: float = 0  # attached: what is really still owed, credit notes deducted
     insurer_invoice_id: uuid.UUID | None = None  # attached by a sale shared with an insurer: its Fatura

@@ -2,8 +2,9 @@ import { useState, useEffect, useRef } from 'react';
 import { ChefHat, History as KitchenHistoryIcon } from 'lucide-react';
 import { Link, useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { createPortal } from 'react-dom';
-import { Building2, LogOut, LayoutDashboard, Sun, Moon, Package, Users, Calendar, Receipt, Settings, Package2, UserCog, History, FileText, Landmark, LayoutGrid, Store, Wheat, Factory, Wallet, SlidersHorizontal, Tags, Wrench, ChevronDown, Cog, Plus, ArrowLeftRight, Calculator, ClipboardList, Gauge, PiggyBank, CreditCard, Boxes, CalendarClock, Wallet2, PackageMinus, Truck, ShieldCheck, FileInput, Send, HandCoins, Bot, HelpCircle } from 'lucide-react';
+import { Building2, LogOut, LayoutDashboard, Sun, Moon, Package, Users, Calendar, Receipt, Settings, Package2, UserCog, History, FileText, Landmark, LayoutGrid, Store, Wheat, Factory, Wallet, SlidersHorizontal, Tags, Wrench, ChevronDown, Cog, Plus, ArrowLeftRight, Calculator, ClipboardList, Gauge, PiggyBank, CreditCard, Boxes, CalendarClock, Wallet2, PackageMinus, Truck, ShieldCheck, FileInput, Send, HandCoins, Bot, HelpCircle, LifeBuoy } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
+import apiClient from '../api/client';
 import { useThemeStore } from '../store/themeStore';
 import { getCurrentPeriod } from '../api/fiscal';
 import { getMyPermissions } from '../api/permissions';
@@ -196,6 +197,27 @@ export default function Layout() {
     navigate('/login');
   }
 
+  // Acesso de suporte RM SOFT: a banner all the time, and «Sair do suporte» ends it at once
+  const support = user?.support || null;
+  const hhmm = (v) => (v ? new Date(v).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' }) : '');
+  async function endSupport() {
+    try { await apiClient.post('/auth/support/end'); } catch { /* ended or expired already: leave anyway */ }
+    logout();
+    navigate('/login');
+  }
+  // the time left, second by second; at zero the access is over: back to the login
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!support) return undefined;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [support?.expires_at]);
+  const left = support ? Math.max(0, Math.floor((new Date(support.expires_at).getTime() - now) / 1000)) : null;
+  useEffect(() => {
+    if (support && left === 0) endSupport();
+  }, [left === 0]);
+  const countdown = left === null ? '' : `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
+
   // The menu of the company's users, in 7 groups - each entry is shown only to who may open it (show), a group with
   // a single visible entry is a plain link, a group with none is not shown (a sector without bookings has no Reservas).
   const visible = (items) => items.filter((item) => item.show);
@@ -343,7 +365,23 @@ export default function Layout() {
         </div>
       </nav>
 
-      <div className="pt-14 pb-11 min-h-screen">
+      {support && (
+        <div className="fixed top-14 inset-x-0 z-40 h-9 bg-amber-400 text-amber-950 text-[13px] flex items-center justify-center gap-3 px-4">
+          <LifeBuoy size={15} className="shrink-0" />
+          <span className="truncate">
+            <span className="font-semibold">Modo suporte RM SOFT</span> · {support.company_name} · entrou às {hhmm(support.started_at)}
+          </span>
+          <span title={'Termina às ' + hhmm(support.expires_at)}
+            className={'shrink-0 font-mono font-semibold rounded px-2 py-0.5 ' + (left <= 300 ? 'bg-red-700 text-white animate-pulse' : 'bg-amber-950/10')}>
+            restam {countdown}
+          </span>
+          <button onClick={endSupport} className="shrink-0 bg-amber-950 hover:bg-black text-amber-50 rounded px-2.5 py-0.5 font-semibold cursor-pointer">
+            Sair do suporte
+          </button>
+        </div>
+      )}
+
+      <div className={(support ? 'pt-[92px]' : 'pt-14') + ' pb-11 min-h-screen'}>
         <Outlet />
       </div>
 

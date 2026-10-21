@@ -1,0 +1,117 @@
+# RM SOFT - hosted service (SaaS), on one server (VPS).
+#   docker compose -f docker/saas/docker-compose.saas.yml --env-file docker/saas/.env.saas up -d --build
+# See INSTALLATION_SAAS.md. Only Caddy is reachable from outside (80 and 443); the database and Redis never are.
+name: rmsoft
+
+x-backend-env: &backend-env
+  DEPLOYMENT_MODE: saas
+  APP_NAME: RM SOFT
+  DEBUG: "false"
+  BASE_DOMAIN: ${BASE_DOMAIN}
+  ADMIN_SUBDOMAIN: ${ADMIN_SUBDOMAIN:-admin}
+  DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+  REDIS_URL: redis://redis:6379/0
+  JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+  ENFORCE_CAPABILITIES: "true"
+  TELEGRAM_POLLING: "false"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      TZ: Africa/Luanda
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+
+  backend:
+    build:
+      context: ../..
+      dockerfile: docker/saas/Dockerfile.backend
+    image: rmsoft-backend
+    restart: unless-stopped
+    command: ["api"]
+    environment: *backend-env
+    volumes:
+      - uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      start_period: 60s
+
+  worker:
+    image: rmsoft-backend
+    restart: unless-stopped
+    command: ["worker"]
+    environment: *backend-env
+    volumes:
+      - uploads:/app/uploads
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ../..
+      dockerfile: docker/saas/Dockerfile.web
+      args:
+        VITE_SUPPLIER_NAME: ${SUPPLIER_NAME}
+        VITE_SUPPLIER_EMAIL: ${SUPPLIER_EMAIL}
+        VITE_SUPPLIER_PHONE: ${SUPPLIER_PHONE}
+        VITE_SUPPLIER_WEBSITE: ${SUPPLIER_WEBSITE}
+        VITE_APP_VERSION: ${APP_VERSION:-1.0.0}
+    restart: unless-stopped
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddydata:/data
+      - caddyconfig:/config
+    depends_on:
+      - backend
+
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/backup.sh"]
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+      TZ: Africa/Luanda
+    volumes:
+      - ./backup.sh:/backup.sh:ro
+      - uploads:/uploads:ro
+      - ${BACKUP_DIR:-./backups}:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  redisdata:
+  uploads:
+  caddydata:
+  caddyconfig:

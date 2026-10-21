@@ -134,7 +134,9 @@ def test_every_api_route_is_protected():
     public = {"/api/v1/auth/login", "/api/v1/auth/refresh", "/api/v1/channels/telegram/webhook",
               "/api/v1/channels/whatsapp/webhook",
               # before the login: whose login screen an address is, and (for the HTTPS proxy) whether it exists
-              "/api/v1/auth/tenant", "/api/v1/auth/domain-check"}
+              "/api/v1/auth/tenant", "/api/v1/auth/domain-check",
+              # the company's address opening a support access: its one-time code is the proof
+              "/api/v1/auth/support/redeem"}
 
     def dependency_names(dependant) -> set[str]:
         names: set[str] = set()
@@ -249,7 +251,7 @@ def test_every_frontend_route_is_guarded():
     guard (RequirePermission, GestorRoute or SuperAdminRoute). The dashboard is
     left open on purpose: it is the redirect target, guarding it could loop."""
     app_jsx = (Path(__file__).resolve().parent.parent / "frontend" / "src" / "App.jsx").read_text(encoding="utf-8")
-    open_paths = {"/login", "/", "/dashboard"}
+    open_paths = {"/login", "/", "/dashboard", "/suporte"}  # /suporte: opens a session from its one-time code
     unguarded = []
     for chunk in re.split(r"(?=<Route\b)", app_jsx):
         m = re.match(r'<Route\s+path="([^"]+)"', chunk)

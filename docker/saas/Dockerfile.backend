@@ -1,0 +1,24 @@
+# RM SOFT - the backend (FastAPI) and the AGT worker (Celery): one image, two commands (see docker-compose.saas.yml).
+FROM python:3.11.9-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 TZ=Africa/Luanda
+WORKDIR /app
+
+# fonts for the PDFs (ReportLab), and tzdata for Luanda's time
+RUN apt-get update && apt-get install -y --no-install-recommends tzdata fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY app ./app
+COPY alembic ./alembic
+COPY alembic.ini .
+COPY docker/saas/backend-entrypoint.sh /usr/local/bin/backend-entrypoint
+RUN chmod +x /usr/local/bin/backend-entrypoint && mkdir -p /app/uploads/logos \
+    && useradd --create-home --uid 1000 rmsoft && chown -R rmsoft /app
+USER rmsoft
+
+EXPOSE 8000
+ENTRYPOINT ["backend-entrypoint"]
+CMD ["api"]

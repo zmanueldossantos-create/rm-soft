@@ -6,6 +6,7 @@ never internal business operations of a specific company.
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -42,6 +43,7 @@ from app.services.sector_service import (
 )
 from app.services.company_service import get_company_gestor
 from app.services.setup_checklist_service import get_setup_checklist
+from app.services.support_service import SupportError, list_support_sessions, start_support
 from app.schemas.auth import UserResponse
 from app.services.company_service import (
     FiscalRegimeNotFoundError,
@@ -365,6 +367,34 @@ async def get_gestor_for_company(
     if gestor is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gestor não encontrado para esta empresa")
     return gestor
+
+
+class SupportStartRequest(BaseModel):
+    reason: str
+
+
+@router.post("/companies/{company_id}/support")
+async def start_company_support(
+    company_id: uuid.UUID,
+    payload: SupportStartRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role("SUPER_ADMIN")),
+):
+    """«Entrar como suporte»: a one-time code opening the company's address with the gestor's screens, for an hour."""
+    try:
+        return await start_support(db, current_user, company_id, payload.reason)
+    except SupportError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.get("/companies/{company_id}/support")
+async def get_company_support_sessions(
+    company_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role("SUPER_ADMIN")),
+):
+    """The support accesses to a company: who, when, why."""
+    return await list_support_sessions(db, company_id)
 
 
 @router.get("/companies/{company_id}/setup")

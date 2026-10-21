@@ -50,3 +50,9 @@ export async function getMyCompanySetup() {
   const res = await apiClient.get('/company/me/setup');
   return res.data;
 }
+
+// The RM SOFT support accesses to the company (who, when, why).
+export async function getMySupportSessions() {
+  const res = await apiClient.get('/company/me/support-sessions');
+  return res.data;
+}

@@ -16,7 +16,8 @@ const apiClient = axios.create({
 // Attaches the JWT access token to every outgoing request, if present.
 apiClient.interceptors.request.use((config) => {
   const token = useAuthStore.getState().accessToken;
-  if (token) {
+  // a call that brings its own token (a new session being opened: login, support access) keeps it
+  if (token && !config.headers.Authorization) {
     config.headers.Authorization = 'Bearer ' + token;
   }
   return config;

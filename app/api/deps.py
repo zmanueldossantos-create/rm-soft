@@ -16,6 +16,7 @@ from app.core.database import get_db
 from app.core.security import decode_token
 from app.models.user import User
 from app.services.permission_service import has_permission
+from app.services.support_service import support_user
 from app.services.tenant_service import host_claim, request_host
 
 
@@ -72,6 +73,14 @@ async def get_current_user(
         )
 
     user_id = payload.get("sub")
+    if payload.get("sup"):  # the platform's support access: its user acts in the company as its gestor (support_service)
+        found = await support_user(db, payload["sup"], user_id)
+        if found is None:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="O acesso de suporte terminou",
+                                headers={"WWW-Authenticate": "Bearer"})
+        user = found[0]
+        current_user_id.set(user.id)  # what is done is recorded in the platform user's own name
+        return user
     result = await db.execute(select(User).where(User.id == uuid.UUID(user_id), User.is_active == True))
     user = result.scalar_one_or_none()
 

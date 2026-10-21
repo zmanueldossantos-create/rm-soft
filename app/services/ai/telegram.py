@@ -12,6 +12,7 @@ import secrets
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.secret_box import decrypt_secret, encrypt_secret
 from app.services.platform_settings_service import get_or_create_platform_settings
 
@@ -59,7 +60,33 @@ async def set_bot_token(db: AsyncSession, token: str) -> dict:
     settings.telegram_bot_username = me.get("username")
     settings.telegram_webhook_secret = settings.telegram_webhook_secret or secrets.token_urlsafe(24)
     await db.commit()
+    if get_settings().is_saas:  # SaaS: Telegram calls our address - told at once
+        await register_webhook(token, settings.telegram_webhook_secret)
     return {"configured": True, "username": settings.telegram_bot_username}
+
+
+def webhook_url() -> str:
+    """SaaS: where Telegram sends the bot's messages - the platform's own address."""
+    settings = get_settings()
+    return f"https://{settings.ADMIN_SUBDOMAIN}.{settings.BASE_DOMAIN}/api/v1/channels/telegram/webhook"
+
+
+async def register_webhook(token: str, secret: str) -> None:
+    """SaaS: tells Telegram our webhook (with the secret it sends back with each message, checked by the route)."""
+    await call(token, "setWebhook", {"url": webhook_url(), "secret_token": secret, "allowed_updates": ["message"]})
+
+
+async def ensure_webhook() -> None:
+    """SaaS, at start-up: the bot's webhook points at this server (the address may have changed). Never blocks."""
+    from app.core.database import AsyncSessionLocal
+    try:
+        async with AsyncSessionLocal() as db:
+            token = await bot_token(db)
+            secret = (await get_or_create_platform_settings(db)).telegram_webhook_secret
+        if token and secret:
+            await register_webhook(token, secret)
+    except Exception:
+        logger.exception("Telegram webhook not registered")
 
 
 # ---------- Telegram's HTML

@@ -150,7 +150,6 @@ export default function Invoices() {
     return allowed.length ? allowed : all;
   })();
   const [openActionMenuId, setOpenActionMenuId] = useState(null);
-  const [company, setCompany] = useState(null);
   const tableScrollRef = useRef(null);
 
   function scrollTableBy(amount) {
@@ -652,7 +651,7 @@ export default function Invoices() {
                       <td className="px-4 py-3 text-text-muted whitespace-nowrap">-</td>
                       <td className="px-4 py-3 text-text-muted whitespace-nowrap">{inv.item_count ?? '-'}</td>
                       <td className="px-4 py-3 text-text-muted whitespace-nowrap">AOA</td>
-                      <td className="px-4 py-3 text-text-muted whitespace-nowrap">{company?.name || '-'}</td>
+                      <td className="px-4 py-3 text-text-muted whitespace-nowrap">{inv.created_by_name || '-'}</td>
                       <td className="px-4 py-3 font-mono text-text-muted text-xs whitespace-nowrap">{inv.created_at ? new Date(inv.created_at).toLocaleString('pt-AO') : '-'}</td>
                       <td className="px-4 py-3 text-right sticky right-0 z-10 bg-bg-elevated shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.15)]">
                         <div className="flex justify-end">

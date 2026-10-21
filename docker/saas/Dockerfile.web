@@ -1,0 +1,21 @@
+# RM SOFT - the screens (React, built here) served by Caddy, which also gives every address its HTTPS certificate and
+# passes /api and /uploads to the backend.
+# Vite 8 (rolldown) needs Node 20.19+ or 22.12+: an older Node silently skips its native binding
+FROM node:22.14-alpine AS build
+WORKDIR /web
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+COPY frontend/ ./
+# the supplier shown on the login screen (build time: Vite writes them into the screens)
+ARG VITE_SUPPLIER_NAME="Rock Mayika Servicos, LDA"
+ARG VITE_SUPPLIER_EMAIL=""
+ARG VITE_SUPPLIER_PHONE=""
+ARG VITE_SUPPLIER_WEBSITE=""
+ARG VITE_APP_VERSION="1.0.0"
+ENV VITE_SUPPLIER_NAME=$VITE_SUPPLIER_NAME VITE_SUPPLIER_EMAIL=$VITE_SUPPLIER_EMAIL \
+    VITE_SUPPLIER_PHONE=$VITE_SUPPLIER_PHONE VITE_SUPPLIER_WEBSITE=$VITE_SUPPLIER_WEBSITE VITE_APP_VERSION=$VITE_APP_VERSION
+RUN npm run build
+
+FROM caddy:2.8.4-alpine
+COPY docker/saas/Caddyfile /etc/caddy/Caddyfile
+COPY --from=build /web/dist /srv

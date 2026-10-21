@@ -5,6 +5,7 @@ See specification v7, section 2.4.
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,6 +30,7 @@ from app.services.auth_service import (
 )
 from app.api.deps import get_current_user, require_role
 from app.models.user import User
+from app.services.support_service import SupportError, end_support, redeem_code, refreshed_access
 from app.services.tenant_service import domain_allowed, host_claim, request_host, resolve_tenant, tenant_claim
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
@@ -106,6 +108,11 @@ async def refresh(payload: RefreshRequest, request: Request, db: AsyncSession = 
     claim = host_claim(request_host(request)) if get_settings().is_saas else None
     if get_settings().is_saas and (claim is None or data.get("tnt") != claim):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sessão de outro endereço - inicie sessão neste endereço.")
+    if data.get("sup"):  # a support access: refreshed until its own end, never beyond
+        try:
+            return TokenPair(access_token=await refreshed_access(db, data["sup"]), refresh_token=payload.refresh_token)
+        except SupportError as e:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
     if get_settings().is_saas and data.get("company_id") not in (None, "None"):
         company = await db.get(Company, uuid.UUID(data["company_id"]))
         if company is None or not company.is_active:  # a suspended company: its sessions end at the next refresh
@@ -116,15 +123,42 @@ async def refresh(payload: RefreshRequest, request: Request, db: AsyncSession = 
 
 
 @router.get("/me")
-async def me(current_user: User = Depends(get_current_user)):
-    """Returns the authenticated user from the token."""
+async def me(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Returns the authenticated user from the token (with the support access, when it is one)."""
+    support = getattr(current_user, "support_session", None)
+    company = await db.get(Company, support.company_id) if support else None
     return {
         "id": str(current_user.id),
         "full_name": current_user.full_name,
         "phone_number": current_user.phone_number,
         "role": current_user.role.value,
         "company_id": str(current_user.company_id) if current_user.company_id else None,
+        "support": {"company_name": company.short_name or company.name, "reason": support.reason,
+                    "started_at": support.started_at, "expires_at": support.expires_at} if support else None,
     }
+
+
+class SupportCodeRequest(BaseModel):
+    code: str
+
+
+@router.post("/support/redeem", response_model=TokenPair)
+async def redeem_support_code(payload: SupportCodeRequest, request: Request, db: AsyncSession = Depends(get_db)):
+    """Public (before any session): the company's address opening a support access with its one-time code."""
+    try:
+        access_token, refresh_token = await redeem_code(db, payload.code, host_claim(request_host(request)))
+    except SupportError as e:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
+    return TokenPair(access_token=access_token, refresh_token=refresh_token)
+
+
+@router.post("/support/end", status_code=status.HTTP_204_NO_CONTENT)
+async def end_support_access(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """«Sair do suporte»: the support access ends at once (its tokens are refused from now on)."""
+    support = getattr(current_user, "support_session", None)
+    if support is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Esta sessão não é um acesso de suporte")
+    await end_support(db, support.id)
 
 
 @router.post("/users", response_model=UserResponse, status_code=status.HTTP_201_CREATED)

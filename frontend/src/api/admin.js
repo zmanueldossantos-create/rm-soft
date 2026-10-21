@@ -73,3 +73,14 @@ export async function getCompanySetup(companyId) {
   const res = await apiClient.get(`/admin/companies/${companyId}/setup`);
   return res.data;
 }
+
+// Acesso de suporte: a one-time code opening the company with the gestor's screens (an hour at most).
+export async function startSupport(companyId, reason) {
+  const res = await apiClient.post(`/admin/companies/${companyId}/support`, { reason });
+  return res.data;
+}
+
+export async function listSupportSessions(companyId) {
+  const res = await apiClient.get(`/admin/companies/${companyId}/support`);
+  return res.data;
+}

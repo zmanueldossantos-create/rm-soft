@@ -58,7 +58,7 @@ settings = get_settings()
 
 app = FastAPI(
     title=settings.APP_NAME,
-    description="RM System - Conforme RGIFT 2.0 (AGT)",
+    description="RM SOFT - Conforme RGIFT 2.0 (AGT)",
     version="7.0.0",
 )
 
@@ -103,9 +103,11 @@ async def start_telegram_polling() -> None:
     """Local installation: the application reads the Telegram bot's messages itself (it waits while no bot is set).
     In SaaS Telegram calls the webhook instead. One reader per bot: TELEGRAM_POLLING=false on any other server."""
     import asyncio
-    from app.services.ai.telegram import polling_loop
+    from app.services.ai.telegram import ensure_webhook, polling_loop
     settings = get_settings()
-    if settings.TELEGRAM_POLLING and not settings.is_saas:
+    if settings.is_saas:
+        app.state.telegram_webhook = asyncio.create_task(ensure_webhook())
+    elif settings.TELEGRAM_POLLING:
         app.state.telegram_polling = asyncio.create_task(polling_loop())
 
 

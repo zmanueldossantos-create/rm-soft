@@ -1,10 +1,10 @@
 import { API_ORIGIN } from '../api/config';
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Building2, Loader2, Save, Lock, Image, Upload, Store, Plus, Pencil, Landmark, X, Check, Trash2, FileStack, Sparkles, ChevronDown, CreditCard, Link2, Unlink, Users, Bot, Mail } from 'lucide-react';
+import { Building2, Loader2, Save, Lock, Image, Upload, Store, Plus, Pencil, Landmark, X, Check, Trash2, FileStack, Sparkles, ChevronDown, CreditCard, Link2, Unlink, Users, Bot, Mail, LifeBuoy } from 'lucide-react';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
-import { getMyCompany, updateMyCompanyContact, uploadMyCompanyLogo, removeMyCompanyLogo, getMyCompanyBankAccounts, addMyCompanyBankAccount, updateMyCompanyBankAccount, toggleMyCompanyBankAccountStatus } from '../api/company';
+import { getMySupportSessions, getMyCompany, updateMyCompanyContact, uploadMyCompanyLogo, removeMyCompanyLogo, getMyCompanyBankAccounts, addMyCompanyBankAccount, updateMyCompanyBankAccount, toggleMyCompanyBankAccountStatus } from '../api/company';
 import { listEstablishments, createEstablishment, updateEstablishment, toggleEstablishmentStatus } from '../api/establishments';
 import { countriesApi, provincesApi, municipalitiesApi, currenciesApi, banksApi, documentTypesApi } from '../api/catalogs';
 import { listDocumentSeries, createDocumentSeries, updateDocumentSeries, toggleDocumentSeriesStatus, getAllowedSeriesYears } from '../api/documentSeries';
@@ -16,6 +16,7 @@ import { getPharmacyContext } from '../api/pharmacy';
 import { getMyCompanyAi } from '../api/ai';
 import AiCompanySettingsTab from '../components/AiCompanySettingsTab';
 import EmailSettingsTab from '../components/EmailSettingsTab';
+import SupportSessionsList from '../components/SupportSessionsList';
 import { listUsers } from '../api/users';
 import { listCashPointAssociations, assignUserToCashPoint, unassignUserFromCashPoint } from '../api/tesouraria';
 
@@ -43,6 +44,25 @@ function Field({ label, children, hint }) {
 const inputClass = "w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors";
 const emptyEstablishmentForm = { code: '', name: '', description: '' };
 const emptyBankForm = { bankId: '', accountNumber: '', iban: '', currencyId: '' };
+
+// The RM SOFT support accesses to this company: who entered, when, why (the platform cannot enter without leaving a trace)
+function SupportTab() {
+  const [sessions, setSessions] = useState(null);
+  useEffect(() => {
+    getMySupportSessions().then(setSessions).catch(() => setSessions([]));
+  }, []);
+  return (
+    <div className="bg-bg-elevated border border-border rounded-lg p-5 flex flex-col gap-3">
+      <p className="text-sm text-text-secondary">
+        Cada vez que a equipa RM SOFT entra na sua empresa para dar suporte, fica aqui: quem, quando, porquê e até quando.
+        Um acesso dura no máximo 1 hora, e o que for feito fica registado em nome de quem entrou.
+      </p>
+      {sessions === null
+        ? <div className="flex items-center justify-center py-12 text-text-muted text-sm"><Loader2 size={18} className="animate-spin mr-2" />A carregar...</div>
+        : <SupportSessionsList sessions={sessions} />}
+    </div>
+  );
+}
 
 export default function CompanySettings() {
   const can = useCan();
@@ -714,6 +734,7 @@ export default function CompanySettings() {
           ['bancarias', 'Coordenadas Bancárias', Landmark],
           ['series', 'Séries de Facturação', FileStack],
           ['email', 'Email', Mail],
+          ...(can('company:manage') ? [['suporte', 'Acessos de suporte', LifeBuoy]] : []),
           ...(aiInfo?.ai_enabled ? [['ia', 'Assistente IA', Bot]] : []),
         ].map(([key, label, Icon]) => (
           <button
@@ -1087,6 +1108,8 @@ export default function CompanySettings() {
       )}
 
       {activeTab === 'email' && <EmailSettingsTab canManage={can('company:manage')} />}
+
+      {activeTab === 'suporte' && <SupportTab />}
 
       {activeTab === 'ia' && aiInfo?.ai_enabled && (
         <AiCompanySettingsTab info={aiInfo} onChange={setAiInfo} canManage={can('company:manage')} />

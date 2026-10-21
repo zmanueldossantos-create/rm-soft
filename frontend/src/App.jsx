@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
+import Suporte from './pages/Suporte';
 import Dashboard from './pages/Dashboard';
 import AdminCompanies from './pages/AdminCompanies';
 import Products from './pages/Products';
@@ -60,6 +61,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/suporte" element={<Suporte />} />
 
         <Route
           element={

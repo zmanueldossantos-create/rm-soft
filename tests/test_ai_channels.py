@@ -195,3 +195,23 @@ async def test_linking_whatsapp_with_ligar(db, company_with_essentials):
     assert (await list_links(db, company_id, gestor_id))["WHATSAPP"]["name"] == "Manuel"
     # the same number on Telegram is another chat: not linked there
     assert (await handle_incoming(db, "TELEGRAM", "244923000102", None, "Olá"))[0]["text"] == NOT_LINKED
+
+
+@pytest.mark.asyncio
+async def test_saas_registers_the_telegram_webhook(db, monkeypatch):
+    """SaaS: saving the bot's token tells Telegram our webhook (the admin address), with the secret the route checks."""
+    from app.core.config import get_settings
+    from app.services.platform_settings_service import get_or_create_platform_settings
+    monkeypatch.setattr(get_settings(), "DEPLOYMENT_MODE", "saas")
+    monkeypatch.setattr(get_settings(), "BASE_DOMAIN", "rmsystem.co.ao")
+    calls = []
+
+    async def fake_call(token, method, data=None, files=None, timeout=30):
+        calls.append((method, data))
+        return {"username": "rmsoft_bot"} if method == "getMe" else True
+    monkeypatch.setattr(telegram, "call", fake_call)
+
+    await telegram.set_bot_token(db, "123:ABC")
+    secret = (await get_or_create_platform_settings(db)).telegram_webhook_secret
+    assert calls[-1] == ("setWebhook", {"url": "https://admin.rmsystem.co.ao/api/v1/channels/telegram/webhook",
+                                        "secret_token": secret, "allowed_updates": ["message"]})

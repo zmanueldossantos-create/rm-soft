@@ -1,12 +1,13 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Building2, Plus, Loader2, Search, Mail, Phone, Pencil, UserCog, Check, X, KeyRound, Landmark } from 'lucide-react';
+import { Building2, Plus, Loader2, Search, Mail, Phone, Pencil, UserCog, Check, X, KeyRound, Landmark, LifeBuoy } from 'lucide-react';
 import Modal from '../components/Modal';
 import apiClient from '../api/client';
 import Select from '../components/Select';
 import {
   listCompanies, createCompany, updateCompany, toggleCompanyStatus,
   getCompanyGestor,
-  listBankAccounts, addBankAccount, updateBankAccount, toggleBankAccountStatus, getCompanyRegimeHistory, getCompanySetup } from '../api/admin';
+  listBankAccounts, addBankAccount, updateBankAccount, toggleBankAccountStatus, getCompanyRegimeHistory, getCompanySetup, startSupport, listSupportSessions } from '../api/admin';
+import SupportSessionsList from '../components/SupportSessionsList';
 import SetupChecklist from '../components/SetupChecklist';
 import { extractErrorMessage } from '../utils/errors';
 import { listFiscalRegimes } from '../api/fiscalRegime';
@@ -301,9 +302,52 @@ export default function AdminCompanies() {
 
   // SaaS: the domain the companies' addresses are under (from the server's settings)
   const [baseDomain, setBaseDomain] = useState('rmsystem.co.ao');
+  const [deploymentMode, setDeploymentMode] = useState('local');
   useEffect(() => {
-    apiClient.get('/auth/tenant').then((r) => r.data.base_domain && setBaseDomain(r.data.base_domain)).catch(() => {});
+    apiClient.get('/auth/tenant').then((r) => {
+      if (r.data.base_domain) setBaseDomain(r.data.base_domain);
+      setDeploymentMode(r.data.mode || 'local');
+    }).catch(() => {});
   }, []);
+
+  // «Entrar como suporte»: a reason, then the company opens with the gestor's screens (an hour at most)
+  const [supportCompany, setSupportCompany] = useState(null);
+  const [supportReason, setSupportReason] = useState('');
+  const [supportSaving, setSupportSaving] = useState(false);
+  const [supportError, setSupportError] = useState('');
+  function openSupport(company) {
+    setSupportCompany(company);
+    setSupportReason('');
+    setSupportError('');
+  }
+  async function confirmSupport() {
+    setSupportSaving(true);
+    setSupportError('');
+    try {
+      const { code, subdomain } = await startSupport(supportCompany.id, supportReason);
+      const path = '/suporte?code=' + encodeURIComponent(code);
+      if (deploymentMode === 'saas') {
+        // the company's own address: this admin address with the company's subdomain (admin.x -> empresa.x)
+        const host = window.location.host.replace(/^[^.]+\./, subdomain + '.');
+        window.open(window.location.protocol + '//' + host + path, '_blank', 'noopener');
+        setSupportCompany(null);
+      } else {
+        window.location.assign(path); // local: one application, this window enters the company
+      }
+    } catch (err) {
+      setSupportError(extractErrorMessage(err, 'Não foi possível abrir o acesso de suporte'));
+    } finally {
+      setSupportSaving(false);
+    }
+  }
+
+  // the support accesses of the company being edited, loaded when its tab is opened
+  const [supportSessions, setSupportSessions] = useState(null);
+  useEffect(() => {
+    if (!editingId || activeTab !== 'suporte') return;
+    setSupportSessions(null);
+    listSupportSessions(editingId).then(setSupportSessions).catch(() => setSupportSessions([]));
+  }, [editingId, activeTab]);
 
   function handleProvinceChange(provinceId) {
     setForm((prev) => ({ ...prev, provinceId, municipalityId: '' }));
@@ -532,7 +576,16 @@ export default function AdminCompanies() {
                         </span>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-right">
+                    <td className="px-6 py-4 text-right whitespace-nowrap">
+                      <button
+                        onClick={() => openSupport(c)}
+                        disabled={!c.is_active}
+                        aria-label="Entrar como suporte"
+                        title={c.is_active ? 'Entrar como suporte' : 'Empresa suspensa'}
+                        className="inline-flex items-center justify-center w-8 h-8 mr-2 rounded-md border border-border text-amber-500 hover:border-amber-500 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        <LifeBuoy size={14} />
+                      </button>
                       <button
                         onClick={() => openEditModal(c)}
                         aria-label="Editar empresa"
@@ -560,6 +613,7 @@ export default function AdminCompanies() {
               ['modulos', 'Módulos'],
               ...(editingId ? [['ia', 'Assistente IA']] : []),
               ...(editingId ? [['configuracao', 'Configuração inicial']] : []),
+              ...(editingId ? [['suporte', 'Acessos de suporte']] : []),
             ].map(([key, label]) => (
               <button
                 key={key}
@@ -795,6 +849,15 @@ export default function AdminCompanies() {
             </div>
           )}
 
+          {activeTab === 'suporte' && (
+            <div className="flex flex-col gap-3 min-h-[420px]">
+              <p className="text-[12px] text-text-muted">Cada entrada da RM SOFT nesta empresa (botão boia na lista) - o gestor vê a mesma lista em Definições da Empresa.</p>
+              {supportSessions === null
+                ? <div className="flex items-center justify-center py-16 text-text-muted text-sm"><Loader2 size={18} className="animate-spin mr-2" />A carregar...</div>
+                : <SupportSessionsList sessions={supportSessions} />}
+            </div>
+          )}
+
           {activeTab === 'configuracao' && (
             <div className="flex flex-col gap-3 min-h-[420px]">
               <p className="text-[12px] text-text-muted">Onde a empresa está na sua configuração - cada passo é lido dos dados reais. Os passos «RM SOFT» são definidos aqui, no separador Dados da Empresa.</p>
@@ -922,6 +985,31 @@ export default function AdminCompanies() {
             </button>
           )}
         </form>
+      </Modal>
+
+      <Modal open={!!supportCompany} onClose={() => setSupportCompany(null)} title="Entrar como suporte">
+        {supportCompany && (
+          <div className="flex flex-col gap-4">
+            <p className="text-sm text-text-secondary">
+              Vai entrar em <span className="font-semibold text-text-primary">{supportCompany.short_name || supportCompany.name}</span> com
+              os ecrãs do gestor, durante <span className="font-semibold text-text-primary">1 hora</span> no máximo. O que fizer fica
+              registado em seu nome, e o gestor vê esta entrada e o motivo.
+            </p>
+            <Field label="Motivo *" hint="Ex.: o gestor não consegue fechar a caixa - pedido por telefone">
+              <textarea value={supportReason} onChange={(e) => setSupportReason(e.target.value)} rows={3} autoFocus
+                className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors resize-none" />
+            </Field>
+            {deploymentMode !== 'saas' && (
+              <p className="text-[12px] text-text-muted">Instalação local: esta janela entra na empresa. Para voltar à administração, use «Sair do suporte» e inicie sessão de novo.</p>
+            )}
+            {supportError && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{supportError}</div>}
+            <button type="button" onClick={confirmSupport} disabled={supportSaving || supportReason.trim().length < 10}
+              className="flex items-center justify-center gap-2 bg-amber-400 hover:bg-amber-300 disabled:opacity-50 text-amber-950 font-semibold text-sm rounded-md py-3 transition-colors cursor-pointer">
+              {supportSaving ? <Loader2 size={16} className="animate-spin" /> : <LifeBuoy size={16} />}
+              Entrar na empresa
+            </button>
+          </div>
+        )}
       </Modal>
 
       <Modal open={resetModalOpen} onClose={() => setResetModalOpen(false)} title="Redefinir palavra-passe do Gestor">

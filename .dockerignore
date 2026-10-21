@@ -1,0 +1,18 @@
+# What never goes into an image: local environments, secrets, data, builds
+venv/
+env/
+**/__pycache__/
+**/*.pyc
+.env
+.env.*
+!.env.example
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+uploads/
+.git/
+.pytest_cache/
+*.log
+*.patch

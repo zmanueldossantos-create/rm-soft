@@ -91,3 +91,4 @@ from app.models.ai_conversation import AiConversation, AiMessage  # noqa: E402,F
 from app.models.ai_pending_action import AiPendingAction  # noqa: E402,F401 - actions prepared by the AI assistant
 from app.models.company_email_settings import CompanyEmailSettings  # noqa: E402,F401 - the company's email account
 from app.models.ai_channel import AiChannelLink, AiLinkCode  # noqa: E402,F401 - the assistant on WhatsApp / Telegram
+from app.models.support_session import SupportSession  # noqa: E402,F401 - the platform's support access to a company

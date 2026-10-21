@@ -21,6 +21,7 @@ from app.schemas.admin import BankAccountResponse
 from app.services.company_service import list_bank_accounts, add_bank_account, update_bank_account, toggle_bank_account, BankAccountNotFoundError
 from app.schemas.admin import BankAccountInput
 from app.services.setup_checklist_service import get_setup_checklist
+from app.services.support_service import list_support_sessions
 
 router = APIRouter(prefix="/api/v1/company", tags=["company"])
 
@@ -50,6 +51,15 @@ async def get_my_company_setup(
 ):
     """Configuração inicial: the set-up steps of the caller's company, each read from the real data."""
     return await get_setup_checklist(db, current_user.company_id)
+
+
+@router.get("/me/support-sessions")
+async def get_my_company_support_sessions(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("company:manage")),
+):
+    """The RM SOFT support accesses to the company: who entered, when, why, until when."""
+    return await list_support_sessions(db, current_user.company_id)
 
 
 @router.get("/me", response_model=CompanyContactResponse)

@@ -48,6 +48,7 @@ from app.models.activity import Activity
 from app.models.payment import Payment
 from app.models.payment_method_catalog import PaymentMethodCatalog
 from app.models.company import Company
+from app.models.user import User
 from app.models.company_bank_account import CompanyBankAccount
 from app.services.ownership import ensure_owned
 from app.models.document_type import DocumentType
@@ -2013,6 +2014,13 @@ async def list_invoices(
             name_by_id = dict(name_result.all())
         for inv in invoices_list:
             inv.customer_name = name_by_id.get(inv.customer_id)
+
+        # who issued each document (the Faturas column «Criado por») - the person, a platform user in support included
+        creator_ids = {inv.created_by_user_id for inv in invoices_list if inv.created_by_user_id}
+        creators = dict((await db.execute(select(User.id, User.full_name).where(User.id.in_(creator_ids)))).all()) \
+            if creator_ids else {}
+        for inv in invoices_list:
+            inv.created_by_name = creators.get(inv.created_by_user_id)
 
         # Attach amount_paid dynamically as well: the real sum of Payment rows on each document (same mechanism as
         # item_count, and as pos_documents_service does for the Caixa table). amount_received stays empty on a
