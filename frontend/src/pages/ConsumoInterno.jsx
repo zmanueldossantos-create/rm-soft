@@ -11,6 +11,7 @@ import Modal from '../components/Modal';
 import Select from '../components/Select';
 
 import PostingPeriodSelect from '../components/PostingPeriodSelect';
+import { useToastState } from '../components/Toaster';
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
@@ -29,7 +30,7 @@ export default function ConsumoInterno() {
   const [entries, setEntries] = useState([]);
   const [canRecord, setCanRecord] = useState(true);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [error, setError] = useToastState('error');
 
   const [dateFrom, setDateFrom] = useState(todayIso());
   const [dateTo, setDateTo] = useState(todayIso());
@@ -38,7 +39,7 @@ export default function ConsumoInterno() {
   const [form, setForm] = useState({ productId: '', quantity: '', reasonId: '', resourceId: '', notes: '', fiscalPeriodId: '' });
 
   const [consumptionPeriodChoice, setConsumptionPeriodChoice] = useState(false); // a soft-closed period exists: choose it explicitly
-  const [formError, setFormError] = useState('');
+  const [formError, setFormError] = useToastState('error');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -159,9 +160,6 @@ export default function ConsumoInterno() {
         </div>
       </div>
 
-      {error && (
-        <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r mb-4">{error}</div>
-      )}
 
       {loading ? (
         <div className="flex items-center justify-center py-16 text-text-muted text-sm">
@@ -249,9 +247,6 @@ export default function ConsumoInterno() {
             <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Notas (opcional)</label>
             <input value={form.notes} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))} className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
           </div>
-          {formError && (
-            <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{formError}</div>
-          )}
           <PostingPeriodSelect value={form.fiscalPeriodId} onChange={(v) => setForm((prev) => ({ ...prev, fiscalPeriodId: v }))} onChoice={setConsumptionPeriodChoice} />
           <button
             type="submit"

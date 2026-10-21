@@ -19,6 +19,7 @@ import { listServices } from '../api/services';
 import { extractErrorMessage } from '../utils/errors';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
+import { useToastState } from '../components/Toaster';
 
 const STATUS_LABELS = {
   PENDENTE: 'Pendente',
@@ -125,11 +126,11 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
   const [walkInPayments, setWalkInPayments] = useState({});
   const [vatRates, setVatRates] = useState([]);
   const [withholdingTaxes, setWithholdingTaxes] = useState([]);
-  const [walkInError, setWalkInError] = useState('');
+  const [walkInError, setWalkInError] = useToastState('error');
   const [walkInSaving, setWalkInSaving] = useState(false);
   const [extendBooking, setExtendBooking] = useState(null);
   const [extendForm, setExtendForm] = useState({ date: '', time: '' });
-  const [extendError, setExtendError] = useState('');
+  const [extendError, setExtendError] = useToastState('error');
   const [extendSaving, setExtendSaving] = useState(false);
   const can = useCan();
   const [activities, setActivities] = useState([]);
@@ -146,28 +147,28 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
   const [customers, setCustomers] = useState([]);
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
   const [customerForm, setCustomerForm] = useState({ name: '', phoneNumber: '', nif: '', legalPersonType: 'FISICA', typeTouched: false });
-  const [customerFormError, setCustomerFormError] = useState('');
+  const [customerFormError, setCustomerFormError] = useToastState('error');
   const [customerSaving, setCustomerSaving] = useState(false);
   const [selectedResourceId, setSelectedResourceId] = useState('');
   const [dateFrom, setDateFrom] = useState(todayIso());
   const [dateTo, setDateTo] = useState(todayIso());
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useToastState('error');
   const [statusUpdatingId, setStatusUpdatingId] = useState(null);
   const [checkActionId, setCheckActionId] = useState(null);
   const [posPickerOpen, setPosPickerOpen] = useState(false);
   const [posPickerBookingId, setPosPickerBookingId] = useState(null);
   const [posPickerOptions, setPosPickerOptions] = useState([]);
   const [posPickerSelected, setPosPickerSelected] = useState('');
-  const [posPickerError, setPosPickerError] = useState('');
+  const [posPickerError, setPosPickerError] = useToastState('error');
   const [posPickerSaving, setPosPickerSaving] = useState(false);
 
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState({ activityId: '', resourceId: '', serviceId: '', customerId: '', date: todayIso(), endDate: todayIso(), startTime: '14:00', endTime: '12:00', notes: '', guestName: '', partySize: '', endTouched: false });
   const [formResources, setFormResources] = useState([]);
   const [editingBookingId, setEditingBookingId] = useState(null);
-  const [formError, setFormError] = useState('');
+  const [formError, setFormError] = useToastState('error');
   const [saving, setSaving] = useState(false);
 
   const [viewMode, setViewMode] = useState('list');
@@ -1043,9 +1044,6 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
         )}
       </div>
 
-      {error && (
-        <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r mb-4">{error}</div>
-      )}
 
       {viewMode === 'agenda' ? renderAgenda() : loading ? (
         <div className="flex items-center justify-center py-16 text-text-muted text-sm">
@@ -1196,9 +1194,6 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
             </div>
           </div>
           {walkInService && renderPayment('Total a pagar (IVA incluído) - até ' + new Date(Date.now() + walkInService.duration_minutes * 60000).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Luanda' }))}
-          {walkInError && (
-            <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{walkInError}</div>
-          )}
           <button type="submit" disabled={walkInSaving || !walkInService || walkInTotal <= 0 || walkInRemaining !== 0} className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer">
             {walkInSaving ? <Loader2 size={17} className="animate-spin" /> : <DoorOpen size={17} />}
             {walkInSaving ? 'A registar...' : 'Receber e dar entrada'}
@@ -1215,9 +1210,6 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
             </div>
             {renderInvoiceCustomer()}
             {chargeService && renderPayment('Total a pagar (IVA incluído)')}
-            {walkInError && (
-              <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{walkInError}</div>
-            )}
             <button type="submit" disabled={walkInSaving || !chargeService || walkInTotal <= 0 || walkInRemaining !== 0} className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer">
               {walkInSaving ? <Loader2 size={17} className="animate-spin" /> : <Banknote size={17} />}
               {walkInSaving ? 'A cobrar...' : 'Receber e concluir'}
@@ -1240,9 +1232,6 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
                 <input type="time" value={extendForm.time} onChange={(e) => setExtendForm((p) => ({ ...p, time: e.target.value }))} required className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
               </div>
             </div>
-            {extendError && (
-              <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{extendError}</div>
-            )}
             <button type="submit" disabled={extendSaving} className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer">
               {extendSaving ? <Loader2 size={17} className="animate-spin" /> : <CalendarClock size={17} />}
               {extendSaving ? 'A guardar...' : 'Prolongar'}
@@ -1349,9 +1338,6 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
             <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Notas (opcional)</label>
             <input value={form.notes} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))} className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
           </div>
-          {formError && (
-            <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{formError}</div>
-          )}
           <button
             type="submit"
             disabled={saving}
@@ -1376,9 +1362,6 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
               options={posPickerOptions.map((p) => ({ value: p.id, label: p.name }))}
               placeholder="Selecionar"
             />
-          )}
-          {posPickerError && (
-            <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{posPickerError}</div>
           )}
           <button
             onClick={handlePosPickerConfirm}
@@ -1409,9 +1392,6 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
               <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Tipo *</label>
               <Select value={customerForm.legalPersonType} onChange={(v) => setCustomerForm((p) => ({ ...p, legalPersonType: v, typeTouched: true }))} options={LEGAL_PERSON_OPTIONS} />
             </div>
-          )}
-          {customerFormError && (
-            <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{customerFormError}</div>
           )}
           <button
             type="submit"

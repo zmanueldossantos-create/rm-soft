@@ -3,6 +3,7 @@ import { Bot, X, Send, Loader2, Plus, MessageSquare, ChevronDown, Check, FileTex
 import { listAiConversations, getAiMessages, askAssistant, decideAiAction } from '../api/ai';
 import { extractErrorMessage } from '../utils/errors';
 import { formatKz } from '../utils/format';
+import { useToastState } from './Toaster';
 
 // What survives a page reload, in this browser only: the conversation in progress (the panel reopens on it).
 const STORED_CONVERSATION = 'rm.assistant.conversation';
@@ -181,7 +182,7 @@ export default function AssistantPanel({ open, onClose, status, onStatus }) {
   const [messages, setMessages] = useState([]);
   const [question, setQuestion] = useState('');
   const [sending, setSending] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useToastState('error');
   const [historyOpen, setHistoryOpen] = useState(false);
   const [decidingId, setDecidingId] = useState(null);
   const endRef = useRef(null);
@@ -350,7 +351,6 @@ export default function AssistantPanel({ open, onClose, status, onStatus }) {
       <div className="border-t border-border px-4 py-3 flex flex-col gap-2">
         {!status.available && <div className="bg-amber-500/10 border-l-2 border-amber-500 text-amber-500 [.light_&]:text-amber-700 px-3 py-2 text-[12px] rounded-r">O assistente ainda não está configurado na plataforma.</div>}
         {limitReached && <div className="bg-amber-500/10 border-l-2 border-amber-500 text-amber-500 [.light_&]:text-amber-700 px-3 py-2 text-[12px] rounded-r">Limite mensal de mensagens atingido.</div>}
-        {error && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3 py-2 text-[12px] rounded-r">{error}</div>}
         <div className="flex items-end gap-2">
           <textarea
             ref={inputRef}

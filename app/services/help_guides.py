@@ -176,18 +176,19 @@ PLATFORM_MODULES = [
         "steps": [
             S(text="Antes do primeiro cliente, confira os catálogos da plataforma: regimes fiscais, taxas legais de IVA, "
                    "tipos de documento e os Módulos (setores) com as funções que cada um dá.", link="/configuracoes"),
-            S(text="Empresas → «Nova empresa». Separador Base: «Catálogo de referência» (marcado) dá à empresa os produtos "
-                   "dos seus setores (Módulos) e os de todos os setores - stock a zero, IVA conforme o seu regime, os sem "
-                   "preço fora da Caixa até o gestor definir o preço.", link="/catalogo-referencia"),
-            S(text="Ainda no separador Base (opcional): escolha a cópia exportada de uma empresa já "
-                   "configurada (ex.: um «Comércio geral» preparado uma vez) e marque o que copiar - artigos e categorias, "
-                   "serviços, fornecedores. A nova empresa fica com o regime fiscal dessa empresa. Nunca são copiados "
-                   "clientes, stock, custos nem documentos.", link="/admin/companies"),
-            S(text="Separador Conta do Gestor: o nome, o telefone e a palavra-passe da pessoa que vai gerir a empresa."),
-            S(text="Separador Dados da Empresa: NIF, denominação fiscal, nome curto, o endereço (subdomínio, proposto a partir "
-                   "do nome curto), contactos, regime fiscal, n.º de registo comercial (exigido no SAF-T) e o modo de emissão."),
-            S(text="Separador Módulos: os setores contratados (Farmácia, Hotel, Restaurante…). Decidem os menus, os ecrãs e "
-                   "os guias que a empresa vê. Coordenadas Bancárias é opcional."),
+            S(text="Empresas → «Nova empresa», separador a separador. Dados da Empresa: NIF, denominação fiscal, nome curto, "
+                   "o endereço (subdomínio, proposto a partir do nome curto), contactos, regime fiscal, n.º de registo "
+                   "comercial (exigido no SAF-T) e o modo de emissão.", link="/admin/companies"),
+            S(text="Módulos: os setores contratados (Farmácia, Hotel, Restaurante…). Decidem os menus, os ecrãs e os guias que "
+                   "a empresa vê - e os produtos do catálogo de referência que recebe."),
+            S(text="Base: «Catálogo de referência» (marcado) dá à empresa os produtos dos seus setores e os de todos os "
+                   "setores - stock a zero, IVA conforme o seu regime, os sem preço fora da Caixa até o gestor definir o "
+                   "preço.", link="/catalogo-referencia"),
+            S(text="Ainda na Base (opcional): a cópia exportada de uma empresa já configurada (ex.: um «Comércio geral») - "
+                   "artigos e categorias, serviços, fornecedores; a nova empresa fica com o regime fiscal dessa empresa. "
+                   "Nunca são copiados clientes, stock, custos nem documentos."),
+            S(text="Conta do Gestor: o nome, o telefone e a palavra-passe da pessoa que vai gerir a empresa. Coordenadas "
+                   "Bancárias é opcional."),
             S(text="«Criar empresa»: a empresa nasce com o seu armazém, as suas taxas de IVA e a conta do gestor."),
             S(text="Entregue ao gestor o endereço da empresa (ex.: farmacia-da-luz.rmsystem.co.ao), o telefone e a "
                    "palavra-passe. Ao entrar, ele vê a lista «Configuração inicial» no Painel."),
@@ -616,8 +617,8 @@ PLATFORM_PAGES = [
         "id": "empresas", "path": "/admin/companies", "title": "Empresas", "module": "novo-cliente", "roles": ["SUPER_ADMIN"],
         "intro": "As empresas clientes da plataforma: criar, editar, acompanhar e suspender.",
         "steps": [
-            "«Nova empresa» abre a criação, separador a separador: Base (o catálogo de uma cópia exportada), Conta do "
-            "Gestor, Dados da Empresa, Coordenadas Bancárias, Módulos.",
+            "«Nova empresa» abre a criação, separador a separador: Dados da Empresa, Módulos, Base (o catálogo de "
+            "referência e/ou uma cópia exportada), Conta do Gestor, Coordenadas Bancárias.",
             "O lápis abre uma empresa: os mesmos separadores, mais Taxas de IVA, Assistente IA e Configuração inicial. "
             "«Guardar alterações» grava tudo.",
             "Por baixo do nome de cada empresa aparece o seu endereço (subdomínio).",

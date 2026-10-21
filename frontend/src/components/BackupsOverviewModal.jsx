@@ -4,13 +4,14 @@ import Modal from './Modal';
 import { getBackupsOverview } from '../api/admin';
 import { extractErrorMessage } from '../utils/errors';
 import { size, when } from './CompanyBackupsPanel';
+import { useToastState } from './Toaster';
 
 // Empresas > «Cópias de segurança»: every company's state at a glance - automatic or manual, last copy, failures,
 // space used. A company without a good copy for more than a day is in red. One company's copies: its pencil > Cópias.
 
 export default function BackupsOverviewModal({ open, onClose, onOpenCompany }) {
   const [rows, setRows] = useState(null);
-  const [error, setError] = useState('');
+  const [error, setError] = useToastState('error');
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('todas');
 
@@ -39,7 +40,6 @@ export default function BackupsOverviewModal({ open, onClose, onOpenCompany }) {
 
   return (
     <Modal open={open} onClose={onClose} title="Cópias de segurança" subtitle="Todas as empresas" maxWidthClass="max-w-6xl">
-      {error && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{error}</div>}
       {!rows && !error && <div className="flex items-center gap-2 text-[13px] text-text-muted py-6"><Loader2 size={15} className="animate-spin" /> A carregar...</div>}
       {rows && (
         <div className="flex flex-col gap-4">

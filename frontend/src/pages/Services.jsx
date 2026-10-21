@@ -11,6 +11,7 @@ import { listVatRates, getArticleVatRule } from '../api/vat';
 import { unitsApi, withholdingTaxesApi, vatCodesApi } from '../api/catalogs';
 import { extractErrorMessage } from '../utils/errors';
 import { useCan } from '../utils/permissions';
+import { useToastState } from '../components/Toaster';
 
 function ToggleSwitch({ checked, onChange, disabled }) {
   const trackClass = 'relative w-10 h-5.5 rounded-full transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ' + (checked ? 'bg-success' : 'bg-border');
@@ -66,12 +67,12 @@ export default function Services() {
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
-  const [formError, setFormError] = useState('');
+  const [formError, setFormError] = useToastState('error');
 
   const [typeModalOpen, setTypeModalOpen] = useState(false);
   const [typeName, setTypeName] = useState('');
   const [typeSaving, setTypeSaving] = useState(false);
-  const [typeFormError, setTypeFormError] = useState('');
+  const [typeFormError, setTypeFormError] = useToastState('error');
 
   // Resource types belong to the Recursos capability: a company without it has none, and the
   // server answers 403 - which used to make the whole screen fail. Only asked when granted,
@@ -393,9 +394,6 @@ export default function Services() {
             </label>
           </div>
 
-          {formError && (
-            <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{formError}</div>
-          )}
 
           <button
             type="submit"
@@ -413,9 +411,6 @@ export default function Services() {
           <Field label="Nome *">
             <input value={typeName} onChange={(e) => setTypeName(e.target.value)} required className={inputClass} />
           </Field>
-          {typeFormError && (
-            <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{typeFormError}</div>
-          )}
           <button
             type="submit"
             disabled={typeSaving || !typeName}

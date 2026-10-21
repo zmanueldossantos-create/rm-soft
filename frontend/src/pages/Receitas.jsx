@@ -6,6 +6,7 @@ import { extractErrorMessage } from '../utils/errors';
 import { listPrescriptions, fetchPrescriptionsPdf, getPsychotropicRegister, fetchPsychotropicsPdf, listInsuranceShares, fetchInsuranceSharesPdf } from '../api/pharmacy';
 import { listCustomers } from '../api/customers';
 import { formatKz } from '../utils/format';
+import { useToastState } from '../components/Toaster';
 
 // Farmácia - the registers (pharmacy_register_service): the registo de receitas (every sale dispensed against a
 // receita, its medicines and lots) and the registo de psicotrópicos e estupefacientes (per medicine of receita
@@ -32,7 +33,7 @@ export default function Receitas() {
   useEffect(() => { listCustomers().then((list) => setInsurers(list.filter((c) => c.is_insurer))).catch(() => setInsurers([])); }, []);
   const [prescriptions, setPrescriptions] = useState(null);
   const [register, setRegister] = useState(null);
-  const [error, setError] = useState('');
+  const [error, setError] = useToastState('error');
   const [pdf, setPdf] = useState(null);
   const set = (field, value) => setFilters((prev) => ({ ...prev, [field]: value }));
 
@@ -109,7 +110,6 @@ export default function Receitas() {
         </button>
       </div>
 
-      {error && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r mb-4">{error}</div>}
       {loading && <div className="flex justify-center py-16"><Loader2 size={20} className="animate-spin text-accent" /></div>}
 
       {!loading && tab === 'receitas' && (

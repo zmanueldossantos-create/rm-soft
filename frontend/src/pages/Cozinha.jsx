@@ -3,6 +3,7 @@ import { ChefHat, Loader2, Volume2, VolumeX, Play, Check, Ban, Minus } from 'luc
 import { useCan } from '../utils/permissions';
 import { extractErrorMessage } from '../utils/errors';
 import { getKitchenBoard, kitchenLineAction, kitchenOrderAction } from '../api/kitchen';
+import { useToastState } from '../components/Toaster';
 
 // The kitchen screen (point 34c): one card per order sent from an open account - number of the day, table, sender,
 // time and minutes elapsed - and its dishes, moved forward dish by dish or card by card. Refreshed every 15 s;
@@ -53,7 +54,7 @@ export default function Cozinha() {
   const canUpdate = can('kitchen:update');
   const [board, setBoard] = useState({ orders: [], recent: [] });
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [error, setError] = useToastState('error');
   const [busy, setBusy] = useState(null);
   const [soundOn, setSoundOn] = useState(readSound);
   const [activityFilter, setActivityFilter] = useState('');
@@ -153,7 +154,6 @@ export default function Cozinha() {
         </div>
       )}
 
-      {error && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r mb-4">{error}</div>}
 
       {loading ? (
         <div className="flex items-center justify-center py-16 text-text-muted text-sm">

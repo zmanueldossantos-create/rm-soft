@@ -9,6 +9,7 @@ import { getHelpGuides } from '../api/help';
 import { getMyCompanySetup } from '../api/company';
 import { extractErrorMessage } from '../utils/errors';
 import SetupChecklist from './SetupChecklist';
+import { useToastState } from './Toaster';
 
 const fold = (text) => text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
@@ -118,7 +119,7 @@ export default function HelpPanel({ open, onClose }) {
   const navigate = useNavigate();
   const can = useCan();
   const [guides, setGuides] = useState(null);
-  const [error, setError] = useState('');
+  const [error, setError] = useToastState('error');
   const [query, setQuery] = useState('');
   const [selectedId, setSelectedId] = useState(null); // a guide opened from a list (with «Voltar»)
 
@@ -161,7 +162,6 @@ export default function HelpPanel({ open, onClose }) {
         </div>
       </div>
       <div className="flex-1 overflow-y-auto scrollbar-thin px-5 py-4 flex flex-col gap-4 *:shrink-0">
-        {error && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{error}</div>}
         {!guides && !error && (
           <div className="flex items-center justify-center py-16 text-text-muted text-sm"><Loader2 size={18} className="animate-spin mr-2" />A carregar...</div>
         )}

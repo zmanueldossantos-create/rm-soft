@@ -5,6 +5,7 @@ import DateInput from './DateInput';
 import { formatKz } from '../utils/format';
 import { extractErrorMessage } from '../utils/errors';
 import { getSupplierStatement, fetchSupplierStatementPdfBlob } from '../api/supplierPayments';
+import { useToastState } from './Toaster';
 
 // Conta corrente of a supplier (supplier_payment_service.supplier_statement): its invoices raise what the company owes,
 // its credit notes and the payments lower it - with the running balance, from the balance before the period.
@@ -20,7 +21,7 @@ export default function SupplierStatementModal({ supplier, onClose }) {
   const [range, setRange] = useState({ from: yearStart(), to: todayIso() });
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useToastState('error');
   const [pdf, setPdf] = useState(null);
 
   useEffect(() => {
@@ -52,7 +53,6 @@ export default function SupplierStatementModal({ supplier, onClose }) {
                 <FileText size={14} /> Ver PDF
               </button>
             </div>
-            {error && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{error}</div>}
             {loading || !data ? (
               <div className="flex justify-center py-10"><Loader2 size={18} className="animate-spin text-accent" /></div>
             ) : (

@@ -3,6 +3,7 @@ import { CheckCircle2, Clock, DatabaseBackup, Download, Loader2, Plus, Save, Tra
 import { downloadMyBackup, getMyBackups, makeMyBackup, saveMyBackupSettings } from '../api/company';
 import { downloadCompanyBackupCopy, getCompanyBackups, makeCompanyBackup } from '../api/admin';
 import { extractErrorMessage } from '../utils/errors';
+import { Notify, useToastState } from './Toaster';
 
 // Cópias de segurança of a company. The gestor (no companyId) chooses automatic (1 to 3 hours a day) or manual, makes a
 // copy now and downloads its copies; the platform (companyId given) sees the same, without changing the gestor's
@@ -26,7 +27,7 @@ export default function CompanyBackupsPanel({ companyId = null, canManage = true
   const [data, setData] = useState(null);
   const [mode, setMode] = useState('MANUAL');
   const [times, setTimes] = useState([]);
-  const [error, setError] = useState('');
+  const [error, setError] = useToastState('error');
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [making, setMaking] = useState(false);
@@ -84,7 +85,7 @@ export default function CompanyBackupsPanel({ companyId = null, canManage = true
 
   if (!data) {
     return error
-      ? <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{error}</div>
+      ? null
       : <div className="flex items-center gap-2 text-[13px] text-text-muted py-6"><Loader2 size={15} className="animate-spin" /> A carregar...</div>;
   }
 
@@ -149,7 +150,7 @@ export default function CompanyBackupsPanel({ companyId = null, canManage = true
                   className="flex items-center gap-2 border border-border hover:border-accent text-text-primary text-sm font-medium px-4 py-2 rounded-md transition-colors cursor-pointer disabled:opacity-50">
                   {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />} Guardar
                 </button>
-                {saved && <span className="text-[12px] text-success">Guardado.</span>}
+                {saved && <Notify success="Cópias de segurança: escolha guardada" />}
                 {settings.mode === 'AUTOMATICA' && settings.next_run_at && (
                   <span className="text-[12px] text-text-muted flex items-center gap-1.5"><Clock size={13} /> Próxima cópia automática: {when(settings.next_run_at)}</span>
                 )}
@@ -166,7 +167,6 @@ export default function CompanyBackupsPanel({ companyId = null, canManage = true
         </div>
       </div>
 
-      {error && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{error}</div>}
 
       <div className="border border-border rounded-md overflow-x-auto">
         <table className="w-full text-sm">

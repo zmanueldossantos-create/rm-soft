@@ -6,6 +6,7 @@ import { getInvoiceDetail, createReceipt, getOpenCashPoints } from '../api/invoi
 import { getMyCompanyBankAccounts } from '../api/company';
 import { extractErrorMessage } from '../utils/errors';
 import { paymentMethodsApi } from '../api/catalogs';
+import { useToastState } from './Toaster';
 
 // Self-contained RC (receipt) action modal against an already-issued invoice - the ONE receipt modal of the app, used
 // from any screen (Caixa's "Consultar documentos" with its own cash point, Faturas choosing one) without leaving
@@ -21,7 +22,7 @@ const DocumentActionModals = forwardRef(function DocumentActionModals({ onSucces
   const [rcDocumentReference, setRcDocumentReference] = useState('');
   const [rcObservations, setRcObservations] = useState('');
   const [rcSaving, setRcSaving] = useState(false);
-  const [rcError, setRcError] = useState('');
+  const [rcError, setRcError] = useToastState('error');
   const [rcPaymentMethodId, setRcPaymentMethodId] = useState('');
   const [rcCashPosId, setRcCashPosId] = useState('');
   const [rcBankAccountId, setRcBankAccountId] = useState('');
@@ -145,7 +146,6 @@ const DocumentActionModals = forwardRef(function DocumentActionModals({ onSucces
               <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Observações</label>
               <input value={rcObservations} onChange={(e) => setRcObservations(e.target.value)} className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent" />
             </div>
-            {rcError && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{rcError}</div>}
             <button type="submit" disabled={rcSaving || !(parseFloat(rcAmount) > 0) || !rcPaymentMethodId || (rcIsCash && !rcCashPosId)} className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 cursor-pointer">
               {rcSaving && <Loader2 size={16} className="animate-spin" />}
               {rcSaving ? 'A emitir...' : 'Emitir recibo'}

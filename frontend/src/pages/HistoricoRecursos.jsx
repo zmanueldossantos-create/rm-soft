@@ -7,6 +7,7 @@ import { History, Loader2 } from 'lucide-react';
 import { listActivities } from '../api/activity';
 import { listResources, getResourceHistory } from '../api/booking';
 import { extractErrorMessage } from '../utils/errors';
+import { useToastState } from '../components/Toaster';
 
 // The history of the resources (resource_history_service): every use of a room, a table or a practitioner over a
 // period - a stay, a passage, a marcação, a reservation, a table's account - with its document and what it brought in
@@ -56,7 +57,7 @@ export default function HistoricoRecursos() {
   const [showNotUses, setShowNotUses] = useState(true);
   const [history, setHistory] = useState({ entries: [], summary: [] });
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [error, setError] = useToastState('error');
 
   useEffect(() => {
     listActivities().then((data) => {
@@ -150,9 +151,6 @@ export default function HistoricoRecursos() {
         </label>
       </div>
 
-      {error && (
-        <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r mb-4">{error}</div>
-      )}
 
       {!selectedActivityId ? (
         <p className="text-text-muted text-[13px]">Selecione uma atividade</p>

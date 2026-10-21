@@ -11,6 +11,7 @@ import { extractErrorMessage } from '../utils/errors';
 
 import PostingPeriodSelect from '../components/PostingPeriodSelect';
 import DateInput from '../components/DateInput';
+import { useToastState } from '../components/Toaster';
 
 async function getProductsWithRecipe() {
   const res = await apiClient.get('/products/with-recipe');
@@ -34,16 +35,16 @@ export default function Producao() {
   const [recipeForm, setRecipeForm] = useState(emptyRecipeForm);
   const [recipeLoading, setRecipeLoading] = useState(false);
   const [recipeSaving, setRecipeSaving] = useState(false);
-  const [recipeError, setRecipeError] = useState('');
+  const [recipeError, setRecipeError] = useToastState('error');
 
   const [produceModalOpen, setProduceModalOpen] = useState(false);
   const [produceForm, setProduceForm] = useState(emptyProduceForm);
   const [producePeriodChoice, setProducePeriodChoice] = useState(false); // a soft-closed period exists: choose it explicitly
   const [produceEstimate, setProduceEstimate] = useState(null);
   const [produceEstimateLoading, setProduceEstimateLoading] = useState(false);
-  const [produceEstimateError, setProduceEstimateError] = useState('');
+  const [produceEstimateError, setProduceEstimateError] = useToastState('error');
   const [produceSaving, setProduceSaving] = useState(false);
-  const [produceError, setProduceError] = useState('');
+  const [produceError, setProduceError] = useToastState('error');
 
   async function loadData() {
     setLoading(true);
@@ -486,11 +487,6 @@ export default function Producao() {
                 </>
               )}
 
-              {recipeError && (
-                <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">
-                  {recipeError}
-                </div>
-              )}
 
               <button
                 type="button"
@@ -523,11 +519,6 @@ export default function Producao() {
             </div>
           )}
 
-          {produceEstimateError && (
-            <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">
-              {produceEstimateError}
-            </div>
-          )}
 
           {produceEstimate && !produceEstimateLoading && (
             <div className={produceEstimate.max_units > 0 ? 'bg-bg-inset border-l-2 border-border text-text-primary px-3.5 py-2.5 text-[13px] rounded-r' : 'bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r'}>
@@ -599,11 +590,6 @@ export default function Producao() {
             />
           </div>
 
-          {produceError && (
-            <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">
-              {produceError}
-            </div>
-          )}
 
           <PostingPeriodSelect value={produceForm.fiscalPeriodId} onChange={(v) => setProduceForm((prev) => ({ ...prev, fiscalPeriodId: v }))} onChoice={setProducePeriodChoice} />
           <button

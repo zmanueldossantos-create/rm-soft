@@ -18,6 +18,7 @@ import { listServices } from '../api/services';
 import { paymentTermsApi, paymentMethodsApi, documentRulesApi } from '../api/catalogs';
 import useDocumentRules from '../utils/documentRules';
 import { extractErrorMessage } from '../utils/errors';
+import { useToastState } from '../components/Toaster';
 
 const STATUS_STYLE = {
   PENDENTE: 'bg-text-muted/10 text-text-muted',
@@ -163,13 +164,13 @@ export default function Invoices() {
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [detailInvoice, setDetailInvoice] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [detailError, setDetailError] = useState('');
+  const [detailError, setDetailError] = useToastState('error');
 
 
   const [convertModalOpen, setConvertModalOpen] = useState(false);
   const [convertTargetType, setConvertTargetType] = useState('FACTURA');
   const [convertSaving, setConvertSaving] = useState(false);
-  const [convertFormError, setConvertFormError] = useState('');
+  const [convertFormError, setConvertFormError] = useToastState('error');
 
   const [pdfModalOpen, setPdfModalOpen] = useState(false);
   const [pdfBlobUrl, setPdfBlobUrl] = useState('');
@@ -762,11 +763,6 @@ export default function Invoices() {
           </div>
         )}
 
-        {detailError && (
-          <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">
-            {detailError}
-          </div>
-        )}
 
         {!detailLoading && !detailError && detailInvoice && (
           <div className="flex flex-col gap-5">
@@ -938,9 +934,6 @@ export default function Invoices() {
               <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Converter para</label>
               <Select value={convertTargetType} onChange={setConvertTargetType} options={convertibleTypes} />
             </div>
-            {convertFormError && (
-              <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{convertFormError}</div>
-            )}
             <button
               type="submit"
               disabled={convertSaving}

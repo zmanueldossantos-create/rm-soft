@@ -10,6 +10,7 @@ import { listConsumptionReasons, createConsumptionReason, updateConsumptionReaso
 import { getPharmacyContext, listPharmaceuticalForms, createPharmaceuticalForm, updatePharmaceuticalForm, togglePharmaceuticalFormStatus } from '../api/pharmacy';
 import { extractErrorMessage } from '../utils/errors';
 import { useCan } from '../utils/permissions';
+import { useToastState } from '../components/Toaster';
 
 function ToggleSwitch({ checked, onChange, disabled }) {
   const trackClass = 'relative w-9 h-5 rounded-full transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ' + (checked ? 'bg-success' : 'bg-border');
@@ -78,7 +79,7 @@ export default function Categorias() {
   const visibleCatalogs = CATALOGS.filter((c) => can(CATALOG_PERMS[c.key].view) && (!c.pharmacyOnly || pharmacyEnabled));
   const [counts, setCounts] = useState({});
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [error, setError] = useToastState('error');
 
   const [activeCatalog, setActiveCatalog] = useState(null);
   const canManage = activeCatalog ? can(CATALOG_PERMS[activeCatalog.key].manage) : false;
@@ -99,7 +100,7 @@ export default function Categorias() {
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
-  const [formError, setFormError] = useState('');
+  const [formError, setFormError] = useToastState('error');
 
   async function loadCounts() {
     setLoading(true);
@@ -270,9 +271,6 @@ export default function Categorias() {
         Categorias de produto e tipos de serviço - próprios da sua empresa
       </p>
 
-      {error && (
-        <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r mb-4">{error}</div>
-      )}
 
       {loading ? (
         <div className="flex items-center justify-center py-16 text-text-muted text-sm">
@@ -450,9 +448,6 @@ export default function Categorias() {
                   <span className="text-sm text-text-primary">Não disponível em vendas</span>
                 </label>
               </div>
-            )}
-            {formError && (
-              <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{formError}</div>
             )}
             <button
               type="submit"

@@ -20,6 +20,7 @@ import PrescriptionModal, { prescriptionNeedOf } from './PrescriptionModal';
 import { dueDateFor, isProntoTerm } from '../utils/paymentTerms';
 import { useAuthStore } from '../store/authStore';
 import { isPessoaColetiva } from '../utils/customerType';
+import { useToastState } from './Toaster';
 
 const inputClass = "w-full bg-bg-inset border border-border rounded-md px-2.5 py-2 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors";
 
@@ -90,7 +91,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
   const [banks, setBanks] = useState([]);
   const [withholdingTaxes, setWithholdingTaxes] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState('');
+  const [loadError, setLoadError] = useToastState('error');
 
   const [step, setStep] = useState(1);
   const [invoiceType, setInvoiceType] = useState('');
@@ -110,7 +111,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
   const [lines, setLines] = useState([{ ...emptyLine }]);
 
   const [saving, setSaving] = useState(false);
-  const [formError, setFormError] = useState('');
+  const [formError, setFormError] = useToastState('error');
   const [previewOpen, setPreviewOpen] = useState(false);
 
   const [referenceInvoice, setReferenceInvoice] = useState(null);
@@ -682,9 +683,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
       <Modal open={open} onClose={onClose} title={modalTitle} subtitle={modalSubtitle} maxWidthClass="max-w-6xl" footer={footer} stacked={stacked}>
         {loading ? (
           <div className="flex items-center justify-center py-16"><Loader2 size={24} className="animate-spin text-accent" /></div>
-        ) : loadError ? (
-          <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-sm rounded-r">{loadError}</div>
-        ) : (
+        ) : loadError ? null : (
           <>
             {!isSingleScreen && <div className="flex items-center gap-1.5 -mt-1 mb-5">
               {STEP_LABELS.map((label, i) => {
@@ -789,9 +788,6 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                         )}
                       </div>
                     )}
-                    {formError && (
-                      <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{formError}</div>
-                    )}
                   </div>
                 )}
 
@@ -807,9 +803,6 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                         <input value={observations} onChange={(e) => setObservations(e.target.value)} className={inputClass} placeholder="Opcional" />
                       </div>
                     </div>
-                    {formError && (
-                      <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{formError}</div>
-                    )}
                   </div>
                 )}
 
@@ -994,9 +987,6 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                             <div className="flex justify-between"><span className="text-text-muted">Valor a pagar</span><span className="font-mono">{formatMoney(totals.valorAPagar)}</span></div>
                           </div>
                         </div>
-                    {formError && (
-                      <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{formError}</div>
-                    )}
                   </div>
                 )}
               </div>

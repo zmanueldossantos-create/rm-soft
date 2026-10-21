@@ -8,6 +8,7 @@ import {
   saveReferenceProduct,
 } from '../api/referenceCatalog';
 import { extractErrorMessage } from '../utils/errors';
+import { useToastState } from '../components/Toaster';
 
 // Catálogo de referência (menu of the platform): the products most shops of a sector sell, kept once for the platform. A new
 // company takes them at its creation; changing the catalog never touches a company that exists. The VAT is the
@@ -33,7 +34,7 @@ export default function CatalogoReferencia() {
   const [search, setSearch] = useState('');
   const [sector, setSector] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useToastState('error');
   const [editing, setEditing] = useState(null); // null closed, {} new, product to edit
   const [toDelete, setToDelete] = useState(null);
   const [importing, setImporting] = useState(false);
@@ -137,7 +138,6 @@ export default function CatalogoReferencia() {
           </div>
         )}
 
-        {error && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{error}</div>}
         {report && (
           <div className="border border-border rounded-md p-3.5 flex flex-col gap-2">
             <div className="flex items-center justify-between gap-2">
@@ -224,7 +224,7 @@ function ReferenceProductForm({ product, meta, onClose, onSaved }) {
     price: product.price ?? '', units: product.units.map((u) => ({ ...u, barcode: u.barcode || '', price: u.price ?? '' })),
   } : emptyForm));
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useToastState('error');
   const set = (field, value) => setForm((prev) => ({ ...prev, [field]: value }));
   const setUnit = (idx, field, value) => setForm((prev) => ({ ...prev, units: prev.units.map((u, i) => (i === idx ? { ...u, [field]: value } : u)) }));
   const unitOptions = meta.units.map((u) => ({ value: u.id, label: u.code + ' - ' + u.name }));
@@ -302,7 +302,6 @@ function ReferenceProductForm({ product, meta, onClose, onSaved }) {
           </button>
         </div>
 
-        {error && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{error}</div>}
         <button type="submit" disabled={saving}
           className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 cursor-pointer">
           {saving ? <Loader2 size={17} className="animate-spin" /> : <Save size={17} />}

@@ -16,6 +16,8 @@ import { listVatRates, getArticleVatRule } from '../api/vat';
 import { listProductCategories, createProductCategory } from '../api/productCategories';
 import { unitsApi, withholdingTaxesApi, vatCodesApi } from '../api/catalogs';
 import { extractErrorMessage } from '../utils/errors';
+import { useToastState } from '../components/Toaster';
+import { toast } from '../store/toastStore';
 
 function ToggleSwitch({ checked, onChange, disabled }) {
   const trackClass = 'relative w-10 h-5.5 rounded-full transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ' + (checked ? 'bg-success' : 'bg-border');
@@ -77,7 +79,7 @@ export default function Products() {
   const [formModalOpen, setFormModalOpen] = useState(false);
   const [newFormName, setNewFormName] = useState('');
   const [formSaving, setFormSaving] = useState(false);
-  const [newFormError, setNewFormError] = useState('');
+  const [newFormError, setNewFormError] = useToastState('error');
   const [categories, setCategories] = useState([]);
   const [units, setUnits] = useState([]);
   const [vatCodes, setVatCodes] = useState([]);
@@ -92,14 +94,14 @@ export default function Products() {
   const [productTab, setProductTab] = useState('geral'); // product sheet tabs: 'geral' | 'unidades' | 'custo'
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
-  const [formError, setFormError] = useState('');
+  const [formError, setFormError] = useToastState('error');
   const fileInputRef = useRef(null);
   const [imageUploading, setImageUploading] = useState(false);
 
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
   const [categoryName, setCategoryName] = useState('');
   const [categorySaving, setCategorySaving] = useState(false);
-  const [categoryFormError, setCategoryFormError] = useState('');
+  const [categoryFormError, setCategoryFormError] = useToastState('error');
 
   async function loadData() {
     setLoading(true);
@@ -318,8 +320,12 @@ export default function Products() {
     try {
       if (editingId) {
         await updateProduct(editingId, payload);
+        // a new price: the packs priced «unit price × what they hold» followed it (the server did it) - say so
+        const followed = editingProduct && Number(editingProduct.price) !== Number(payload.price);
+        toast.success('Produto «' + form.name + '» guardado' + (followed ? ' - as embalagens ao preço proporcional seguem o novo preço' : ''));
       } else {
         await createProduct(payload);
+        toast.success('Produto «' + form.name + '» criado');
       }
       closeModal();
       await loadData();
@@ -660,9 +666,6 @@ export default function Products() {
           {editingId && productTab === 'unidades' && <ProductSaleUnits productId={editingId} baseUnitId={form.unitOfMeasureId} units={units} />}
           {editingId && productTab === 'custo' && <CostHistory productId={editingId} />}
 
-          {formError && (
-            <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{formError}</div>
-          )}
 
           <button
             type="submit"
@@ -680,9 +683,6 @@ export default function Products() {
           <Field label="Nome *">
             <input value={newFormName} onChange={(e) => setNewFormName(e.target.value)} placeholder="Ex.: Comprimido" required className={inputClass} />
           </Field>
-          {newFormError && (
-            <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{newFormError}</div>
-          )}
           <button type="submit" disabled={formSaving || !newFormName.trim()} className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer">
             {formSaving ? <Loader2 size={17} className="animate-spin" /> : <Plus size={17} />}
             Criar forma farmacêutica
@@ -695,9 +695,6 @@ export default function Products() {
           <Field label="Nome *">
             <input value={categoryName} onChange={(e) => setCategoryName(e.target.value)} required className={inputClass} />
           </Field>
-          {categoryFormError && (
-            <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{categoryFormError}</div>
-          )}
           <button
             type="submit"
             disabled={categorySaving || !categoryName}

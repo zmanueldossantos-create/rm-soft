@@ -9,6 +9,7 @@ import { paymentMethodsApi, banksApi } from '../api/catalogs';
 import { getMyCompanyBankAccounts } from '../api/company';
 import { getOpenCashPoints } from '../api/invoices';
 import { createSupplierPayment } from '../api/supplierPayments';
+import { useToastState } from './Toaster';
 
 // Pagar fornecedor (supplier_payment_service): one payment for invoices (FT) of one supplier - each with what it settles
 // (what is owed, by default; never more). The method must allow payments: cash leaves a till (it must be open, today),
@@ -28,7 +29,7 @@ export default function SupplierPaymentModal({ invoices, onClose, onPaid }) {
   const [tills, setTills] = useState([]);
   const [amounts, setAmounts] = useState({});
   const [form, setForm] = useState({ methodId: '', bankAccountId: '', posId: '', date: todayIso(), reference: '', notes: '' });
-  const [error, setError] = useState('');
+  const [error, setError] = useToastState('error');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -139,7 +140,6 @@ export default function SupplierPaymentModal({ invoices, onClose, onPaid }) {
           {method?.is_cash ? 'O numerário sai hoje da caixa escolhida (uma saída automática «Pagamento a fornecedor»).' : 'O pagamento fica registado; as faturas pagas deixam de estar em dívida.'}
           {over ? ' O valor a pagar de ' + over.supplier_document + ' excede o que está em dívida.' : ''}
         </p>
-        {error && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{error}</div>}
         <button onClick={submit} disabled={saving || !valid} className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 cursor-pointer">
           {saving ? <Loader2 size={17} className="animate-spin" /> : <Wallet size={17} />} Registar pagamento de {kz(total)}
         </button>

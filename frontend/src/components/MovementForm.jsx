@@ -10,6 +10,7 @@ import { listProducts } from '../api/products';
 import { listWarehouses } from '../api/stock';
 import { movementTypesApi, unitsApi } from '../api/catalogs';
 import { extractErrorMessage } from '../utils/errors';
+import { useToastState } from './Toaster';
 
 const inputClass = "w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors";
 
@@ -38,13 +39,13 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection }) {
   const [description, setDescription] = useState('');
   const [lines, setLines] = useState([{ product_id: '', sale_unit_id: '', quantity: '1', purchase_price: '0', sale_price: '0' }]);
   const [scanCode, setScanCode] = useState('');
-  const [scanError, setScanError] = useState('');
+  const [scanError, setScanError] = useToastState('error');
   const [excelFileName, setExcelFileName] = useState('');
   const [excelError, setExcelError] = useState('');
   const excelInputRef = useRef(null);
 
   const [saving, setSaving] = useState(false);
-  const [formError, setFormError] = useState('');
+  const [formError, setFormError] = useToastState('error');
 
   useEffect(() => {
     async function loadData() {
@@ -338,7 +339,6 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection }) {
           <Download size={15} /> Modelo
         </button>
 <button type="button" onClick={addLine} className="flex items-center gap-1.5 border border-dashed border-accent/60 hover:border-accent hover:bg-accent/5 text-accent text-[13px] font-medium rounded-md px-3.5 py-2 transition-colors cursor-pointer"><Plus size={15} /> Linha</button>
-        {scanError && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2 text-[12px] rounded-r">{scanError}</div>}
       </div>
       {(excelFileName || excelError) && (
         <div className="flex items-center gap-3 flex-wrap -mt-2">
@@ -419,9 +419,6 @@ export default function MovementForm({ onSuccess, onCancel, filterDirection }) {
         </table>
       </div>
 
-      {formError && (
-        <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-sm rounded-r">{formError}</div>
-      )}
 
       <div className="flex justify-end gap-3">
         <button type="button" onClick={onCancel} className="border border-border hover:border-accent text-text-primary text-sm px-5 py-3 rounded-md transition-colors cursor-pointer">

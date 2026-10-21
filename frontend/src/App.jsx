@@ -10,6 +10,7 @@ import StockDashboard from './pages/StockDashboard';
 import ProductionHistory from './pages/ProductionHistory';
 import Caixa from './pages/Caixa';
 import Configuracoes from './pages/Configuracoes';
+import Toaster from './components/Toaster';
 import CatalogoReferencia from './pages/CatalogoReferencia';
 import Categorias from './pages/Categorias';
 import Services from './pages/Services';
@@ -60,6 +61,7 @@ function GestorRoute({ children }) {
 export default function App() {
   return (
     <BrowserRouter>
+      <Toaster />
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/suporte" element={<Suporte />} />

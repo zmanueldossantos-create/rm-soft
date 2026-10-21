@@ -10,6 +10,7 @@ import { extractErrorMessage } from '../utils/errors';
 import {
   listInventories, createInventory, getInventory, saveInventoryCounts, validateInventory, fetchInventoryPdfBlob,
 } from '../api/stock';
+import { useToastState } from './Toaster';
 
 // Inventário (stock_inventory_service): count a warehouse. The list of its inventories, then one inventory - every
 // product managed by stock with its expected quantity; the count is typed per unit (packages + base unit), its total
@@ -31,7 +32,7 @@ export default function StockInventory({ open, onClose, warehouses, warehouseId,
   const [view, setView] = useState('list'); // list | edit
   const [inventories, setInventories] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useToastState('error');
   const [newWarehouseId, setNewWarehouseId] = useState('');
   const [periodId, setPeriodId] = useState('');
   const [periodRequired, setPeriodRequired] = useState(false);
@@ -164,7 +165,6 @@ export default function StockInventory({ open, onClose, warehouses, warehouseId,
   return (
     <>
     <Modal open={open} onClose={onClose} title="Inventário" maxWidthClass="max-w-6xl">
-      {error && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r mb-4">{error}</div>}
 
       {view === 'list' ? (
         <div className="flex flex-col gap-5">

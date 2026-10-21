@@ -4,6 +4,7 @@ import Select from '../components/Select';
 import { listFiscalYears, listFiscalPeriods } from '../api/fiscal';
 import { downloadSaftFile } from '../api/saft';
 import { extractErrorMessage } from '../utils/errors';
+import { useToastState } from '../components/Toaster';
 
 const MONTH_NAMES = [
   'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
@@ -19,7 +20,7 @@ export default function SaftExport() {
   const [loadingPeriods, setLoadingPeriods] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [includePurchases, setIncludePurchases] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useToastState('error');
 
   useEffect(() => {
     listFiscalYears()
@@ -126,11 +127,6 @@ export default function SaftExport() {
               </span>
             </label>
 
-            {error && (
-              <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">
-                {error}
-              </div>
-            )}
 
             <button
               onClick={handleDownload}

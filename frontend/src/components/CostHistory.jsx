@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useToastState } from './Toaster';
 import { Loader2, TrendingUp, TrendingDown } from 'lucide-react';
 import DateInput from './DateInput';
 import { getCostHistory } from '../api/products';
@@ -29,7 +30,7 @@ export default function CostHistory({ productId }) {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [history, setHistory] = useState(null);
-  const [error, setError] = useState('');
+  const [error, setError] = useToastState('error');
 
   useEffect(() => {
     let cancelled = false;
@@ -40,7 +41,7 @@ export default function CostHistory({ productId }) {
     return () => { cancelled = true; };
   }, [productId, dateFrom, dateTo]);
 
-  if (error) return <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{error}</div>;
+  if (error) return null;
   if (!history) return <div className="flex justify-center py-10"><Loader2 size={18} className="animate-spin text-accent" /></div>;
 
   return (

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { FileInput, Plus, Loader2, Trash2, Ban, Search, Eye, Wallet, CheckCircle2 } from 'lucide-react';
+import { FileInput, Plus, Loader2, Trash2, Ban, Search, Eye, Wallet } from 'lucide-react';
 import SupplierPaymentModal from '../components/SupplierPaymentModal';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
@@ -14,6 +14,7 @@ import { listServices } from '../api/services';
 import { listWarehouses } from '../api/stock';
 import { legalVatRatesApi, vatCodesApi } from '../api/catalogs';
 import { listPurchaseInvoices, getPurchaseInvoice, registerPurchaseInvoice, cancelPurchaseInvoice } from '../api/purchases';
+import { useToastState } from '../components/Toaster';
 
 // Faturas de compra (purchase_invoice_service): the supplier invoices the company registers - the VAT the supplier
 // charged (a legal rate, its exemption motive when exempt), the share the company deducts by its regime, the rest a
@@ -50,7 +51,7 @@ export default function Compras() {
   const can = useCan();
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [error, setError] = useToastState('error');
   const [suppliers, setSuppliers] = useState([]);
   const [products, setProducts] = useState([]);
   const [services, setServices] = useState([]);
@@ -61,7 +62,7 @@ export default function Compras() {
   const [filters, setFilters] = useState({ supplierId: '', status: '', payment: '', dateFrom: todayIso().slice(0, 8) + '01', dateTo: todayIso() });
   const [selected, setSelected] = useState([]);  // invoices ticked to pay (one supplier)
   const [paying, setPaying] = useState(null);
-  const [notice, setNotice] = useState('');
+  const [notice, setNotice] = useToastState('success');
   const [search, setSearch] = useState('');
 
   const [formOpen, setFormOpen] = useState(false);
@@ -70,12 +71,12 @@ export default function Compras() {
   const [saving, setSaving] = useState(false);
   const [scanCode, setScanCode] = useState('');
   const [scanError, setScanError] = useState('');
-  const [formError, setFormError] = useState('');
+  const [formError, setFormError] = useToastState('error');
 
   const [detail, setDetail] = useState(null);
   const [cancelReason, setCancelReason] = useState('');
   const [cancelling, setCancelling] = useState(false);
-  const [detailError, setDetailError] = useState('');  // shown in the open invoice, where the action was made
+  const [detailError, setDetailError] = useToastState('error');  // shown in the open invoice, where the action was made
 
   async function load() {
     setLoading(true);
@@ -325,13 +326,6 @@ export default function Compras() {
         ))}
       </div>
 
-      {error && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r mb-4">{error}</div>}
-      {notice && (
-        <div className="bg-success/10 border-l-2 border-success text-success px-3.5 py-2.5 text-[13px] rounded-r mb-4 flex items-center justify-between gap-3">
-          <span className="flex items-center gap-2"><CheckCircle2 size={15} /> {notice}</span>
-          <button onClick={() => setNotice('')} className="text-[12px] underline cursor-pointer">Fechar</button>
-        </div>
-      )}
       {canPay && <p className="text-[12px] text-text-muted mb-3">Para pagar, marque as faturas em dívida de um fornecedor - um pagamento para todas.</p>}
 
       <div className="bg-bg-elevated border border-border rounded-lg overflow-x-auto">
@@ -400,7 +394,6 @@ export default function Compras() {
               <p className="font-mono font-semibold text-lg text-text-primary">{kz(totals.subtotal + totals.vat)}</p>
             </div>
 
-            {formError && <div className="md:col-span-2 md:order-first bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{formError}</div>}
             <button type="submit" form="purchase-form" disabled={saving || !formValid} className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 cursor-pointer">
               {saving ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />} Registar fatura de compra
             </button>
@@ -624,7 +617,6 @@ export default function Compras() {
                 : 'Sem entrada em stock'}
             </p>
             <p className="text-[12px] text-text-muted">Registada por {detail.created_by || '-'} em {new Date(detail.created_at).toLocaleString('pt-PT')}{detail.description ? ' · ' + detail.description : ''}</p>
-            {detailError && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{detailError}</div>}
             {detail.status === 'REGISTADA' && can('purchases:manage') && (
               <div className="flex items-end gap-2 border-t border-border pt-4">
                 <div className="flex-1">

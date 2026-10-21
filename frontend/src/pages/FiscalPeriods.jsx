@@ -14,6 +14,7 @@ import {
   partialCloseFiscalPeriod,
 } from '../api/fiscal';
 import { extractErrorMessage } from '../utils/errors';
+import { useToastState } from '../components/Toaster';
 
 const MONTH_ABBR = ['', 'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 const MONTH_NAMES = [
@@ -88,7 +89,7 @@ export default function FiscalPeriods() {
   const [periods, setPeriods] = useState([]);
   const [nextMonth, setNextMonth] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [error, setError] = useToastState('error');
   const [busy, setBusy] = useState(false);
   const [confirmAction, setConfirmAction] = useState(null);
 
@@ -213,9 +214,6 @@ export default function FiscalPeriods() {
         )}
       </div>
 
-      {error && (
-        <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-sm rounded-r mb-5">{error}</div>
-      )}
 
       {!activeYear && (
         <div className="flex flex-col items-center justify-center py-16 border border-dashed border-border rounded-lg">

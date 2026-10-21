@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { ShieldCheck, Loader2 } from 'lucide-react';
 import { getPermissionMatrix, setRolePermission } from '../api/permissions';
 import { extractErrorMessage } from '../utils/errors';
+import { useToastState } from '../components/Toaster';
 
 const ROLES = ['GESTOR', 'CAIXA', 'ATENDENTE', 'COZINHA', 'ARMAZENISTA', 'CONTABILISTA'];
 const ROLE_LABELS = { GESTOR: 'Gestor', CAIXA: 'Caixa', ATENDENTE: 'Atendente', COZINHA: 'Cozinha', ARMAZENISTA: 'Armazenista', CONTABILISTA: 'Contabilista' };
@@ -9,7 +10,7 @@ const ROLE_LABELS = { GESTOR: 'Gestor', CAIXA: 'Caixa', ATENDENTE: 'Atendente', 
 export default function Permissoes() {
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [error, setError] = useToastState('error');
   const [savingKey, setSavingKey] = useState(null);
 
   useEffect(() => {
@@ -62,9 +63,6 @@ export default function Permissoes() {
         Configure o que cada perfil pode fazer. O perfil Gestor tem sempre todas as permissões. As alterações aplicam-se aos outros utilizadores ao recarregar a página ou no próximo início de sessão.
       </p>
 
-      {error && (
-        <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r mb-4">{error}</div>
-      )}
 
       {loading ? (
         <div className="flex items-center justify-center py-16 text-text-muted text-sm">

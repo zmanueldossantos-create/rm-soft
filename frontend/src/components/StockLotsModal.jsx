@@ -5,6 +5,7 @@ import { listProductLots } from '../api/stock';
 import LotTraceModal from './LotTraceModal';
 import { useCan } from '../utils/permissions';
 import { extractErrorMessage } from '../utils/errors';
+import { useToastState } from './Toaster';
 
 const th = 'text-[11px] uppercase tracking-wide text-text-muted font-medium px-4 py-2.5';
 const qty = (v) => Number(v || 0).toLocaleString('pt-PT', { maximumFractionDigits: 3 });
@@ -29,7 +30,7 @@ function LotState({ lot }) {
 // them (the first to expire first).
 export default function StockLotsModal({ product, onClose }) {
   const [lots, setLots] = useState(null);
-  const [error, setError] = useState('');
+  const [error, setError] = useToastState('error');
   const can = useCan();
   const [tracing, setTracing] = useState(null); // the lot whose path is shown (Rastrear)
 
@@ -48,7 +49,6 @@ export default function StockLotsModal({ product, onClose }) {
     <>
     <LotTraceModal lot={tracing} onClose={() => setTracing(null)} />
     <Modal open={!!product} onClose={onClose} title={product ? 'Lotes - ' + product.product_name : ''} maxWidthClass="max-w-4xl">
-      {error && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{error}</div>}
       {!error && lots === null && <div className="flex justify-center py-10"><Loader2 size={22} className="animate-spin text-accent" /></div>}
       {!error && lots && lots.length === 0 && <p className="text-sm text-text-muted py-6 text-center">Nenhum lote com stock.</p>}
       {!error && lots && lots.length > 0 && (

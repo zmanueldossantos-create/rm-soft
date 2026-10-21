@@ -20,6 +20,7 @@ import CompanyBackupsPanel from '../components/CompanyBackupsPanel';
 import SupportSessionsList from '../components/SupportSessionsList';
 import { listUsers } from '../api/users';
 import { listCashPointAssociations, assignUserToCashPoint, unassignUserFromCashPoint } from '../api/tesouraria';
+import { Notify, useToastState } from '../components/Toaster';
 
 
 function ToggleSwitch({ checked, onChange, disabled }) {
@@ -82,9 +83,9 @@ export default function CompanySettings() {
 
   const [company, setCompany] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [error, setError] = useToastState('error');
   const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState('');
+  const [saveError, setSaveError] = useToastState('error');
   const [saved, setSaved] = useState(false);
 
   const [email, setEmail] = useState('');
@@ -126,7 +127,7 @@ export default function CompanySettings() {
   const [banks, setBanks] = useState([]);
 
   const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState('');
+  const [uploadError, setUploadError] = useToastState('error');
   const [removingLogo, setRemovingLogo] = useState(false);
   const fileInputRef = useRef(null);
 
@@ -137,7 +138,7 @@ export default function CompanySettings() {
   const [editingActivityId, setEditingActivityId] = useState(null);
   const [activityForm, setActivityForm] = useState({ moduleId: '', name: '' });
   const [activitySaving, setActivitySaving] = useState(false);
-  const [activityFormError, setActivityFormError] = useState('');
+  const [activityFormError, setActivityFormError] = useToastState('error');
   const [activityTogglingId, setActivityTogglingId] = useState(null);
 
   const [posByActivity, setPosByActivity] = useState({});
@@ -146,7 +147,7 @@ export default function CompanySettings() {
   const [editingPosId, setEditingPosId] = useState(null);
   const [posForm, setPosForm] = useState({ activityId: '', name: '', billetageEnabled: false, acceptClosingDifference: true, printClosingReport: false, printAfterSale: false, printTicket: true, printA4: false });
   const [posSaving, setPosSaving] = useState(false);
-  const [posFormError, setPosFormError] = useState('');
+  const [posFormError, setPosFormError] = useToastState('error');
   const [assocByPos, setAssocByPos] = useState({});
   const [assocUsers, setAssocUsers] = useState([]);
   const [assocPos, setAssocPos] = useState(null);
@@ -162,7 +163,7 @@ export default function CompanySettings() {
   const [editingEstablishmentId, setEditingEstablishmentId] = useState(null);
   const [establishmentForm, setEstablishmentForm] = useState(emptyEstablishmentForm);
   const [establishmentSaving, setEstablishmentSaving] = useState(false);
-  const [establishmentFormError, setEstablishmentFormError] = useState('');
+  const [establishmentFormError, setEstablishmentFormError] = useToastState('error');
 
   const [documentTypes, setDocumentTypes] = useState([]);
   const [seriesList, setSeriesList] = useState([]);
@@ -173,7 +174,7 @@ export default function CompanySettings() {
   const emptySeriesForm = { year: '', documentTypeId: '', establishmentId: '', seriesCode: '', description: '', contingencyIndicator: 'NORMAL', isPredefined: true, todosFacturacao: false, todosTesouraria: false, todosCompras: false };
   const [seriesForm, setSeriesForm] = useState(emptySeriesForm);
   const [seriesSaving, setSeriesSaving] = useState(false);
-  const [seriesFormError, setSeriesFormError] = useState('');
+  const [seriesFormError, setSeriesFormError] = useToastState('error');
 
   const [bankAccounts, setBankAccounts] = useState([]);
   const [bankAccountsLoading, setBankAccountsLoading] = useState(false);
@@ -182,7 +183,7 @@ export default function CompanySettings() {
   const [editingBankId, setEditingBankId] = useState(null);
   const [bankForm, setBankForm] = useState(emptyBankForm);
   const [bankSaving, setBankSaving] = useState(false);
-  const [bankFormError, setBankFormError] = useState('');
+  const [bankFormError, setBankFormError] = useToastState('error');
 
   function formatIbanRest(raw) {
     const alnum = raw.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 21);
@@ -721,11 +722,6 @@ export default function CompanySettings() {
         Atualize o logotipo, os contactos, os estabelecimentos e as contas bancárias da sua empresa
       </p>
 
-      {error && (
-        <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-sm rounded-r mb-5">
-          {error}
-        </div>
-      )}
 
       <div className="flex items-center bg-bg-inset border border-border rounded-md p-0.5 self-start mb-5 w-fit flex-wrap">
         {[
@@ -803,7 +799,6 @@ export default function CompanySettings() {
                   Remover
                 </button>
               )}
-              {uploadError && <div className="bg-danger/10 border-l-2 border-danger text-danger px-2.5 py-2 text-[11px] rounded-r mt-2">{uploadError}</div>}
             </div>
 
             <div className="flex-1 flex flex-col gap-4">
@@ -943,8 +938,7 @@ export default function CompanySettings() {
             </div>
           </div>
 
-          {saveError && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r mt-4">{saveError}</div>}
-          {saved && <div className="bg-success/10 border-l-2 border-success text-success px-3.5 py-2.5 text-[13px] rounded-r mt-4">Alterações guardadas com sucesso</div>}
+          {saved && <Notify success="Alterações guardadas com sucesso" />}
 
           <div className="flex items-center justify-between gap-4 flex-wrap mt-6 pt-4 border-t border-border">
             <p className="text-[11px] text-text-muted">PNG, JPG, WEBP - máx. 2MB</p>
@@ -1237,7 +1231,6 @@ export default function CompanySettings() {
             <Field label="Nome *"><input value={establishmentForm.name} onChange={(e) => setEstablishmentForm((p) => ({ ...p, name: e.target.value }))} required className={inputClass} /></Field>
           </div>
           <Field label="Descrição"><input value={establishmentForm.description} onChange={(e) => setEstablishmentForm((p) => ({ ...p, description: e.target.value }))} className={inputClass} /></Field>
-          {establishmentFormError && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{establishmentFormError}</div>}
           <button type="submit" disabled={establishmentSaving || !establishmentForm.code || !establishmentForm.name} className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer">
             {establishmentSaving ? <Loader2 size={17} className="animate-spin" /> : <Plus size={17} />}
             {establishmentSaving ? 'A guardar...' : editingEstablishmentId ? 'Guardar alterações' : 'Criar estabelecimento'}
@@ -1260,7 +1253,6 @@ export default function CompanySettings() {
           <Field label="Moeda *">
             <Select value={bankForm.currencyId} onChange={(v) => setBankForm((p) => ({ ...p, currencyId: v }))} options={currencies.map((c) => ({ value: c.id, label: c.code }))} placeholder="Selecionar" />
           </Field>
-          {bankFormError && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{bankFormError}</div>}
           <button type="submit" disabled={bankSaving || !bankForm.bankId || !bankForm.accountNumber || !bankForm.iban || !bankForm.currencyId} className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer">
             {bankSaving ? <Loader2 size={17} className="animate-spin" /> : <Plus size={17} />}
             {bankSaving ? 'A guardar...' : editingBankId ? 'Guardar alterações' : 'Criar conta bancária'}
@@ -1359,9 +1351,6 @@ export default function CompanySettings() {
                   <input type="checkbox" checked={seriesForm.isPredefined} onChange={(e) => setSeriesForm((p) => ({ ...p, isPredefined: e.target.checked }))} className="w-4 h-4 accent-accent cursor-pointer" />
                   <span className="text-sm text-text-primary">Predefinida</span>
                 </label>
-                {seriesFormError && (
-                  <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{seriesFormError}</div>
-                )}
                 <button
                   type="submit"
                   disabled={seriesSaving || (allowedSeriesYears.length > 1 && !editingSeriesId && !seriesForm.year) || (!editingSeriesId && !seriesForm.documentTypeId) || (!editingSeriesId && issuanceMode === 'MANUAL' && !autoSeriesYear && !isTodos && !seriesForm.seriesCode) || (!editingSeriesId && issuanceMode === 'ELETRONICA' && !seriesForm.establishmentId)}
@@ -1389,9 +1378,6 @@ export default function CompanySettings() {
               className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors"
             />
           </div>
-          {activityFormError && (
-            <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{activityFormError}</div>
-          )}
           <button
             type="submit"
             disabled={activitySaving || !activityForm.name.trim()}
@@ -1485,9 +1471,6 @@ export default function CompanySettings() {
                     : 'Escolha pelo menos um formato.'}
             </p>
           </div>
-          {posFormError && (
-            <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{posFormError}</div>
-          )}
           <button
             type="submit"
             disabled={posSaving || !posForm.name.trim()}

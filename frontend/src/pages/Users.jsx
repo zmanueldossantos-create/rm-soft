@@ -5,6 +5,8 @@ import Select from '../components/Select';
 import { listUsers, createTeamUser, updateTeamUser, toggleUserStatus, resetUserPassword } from '../api/users';
 import { extractErrorMessage } from '../utils/errors';
 import { useAuthStore } from '../store/authStore';
+import { useToastState } from '../components/Toaster';
+import { toast } from '../store/toastStore';
 
 function ToggleSwitch({ checked, onChange, disabled }) {
   const trackClass = 'relative w-10 h-5.5 rounded-full transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ' + (checked ? 'bg-success' : 'bg-border');
@@ -39,20 +41,18 @@ export default function Users() {
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
-  const [formError, setFormError] = useState('');
+  const [formError, setFormError] = useToastState('error');
 
   const [resetModalOpen, setResetModalOpen] = useState(false);
   const [resetTarget, setResetTarget] = useState(null);
   const [resetPassword, setResetPassword] = useState('');
   const [resetSaving, setResetSaving] = useState(false);
-  const [resetError, setResetError] = useState('');
-  const [resetSuccess, setResetSuccess] = useState(false);
+  const [resetError, setResetError] = useToastState('error');
 
   function openResetModal(user) {
     setResetTarget(user);
     setResetPassword('');
     setResetError('');
-    setResetSuccess(false);
     setResetModalOpen(true);
   }
 
@@ -62,7 +62,8 @@ export default function Users() {
     setResetSaving(true);
     try {
       await resetUserPassword(resetTarget.id, resetPassword);
-      setResetSuccess(true);
+      toast.success('Palavra-passe redefinida. As sessões abertas desse utilizador foram terminadas.');
+      setResetModalOpen(false);
     } catch (err) {
       setResetError(extractErrorMessage(err, 'Erro ao redefinir palavra-passe'));
     } finally {
@@ -314,11 +315,6 @@ export default function Users() {
             />
           </div>
 
-          {formError && (
-            <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">
-              {formError}
-            </div>
-          )}
 
           <button
             type="submit"
@@ -332,21 +328,7 @@ export default function Users() {
       </Modal>
 
       <Modal open={resetModalOpen} onClose={() => setResetModalOpen(false)} title={'Redefinir palavra-passe' + (resetTarget ? ' - ' + resetTarget.full_name : '')}>
-        {resetSuccess ? (
-          <div className="flex flex-col gap-4">
-            <div className="bg-success/10 border-l-2 border-success text-success px-3.5 py-2.5 text-[13px] rounded-r">
-              Palavra-passe redefinida com sucesso.
-            </div>
-            <button
-              type="button"
-              onClick={() => setResetModalOpen(false)}
-              className="bg-accent hover:bg-accent-hover text-white font-semibold text-sm rounded-md py-3 transition-colors cursor-pointer"
-            >
-              Fechar
-            </button>
-          </div>
-        ) : (
-          <form onSubmit={handleResetPassword} className="flex flex-col gap-4">
+                  <form onSubmit={handleResetPassword} className="flex flex-col gap-4">
             <div>
               <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Nova palavra-passe *</label>
               <input
@@ -359,11 +341,6 @@ export default function Users() {
               />
               <p className="text-[11px] text-text-muted mt-1">Mínimo 8 caracteres</p>
             </div>
-            {resetError && (
-              <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">
-                {resetError}
-              </div>
-            )}
             <button
               type="submit"
               disabled={resetSaving || resetPassword.length < 8}
@@ -373,7 +350,6 @@ export default function Users() {
               {resetSaving ? 'A guardar...' : 'Redefinir palavra-passe'}
             </button>
           </form>
-        )}
       </Modal>
     </main>
   );

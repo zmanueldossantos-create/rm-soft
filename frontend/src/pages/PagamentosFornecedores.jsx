@@ -8,6 +8,7 @@ import { extractErrorMessage } from '../utils/errors';
 import { useCan } from '../utils/permissions';
 import { listSuppliers } from '../api/suppliers';
 import { listSupplierPayments, getSupplierPayment, cancelSupplierPayment, fetchSupplierPaymentPdfBlob } from '../api/supplierPayments';
+import { useToastState } from '../components/Toaster';
 
 // Pagamentos a fornecedores (supplier_payment_service): the payments made from Faturas de compra ("Pagar") - each with
 // the invoices it settled; never deleted: cancelled with a reason (the invoices are owed again, cash goes back to its till).
@@ -25,10 +26,10 @@ export default function PagamentosFornecedores() {
   const [payments, setPayments] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [error, setError] = useToastState('error');
   const [filters, setFilters] = useState({ supplierId: '', status: '', dateFrom: todayIso().slice(0, 8) + '01', dateTo: todayIso() });
   const [detail, setDetail] = useState(null);
-  const [detailError, setDetailError] = useState('');
+  const [detailError, setDetailError] = useToastState('error');
   const [cancelReason, setCancelReason] = useState('');
   const [cancelling, setCancelling] = useState(false);
   const [pdf, setPdf] = useState(null);
@@ -115,7 +116,6 @@ export default function PagamentosFornecedores() {
         </div>
       </div>
 
-      {error && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r mb-4">{error}</div>}
 
       <div className="bg-bg-elevated border border-border rounded-lg overflow-x-auto">
         {loading ? (
@@ -195,7 +195,6 @@ export default function PagamentosFornecedores() {
                 <FileText size={14} /> Ver PDF
               </button>
             </div>
-            {detailError && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{detailError}</div>}
             {detail.status === 'REGISTADO' && can('purchases:pay') && (
               <div className="flex items-end gap-2 border-t border-border pt-4">
                 <div className="flex-1">

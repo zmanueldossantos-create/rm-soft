@@ -7,6 +7,7 @@ import { formatKz } from '../utils/format';
 import { extractErrorMessage } from '../utils/errors';
 import { getTreasuryPosition, listTreasuryMovements, listTreasuryClosings } from '../api/tesouraria';
 import { fetchClosingReportPdfBlob } from '../api/pos';
+import { useToastState } from '../components/Toaster';
 
 // Tesouraria - the manager's view of the company's cash (treasury_overview_service): every till now, the movements
 // and the closings of a period. A read only: transfers, entradas and saídas are made at the Caixa.
@@ -221,7 +222,7 @@ export default function Tesouraria() {
   const [movements, setMovements] = useState([]);
   const [closings, setClosings] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [error, setError] = useToastState('error');
   const [dateFrom, setDateFrom] = useState(todayIso().slice(0, 8) + '01');
   const [dateTo, setDateTo] = useState(todayIso());
   const [posId, setPosId] = useState('');
@@ -329,9 +330,6 @@ export default function Tesouraria() {
         </div>
       )}
 
-      {error && (
-        <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r mb-4">{error}</div>
-      )}
 
       {loading || (tab === 'position' && !position) ? (
         <div className="flex items-center justify-center py-16 text-text-muted text-sm">

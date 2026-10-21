@@ -9,6 +9,7 @@ import { extractErrorMessage } from '../utils/errors';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
 import { countriesApi } from '../api/catalogs';
+import { useToastState } from '../components/Toaster';
 
 function ToggleSwitch({ checked, onChange, disabled }) {
   const trackClass = 'relative w-9 h-5 rounded-full transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ' + (checked ? 'bg-success' : 'bg-border');
@@ -28,14 +29,14 @@ export default function Fornecedores() {
   const [balances, setBalances] = useState({});  // what the company owes each supplier
   const [statementOf, setStatementOf] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [error, setError] = useToastState('error');
   const [togglingId, setTogglingId] = useState(null);
   const [search, setSearch] = useState('');
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm);
-  const [formError, setFormError] = useState('');
+  const [formError, setFormError] = useToastState('error');
   const [saving, setSaving] = useState(false);
 
   const [countries, setCountries] = useState([]);
@@ -162,9 +163,6 @@ export default function Fornecedores() {
         </button>
       </div>
 
-      {error && (
-        <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r mb-4">{error}</div>
-      )}
 
       {loading ? (
         <div className="flex items-center justify-center py-16 text-text-muted text-sm">
@@ -263,9 +261,6 @@ export default function Fornecedores() {
             <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Notas (opcional)</label>
             <textarea value={form.notes} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))} rows={2} className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
           </div>
-          {formError && (
-            <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{formError}</div>
-          )}
           <button
             type="submit"
             disabled={saving}

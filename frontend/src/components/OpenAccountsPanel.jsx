@@ -18,6 +18,7 @@ import { extractErrorMessage } from '../utils/errors';
 import { medicineSearchText } from '../api/pharmacy';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
+import { useToastState } from './Toaster';
 
 const TABLE_STATUS_LABEL = { LIVRE: 'Livre', OCUPADA: 'Ocupado', RESERVADA: 'Reservado' };
 const TABLE_BADGE_STYLE = {
@@ -58,17 +59,17 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
 
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useToastState('error');
 
   const [newModalOpen, setNewModalOpen] = useState(false);
   const [newForm, setNewForm] = useState({ label: '', resourceId: '', notes: '' });
-  const [newError, setNewError] = useState('');
+  const [newError, setNewError] = useToastState('error');
   const [newSaving, setNewSaving] = useState(false);
 
   const [detailAccount, setDetailAccount] = useState(null);
   const [detailLines, setDetailLines] = useState([]);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [detailError, setDetailError] = useState('');
+  const [detailError, setDetailError] = useToastState('error');
   const [stockLevels, setStockLevels] = useState({});
   const [itemTab, setItemTab] = useState('products');
   const [itemSearch, setItemSearch] = useState('');
@@ -79,7 +80,7 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
 
   const [closeModalOpen, setCloseModalOpen] = useState(false);
   const [closePayments, setClosePayments] = useState([]);
-  const [closeError, setCloseError] = useState('');
+  const [closeError, setCloseError] = useToastState('error');
   const [closeSaving, setCloseSaving] = useState(false);
   const [closeInvoiceType, setCloseInvoiceType] = useState('');
   const [closeCustomerId, setCloseCustomerId] = useState('');
@@ -103,7 +104,7 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
   const [transferTargetAccountId, setTransferTargetAccountId] = useState('');
   const [transferTargetResourceId, setTransferTargetResourceId] = useState('');
   const [transferNewLabel, setTransferNewLabel] = useState('');
-  const [transferError, setTransferError] = useState('');
+  const [transferError, setTransferError] = useToastState('error');
   const [transferSaving, setTransferSaving] = useState(false);
 
   useEffect(() => {
@@ -595,9 +596,6 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
         </div>
       )}
 
-      {error && (
-        <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r mb-4">{error}</div>
-      )}
 
       {showTables ? (
         tableStatuses.length === 0 ? (
@@ -710,9 +708,6 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
               className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors"
             />
           </div>
-          {newError && (
-            <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{newError}</div>
-          )}
           <button
             type="submit"
             disabled={newSaving}
@@ -823,9 +818,6 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
                 )}
               </div>
 
-              {detailError && (
-                <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{detailError}</div>
-              )}
 
               <div className="bg-bg-inset border border-border rounded-md px-4 py-3 flex flex-col gap-1">
                 <div className="flex justify-between text-[12px]"><span className="text-text-muted">Subtotal</span><span className="font-mono text-text-primary">{formatKz(detailSubtotal)} Kz</span></div>
@@ -969,9 +961,6 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
               {closeRemaining === 0 ? 'Valor exato' : closeRemaining > 0 ? `Falta ${formatKz(closeRemaining)} Kz` : `Excede em ${formatKz(Math.abs(closeRemaining))} Kz`}
             </div>
           )}
-          {closeError && (
-            <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{closeError}</div>
-          )}
           <button
             onClick={handleCloseSubmit}
             disabled={closeSaving || (closePaidOnIssue && posPaymentMethods.length > 0 && closeRemaining !== 0)
@@ -1053,9 +1042,6 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
             <span className="font-mono font-semibold text-text-primary text-lg">{formatKz(transferTotal)} Kz</span>
           </div>
 
-          {transferError && (
-            <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{transferError}</div>
-          )}
           <button
             type="button"
             onClick={handleTransferSubmit}

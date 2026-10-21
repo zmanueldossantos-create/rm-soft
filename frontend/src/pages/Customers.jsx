@@ -12,6 +12,7 @@ import { listInvoices } from '../api/invoices';
 import { extractErrorMessage } from '../utils/errors';
 import { getPharmacyContext } from '../api/pharmacy';
 import { countriesApi, provincesApi, currenciesApi, paymentTermsApi, paymentMethodsApi, withholdingTaxesApi, banksApi } from '../api/catalogs';
+import { useToastState } from '../components/Toaster';
 
 function Field({ label, children, hint }) {
   return (
@@ -65,8 +66,8 @@ export default function Customers() {
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
-  const [formError, setFormError] = useState('');
-  const [createdMessage, setCreatedMessage] = useState('');
+  const [formError, setFormError] = useToastState('error');
+  const [createdMessage, setCreatedMessage] = useToastState('success');
   const [nifLookupLoading, setNifLookupLoading] = useState(false);
   const [nifLookupMessage, setNifLookupMessage] = useState('');
   // Farmácia (only with the Farmácia sector): a customer may be an insurer / agreement paying part of the sales.
@@ -451,9 +452,6 @@ export default function Customers() {
 
       <Modal open={modalOpen} onClose={closeModal} title={editingId ? 'Editar cliente' : 'Novo cliente'} maxWidthClass="max-w-6xl">
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          {createdMessage && (
-            <div className="bg-success/10 border-l-2 border-success text-success px-3.5 py-2.5 text-[13px] rounded-r">{createdMessage}</div>
-          )}
           <div className="flex items-center bg-bg-inset border border-border rounded-md p-0.5 self-start flex-wrap">
             {[
               ['identificacao', 'Identificação'],
@@ -697,9 +695,6 @@ export default function Customers() {
             </div>
           )}
 
-          {formError && (
-            <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{formError}</div>
-          )}
 
           {activeTab !== 'faturacao' && (
             <button

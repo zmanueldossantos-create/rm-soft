@@ -6,12 +6,13 @@ import { API_ORIGIN } from '../api/config';
 import { useAuthStore } from '../store/authStore';
 import { extractErrorMessage } from '../utils/errors';
 import { homeFor } from '../utils/roleHome';
+import { useToastState } from '../components/Toaster';
 
 export default function Login() {
   const [phoneSuffix, setPhoneSuffix] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useToastState('error');
   const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
@@ -139,11 +140,6 @@ export default function Login() {
                 </button>
               </div>
 
-              {error && (
-                <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] mt-4 rounded-r">
-                  {error}
-                </div>
-              )}
 
               <button
                 type="submit"

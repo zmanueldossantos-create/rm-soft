@@ -8,6 +8,7 @@ import Select from '../components/Select';
 import { listProducts, createProduct, updateProduct, toggleProductStatus } from '../api/products';
 import { unitsApi } from '../api/catalogs';
 import { extractErrorMessage } from '../utils/errors';
+import { useToastState } from '../components/Toaster';
 
 function ToggleSwitch({ checked, onChange, disabled }) {
   const trackClass = 'relative w-10 h-5.5 rounded-full transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ' + (checked ? 'bg-success' : 'bg-border');
@@ -40,7 +41,7 @@ export default function MateriaPrima() {
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
-  const [formError, setFormError] = useState('');
+  const [formError, setFormError] = useToastState('error');
   const [sheetTab, setSheetTab] = useState('geral'); // 'geral' | 'embalagens' | 'custo'
   const [editingMaterial, setEditingMaterial] = useState(null); // its last purchase price and average cost
 
@@ -328,11 +329,6 @@ export default function MateriaPrima() {
               </div>
             );
           })()}
-          {formError && (
-            <div className="sm:col-span-2 bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">
-              {formError}
-            </div>
-          )}
 
           <button
             type="submit"

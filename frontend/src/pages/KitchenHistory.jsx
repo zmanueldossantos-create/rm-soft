@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { History, Loader2, ChevronDown, ChevronRight } from 'lucide-react';
 import { extractErrorMessage } from '../utils/errors';
 import { getKitchenHistory } from '../api/kitchen';
+import { useToastState } from '../components/Toaster';
 
 // Kitchen history (point 34d): the orders of a period, and for every dish who started it, who made it ready,
 // who cancelled it and why, and how long it took. Quick periods rather than date fields: the kitchen mostly
@@ -43,7 +44,7 @@ export default function KitchenHistory() {
   const [period, setPeriod] = useState('today');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useToastState('error');
   const [activityFilter, setActivityFilter] = useState('');
   const [onlyCancelled, setOnlyCancelled] = useState(false);
   const [open, setOpen] = useState({});
@@ -90,7 +91,6 @@ export default function KitchenHistory() {
         </div>
       )}
 
-      {error && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r mb-4">{error}</div>}
 
       {s && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">

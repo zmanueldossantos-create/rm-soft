@@ -4,6 +4,7 @@ import { Plus, Loader2, Pencil, Power, Check, X } from 'lucide-react';
 import Select from './Select';
 import { listSaleUnits, createSaleUnit, updateSaleUnit, toggleSaleUnit } from '../api/products';
 import { extractErrorMessage } from '../utils/errors';
+import { useToastState } from './Toaster';
 
 const inputClass = 'w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors';
 const labelClass = 'text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block';
@@ -20,7 +21,7 @@ export default function ProductSaleUnits({ productId, baseUnitId, units, noPrice
   const [form, setForm] = useState(EMPTY);
   const [editingId, setEditingId] = useState(null);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useToastState('error');
   const [warnings, setWarnings] = useState([]);
   const baseCode = units.find((u) => u.id === baseUnitId)?.code || 'unidade base';
 
@@ -193,7 +194,6 @@ export default function ProductSaleUnits({ productId, baseUnitId, units, noPrice
           </div>
         </div>
       )}
-      {error && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{error}</div>}
     </div>
   );
 }

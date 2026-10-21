@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { LayoutGrid, Loader2, RefreshCw, AlertTriangle, RotateCcw } from 'lucide-react';
 import { getAdminOverview, setModuleCapabilities, resetModuleCapabilities, setCompanyModules } from '../api/module';
 import { extractErrorMessage } from '../utils/errors';
+import { useToastState } from '../components/Toaster';
 
 const TABS = [
   { key: 'setores', label: 'Setores' },
@@ -43,7 +44,7 @@ function dependentsOf(code, capabilities) {
 export default function VisaoGlobal() {
   const [overview, setOverview] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [error, setError] = useToastState('error');
   const [tab, setTab] = useState('setores');
   const [savingKey, setSavingKey] = useState(null);
 
@@ -351,9 +352,6 @@ export default function VisaoGlobal() {
         </div>
       )}
 
-      {error && (
-        <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r mb-4">{error}</div>
-      )}
 
       <div className="flex items-center gap-2 mb-4 flex-wrap">
         {TABS.map((t) => (

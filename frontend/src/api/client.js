@@ -3,6 +3,8 @@
 import { API_BASE_URL } from './config';
 import axios from 'axios';
 import { useAuthStore } from '../store/authStore';
+import { toast } from '../store/toastStore';
+import { SERVER_UNREACHABLE } from '../utils/errors';
 
 // SaaS mode: the screen's own address tells the backend whose company this is (farmacia-da-luz.rmsystem.co.ao) - sent
 // on every call, since in development the backend has another address than the screens.
@@ -60,9 +62,14 @@ apiClient.interceptors.response.use(
         return apiClient(originalRequest);
       } catch (refreshError) {
         logout();
+        toast.info('A sessão terminou - inicie sessão novamente');
         return Promise.reject(refreshError);
       }
     }
+
+    // the server's own troubles, shown once whatever the screen (the screen's message, the same text, is not repeated)
+    if (!error.response && error.request) toast.error(SERVER_UNREACHABLE);
+    else if (error.response?.status >= 500) toast.error('Erro no servidor - tente de novo; se continuar, contacte o suporte RM SOFT');
 
     return Promise.reject(error);
   }

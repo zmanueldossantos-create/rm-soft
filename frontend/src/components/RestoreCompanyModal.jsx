@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, CheckCircle2, FileArchive, Loader2, Upload } from 'lucide-react';
+import { AlertTriangle, FileArchive, Loader2, Upload } from 'lucide-react';
 import Modal from './Modal';
 import { inspectCompanyBackup, restoreCompanyBackup } from '../api/admin';
 import { extractErrorMessage } from '../utils/errors';
+import { toast } from '../store/toastStore';
+import { useToastState } from './Toaster';
 
 // Empresas > «Restaurar empresa»: choose a backup file (made with «Exportar»), see what it holds and what would stop
 // it, then put the company back - identical. Never over a company that exists here.
@@ -26,11 +28,10 @@ export default function RestoreCompanyModal({ open, onClose, onRestored }) {
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const [done, setDone] = useState(null);
+  const [error, setError] = useToastState('error');
 
   useEffect(() => {
-    if (open) { setFile(null); setPreview(null); setError(''); setDone(null); setBusy(false); }
+    if (open) { setFile(null); setPreview(null); setError(''); setBusy(false); }
   }, [open]);
 
   async function choose(e) {
@@ -55,8 +56,12 @@ export default function RestoreCompanyModal({ open, onClose, onRestored }) {
     setError('');
     try {
       const result = await restoreCompanyBackup(file);
-      setDone(result);
+      toast.success('«' + result.name + '» restaurada: ' + plural(result.faturas, 'fatura', 'faturas') + ', '
+        + plural(result.clientes, 'cliente', 'clientes') + ', ' + plural(result.artigos, 'artigo', 'artigos') + ', '
+        + plural(result.utilizadores, 'utilizador', 'utilizadores') + '. Os utilizadores entram com as mesmas palavras-passe.');
+      toast.info('Numa outra instalação, volte a escrever as palavras-passe guardadas (email da empresa, chaves) se a chave do servidor for diferente.');
       onRestored?.();
+      onClose();
     } catch (err) {
       setError(extractErrorMessage(err, 'Não foi possível restaurar a empresa'));
     } finally {
@@ -68,26 +73,6 @@ export default function RestoreCompanyModal({ open, onClose, onRestored }) {
 
   return (
     <Modal open={open} onClose={onClose} title="Restaurar empresa" subtitle="A partir de uma cópia feita com «Exportar»" maxWidthClass="max-w-2xl">
-      {done ? (
-        <div className="flex flex-col gap-4">
-          <div className="flex items-start gap-2.5 bg-success/10 border-l-2 border-success text-success px-3.5 py-2.5 text-[13px] rounded-r">
-            <CheckCircle2 size={16} className="shrink-0 mt-0.5" />
-            <span>
-              «{done.name}» restaurada: {plural(done.faturas, 'fatura', 'faturas')}, {plural(done.clientes, 'cliente', 'clientes')},
-              {' '}{plural(done.artigos, 'artigo', 'artigos')}, {plural(done.utilizadores, 'utilizador', 'utilizadores')}.
-              {' '}Os utilizadores entram com as mesmas palavras-passe.
-            </span>
-          </div>
-          <p className="text-[12px] text-text-muted">
-            Numa outra instalação, volte a escrever as palavras-passe guardadas (email da empresa, chaves) se a chave do
-            servidor for diferente.
-          </p>
-          <button type="button" onClick={onClose}
-            className="bg-accent hover:bg-accent-hover text-white font-semibold text-sm rounded-md py-3 transition-colors cursor-pointer">
-            Fechar
-          </button>
-        </div>
-      ) : (
         <div className="flex flex-col gap-4">
           <input ref={inputRef} type="file" accept=".zip,application/zip" onChange={choose} className="hidden" />
           <button type="button" onClick={() => inputRef.current?.click()} disabled={busy}
@@ -139,7 +124,6 @@ export default function RestoreCompanyModal({ open, onClose, onRestored }) {
             </div>
           )}
 
-          {error && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{error}</div>}
 
           <button type="button" onClick={restore} disabled={busy || blocked}
             className="bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors">
@@ -147,7 +131,6 @@ export default function RestoreCompanyModal({ open, onClose, onRestored }) {
             {busy && preview ? 'A restaurar...' : 'Restaurar a empresa'}
           </button>
         </div>
-      )}
     </Modal>
   );
 }

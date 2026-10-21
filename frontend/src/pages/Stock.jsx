@@ -18,6 +18,7 @@ import { provincesApi, municipalitiesApi } from '../api/catalogs';
 import { listProducts } from '../api/products';
 import { extractErrorMessage } from '../utils/errors';
 import { useCan } from '../utils/permissions';
+import { useToastState } from '../components/Toaster';
 
 const LOSS_CATEGORIES = [
   { value: 'EXPIRACAO', label: 'Expiração' },
@@ -102,7 +103,7 @@ export default function Stock() {
   const [whLocations, setWhLocations] = useState([]);
   const [locationsOf, setLocationsOf] = useState(null);
   const [placingId, setPlacingId] = useState(null);
-  const [placeError, setPlaceError] = useState('');
+  const [placeError, setPlaceError] = useToastState('error');
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -122,7 +123,7 @@ export default function Stock() {
   const [municipalities, setMunicipalities] = useState([]);
   const [creatingWarehouse, setCreatingWarehouse] = useState(false);
   const [togglingWarehouseId, setTogglingWarehouseId] = useState(null);
-  const [newWarehouseError, setNewWarehouseError] = useState('');
+  const [newWarehouseError, setNewWarehouseError] = useToastState('error');
 
   const [receiveModalOpen, setReceiveModalOpen] = useState(false);
   const [transferModalOpen, setTransferModalOpen] = useState(false);
@@ -146,11 +147,11 @@ export default function Stock() {
   const [expiryDate, setExpiryDate] = useState('');
   const [adjustCurrent, setAdjustCurrent] = useState(null); // adjustment: the product's stock now in that warehouse
   const [saving, setSaving] = useState(false);
-  const [formError, setFormError] = useState('');
-  const [formSuccess, setFormSuccess] = useState('');
+  const [formError, setFormError] = useToastState('error');
+  const [formSuccess, setFormSuccess] = useToastState('success');
   // After a movement, the page shows the warehouse it changed, with a confirmation - never another warehouse's stock
   // that would look as if nothing had been recorded.
-  const [pageNotice, setPageNotice] = useState('');
+  const [pageNotice, setPageNotice] = useToastState('success');
   const noticeTimer = useRef(null);
   function showMovedWarehouse(warehouseId, message) {
     if (warehouseId && warehouseId !== selectedWarehouseId) setSelectedWarehouseId(warehouseId);  // its levels load on change
@@ -546,7 +547,6 @@ export default function Stock() {
         </div>
       </div>
 
-      {pageNotice && <div className="bg-success/10 border-l-2 border-success text-success px-3.5 py-2.5 text-[13px] rounded-r mb-4">{pageNotice}</div>}
       {selectedWarehouse && view === 'niveis' && <div className="mb-5"><WarehouseCard key={selectedWarehouse.id} warehouse={selectedWarehouse} isCentral={selectedWarehouse.id === centralWarehouse?.id} onEditClick={openEditWarehouseModal} onToggleStatus={handleToggleWarehouseStatus} togglingId={togglingWarehouseId} onLocationsClick={setLocationsOf} locationCount={whLocations.length} /></div>}
 
       <div className="flex items-center gap-3 mb-5 flex-wrap">
@@ -577,7 +577,6 @@ export default function Stock() {
         </div>
       )}
 
-      {placeError && view === 'niveis' && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r mb-3">{placeError}</div>}
       <div className={'bg-bg-elevated border border-border rounded-lg overflow-hidden ' + (view === 'niveis' ? '' : 'hidden')}>
         {loading && (
           <div className="flex items-center justify-center py-16 text-text-muted text-sm">
@@ -752,16 +751,6 @@ export default function Stock() {
               className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors"
             />
           </div>
-          {formSuccess && (
-            <div className="bg-success/10 border-l-2 border-success text-success px-3.5 py-2.5 text-[13px] rounded-r">
-              {formSuccess}
-            </div>
-          )}
-          {formError && (
-            <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">
-              {formError}
-            </div>
-          )}
           <button
             type="submit"
             disabled={saving || (periodChoice && !fiscalPeriodId) || !selectedProductId || !quantity || !transferToWarehouseId || !transferFromWarehouseId}
@@ -855,16 +844,6 @@ export default function Stock() {
               className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors"
             />
           </div>
-          {formSuccess && (
-            <div className="bg-success/10 border-l-2 border-success text-success px-3.5 py-2.5 text-[13px] rounded-r">
-              {formSuccess}
-            </div>
-          )}
-          {formError && (
-            <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">
-              {formError}
-            </div>
-          )}
           <button
             type="submit"
             disabled={saving || (periodChoice && !fiscalPeriodId) || !opWarehouseId || !lossCategory || !selectedProductId || !quantity}
@@ -962,16 +941,6 @@ export default function Stock() {
               className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors"
             />
           </div>
-          {formSuccess && (
-            <div className="bg-success/10 border-l-2 border-success text-success px-3.5 py-2.5 text-[13px] rounded-r">
-              {formSuccess}
-            </div>
-          )}
-          {formError && (
-            <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">
-              {formError}
-            </div>
-          )}
           <button
             type="submit"
             disabled={saving || (periodChoice && !fiscalPeriodId) || !opWarehouseId || !selectedProductId || !countFilled || reason.trim().length < 5 || adjustLotMissing}
@@ -1041,9 +1010,6 @@ export default function Stock() {
             </label>
           </div>
 
-          {newWarehouseError && (
-            <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-sm rounded-r">{newWarehouseError}</div>
-          )}
           <button
             type="submit"
             disabled={creatingWarehouse || !newWarehouseName.trim()}

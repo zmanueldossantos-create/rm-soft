@@ -3,10 +3,12 @@
 // {type, loc, msg, input, ctx} objects rather than a plain string -
 // this normalizes both shapes to avoid crashing React (objects are not
 // valid children) and to avoid showing raw error internals to the user.
+export const SERVER_UNREACHABLE = 'Servidor inacessível - verifique a ligação ou se o servidor está ativo';
+
 export function extractErrorMessage(err, fallback) {
   // No answer at all (server stopped, network down): say so instead of each screen's generic message.
   if (err && !err.response && err.request) {
-    return 'Servidor inacessível - verifique a ligação ou se o servidor esta ativo';
+    return SERVER_UNREACHABLE;
   }
   const detail = err.response?.data?.detail;
 

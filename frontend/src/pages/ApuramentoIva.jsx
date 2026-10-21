@@ -8,6 +8,7 @@ import { listVatPeriods, getVatReturn, listVatDocuments, fetchVatReturnPdfBlob }
 import { fetchInvoicePdfBlob } from '../api/invoices';
 import { getPurchaseInvoice } from '../api/purchases';
 import { useCan } from '../utils/permissions';
+import { useToastState } from '../components/Toaster';
 
 // Apuramento do IVA (vat_return_service): the VAT of a month - charged on the sales documents (a credit note against),
 // deductible on the purchase invoices of the period - and the result by the company's regime (its data). Each line
@@ -70,7 +71,7 @@ export default function ApuramentoIva() {
   const [periodId, setPeriodId] = useState('');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [error, setError] = useToastState('error');
   const [detail, setDetail] = useState(null);
   const [pdf, setPdf] = useState(null);
   const [purchase, setPurchase] = useState(null);
@@ -146,7 +147,6 @@ export default function ApuramentoIva() {
         </div>
       </div>
 
-      {error && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r mb-4">{error}</div>}
 
       {loading ? (
         <div className="flex justify-center py-16"><Loader2 size={20} className="animate-spin text-accent" /></div>

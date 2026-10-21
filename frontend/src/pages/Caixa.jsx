@@ -40,6 +40,7 @@ import { medicineSearchText, medicineSummary, getPharmacyContext } from '../api/
 import PrescriptionModal, { prescriptionNeedOf } from '../components/PrescriptionModal';
 
 import { dueDateFor, isProntoTerm } from '../utils/paymentTerms';
+import { useToastState } from '../components/Toaster';
 
 // What is still owed, from the server (credit notes, deposit, receipts and refunds counted) - never recomputed here.
 const balanceOf = (inv) => Number(inv.amount_due || 0);
@@ -95,7 +96,7 @@ export default function Caixa() {
   const [newCustomerModalOpen, setNewCustomerModalOpen] = useState(false);
   const [newCustomerForm, setNewCustomerForm] = useState({ name: '', nif: '', phone_number: '', email: '', legal_person_type: 'FISICA', typeTouched: false });
   const [newCustomerSaving, setNewCustomerSaving] = useState(false);
-  const [newCustomerError, setNewCustomerError] = useState('');
+  const [newCustomerError, setNewCustomerError] = useToastState('error');
   const [articlesModalOpen, setArticlesModalOpen] = useState(false);
   const [articleSearchQuery, setArticleSearchQuery] = useState('');
 
@@ -105,14 +106,14 @@ export default function Caixa() {
   const [denominations, setDenominations] = useState([]);
   const [denominationQuantities, setDenominationQuantities] = useState({});
   const [moedeiroSaving, setMoedeiroSaving] = useState(false);
-  const [moedeiroError, setMoedeiroError] = useState('');
+  const [moedeiroError, setMoedeiroError] = useToastState('error');
   const [moedeiroSavedTotal, setMoedeiroSavedTotal] = useState(null);
 
   const [movementModalOpen, setMovementModalOpen] = useState(false);
   const [movementForm, setMovementForm] = useState({ movementType: 'TRANSFERENCIA', amount: '', sourcePosId: '', otherPosId: '', reasonId: '', description: '' });
   const [movementReasons, setMovementReasons] = useState([]);
   const [movementSaving, setMovementSaving] = useState(false);
-  const [movementFormError, setMovementFormError] = useState('');
+  const [movementFormError, setMovementFormError] = useToastState('error');
   const [movementHistory, setMovementHistory] = useState([]);
   const [movementHistoryLoading, setMovementHistoryLoading] = useState(false);
   const [pendingReceptions, setPendingReceptions] = useState([]);
@@ -142,7 +143,7 @@ export default function Caixa() {
 
   const [session, setSession] = useState(null);
   const [sessionLoading, setSessionLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [error, setError] = useToastState('error');
 
   const [products, setProducts] = useState([]);
   const [customers, setCustomers] = useState([]);
@@ -153,19 +154,19 @@ export default function Caixa() {
   const [openModalOpen, setOpenModalOpen] = useState(false);
   const [openingAmount, setOpeningAmount] = useState('');
   const [openSaving, setOpenSaving] = useState(false);
-  const [openError, setOpenError] = useState('');
+  const [openError, setOpenError] = useToastState('error');
 
   const [closeModalOpen, setCloseModalOpen] = useState(false);
   const [closingAmountCounted, setClosingAmountCounted] = useState('');
   const [closingNotes, setClosingNotes] = useState('');
   const [closeSaving, setCloseSaving] = useState(false);
-  const [closeError, setCloseError] = useState('');
+  const [closeError, setCloseError] = useToastState('error');
   const [closeResult, setCloseResult] = useState(null);
 
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [payments, setPayments] = useState([]);
   const [checkoutSaving, setCheckoutSaving] = useState(false);
-  const [checkoutError, setCheckoutError] = useState('');
+  const [checkoutError, setCheckoutError] = useToastState('error');
   const [lastInvoice, setLastInvoice] = useState(null);
 
   const [proFormaModalOpen, setProFormaModalOpen] = useState(false);
@@ -186,7 +187,7 @@ export default function Caixa() {
   });
   const [pendingProFormas, setPendingProFormas] = useState([]);
   const [proFormaLoading, setProFormaLoading] = useState(false);
-  const [proFormaError, setProFormaError] = useState('');
+  const [proFormaError, setProFormaError] = useToastState('error');
   const [recentInvoices, setRecentInvoices] = useState([]);
   const [recentInvoicesLoading, setRecentInvoicesLoading] = useState(false);
   const [pdfModalOpen, setPdfModalOpen] = useState(false);
@@ -1404,11 +1405,6 @@ export default function Caixa() {
         </div>
       </div>
 
-      {error && (
-        <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r mb-4">
-          {error}
-        </div>
-      )}
 
       {sessionLoading && (
         <div className="flex items-center justify-center py-16 text-text-muted text-sm">
@@ -1733,9 +1729,6 @@ export default function Caixa() {
                 </div>
               </div>
 
-              {checkoutError && (
-                <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r mb-3">{checkoutError}</div>
-              )}
 
               <button
                 onClick={startConfirmation}
@@ -1760,9 +1753,6 @@ export default function Caixa() {
               <p className="font-mono font-semibold text-text-primary text-lg">{formatKz(carryForwardAmount)} Kz</p>
             )}
           </div>
-          {openError && (
-            <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{openError}</div>
-          )}
           <button type="submit" disabled={openSaving} className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer">
             {openSaving ? <Loader2 size={17} className="animate-spin" /> : <Wallet size={17} />}
             {openSaving ? 'A abrir...' : 'Abrir caixa'}
@@ -1791,9 +1781,6 @@ export default function Caixa() {
                 className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors"
               />
             </div>
-            {closeError && (
-              <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{closeError}</div>
-            )}
             <button type="submit" disabled={closeSaving} className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer">
               {closeSaving ? <Loader2 size={17} className="animate-spin" /> : <LogOut size={17} />}
               {closeSaving ? 'A fechar...' : 'Fechar caixa'}
@@ -1885,9 +1872,6 @@ export default function Caixa() {
             {paymentsRemaining === 0 ? 'Valor exato' : paymentsRemaining > 0 ? `Falta ${formatKz(paymentsRemaining)} Kz` : `Excede em ${formatKz(Math.abs(paymentsRemaining))} Kz`}
           </div>
 
-          {checkoutError && (
-            <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{checkoutError}</div>
-          )}
 
           <button
             onClick={handleConfirmSale}
@@ -2259,9 +2243,6 @@ export default function Caixa() {
                       className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors"
                     />
                   </div>
-                  {moedeiroError && (
-                    <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{moedeiroError}</div>
-                  )}
                   <button
                     onClick={handleCloseAfterBilletage}
                     disabled={closeSaving}
@@ -2293,9 +2274,6 @@ export default function Caixa() {
                 )}
               </div>
 
-              {moedeiroError && (
-                <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{moedeiroError}</div>
-              )}
 
               <button
                 onClick={handleMoedeiroSubmit}
@@ -2416,9 +2394,6 @@ export default function Caixa() {
               />
             </div>
 
-            {movementFormError && (
-              <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{movementFormError}</div>
-            )}
 
             <button
               type="submit"
@@ -2475,9 +2450,6 @@ export default function Caixa() {
                   </p>
                 </div>
 
-                {movementFormError && (
-                  <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{movementFormError}</div>
-                )}
 
                 <button
                   onClick={() => handleReceiveMovement(m.id, denominationLines(denominations, receptionDraft.quantities))}
@@ -2554,9 +2526,6 @@ export default function Caixa() {
               )}
             </div>
 
-            {movementFormError && (
-              <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{movementFormError}</div>
-            )}
           </div>
         )}
       </Modal>
@@ -2604,9 +2573,6 @@ export default function Caixa() {
               className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors"
             />
           </div>
-          {newCustomerError && (
-            <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{newCustomerError}</div>
-          )}
           <button
             type="submit"
             disabled={newCustomerSaving || !newCustomerForm.name.trim() || !newCustomerForm.phone_number.trim()}
@@ -2744,9 +2710,7 @@ export default function Caixa() {
           <div className={docsTab === 'proformas' ? '' : 'hidden'}>
           {proFormaLoading ? (
             <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin text-accent" /></div>
-          ) : proFormaError ? (
-            <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{proFormaError}</div>
-          ) : pendingProFormas.length === 0 ? (
+          ) : proFormaError ? null : pendingProFormas.length === 0 ? (
             <p className="text-text-muted text-[13px] text-center py-8">Nenhuma pro-forma pendente de liquidação</p>
           ) : (
             <div>

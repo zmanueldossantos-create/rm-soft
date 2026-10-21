@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Send, Plus, Loader2, Trash2, Ban, FileText, Eye, Receipt, CheckCircle2 } from 'lucide-react';
+import { Send, Plus, Loader2, Trash2, Ban, FileText, Eye, Receipt } from 'lucide-react';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
 import DateInput from '../components/DateInput';
@@ -13,6 +13,7 @@ import { listWarehouses } from '../api/stock';
 import { listPurchaseInvoices } from '../api/purchases';
 import { listActivities } from '../api/activity';
 import { listGuias, getGuia, createGuia, cancelGuia, fetchGuiaPdfBlob, invoiceGuias } from '../api/guias';
+import { useToastState } from '../components/Toaster';
 
 // Guias (goods_movement_service): the documents that travel with the goods - GR to a customer, GT between two
 // warehouses of the company, GD back to a supplier. Issued like an invoice (series, hash, ATCUD), they move the stock;
@@ -49,7 +50,7 @@ export default function Guias() {
   const can = useCan();
   const [guias, setGuias] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [error, setError] = useToastState('error');
   const [filters, setFilters] = useState({ type: '', status: '', dateFrom: todayIso().slice(0, 8) + '01', dateTo: todayIso() });
   const [customers, setCustomers] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
@@ -59,9 +60,9 @@ export default function Guias() {
 
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
-  const [formError, setFormError] = useState('');
+  const [formError, setFormError] = useToastState('error');
   const [detail, setDetail] = useState(null);
-  const [detailError, setDetailError] = useState('');
+  const [detailError, setDetailError] = useToastState('error');
   const [cancelReason, setCancelReason] = useState('');
   const [cancelling, setCancelling] = useState(false);
   const [pdf, setPdf] = useState(null);
@@ -71,9 +72,9 @@ export default function Guias() {
   const [activities, setActivities] = useState([]);
   const [invoicing, setInvoicing] = useState(null);  // the GR being invoiced
   const [invoiceActivity, setInvoiceActivity] = useState('');
-  const [invoiceError, setInvoiceError] = useState('');
+  const [invoiceError, setInvoiceError] = useToastState('error');
   const [invoiceSaving, setInvoiceSaving] = useState(false);
-  const [notice, setNotice] = useState('');
+  const [notice, setNotice] = useToastState('success');
 
   async function load() {
     setLoading(true);
@@ -268,13 +269,6 @@ export default function Guias() {
         </div>
       </div>
 
-      {error && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r mb-4">{error}</div>}
-      {notice && (
-        <div className="bg-success/10 border-l-2 border-success text-success px-3.5 py-2.5 text-[13px] rounded-r mb-4 flex items-center justify-between gap-3">
-          <span className="flex items-center gap-2"><CheckCircle2 size={15} /> {notice}</span>
-          <button onClick={() => setNotice('')} className="text-[12px] underline cursor-pointer">Fechar</button>
-        </div>
-      )}
       {can('guias:invoice') && (
         <p className="text-[12px] text-text-muted mb-3">Para faturar, marque as guias de remessa emitidas de um cliente - uma fatura para todas.</p>
       )}
@@ -451,7 +445,6 @@ export default function Guias() {
               {form.type === 'GD' && 'A mercadoria sai do armazém de carga e volta ao fornecedor ao emitir.'}
             </p>
 
-            {formError && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{formError}</div>}
             <button type="submit" disabled={saving || !formValid} className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 cursor-pointer">
               {saving ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />} Emitir {form.type ? TYPE_LABEL[form.type].toLowerCase() : 'guia'}
             </button>
@@ -521,7 +514,6 @@ export default function Guias() {
                 </button>
               </div>
             </div>
-            {detailError && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{detailError}</div>}
             {detail.status === 'EMITIDA' && can('guias:manage') && (
               <div className="flex items-end gap-2 border-t border-border pt-4">
                 <div className="flex-1">
@@ -575,7 +567,6 @@ export default function Guias() {
               Uma Fatura (FT) com as linhas das guias, ao preço de cada guia; a mercadoria já saiu do stock com as guias e não volta a sair.
               As guias passam a «Faturada». O pagamento regista-se depois com um recibo.
             </p>
-            {invoiceError && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{invoiceError}</div>}
             <button onClick={submitInvoice} disabled={invoiceSaving || !invoiceActivity} className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 cursor-pointer">
               {invoiceSaving ? <Loader2 size={17} className="animate-spin" /> : <Receipt size={17} />} Emitir fatura
             </button>

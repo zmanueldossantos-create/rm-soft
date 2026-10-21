@@ -3,6 +3,7 @@ import { Loader2, Printer } from 'lucide-react';
 import Modal from './Modal';
 import { traceLot, fetchLotTracePdf } from '../api/pharmacy';
 import { extractErrorMessage } from '../utils/errors';
+import { useToastState } from './Toaster';
 
 const th = 'text-[11px] uppercase tracking-wide text-text-muted font-medium px-3 py-2.5';
 const qty = (v) => (v == null ? '' : Number(v).toLocaleString('pt-PT', { maximumFractionDigits: 3 }));
@@ -12,7 +13,7 @@ const when = (iso) => new Date(iso).toLocaleDateString('pt-PT');
 // guide and loss - and what is left in each warehouse. What a recall by the manufacturer or the ARMED needs.
 export default function LotTraceModal({ lot, onClose }) {
   const [data, setData] = useState(null);
-  const [error, setError] = useState('');
+  const [error, setError] = useToastState('error');
   const [pdf, setPdf] = useState(null);
 
   useEffect(() => {
@@ -34,7 +35,6 @@ export default function LotTraceModal({ lot, onClose }) {
     <>
       <Modal open={!!lot} onClose={onClose} stacked maxWidthClass="max-w-6xl"
         title={data ? 'Rastrear lote - ' + data.product_name + ' · ' + data.label : 'Rastrear lote'}>
-        {error && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r mb-3">{error}</div>}
         {!error && !data && <div className="flex justify-center py-10"><Loader2 size={22} className="animate-spin text-accent" /></div>}
         {data && (
           <div className="flex flex-col gap-4">

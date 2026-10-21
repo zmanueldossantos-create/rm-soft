@@ -3,6 +3,8 @@ import { Mail, Loader2, Save, Check, Send } from 'lucide-react';
 import Select from './Select';
 import { getEmailSettings, updateEmailSettings, testEmailSettings } from '../api/ai';
 import { extractErrorMessage } from '../utils/errors';
+import { useToastState } from './Toaster';
+import { toast } from '../store/toastStore';
 
 const inputClass = 'w-full bg-bg-inset border border-border rounded-md px-3 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors disabled:opacity-60';
 const labelClass = 'text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block';
@@ -14,10 +16,10 @@ export default function EmailSettingsTab({ canManage }) {
   const [info, setInfo] = useState(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useToastState('error');
   const [testTo, setTestTo] = useState('');
   const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState('');
+  const [testResult, setTestResult] = useToastState('success');
 
   function load(data) {
     setInfo(data);
@@ -50,6 +52,7 @@ export default function EmailSettingsTab({ canManage }) {
         from_email: form.fromEmail.trim(), from_name: form.fromName.trim() || null, is_active: true,
       }));
       setSaved(true);
+      toast.success('Alterações guardadas');
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {
       setError(extractErrorMessage(err, 'Erro ao guardar'));
@@ -140,8 +143,6 @@ export default function EmailSettingsTab({ canManage }) {
           </div>
         </div>
       )}
-      {testResult && <div className="bg-success/10 border-l-2 border-success text-success px-3 py-2 text-[12px] rounded-r">{testResult}</div>}
-      {error && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3 py-2 text-[12px] rounded-r">{error}</div>}
     </div>
   );
 }

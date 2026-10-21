@@ -5,6 +5,8 @@ import Modal from './Modal';
 import apiClient from '../api/client';
 import { useAuthStore } from '../store/authStore';
 import { extractErrorMessage } from '../utils/errors';
+import { useToastState } from './Toaster';
+import { toast } from '../store/toastStore';
 
 // The connected user, at the bottom left of every screen: a circle with the initials; a click opens a small menu
 // upwards (the name, the phone, «Alterar palavra-passe», «Terminar sessão»). Esc or a click elsewhere closes it.
@@ -117,12 +119,11 @@ function ChangePasswordModal({ open, onClose }) {
   const [confirm, setConfirm] = useState('');
   const [show, setShow] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(null);
-  const [done, setDone] = useState(false);
+  const [error, setError] = useToastState('error', null);
 
   // a fresh form each time it opens
   useEffect(() => {
-    if (open) { setCurrent(''); setNext(''); setConfirm(''); setShow(false); setError(null); setDone(false); }
+    if (open) { setCurrent(''); setNext(''); setConfirm(''); setShow(false); setError(null); }
   }, [open]);
 
   const mismatch = confirm.length > 0 && next !== confirm;
@@ -135,7 +136,8 @@ function ChangePasswordModal({ open, onClose }) {
     try {
       const { data } = await apiClient.post('/auth/me/password', { current_password: current, new_password: next });
       login(data.access_token, data.refresh_token, user); // this device keeps working with its new session
-      setDone(true);
+      toast.success('Palavra-passe alterada. As sessões abertas noutros aparelhos foram terminadas.');
+      onClose();
     } catch (err) {
       setError(extractErrorMessage(err, 'Não foi possível alterar a palavra-passe'));
     } finally {
@@ -145,18 +147,7 @@ function ChangePasswordModal({ open, onClose }) {
 
   return (
     <Modal open={open} onClose={onClose} title="Alterar palavra-passe" subtitle={user?.full_name}>
-      {done ? (
-        <div className="flex flex-col gap-4">
-          <div className="bg-success/10 border-l-2 border-success text-success px-3.5 py-2.5 text-[13px] rounded-r">
-            Palavra-passe alterada. As sessões abertas noutros aparelhos foram terminadas.
-          </div>
-          <button type="button" onClick={onClose}
-            className="bg-accent hover:bg-accent-hover text-white font-semibold text-sm rounded-md py-3 transition-colors cursor-pointer">
-            Fechar
-          </button>
-        </div>
-      ) : (
-        <form onSubmit={submit} className="flex flex-col gap-4">
+              <form onSubmit={submit} className="flex flex-col gap-4">
           <PasswordField label="Palavra-passe atual *" value={current} onChange={setCurrent} show={show} autoFocus />
           <PasswordField label="Nova palavra-passe *" value={next} onChange={setNext} show={show} />
           <div>
@@ -172,9 +163,6 @@ function ChangePasswordModal({ open, onClose }) {
           <p className="text-[12px] text-text-muted">
             As sessões abertas noutros aparelhos serão terminadas; este aparelho continua ligado.
           </p>
-          {error && (
-            <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{error}</div>
-          )}
           <button
             type="submit"
             disabled={saving || !current || next.length < 8 || next !== confirm}
@@ -184,7 +172,6 @@ function ChangePasswordModal({ open, onClose }) {
             {saving ? 'A guardar...' : 'Alterar palavra-passe'}
           </button>
         </form>
-      )}
     </Modal>
   );
 }

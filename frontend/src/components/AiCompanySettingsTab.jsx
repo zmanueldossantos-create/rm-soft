@@ -3,6 +3,8 @@ import { Bot, Loader2, Save, Check, Send, Link2, Unlink } from 'lucide-react';
 import { updateMyCompanyAi, getMyChannels, newChannelCode, unlinkChannel } from '../api/ai';
 import { useCan } from '../utils/permissions';
 import { extractErrorMessage } from '../utils/errors';
+import { useToastState } from './Toaster';
+import { toast } from '../store/toastStore';
 
 const CHANNEL_LABELS = { TELEGRAM: 'Telegram', WHATSAPP: 'WhatsApp' };
 
@@ -11,7 +13,7 @@ function ChannelLinks() {
   const [data, setData] = useState(null);
   const [codes, setCodes] = useState({});
   const [busy, setBusy] = useState(null);
-  const [error, setError] = useState('');
+  const [error, setError] = useToastState('error');
 
   function load() {
     getMyChannels().then(setData).catch(() => setData(null));
@@ -93,7 +95,6 @@ function ChannelLinks() {
           </div>
         );
       })}
-      {error && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3 py-2 text-[12px] rounded-r">{error}</div>}
     </div>
   );
 }
@@ -105,7 +106,7 @@ export default function AiCompanySettingsTab({ info, onChange, canManage }) {
   const [values, setValues] = useState({ confirmDocuments: info.confirm_documents, confirmSends: info.confirm_sends });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useToastState('error');
 
   async function handleSave() {
     setError('');
@@ -113,6 +114,7 @@ export default function AiCompanySettingsTab({ info, onChange, canManage }) {
     try {
       onChange(await updateMyCompanyAi({ confirm_documents: values.confirmDocuments, confirm_sends: values.confirmSends }));
       setSaved(true);
+      toast.success('Alterações guardadas');
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {
       setError(extractErrorMessage(err, 'Erro ao guardar'));
@@ -168,7 +170,6 @@ export default function AiCompanySettingsTab({ info, onChange, canManage }) {
             {saving ? <Loader2 size={14} className="animate-spin" /> : saved ? <Check size={14} /> : <Save size={14} />}
             {saved ? 'Guardado' : 'Guardar'}
           </button>
-          {error && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3 py-2 text-[12px] rounded-r">{error}</div>}
         </div>
       )}
     </div>

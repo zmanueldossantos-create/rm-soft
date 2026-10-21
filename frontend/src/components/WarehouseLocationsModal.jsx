@@ -3,6 +3,7 @@ import { Loader2, Pencil, Plus, Power, X, Check } from 'lucide-react';
 import Modal from './Modal';
 import { listWarehouseLocations, createWarehouseLocation, updateWarehouseLocation, toggleWarehouseLocation } from '../api/stock';
 import { extractErrorMessage } from '../utils/errors';
+import { useToastState } from './Toaster';
 
 const th = 'text-[11px] uppercase tracking-wide text-text-muted font-medium px-4 py-2.5';
 const inputCls = 'w-full bg-bg-inset border border-border rounded-md px-3 py-2 text-sm text-text-primary outline-none focus:border-accent transition-colors';
@@ -11,7 +12,7 @@ const inputCls = 'w-full bg-bg-inset border border-border rounded-md px-3 py-2 t
 // put away in them from the stock screen (column Localização). A place still holding products cannot be deactivated.
 export default function WarehouseLocationsModal({ warehouse, canManage, onClose, onChanged }) {
   const [rows, setRows] = useState(null);
-  const [error, setError] = useState('');
+  const [error, setError] = useToastState('error');
   const [code, setCode] = useState('');
   const [description, setDescription] = useState('');
   const [editing, setEditing] = useState(null); // {id, code, description}
@@ -77,7 +78,6 @@ export default function WarehouseLocationsModal({ warehouse, canManage, onClose,
             </button>
           </form>
         )}
-        {error && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{error}</div>}
         {rows === null ? (
           <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin text-accent" /></div>
         ) : rows.length === 0 ? (

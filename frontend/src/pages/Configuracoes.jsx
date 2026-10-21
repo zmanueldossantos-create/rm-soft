@@ -29,6 +29,8 @@ const modulesApi = {
 import { extractErrorMessage } from '../utils/errors';
 import { getPlatformSettings, updatePlatformSettings } from '../api/admin';
 import { getPlatformAi, updatePlatformAi, testPlatformAi, setTelegramBot, getWhatsAppSettings, updateWhatsAppSettings } from '../api/ai';
+import { useToastState } from '../components/Toaster';
+import { toast } from '../store/toastStore';
 
 // The AI assistant: one provider, model and key for every company (the platform pays), a monthly message limit per
 // company (each company's own limit, if any, is set in Empresas > Assistente IA). The key is never shown back.
@@ -38,8 +40,8 @@ function AiSettingsCard() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState('');
-  const [error, setError] = useState('');
+  const [testResult, setTestResult] = useToastState('success');
+  const [error, setError] = useToastState('error');
 
   function load(data) {
     setInfo(data);
@@ -66,6 +68,7 @@ function AiSettingsCard() {
         monthlyLimit: parseInt(values.monthlyLimit, 10) || 0, ...extra,
       }));
       setSaved(true);
+      toast.success('Alterações guardadas');
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {
       setError(extractErrorMessage(err, 'Erro ao guardar'));
@@ -151,8 +154,6 @@ function AiSettingsCard() {
             Remover a chave
           </button>
         )}
-        {testResult && <div className="bg-success/10 border-l-2 border-success text-success px-3 py-2 text-[12px] rounded-r">{testResult}</div>}
-        {error && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3 py-2 text-[12px] rounded-r">{error}</div>}
       </div>
 
       <TelegramBotRow info={info} onChange={(t) => setInfo((p) => ({ ...p, telegram_configured: t.configured, telegram_bot_username: t.username }))} />
@@ -165,7 +166,7 @@ function AiSettingsCard() {
 function TelegramBotRow({ info, onChange }) {
   const [token, setToken] = useState('');
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useToastState('error');
 
   async function save(value) {
     setError('');
@@ -198,7 +199,6 @@ function TelegramBotRow({ info, onChange }) {
           <button onClick={() => save('')} disabled={saving} className="text-[12px] text-text-muted hover:text-danger transition-colors cursor-pointer py-2">Remover o bot</button>
         </>
       )}
-      {error && <div className="w-full bg-danger/10 border-l-2 border-danger text-danger px-3 py-2 text-[12px] rounded-r">{error}</div>}
     </div>
   );
 }
@@ -210,7 +210,7 @@ function WhatsAppRow() {
   const [form, setForm] = useState({ phoneNumberId: '', displayNumber: '', accessToken: '', appSecret: '' });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useToastState('error');
 
   function load(data) {
     setInfo(data);
@@ -230,6 +230,7 @@ function WhatsAppRow() {
         accessToken: form.accessToken.trim() ? form.accessToken.trim() : null, appSecret: form.appSecret.trim() ? form.appSecret.trim() : null,
       }));
       setSaved(true);
+      toast.success('Alterações guardadas');
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {
       setError(extractErrorMessage(err, 'Erro ao guardar'));
@@ -277,7 +278,6 @@ function WhatsAppRow() {
         <button onClick={save} disabled={saving} className="flex items-center gap-1.5 bg-accent hover:bg-accent-hover disabled:opacity-50 text-white text-sm font-medium px-3.5 py-2 rounded-md transition-colors cursor-pointer">
           {saving ? <Loader2 size={14} className="animate-spin" /> : saved ? <Check size={14} /> : <Save size={14} />}{saved ? 'Guardado' : 'Guardar WhatsApp'}
         </button>
-        {error && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3 py-2 text-[12px] rounded-r">{error}</div>}
       </div>
     </div>
   );
@@ -288,7 +288,7 @@ function PlatformSettingsCard() {
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useToastState('error');
 
   useEffect(() => {
     getPlatformSettings()
@@ -320,6 +320,7 @@ function PlatformSettingsCard() {
         values.productVersion.trim() || null,
       );
       setSaved(true);
+      toast.success('Alterações guardadas');
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {
       setError(extractErrorMessage(err, 'Erro ao guardar'));
@@ -390,11 +391,6 @@ function PlatformSettingsCard() {
           {saving ? <Loader2 size={14} className="animate-spin" /> : saved ? <Check size={14} /> : <Save size={14} />}
           {saved ? 'Guardado' : 'Guardar'}
         </button>
-        {error && (
-          <div className="bg-danger/10 border-l-2 border-danger text-danger px-3 py-2 text-[12px] rounded-r">
-            {error}
-          </div>
-        )}
       </div>
     </div>
   );
@@ -452,7 +448,7 @@ const RULE_INFO = [
 export default function Configuracoes() {
   const [counts, setCounts] = useState({});
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [error, setError] = useToastState('error');
   const [countries, setCountries] = useState([]);
   const [provinces, setProvinces] = useState([]);
   const [currencies, setCurrencies] = useState([]);
@@ -473,7 +469,7 @@ export default function Configuracoes() {
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState({});
   const [saving, setSaving] = useState(false);
-  const [formError, setFormError] = useState('');
+  const [formError, setFormError] = useToastState('error');
 
   async function loadCounts() {
     setLoading(true);
@@ -917,9 +913,6 @@ export default function Configuracoes() {
       <PlatformSettingsCard />
       <AiSettingsCard />
 
-      {error && (
-        <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r mb-4">{error}</div>
-      )}
 
       {loading ? (
         <div className="flex items-center justify-center py-16 text-text-muted text-sm">
@@ -980,9 +973,6 @@ export default function Configuracoes() {
         {activeCatalog && (
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             {renderFormFields()}
-            {formError && (
-              <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{formError}</div>
-            )}
             <button
               type="submit"
               disabled={saving}

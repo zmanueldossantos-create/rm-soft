@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Building2, Plus, Loader2, Search, Mail, Phone, Pencil, UserCog, Check, X, KeyRound, Landmark, LifeBuoy, Download, Upload, Copy, FileArchive, DatabaseBackup } from 'lucide-react';
+import { Building2, Plus, Loader2, Search, Mail, Phone, Pencil, UserCog, Check, X, KeyRound, Landmark, LifeBuoy, Download, Upload, FileArchive, DatabaseBackup } from 'lucide-react';
 import Modal from '../components/Modal';
 import apiClient from '../api/client';
 import Select from '../components/Select';
@@ -19,6 +19,8 @@ import { resetUserPassword } from '../api/users';
 import { listCompanyVatRates } from '../api/vat';
 import { countriesApi, provincesApi, municipalitiesApi, currenciesApi, banksApi } from '../api/catalogs';
 import { getCompanyAi, updateCompanyAi } from '../api/ai';
+import { useToastState } from '../components/Toaster';
+import { toast } from '../store/toastStore';
 
 const emptyAi = { aiEnabled: false, whatsappEnabled: false, telegramEnabled: false, emailEnabled: false, monthlyLimit: '', platformLimit: 300, platformConfigured: true, loaded: false };
 
@@ -82,7 +84,7 @@ export default function AdminCompanies() {
   const [companies, setCompanies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState(''); // after a creation from a base file: what was copied
+  const [notice, setNotice] = useToastState('success'); // after a creation from a base file: what was copied
   const [search, setSearch] = useState('');
   // Cópia de segurança: «Exportar» one company to a file; «Restaurar empresa» puts one back from its file
   const [exportingId, setExportingId] = useState(null);
@@ -119,7 +121,7 @@ export default function AdminCompanies() {
   }, [editingId]);
   // Configuração inicial of the company being edited (read only), loaded when its tab is opened
   const [setup, setSetup] = useState(null);
-  const [setupError, setSetupError] = useState('');
+  const [setupError, setSetupError] = useToastState('error');
   useEffect(() => {
     if (!editingId || activeTab !== 'configuracao') return;
     setSetup(null);
@@ -128,7 +130,7 @@ export default function AdminCompanies() {
   }, [editingId, activeTab]);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
-  const [formError, setFormError] = useState('');
+  const [formError, setFormError] = useToastState('error');
   const [nifLookupLoading, setNifLookupLoading] = useState(false);
   const [nifLookupMessage, setNifLookupMessage] = useState('');
 
@@ -154,13 +156,11 @@ export default function AdminCompanies() {
   const [resetModalOpen, setResetModalOpen] = useState(false);
   const [resetPassword, setResetPassword] = useState('');
   const [resetSaving, setResetSaving] = useState(false);
-  const [resetError, setResetError] = useState('');
-  const [resetSuccess, setResetSuccess] = useState(false);
+  const [resetError, setResetError] = useToastState('error');
 
   async function openResetModal() {
     setResetPassword('');
     setResetError('');
-    setResetSuccess(false);
     setResetModalOpen(true);
   }
 
@@ -171,7 +171,8 @@ export default function AdminCompanies() {
     try {
       const gestor = await getCompanyGestor(editingId);
       await resetUserPassword(gestor.id, resetPassword);
-      setResetSuccess(true);
+      toast.success('Palavra-passe redefinida. As sessões abertas desse utilizador foram terminadas.');
+      setResetModalOpen(false);
     } catch (err) {
       setResetError(extractErrorMessage(err, 'Erro ao redefinir palavra-passe'));
     } finally {
@@ -242,7 +243,7 @@ export default function AdminCompanies() {
     setEditingId(null);
     setForm(emptyForm);
     setBankRows([]);
-    setActiveTab('base');
+    setActiveTab('dados');
     setFormError('');
     setModalOpen(true);
     setBase(null);
@@ -253,7 +254,7 @@ export default function AdminCompanies() {
   const [base, setBase] = useState(null); // {token, company, counts, fiscal_regime_id, ...} once the file is read
   const [baseFileName, setBaseFileName] = useState('');
   const [baseLoading, setBaseLoading] = useState(false);
-  const [baseError, setBaseError] = useState('');
+  const [baseError, setBaseError] = useToastState('error');
   async function chooseBaseFile(e) {
     const file = e.target.files?.[0];
     e.target.value = '';
@@ -401,7 +402,7 @@ export default function AdminCompanies() {
   const [supportCompany, setSupportCompany] = useState(null);
   const [supportReason, setSupportReason] = useState('');
   const [supportSaving, setSupportSaving] = useState(false);
-  const [supportError, setSupportError] = useState('');
+  const [supportError, setSupportError] = useToastState('error');
   function openSupport(company) {
     setSupportCompany(company);
     setSupportReason('');
@@ -430,7 +431,7 @@ export default function AdminCompanies() {
 
   // the gestor's account of the company being edited (name, phone, state), loaded when its tab is opened
   const [gestorAccount, setGestorAccount] = useState(null);
-  const [gestorError, setGestorError] = useState('');
+  const [gestorError, setGestorError] = useToastState('error');
   useEffect(() => {
     if (!editingId || activeTab !== 'gestor') return;
     setGestorAccount(null);
@@ -656,13 +657,6 @@ export default function AdminCompanies() {
         </div>
       </div>
 
-      {notice && (
-        <div className="mb-4 flex items-start gap-3 bg-success/10 border-l-2 border-success text-success px-3.5 py-2.5 text-[13px] rounded-r">
-          <Copy size={15} className="shrink-0 mt-0.5" />
-          <span className="flex-1">{notice}</span>
-          <button type="button" onClick={() => setNotice('')} aria-label="Fechar" className="shrink-0 cursor-pointer hover:text-text-primary"><X size={15} /></button>
-        </div>
-      )}
 
       <div className="bg-bg-elevated border border-border rounded-lg overflow-hidden">
         {loading && (
@@ -753,12 +747,14 @@ export default function AdminCompanies() {
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex items-center bg-bg-inset border border-border rounded-md p-0.5 self-start flex-wrap">
             {[
+              // the order a client is set up in: who it is (NIF, regime), what it does (its sectors), what it starts
+              // with (Base: counts follow the sectors and the regime), who uses it, then the optional bank details
+              ['dados', 'Dados da Empresa'],
+              ['modulos', 'Módulos'],
               ...(editingId ? [] : [['base', 'Base']]),
               ['gestor', 'Conta do Gestor'],
-              ['dados', 'Dados da Empresa'],
-                        ['bancarias', 'Coordenadas Bancárias'],
+              ['bancarias', 'Coordenadas Bancárias'],
               ...(editingId ? [['iva', 'Taxas de IVA']] : []),
-              ['modulos', 'Módulos'],
               ...(editingId ? [['ia', 'Assistente IA']] : []),
               ...(editingId ? [['configuracao', 'Configuração inicial']] : []),
               ...(editingId ? [['copias', 'Cópias de segurança']] : []),
@@ -985,7 +981,6 @@ export default function AdminCompanies() {
                   </button>
                 )}
               </div>
-              {baseError && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{baseError}</div>}
               {base && (
                 <>
                   <div className="text-[13px] text-text-primary">
@@ -1031,7 +1026,6 @@ export default function AdminCompanies() {
 
           {activeTab === 'gestor' && editingId && (
             <div className="flex flex-col gap-4 min-h-[420px]">
-              {gestorError && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{gestorError}</div>}
               {!gestorAccount && !gestorError && <div className="flex items-center gap-2 text-[13px] text-text-muted"><Loader2 size={15} className="animate-spin" /> A carregar...</div>}
               {gestorAccount && (
                 <>
@@ -1133,7 +1127,6 @@ export default function AdminCompanies() {
           {activeTab === 'configuracao' && (
             <div className="flex flex-col gap-3 min-h-[420px]">
               <p className="text-[12px] text-text-muted">Onde a empresa está na sua configuração - cada passo é lido dos dados reais. Os passos «RM SOFT» são definidos aqui, no separador Dados da Empresa.</p>
-              {setupError && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{setupError}</div>}
               {!setup && !setupError && (
                 <div className="flex items-center justify-center py-16 text-text-muted text-sm"><Loader2 size={18} className="animate-spin mr-2" />A carregar...</div>
               )}
@@ -1233,9 +1226,6 @@ export default function AdminCompanies() {
             </div>
           )}
 
-          {formError && (
-            <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{formError}</div>
-          )}
 
           <button
             type="submit"
@@ -1269,7 +1259,6 @@ export default function AdminCompanies() {
             {deploymentMode !== 'saas' && (
               <p className="text-[12px] text-text-muted">Instalação local: esta janela entra na empresa. Para voltar à administração, use «Sair do suporte» e inicie sessão de novo.</p>
             )}
-            {supportError && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{supportError}</div>}
             <button type="button" onClick={confirmSupport} disabled={supportSaving || supportReason.trim().length < 10}
               className="flex items-center justify-center gap-2 bg-amber-400 hover:bg-amber-300 disabled:opacity-50 text-amber-950 font-semibold text-sm rounded-md py-3 transition-colors cursor-pointer">
               {supportSaving ? <Loader2 size={16} className="animate-spin" /> : <LifeBuoy size={16} />}
@@ -1280,23 +1269,10 @@ export default function AdminCompanies() {
       </Modal>
 
       <Modal open={resetModalOpen} onClose={() => setResetModalOpen(false)} title="Redefinir palavra-passe do Gestor">
-        {resetSuccess ? (
-          <div className="flex flex-col gap-4">
-            <div className="bg-success/10 border-l-2 border-success text-success px-3.5 py-2.5 text-[13px] rounded-r">
-              Palavra-passe redefinida com sucesso.
-            </div>
-            <button type="button" onClick={() => setResetModalOpen(false)} className="bg-accent hover:bg-accent-hover text-white font-semibold text-sm rounded-md py-3 transition-colors cursor-pointer">
-              Fechar
-            </button>
-          </div>
-        ) : (
-          <form onSubmit={handleResetPassword} className="flex flex-col gap-4">
+                  <form onSubmit={handleResetPassword} className="flex flex-col gap-4">
             <Field label="Nova palavra-passe *" hint="Mínimo 8 caracteres">
               <input type="password" value={resetPassword} onChange={(e) => setResetPassword(e.target.value)} required minLength={8} className={inputClass} />
             </Field>
-            {resetError && (
-              <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{resetError}</div>
-            )}
             <button
               type="submit"
               disabled={resetSaving || resetPassword.length < 8}
@@ -1306,7 +1282,6 @@ export default function AdminCompanies() {
               {resetSaving ? 'A guardar...' : 'Redefinir palavra-passe'}
             </button>
           </form>
-        )}
       </Modal>
     </main>
   );
