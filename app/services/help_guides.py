@@ -176,7 +176,10 @@ PLATFORM_MODULES = [
         "steps": [
             S(text="Antes do primeiro cliente, confira os catálogos da plataforma: regimes fiscais, taxas legais de IVA, "
                    "tipos de documento e os Módulos (setores) com as funções que cada um dá.", link="/configuracoes"),
-            S(text="Empresas → «Nova empresa». Separador Base (opcional): escolha a cópia exportada de uma empresa já "
+            S(text="Empresas → «Nova empresa». Separador Base: «Catálogo de referência» (marcado) dá à empresa os produtos "
+                   "dos seus setores (Módulos) e os de todos os setores - stock a zero, IVA conforme o seu regime, os sem "
+                   "preço fora da Caixa até o gestor definir o preço.", link="/catalogo-referencia"),
+            S(text="Ainda no separador Base (opcional): escolha a cópia exportada de uma empresa já "
                    "configurada (ex.: um «Comércio geral» preparado uma vez) e marque o que copiar - artigos e categorias, "
                    "serviços, fornecedores. A nova empresa fica com o regime fiscal dessa empresa. Nunca são copiados "
                    "clientes, stock, custos nem documentos.", link="/admin/companies"),
@@ -302,6 +305,8 @@ PAGES = [
             "Marque «Gerido por stocks» para controlar as quantidades; «Gerido por lotes» e «Gerido por validade» para "
             "seguir lotes e datas de validade.",
             "Clique em «Criar produto». O separador «Histórico do custo» mostra a evolução do custo médio.",
+            "«Sem preço» (botão laranja): os produtos recebidos do catálogo de referência ainda sem preço - fora da Caixa "
+            "e nunca vendidos até definir o preço; ao guardar um preço, ficam à venda.",
         ],
         "tips": ["«Não disponível POS» esconde o produto da caixa (vende-se apenas por fatura)."],
         "errors": [("O produto não aparece na caixa", "Verifique o estado (Ativo), a opção «Não disponível POS» e o stock no "

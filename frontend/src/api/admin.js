@@ -151,3 +151,11 @@ export async function downloadCompanyBackupCopy(backupId, fileName) {
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
 }
+
+// «Nova empresa» > Base: how many reference catalog products a company of these modules receives.
+export async function getReferenceOffer(moduleIds) {
+  const params = new URLSearchParams();
+  (moduleIds || []).forEach((id) => params.append('module_ids', id));
+  const res = await apiClient.get('/admin/reference-catalog/offer?' + params.toString());
+  return res.data;
+}

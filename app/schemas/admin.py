@@ -105,6 +105,7 @@ class CompanyCreateRequest(BaseModel):
     # «Base»: a company's backup file, uploaded first (/admin/company-base/inspect), whose catalog is copied
     base_token: str | None = None
     base_parts: list[Literal["artigos", "servicos", "fornecedores"]] = []
+    reference_catalog: bool = False  # the reference catalog of its sectors (Catálogo de referência)
 
     @field_validator("name")
     @classmethod
@@ -208,6 +209,7 @@ class CompanyResponse(BaseModel):
     id: uuid.UUID
     subdomain: str | None = None
     base_counts: dict[str, int] | None = None  # after a creation from a base file: what was copied (not stored)
+    catalog_counts: dict[str, int] | None = None  # after a creation with the reference catalog: what it received
     name: str
     nif: str
     email: str

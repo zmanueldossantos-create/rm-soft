@@ -114,7 +114,10 @@ def _needs_reclassification(article, active_rates: dict, others: set, regime=Non
 
 
 async def ensure_article_sellable(db: AsyncSession, article) -> None:
-    """An article left behind by a regime change cannot be sold until it is reclassified."""
+    """An article left behind by a regime change cannot be sold until it is reclassified - nor one taken from the
+    reference catalog without a price, until its price is set."""
+    if getattr(article, "awaiting_price", False):
+        raise ArticleVatError(f"O artigo {article.name} ainda não tem preço - defina-o na ficha do artigo")
     regime, active_rates, _, others = await _company_vat_context(db, article.company_id)
     if _needs_reclassification(article, active_rates, others, regime):
         raise ArticleVatError(

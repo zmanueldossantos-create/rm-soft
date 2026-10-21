@@ -37,7 +37,11 @@ async def catalog_meta(db: AsyncSession) -> dict:
     )).all())
     units = (await db.execute(select(UnitOfMeasureCatalog).where(UnitOfMeasureCatalog.is_active.is_(True))
                               .order_by(UnitOfMeasureCatalog.code))).scalars().all()
-    motives = (await db.execute(select(VatCode).where(VatCode.is_active.is_(True)).order_by(VatCode.code))).scalars().all()
+    # a product's own motives only: a regime's motive (M00, M04) is the company's, set by its regime when it takes it
+    from app.models.fiscal_regime import FiscalRegime
+    regime_motives = select(FiscalRegime.required_exemption_id).where(FiscalRegime.required_exemption_id.is_not(None))
+    motives = (await db.execute(select(VatCode).where(VatCode.is_active.is_(True), VatCode.id.not_in(regime_motives))
+                                .order_by(VatCode.code))).scalars().all()
     total = (await db.execute(select(func.count()).select_from(ReferenceProduct))).scalar_one()
     general = (await db.execute(select(func.count()).select_from(ReferenceProduct)
                                 .where(func.cardinality(ReferenceProduct.sectors) == 0))).scalar_one()
@@ -303,3 +307,132 @@ async def import_catalog(db: AsyncSession, content: bytes) -> dict:
             errors.append({"row": number, "message": str(e)})
     await db.commit()
     return {"created": created, "updated": updated, "errors": errors}
+
+
+# ------------------------------------------------------------------------------------- a new company takes the catalog
+
+def _for_sectors(sectors: list[str]):
+    """The active products a company of these sectors receives: theirs, and those of every sector (no sector)."""
+    return select(ReferenceProduct).where(
+        ReferenceProduct.is_active.is_(True),
+        or_(func.cardinality(ReferenceProduct.sectors) == 0, ReferenceProduct.sectors.overlap(sectors or [""])),
+    )
+
+
+async def sectors_of_modules(db: AsyncSession, module_ids: list) -> list[str]:
+    from app.models.module import Module
+    if not module_ids:
+        return []
+    return [m.code for m in (await db.execute(select(Module).where(Module.id.in_(module_ids)))).scalars().all() if m.code]
+
+
+async def catalog_offer(db: AsyncSession, module_ids: list) -> dict:
+    """«Nova empresa» > Base: what the reference catalog gives a company of these sectors."""
+    sectors = await sectors_of_modules(db, module_ids)
+    rows = (await db.execute(_for_sectors(sectors))).scalars().all()
+    names = {s["code"]: s["name"] for s in catalog_sectors()}
+    return {"sectors": [names.get(s, s) for s in sectors], "products": len(rows),
+            "without_price": sum(1 for p in rows if p.price is None)}
+
+
+async def take_reference_catalog(db: AsyncSession, company) -> dict:
+    """The new company receives the reference catalog of its sectors, in the creation's transaction (no commit):
+    each product becomes its own article - stock 0, its category, its sale units - with THE company's VAT:
+    - the product's nature (NOR / RED / ISE) gives the company's rate of that category, when its regime allows it;
+    - a regime imposing a motive (M00, M04) gives its exempt rate and that motive, unless the product's own motive is
+      one the regime keeps;
+    - otherwise the product is taken with the rate of its category, inactive: the reclassification banner shows it
+      and it is never sold before (vat_rule_service).
+    Without price: price 0, off the Caixa and never sold until the gestor sets it (awaiting_price).
+    A product the company already has (same barcode, else same name) is skipped."""
+    from app.models.company_module import CompanyModule
+    from app.models.fiscal_regime import FiscalRegime
+    from app.models.legal_vat_rate import LegalVatRate
+    from app.models.product import Product, ProductType
+    from app.models.product_category import ProductCategory
+    from app.models.product_sale_unit import ProductSaleUnit
+    from app.models.vat import VAT
+
+    module_ids = (await db.execute(select(CompanyModule.module_id).where(CompanyModule.company_id == company.id))).scalars().all()
+    sectors = await sectors_of_modules(db, list(module_ids))
+    regime = await db.get(FiscalRegime, company.fiscal_regime_id) if company.fiscal_regime_id else None
+    rates = {}
+    for vat in (await db.execute(select(VAT).where(VAT.company_id == company.id))).scalars().all():
+        if vat.tax_category not in rates or vat.is_active:
+            rates[vat.tax_category] = vat
+
+    async def rate_of(category: str):
+        """The company's rate of this category - an inactive one added when it has none (the product to reclassify)."""
+        if category not in rates:
+            legal = (await db.execute(select(LegalVatRate).where(LegalVatRate.tax_category == category))).scalar_one_or_none()
+            vat = VAT(company_id=company.id, tax_category=category, is_active=False,
+                      name=legal.name if legal else TAX_CATEGORIES.get(category, category), rate=legal.rate if legal else 0)
+            db.add(vat)
+            await db.flush()
+            rates[category] = vat
+        return rates[category]
+
+    def allowed(category: str) -> bool:
+        vat = rates.get(category)
+        return vat is not None and vat.is_active and (regime is None or getattr(regime, "allows_" + category.lower(), False))
+
+    async def vat_of(product: ReferenceProduct) -> tuple:
+        """(rate, motive, to review) - THE rule of vat_rule_service, applied to a whole catalog."""
+        imposed = regime.required_exemption_id if regime is not None else None
+        kept = set(regime.kept_exemption_ids or []) if regime is not None else set()
+        if allowed(product.tax_category):
+            if product.tax_category != "ISE":
+                return rates[product.tax_category].id, None, False
+            motive = product.exemption_id if (imposed is None or product.exemption_id in kept) else imposed
+            return rates["ISE"].id, motive, False
+        if imposed is not None and allowed("ISE"):  # Simplificado, Exclusão: exempt with the regime's motive
+            return rates["ISE"].id, product.exemption_id if product.exemption_id in kept else imposed, False
+        return (await rate_of(product.tax_category)).id, product.exemption_id, True
+
+    existing = (await db.execute(select(Product.code, Product.barcode, Product.name).where(Product.company_id == company.id))).all()
+    codes = {r.code for r in existing}
+    barcodes = {r.barcode for r in existing if r.barcode}
+    names = {r.name.lower() for r in existing}
+    categories = {c.name.lower(): c.id for c in (await db.execute(
+        select(ProductCategory).where(ProductCategory.company_id == company.id))).scalars().all()}
+
+    counts = {"artigos": 0, "sem_preco": 0, "a_rever": 0, "unidades_de_venda": 0, "categorias": 0}
+    serial = 0
+    for ref in (await db.execute(_for_sectors(sectors).order_by(ReferenceProduct.name))).scalars().all():
+        if (ref.barcode and ref.barcode in barcodes) or (not ref.barcode and ref.name.lower() in names):
+            continue
+        category_id = None
+        if ref.category:
+            category_id = categories.get(ref.category.lower())
+            if category_id is None:
+                category = ProductCategory(company_id=company.id, name=ref.category)
+                db.add(category)
+                await db.flush()
+                category_id = categories[ref.category.lower()] = category.id
+                counts["categorias"] += 1
+        code = ref.barcode if ref.barcode and ref.barcode not in codes and len(ref.barcode) <= 50 else None
+        while code is None or code in codes:
+            serial += 1
+            code = f"REF{serial:05d}"
+        codes.add(code)
+        vat_id, motive, review = await vat_of(ref)
+        no_price = ref.price is None
+        product = Product(company_id=company.id, code=code, name=ref.name, barcode=ref.barcode, category_id=category_id,
+                          unit_of_measure_id=ref.unit_of_measure_id, vat_id=vat_id, exemption_reason_id=motive,
+                          price=ref.price if not no_price else 0, min_stock_threshold=0, product_type=ProductType.BEM,
+                          awaiting_price=no_price, not_available_pos=no_price)
+        db.add(product)
+        await db.flush()
+        for unit in ref.units:
+            unit_price = unit.price if unit.price is not None else (Decimal(ref.price) * unit.factor if ref.price is not None else 0)
+            db.add(ProductSaleUnit(company_id=company.id, product_id=product.id, unit_of_measure_id=unit.unit_of_measure_id,
+                                   factor=unit.factor, price=unit_price, barcode=unit.barcode))
+            counts["unidades_de_venda"] += 1
+        counts["artigos"] += 1
+        counts["sem_preco"] += no_price
+        counts["a_rever"] += review
+        if ref.barcode:
+            barcodes.add(ref.barcode)
+        names.add(ref.name.lower())
+    await db.flush()
+    return counts

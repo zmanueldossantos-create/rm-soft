@@ -351,6 +351,7 @@ async def update_product(
     product.name = name
     product.barcode = barcode
     product.vat_id = vat_id
+    old_price = float(product.price or 0)
     product.price = price
     product.min_stock_threshold = min_stock_threshold
     product.product_type = product_type
@@ -366,6 +367,18 @@ async def update_product(
     product.managed_by_stock = managed_by_stock
     product.managed_by_expiry = managed_by_expiry
     product.not_available_pos = not_available_pos
+    priced_at_last = product.awaiting_price and float(price or 0) > 0
+    if priced_at_last:  # a catalog product priced at last: on sale now
+        product.awaiting_price = False
+        product.not_available_pos = False
+    if float(price or 0) != old_price:
+        # the packs priced as «unit price × what they hold» follow the new price (and those without price, of a catalog
+        # product priced at last); a pack with a price of its own (a discount on the box) keeps it
+        from app.models.product_sale_unit import ProductSaleUnit
+        for unit in (await db.execute(select(ProductSaleUnit).where(ProductSaleUnit.product_id == product.id))).scalars().all():
+            unit_price, factor = float(unit.price or 0), float(unit.factor)
+            if abs(unit_price - round(old_price * factor, 2)) < 0.005 or (priced_at_last and unit_price == 0):
+                unit.price = round(float(price) * factor, 2)
     product.prepared_in_kitchen = prepared_in_kitchen
     product.internal_use_only = internal_use_only
     product.status = status

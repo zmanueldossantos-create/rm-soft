@@ -183,6 +183,7 @@ class ProductResponse(BaseModel):
     managed_by_stock: bool
     managed_by_expiry: bool
     not_available_pos: bool
+    awaiting_price: bool = False  # from the reference catalog, no price yet: never sold until one is set
     prepared_in_kitchen: bool = False
     internal_use_only: bool
     status: str

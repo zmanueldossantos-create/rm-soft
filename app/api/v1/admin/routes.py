@@ -5,7 +5,7 @@ never internal business operations of a specific company.
 """
 import uuid
 
-from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -47,7 +47,7 @@ from app.services.company_base_service import inspect_base
 from app.services.company_backup_jobs import (BackupSettingsError, backup_file, backup_view, backups_overview,
                                               get_backup_settings, list_backups, make_backup, settings_view)
 from fastapi.responses import FileResponse
-from app.services.reference_catalog_service import (ReferenceCatalogError, catalog_meta, catalog_template,
+from app.services.reference_catalog_service import (ReferenceCatalogError, catalog_meta, catalog_offer, catalog_template,
                                                     delete_reference_product, import_catalog, list_reference_products,
                                                     product_view, save_reference_product)
 from app.services.setup_checklist_service import get_setup_checklist
@@ -117,6 +117,7 @@ async def create_new_company(
             subdomain=payload.subdomain,
             base_token=payload.base_token,
             base_parts=payload.base_parts,
+            reference_catalog=payload.reference_catalog,
         )
     except BackupError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
@@ -155,6 +156,13 @@ async def get_reference_catalog_meta(db: AsyncSession = Depends(get_db),
                                      current_user: User = Depends(require_role("SUPER_ADMIN"))):
     """Catálogo de referência: the sectors with their counts, the units, the exemption motives."""
     return await catalog_meta(db)
+
+
+@router.get("/reference-catalog/offer")
+async def get_reference_catalog_offer(module_ids: list[uuid.UUID] = Query(default=[]), db: AsyncSession = Depends(get_db),
+                                      current_user: User = Depends(require_role("SUPER_ADMIN"))):
+    """«Nova empresa» > Base: how many catalog products a company of these modules (sectors) receives."""
+    return await catalog_offer(db, module_ids)
 
 
 @router.get("/reference-catalog")

@@ -130,14 +130,18 @@ export default function Products() {
     return map;
   }, [vatRates]);
 
+  // «Sem preço»: the articles taken from the reference catalog without a price - off the Caixa until priced
+  const [onlyWithoutPrice, setOnlyWithoutPrice] = useState(false);
+  const withoutPrice = products.filter((p) => p.awaiting_price).length;
   const filteredProducts = useMemo(() => {
-    if (!search.trim()) return products;
+    const base = onlyWithoutPrice ? products.filter((p) => p.awaiting_price) : products;
+    if (!search.trim()) return base;
     const q = search.toLowerCase();
-    return products.filter(
+    return base.filter(
       (p) => p.code.toLowerCase().includes(q) || p.name.toLowerCase().includes(q) || (p.barcode && p.barcode.includes(q))
         || medicineSearchText(p).includes(q)
     );
-  }, [products, search]);
+  }, [products, search, onlyWithoutPrice]);
 
   function openCreateModal() {
     setEditingId(null);
@@ -374,6 +378,13 @@ export default function Products() {
             className="w-full bg-bg-elevated border border-border rounded-md pl-10 pr-4 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors"
           />
         </div>
+        {(withoutPrice > 0 || onlyWithoutPrice) && (
+          <button type="button" onClick={() => setOnlyWithoutPrice((v) => !v)}
+            className={'flex items-center gap-2 text-sm font-medium px-3.5 py-2.5 rounded-md border transition-colors cursor-pointer ' + (onlyWithoutPrice ? 'bg-amber-500 border-amber-500 text-amber-950' : 'border-amber-500/60 text-amber-500 [.light_&]:text-amber-700 hover:border-amber-500')}>
+            Sem preço ({withoutPrice})
+          </button>
+        )}
+        <div className="flex-1" />
         <button
           onClick={openCreateModal}
           disabled={vatRates.length === 0}
@@ -431,6 +442,12 @@ export default function Products() {
                       <div className="flex items-center gap-2">
                         {p.name}
                         {p.barcode && <Barcode size={13} className="text-text-muted" />}
+                        {p.awaiting_price && (
+                          <span title="Vindo do catálogo de referência sem preço: fora da Caixa até definir o preço"
+                            className="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 [.light_&]:text-amber-700">
+                            Sem preço
+                          </span>
+                        )}
                         {p.unit_is_fractional && <Scale size={13} className="text-text-muted" />}
                         {p.is_medicine && p.dispensing_regime !== 'LIVRE' && (
                           <span title={DISPENSING_REGIMES.find((r) => r.value === p.dispensing_regime)?.label} className={'text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded ' + (p.dispensing_regime === 'RECEITA_ESPECIAL' ? 'bg-danger/10 text-danger' : 'bg-amber-500/10 text-amber-500 [.light_&]:text-amber-700')}>

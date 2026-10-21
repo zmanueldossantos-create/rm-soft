@@ -204,6 +204,17 @@ export default function Layout() {
     return () => document.removeEventListener('click', markReadingRow);
   }, []);
 
+  // The mouse wheel never changes an amount: over a number field being typed in, it scrolls the page instead of
+  // adding or taking 0,01 (150 becoming 149,99 unseen)
+  useEffect(() => {
+    function keepTheNumber(e) {
+      const field = e.target;
+      if (field instanceof HTMLInputElement && field.type === 'number' && document.activeElement === field) field.blur();
+    }
+    document.addEventListener('wheel', keepTheNumber, { passive: true });
+    return () => document.removeEventListener('wheel', keepTheNumber);
+  }, []);
+
   function handleLogout() {
     logout();
     navigate('/login');

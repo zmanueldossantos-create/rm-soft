@@ -165,6 +165,7 @@ async def create_company(
     subdomain: str | None = None,
     base_token: str | None = None,
     base_parts: list[str] | None = None,
+    reference_catalog: bool = False,
 ) -> Company:
     """
     Creates a new client company, seeds its VAT rates (limited to what the
@@ -275,9 +276,17 @@ async def create_company(
             await db.rollback()
             raise
 
+    catalog_counts = None
+    if reference_catalog:  # the reference catalog of its sectors (reference_catalog_service), same transaction
+        await db.flush()
+        from app.services.reference_catalog_service import take_reference_catalog
+        catalog_counts = await take_reference_catalog(db, company)
+
     await grant_default_role_permissions(db, company.id)
     await db.commit()
     await db.refresh(company)
+    if catalog_counts is not None:
+        company.catalog_counts = catalog_counts  # shown once, after the creation (not stored)
     if base_copy is not None:
         write_images(base_copy)
         company.base_counts = base_counts(base_copy)  # shown once, after the creation (not stored)

@@ -1470,7 +1470,7 @@ export default function Caixa() {
                     >
                       Todos
                     </button>
-                    {categories.map((c) => (
+                    {categories.filter((c) => products.some((p) => p.category_id === c.id)).map((c) => (
                       <button
                         key={c.id}
                         onClick={() => setActiveCategoryId(c.id)}

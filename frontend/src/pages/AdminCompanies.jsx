@@ -6,7 +6,7 @@ import Select from '../components/Select';
 import {
   listCompanies, createCompany, updateCompany, toggleCompanyStatus,
   getCompanyGestor,
-  listBankAccounts, addBankAccount, updateBankAccount, toggleBankAccountStatus, getCompanyRegimeHistory, getCompanySetup, startSupport, listSupportSessions, downloadCompanyBackup, inspectCompanyBase } from '../api/admin';
+  listBankAccounts, addBankAccount, updateBankAccount, toggleBankAccountStatus, getCompanyRegimeHistory, getCompanySetup, startSupport, listSupportSessions, downloadCompanyBackup, inspectCompanyBase, getReferenceOffer } from '../api/admin';
 import RestoreCompanyModal from '../components/RestoreCompanyModal';
 import BackupsOverviewModal from '../components/BackupsOverviewModal';
 import CompanyBackupsPanel from '../components/CompanyBackupsPanel';
@@ -61,6 +61,7 @@ const emptyForm = {
   moduleIds: [],
   gestorName: '', gestorPhone: '', gestorPassword: '',
   baseParts: [],
+  referenceCatalog: true,
 };
 
 // «Base»: what a new company can take from a backup file, and what it never takes
@@ -287,6 +288,13 @@ export default function AdminCompanies() {
       baseParts: prev.baseParts.includes(key) ? prev.baseParts.filter((k) => k !== key) : [...prev.baseParts, key],
     }));
   }
+  // «Catálogo de referência»: the products of the chosen sectors (Módulos) and those of every sector
+  const [offer, setOffer] = useState(null);
+  useEffect(() => {
+    if (!modalOpen || editingId) return;
+    getReferenceOffer(form.moduleIds).then(setOffer).catch(() => setOffer(null));
+  }, [modalOpen, editingId, form.moduleIds.join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // another regime chosen in «Dados da Empresa»: the base (of the file's regime) is no longer usable
   function handleRegimeChange(regimeId) {
     if (base && (base.fiscal_regime_id || '') !== (regimeId || '')) clearBase();
@@ -556,6 +564,7 @@ export default function AdminCompanies() {
           ...buildPayload(),
           base_token: base && !base.problems.length ? base.token : null,
           base_parts: base && !base.problems.length ? form.baseParts : [],
+          reference_catalog: !!(form.referenceCatalog && offer && offer.products > 0),
           fiscal_regime_id: form.fiscalRegimeId || null,
           module_ids: form.moduleIds,
           gestor_full_name: form.gestorName,
@@ -563,12 +572,19 @@ export default function AdminCompanies() {
           gestor_password: form.gestorPassword,
           bank_accounts: validBankRows.map((r) => ({ bank_id: r.bankId, account_number: r.accountNumber, iban: 'AO06' + r.iban, currency_id: r.currencyId })),
         });
+        const parts = [];
+        if (created.catalog_counts && created.catalog_counts.artigos > 0) {
+          const c = created.catalog_counts;
+          parts.push('catálogo de referência: ' + c.artigos + (c.artigos === 1 ? ' artigo' : ' artigos')
+            + (c.sem_preco ? ' (' + c.sem_preco + ' sem preço, fora da Caixa até definir o preço)' : '')
+            + (c.a_rever ? ', ' + c.a_rever + ' a reclassificar (IVA)' : ''));
+        }
         if (created.base_counts) {
           const copied = Object.entries(created.base_counts).filter(([, n]) => n > 0)
             .map(([k, n]) => n + ' ' + (BASE_COUNT_LABELS[k] ? BASE_COUNT_LABELS[k][n === 1 ? 0 : 1] : k));
-          setNotice('«' + (created.short_name || created.name) + '» criada com a base do ficheiro: '
-            + (copied.length ? copied.join(', ') + '.' : 'o ficheiro não tinha nada a copiar.'));
+          parts.push('cópia exportada: ' + (copied.length ? copied.join(', ') : 'nada a copiar'));
         }
+        if (parts.length) setNotice('«' + (created.short_name || created.name) + '» criada com - ' + parts.join('; ') + '.');
       }
       closeModal();
       await loadCompanies();
@@ -933,6 +949,25 @@ export default function AdminCompanies() {
 
           {activeTab === 'base' && !editingId && (
             <div className="flex flex-col gap-4 min-h-[420px]">
+              <label className={'flex items-start gap-3 border rounded-md px-4 py-3 transition-colors ' + (offer?.products ? 'cursor-pointer hover:border-accent ' : 'opacity-60 ') + (form.referenceCatalog && offer?.products ? 'border-accent' : 'border-border')}>
+                <input type="checkbox" checked={!!form.referenceCatalog && !!offer?.products} disabled={!offer?.products}
+                  onChange={(e) => updateField('referenceCatalog', e.target.checked)} className="w-4 h-4 mt-0.5 accent-accent cursor-pointer disabled:cursor-not-allowed" />
+                <span className="flex-1">
+                  <span className="text-[13px] text-text-primary font-semibold">Catálogo de referência</span>
+                  <span className="text-[12px] text-text-muted">
+                    {' · '}{offer ? offer.products + ' produtos' + (offer.without_price ? ' (' + offer.without_price + ' sem preço)' : '') : '...'}
+                  </span>
+                  <span className="block text-[12px] text-text-muted mt-0.5">
+                    {offer?.sectors?.length
+                      ? 'Os produtos de ' + offer.sectors.join(', ') + ' e os de todos os setores.'
+                      : 'Os produtos de todos os setores - escolha os setores em «Módulos» para receber também os deles.'}
+                    {' '}Stock a zero; o IVA de cada produto segue o regime fiscal da empresa; sem preço, ficam fora da Caixa até o gestor definir o preço.
+                  </span>
+                </span>
+              </label>
+              <div className="flex items-center gap-3 text-[11px] uppercase tracking-wide text-text-muted">
+                <span className="h-px flex-1 bg-border" /> e / ou uma cópia exportada <span className="h-px flex-1 bg-border" />
+              </div>
               <p className="text-[13px] text-text-muted">
                 Para não configurar tudo de novo: a nova empresa recebe o catálogo de uma cópia exportada (botão de descarga
                 na lista) - ex.: um «Comércio geral» preparado uma vez. Fica com o regime fiscal dessa empresa. Opcional - sem

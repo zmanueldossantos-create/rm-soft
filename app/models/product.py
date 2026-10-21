@@ -102,6 +102,8 @@ class Product(Base):
     dispensing_regime: Mapped[str | None] = mapped_column(String(20), nullable=True)
     cold_storage: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)  # conservar no frio
     not_available_pos: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # taken from the reference catalog without a price: off the Caixa, never sold, until the gestor sets its price
+    awaiting_price: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
     # shown to the kitchen once sent from an open account (a dish) - unrelated to the stock
     prepared_in_kitchen: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     # True for items never meant to be sold at all (housekeeping supplies -
