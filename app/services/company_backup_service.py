@@ -24,7 +24,7 @@ import json
 import os
 import uuid
 import zipfile
-from datetime import date, datetime, time, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
 
@@ -210,7 +210,8 @@ async def export_company(db: AsyncSession, company_id: uuid.UUID) -> tuple[bytes
             if os.path.isfile(local):
                 archive.write(local, "files/" + local)
     slug = "".join(ch if ch.isalnum() else "-" for ch in (company.short_name or company.name)).strip("-").lower()[:40]
-    return buffer.getvalue(), f"rmsoft_{slug}_{company.nif}_{exported_at:%Y%m%d_%H%M}.zip"
+    luanda = exported_at.astimezone(timezone(timedelta(hours=1)))  # the name in Luanda time (UTC+1 all year)
+    return buffer.getvalue(), f"rmsoft_{slug}_{company.nif}_{luanda:%Y%m%d_%H%M}.zip"
 
 
 # ------------------------------------------------------------------------------------------------------------ restore

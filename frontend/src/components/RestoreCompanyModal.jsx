@@ -12,6 +12,11 @@ const COUNT_LABELS = [
   ['fornecedores', 'Fornecedores'], ['utilizadores', 'Utilizadores'], ['movimentos_de_stock', 'Movimentos de stock'],
 ];
 
+// "1 cliente", "23 faturas"
+function plural(n, one, many) {
+  return n + ' ' + (n === 1 ? one : many);
+}
+
 function when(value) {
   return value ? new Date(value).toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short' }) : '';
 }
@@ -68,8 +73,9 @@ export default function RestoreCompanyModal({ open, onClose, onRestored }) {
           <div className="flex items-start gap-2.5 bg-success/10 border-l-2 border-success text-success px-3.5 py-2.5 text-[13px] rounded-r">
             <CheckCircle2 size={16} className="shrink-0 mt-0.5" />
             <span>
-              «{done.name}» restaurada: {done.faturas} faturas, {done.clientes} clientes, {done.artigos} artigos,
-              {' '}{done.utilizadores} utilizadores. Os utilizadores entram com as mesmas palavras-passe.
+              «{done.name}» restaurada: {plural(done.faturas, 'fatura', 'faturas')}, {plural(done.clientes, 'cliente', 'clientes')},
+              {' '}{plural(done.artigos, 'artigo', 'artigos')}, {plural(done.utilizadores, 'utilizador', 'utilizadores')}.
+              {' '}Os utilizadores entram com as mesmas palavras-passe.
             </span>
           </div>
           <p className="text-[12px] text-text-muted">
