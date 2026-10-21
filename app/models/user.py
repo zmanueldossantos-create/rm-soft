@@ -47,6 +47,8 @@ class User(Base):
     role: Mapped[UserRole] = mapped_column(Enum(UserRole), nullable=False)
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # when the password last changed: a session opened before it is refused (the other devices are logged out)
+    password_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

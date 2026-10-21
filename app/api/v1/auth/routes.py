@@ -12,8 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.models.company import Company
-from app.core.security import decode_token, create_access_token
-from app.schemas.auth import PhoneLoginRequest, TokenPair, RefreshRequest, UserCreateRequest, UserUpdateRequest, UserResponse, PasswordResetRequest
+from app.core.security import decode_token, create_access_token, issued_before
+from app.schemas.auth import PhoneLoginRequest, TokenPair, RefreshRequest, UserCreateRequest, UserUpdateRequest, UserResponse, PasswordResetRequest, PasswordChangeRequest
 from app.services.auth_service import (
     authenticate_user,
     generate_token_pair,
@@ -22,7 +22,9 @@ from app.services.auth_service import (
     list_users,
     toggle_user_status,
     reset_user_password,
+    change_own_password,
     AuthenticationError,
+    PasswordChangeError,
     PLATFORM,
     UserAlreadyExistsError,
     UserNotFoundError,
@@ -113,6 +115,10 @@ async def refresh(payload: RefreshRequest, request: Request, db: AsyncSession = 
             return TokenPair(access_token=await refreshed_access(db, data["sup"]), refresh_token=payload.refresh_token)
         except SupportError as e:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
+    user = await db.get(User, uuid.UUID(data["sub"]))
+    if user is None or not user.is_active or issued_before(data, user.password_changed_at):
+        # a deactivated account, or a session opened before the password changed: no new access
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sessão inválida ou expirada. Por favor, inicie sessão novamente.")
     if get_settings().is_saas and data.get("company_id") not in (None, "None"):
         company = await db.get(Company, uuid.UUID(data["company_id"]))
         if company is None or not company.is_active:  # a suspended company: its sessions end at the next refresh
@@ -136,6 +142,22 @@ async def me(current_user: User = Depends(get_current_user), db: AsyncSession = 
         "support": {"company_name": company.short_name or company.name, "reason": support.reason,
                     "started_at": support.started_at, "expires_at": support.expires_at} if support else None,
     }
+
+
+@router.post("/me/password", response_model=TokenPair)
+async def change_password(payload: PasswordChangeRequest, request: Request,
+                          current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """The user changes their own password. The other devices are logged out; this one receives a new session."""
+    if getattr(current_user, "support_session", None) is not None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail="Indisponível durante um acesso de suporte")
+    try:
+        await change_own_password(db, current_user, payload.current_password, payload.new_password)
+    except PasswordChangeError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    tenant = host_claim(request_host(request)) if get_settings().is_saas else None
+    access_token, refresh_token = generate_token_pair(current_user, tenant=tenant)
+    return TokenPair(access_token=access_token, refresh_token=refresh_token)
 
 
 class SupportCodeRequest(BaseModel):

@@ -37,6 +37,7 @@ def create_access_token(subject: str, company_id: str, role: str, tenant: str | 
         "role": role,
         "type": "access",
         "exp": expire,
+        "iat": datetime.now(timezone.utc),
     }
     if tenant:
         payload["tnt"] = tenant
@@ -54,6 +55,7 @@ def create_refresh_token(subject: str, company_id: str, role: str | None = None,
         "company_id": company_id,
         "type": "refresh",
         "exp": expire,
+        "iat": datetime.now(timezone.utc),
     }
     if role:
         payload["role"] = role
@@ -62,6 +64,15 @@ def create_refresh_token(subject: str, company_id: str, role: str | None = None,
     if support:
         payload["sup"] = support
     return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+
+
+def issued_before(payload: dict, moment: datetime | None) -> bool:
+    """Whether a token was issued before this moment (a password change: older sessions are refused). A token without
+    "iat" predates the rule - refused as soon as a password changed."""
+    if moment is None:
+        return False
+    iat = payload.get("iat")
+    return iat is None or int(iat) < int(moment.timestamp())
 
 
 def decode_token(token: str) -> dict | None:

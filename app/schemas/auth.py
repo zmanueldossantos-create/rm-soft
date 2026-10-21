@@ -106,3 +106,14 @@ class PasswordResetRequest(BaseModel):
         if len(v) < 8:
             raise ValueError("Palavra-passe deve ter pelo menos 8 caracteres")
         return v
+
+
+class PasswordChangeRequest(BaseModel):
+    """The user's own password change: the current password, and the new one (the same rule as a reset)."""
+    current_password: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        return PasswordResetRequest.validate_password(v)

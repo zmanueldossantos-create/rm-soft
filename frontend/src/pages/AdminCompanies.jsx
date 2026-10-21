@@ -341,6 +341,16 @@ export default function AdminCompanies() {
     }
   }
 
+  // the gestor's account of the company being edited (name, phone, state), loaded when its tab is opened
+  const [gestorAccount, setGestorAccount] = useState(null);
+  const [gestorError, setGestorError] = useState('');
+  useEffect(() => {
+    if (!editingId || activeTab !== 'gestor') return;
+    setGestorAccount(null);
+    setGestorError('');
+    getCompanyGestor(editingId).then(setGestorAccount).catch((err) => setGestorError(extractErrorMessage(err, 'Erro ao carregar a conta do gestor')));
+  }, [editingId, activeTab]);
+
   // the support accesses of the company being edited, loaded when its tab is opened
   const [supportSessions, setSupportSessions] = useState(null);
   useEffect(() => {
@@ -606,7 +616,7 @@ export default function AdminCompanies() {
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex items-center bg-bg-inset border border-border rounded-md p-0.5 self-start flex-wrap">
             {[
-              ...(editingId ? [] : [['gestor', 'Conta do Gestor']]),
+              ['gestor', 'Conta do Gestor'],
               ['dados', 'Dados da Empresa'],
                         ['bancarias', 'Coordenadas Bancárias'],
               ...(editingId ? [['iva', 'Taxas de IVA']] : []),
@@ -795,6 +805,40 @@ export default function AdminCompanies() {
             </div>
           )}
 
+          {activeTab === 'gestor' && editingId && (
+            <div className="flex flex-col gap-4 min-h-[420px]">
+              {gestorError && <div className="bg-danger/10 border-l-2 border-danger text-danger px-3.5 py-2.5 text-[13px] rounded-r">{gestorError}</div>}
+              {!gestorAccount && !gestorError && <div className="flex items-center gap-2 text-[13px] text-text-muted"><Loader2 size={15} className="animate-spin" /> A carregar...</div>}
+              {gestorAccount && (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <Field label="Nome completo">
+                      <div className={inputClass + ' select-all'}>{gestorAccount.full_name}</div>
+                    </Field>
+                    <Field label="Número de telefone (login)">
+                      <div className={inputClass + ' select-all'}>{gestorAccount.phone_number}</div>
+                    </Field>
+                    <Field label="Estado">
+                      <div className={inputClass + (gestorAccount.is_active ? ' text-success' : ' text-danger')}>{gestorAccount.is_active ? 'Ativo' : 'Inativo'}</div>
+                    </Field>
+                  </div>
+                  <p className="text-[12px] text-text-muted">
+                    A palavra-passe nunca é mostrada. Se o gestor a esqueceu, defina uma provisória: ele altera-a depois no menu do seu nome, em baixo à esquerda.
+                    As sessões abertas do gestor são terminadas.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={openResetModal}
+                    className="self-start flex items-center justify-center gap-2 border border-border hover:border-accent text-text-primary text-sm font-medium rounded-md px-4 py-2.5 transition-colors cursor-pointer"
+                  >
+                    <KeyRound size={15} />
+                    Redefinir palavra-passe do Gestor
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+
           {activeTab === 'iva' && (
             <div className="flex flex-col gap-4 min-h-[420px]">
               <div className="flex items-center justify-between">
@@ -974,16 +1018,6 @@ export default function AdminCompanies() {
             {saving ? 'A guardar...' : editingId ? 'Guardar alterações' : 'Criar empresa'}
           </button>
 
-          {editingId && (
-            <button
-              type="button"
-              onClick={openResetModal}
-              className="flex items-center justify-center gap-2 border border-border hover:border-accent text-text-primary text-sm font-medium rounded-md py-2.5 transition-colors cursor-pointer"
-            >
-              <KeyRound size={15} />
-              Redefinir palavra-passe do Gestor
-            </button>
-          )}
         </form>
       </Modal>
 

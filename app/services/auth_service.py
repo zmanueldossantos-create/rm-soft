@@ -3,6 +3,7 @@ Business logic for phone number authentication.
 See specification v7, section 2.4.
 """
 import uuid
+from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -113,6 +114,22 @@ async def authenticate_user(db: AsyncSession, phone_number: str, password: str,
     raise AuthenticationError("Número de telefone ou palavra-passe incorretos")
 
 
+class PasswordChangeError(Exception):
+    """Raised when a user's own password change is refused (wrong current password, same password)."""
+
+
+async def change_own_password(db: AsyncSession, user: User, current_password: str, new_password: str) -> None:
+    """The user changes their own password: the current one proves it is them. Every other session of the account
+    ends (password_changed_at); the caller issues this device a new one."""
+    if not verify_password(current_password, user.password_hash):
+        raise PasswordChangeError("A palavra-passe atual está incorreta")
+    if verify_password(new_password, user.password_hash):
+        raise PasswordChangeError("A nova palavra-passe tem de ser diferente da atual")
+    user.password_hash = hash_password(new_password)
+    user.password_changed_at = datetime.now(timezone.utc)
+    await db.commit()
+
+
 def generate_token_pair(user: User, tenant: str | None = None) -> tuple[str, str]:
     """Generates the access token and refresh token for an authenticated user (tenant: SaaS mode, the address)."""
     access_token = create_access_token(
@@ -186,6 +203,7 @@ async def reset_user_password(
         raise PasswordResetNotAllowedError("Sem permissão para redefinir palavras-passe")
 
     target.password_hash = hash_password(new_password)
+    target.password_changed_at = datetime.now(timezone.utc)  # the account's open sessions end
     await db.commit()
     await db.refresh(target)
     return target

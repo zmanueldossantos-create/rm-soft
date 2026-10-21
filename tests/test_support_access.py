@@ -133,3 +133,13 @@ async def test_a_document_issued_in_support_names_the_platform_user(db, platform
                          lines_input=[{"product_id": product.id, "quantity": 1}])
     [invoice] = await list_invoices(db, company_id)
     assert invoice.created_by_name == "Suporte RM"
+
+
+async def test_no_password_change_in_support(db, platform):
+    client, ctx, admin_id, admin_token = platform
+    admin = (await db.execute(select(User).where(User.id == admin_id))).scalar_one()
+    code = (await start_support(db, admin, ctx["company"].id, "Verificar a configuração"))["code"]
+    access = (await client.post("/api/v1/auth/support/redeem", json={"code": code})).json()["access_token"]
+    refused = await client.post("/api/v1/auth/me/password", json={"current_password": "Teste@2026", "new_password": "Nova@2026"},
+                                headers=_auth(access))
+    assert refused.status_code == 403 and "suporte" in refused.json()["detail"]

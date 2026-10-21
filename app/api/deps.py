@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.database import get_db
-from app.core.security import decode_token
+from app.core.security import decode_token, issued_before
 from app.models.user import User
 from app.services.permission_service import has_permission
 from app.services.support_service import support_user
@@ -86,6 +86,10 @@ async def get_current_user(
 
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Utilizador não encontrado ou desativado")
+    if issued_before(payload, user.password_changed_at):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                            detail="A palavra-passe foi alterada - inicie sessão novamente.",
+                            headers={"WWW-Authenticate": "Bearer"})
 
     current_user_id.set(user.id)  # who makes this request: every document it creates records it
     return user
