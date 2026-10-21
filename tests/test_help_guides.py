@@ -57,7 +57,7 @@ def test_each_user_sees_the_guides_of_his_screens():
     assert next(g for g in alone if g["id"] == "apuramento-iva")["module"] == "fim-do-mes"
     # the platform has its own guides, and only them
     platform = visible_guides(set(), "SUPER_ADMIN")
-    assert {g["id"] for g in platform} == {"novo-cliente", "manter-clientes", "empresas", "configuracoes", "visao-global"}
+    assert {g["id"] for g in platform} == {"novo-cliente", "manter-clientes", "empresas", "catalogo-referencia", "configuracoes", "visao-global"}
     assert next(g for g in platform if g["id"] == "empresas")["module"] == "novo-cliente"
     assert not {"empresas", "novo-cliente"} & {g["id"] for g in visible_guides(CATALOG, "GESTOR")}
 

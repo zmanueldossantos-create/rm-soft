@@ -47,6 +47,9 @@ from app.services.company_base_service import inspect_base
 from app.services.company_backup_jobs import (BackupSettingsError, backup_file, backup_view, backups_overview,
                                               get_backup_settings, list_backups, make_backup, settings_view)
 from fastapi.responses import FileResponse
+from app.services.reference_catalog_service import (ReferenceCatalogError, catalog_meta, catalog_template,
+                                                    delete_reference_product, import_catalog, list_reference_products,
+                                                    product_view, save_reference_product)
 from app.services.setup_checklist_service import get_setup_checklist
 from app.services.support_service import SupportError, list_support_sessions, start_support
 from app.schemas.auth import UserResponse
@@ -125,6 +128,89 @@ async def create_new_company(
 
 
 MAX_BACKUP_BYTES = 200 * 1024 * 1024  # a company's copy, images included
+
+
+class ReferenceUnitInput(BaseModel):
+    unit_of_measure_id: uuid.UUID | None = None
+    factor: float | str | None = None
+    barcode: str | None = None
+    price: float | str | None = None
+
+
+class ReferenceProductInput(BaseModel):
+    barcode: str | None = None
+    name: str = ""
+    category: str | None = None
+    unit_of_measure_id: uuid.UUID | None = None
+    tax_category: str = ""
+    exemption_id: uuid.UUID | None = None
+    price: float | str | None = None
+    sectors: list[str] = []
+    is_active: bool = True
+    units: list[ReferenceUnitInput] = []
+
+
+@router.get("/reference-catalog/meta")
+async def get_reference_catalog_meta(db: AsyncSession = Depends(get_db),
+                                     current_user: User = Depends(require_role("SUPER_ADMIN"))):
+    """Catálogo de referência: the sectors with their counts, the units, the exemption motives."""
+    return await catalog_meta(db)
+
+
+@router.get("/reference-catalog")
+async def get_reference_catalog(q: str = "", sector: str | None = None, limit: int = 100, offset: int = 0,
+                                db: AsyncSession = Depends(get_db),
+                                current_user: User = Depends(require_role("SUPER_ADMIN"))):
+    return await list_reference_products(db, q, sector, min(max(limit, 1), 500), max(offset, 0))
+
+
+@router.post("/reference-catalog")
+async def create_reference_product(payload: ReferenceProductInput, db: AsyncSession = Depends(get_db),
+                                   current_user: User = Depends(require_role("SUPER_ADMIN"))):
+    try:
+        return product_view(await save_reference_product(db, payload.model_dump()))
+    except ReferenceCatalogError as e:
+        await db.rollback()
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.put("/reference-catalog/{product_id}")
+async def update_reference_product(product_id: uuid.UUID, payload: ReferenceProductInput,
+                                   db: AsyncSession = Depends(get_db),
+                                   current_user: User = Depends(require_role("SUPER_ADMIN"))):
+    try:
+        return product_view(await save_reference_product(db, payload.model_dump(), product_id))
+    except ReferenceCatalogError as e:
+        await db.rollback()
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.delete("/reference-catalog/{product_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_reference_product(product_id: uuid.UUID, db: AsyncSession = Depends(get_db),
+                                   current_user: User = Depends(require_role("SUPER_ADMIN"))):
+    try:
+        await delete_reference_product(db, product_id)
+    except ReferenceCatalogError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.get("/reference-catalog-template")
+async def get_reference_catalog_template(db: AsyncSession = Depends(get_db),
+                                         current_user: User = Depends(require_role("SUPER_ADMIN"))):
+    """The Excel sheet to fill (with the codes to use)."""
+    return Response(content=await catalog_template(db),
+                    media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": 'attachment; filename="catalogo_referencia_modelo.xlsx"'})
+
+
+@router.post("/reference-catalog-import")
+async def import_reference_catalog(file: UploadFile = File(...), db: AsyncSession = Depends(get_db),
+                                   current_user: User = Depends(require_role("SUPER_ADMIN"))):
+    """The filled sheet into the catalog: created, updated, and the rows refused with their reason."""
+    try:
+        return await import_catalog(db, await _backup_content(file))
+    except ReferenceCatalogError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
 
 
 @router.get("/backups")

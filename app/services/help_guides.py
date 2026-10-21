@@ -629,6 +629,22 @@ PLATFORM_PAGES = [
         ],
     },
     {
+        "id": "catalogo-referencia", "path": "/catalogo-referencia", "title": "Catálogo de referência", "module": "novo-cliente",
+        "roles": ["SUPER_ADMIN"],
+        "intro": "Os produtos que as lojas de cada setor vendem - mantidos uma vez para a plataforma. Uma nova empresa "
+                 "recebe-os na criação; mudar o catálogo nunca altera as empresas existentes.",
+        "steps": [
+            "«Novo produto»: código de barras (opcional, ex.: pão), nome, categoria, unidade de base, preço indicativo "
+            "(opcional) e as unidades de venda (ex.: caixa de 6, cartão de 30), cada uma com o seu código de barras.",
+            "Natureza do IVA: normal, reduzida ou isento (com o motivo) - não uma taxa: cada empresa recebe a sua própria "
+            "taxa conforme o seu regime fiscal.",
+            "Setores: os setores cujas novas empresas recebem o produto; nenhum setor = todos os setores (ex.: água).",
+            "Excel: «Descarregar modelo» (com os códigos de unidades, motivos e setores), preencher, «Importar Excel». O "
+            "mesmo ficheiro outra vez atualiza os produtos; as linhas recusadas aparecem com o motivo.",
+            "Um código de barras lê uma só coisa: nunca repetido entre produtos nem entre unidades de venda.",
+        ],
+    },
+    {
         "id": "configuracoes", "path": "/configuracoes", "title": "Configurações da plataforma", "roles": ["SUPER_ADMIN"],
         "intro": "O que vale para todas as empresas: a identificação do software na AGT, o assistente IA, os canais e os "
                  "catálogos comuns.",

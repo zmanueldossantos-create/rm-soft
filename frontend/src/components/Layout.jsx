@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { ChefHat, History as KitchenHistoryIcon } from 'lucide-react';
 import { Link, useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { createPortal } from 'react-dom';
-import { Building2, LogOut, LayoutDashboard, Sun, Moon, Package, Users, Calendar, Receipt, Settings, Package2, UserCog, History, FileText, Landmark, LayoutGrid, Store, Wheat, Factory, Wallet, SlidersHorizontal, Tags, Wrench, ChevronDown, Cog, Plus, ArrowLeftRight, Calculator, ClipboardList, Gauge, PiggyBank, CreditCard, Boxes, CalendarClock, Wallet2, PackageMinus, Truck, ShieldCheck, FileInput, Send, HandCoins, Bot, HelpCircle, LifeBuoy } from 'lucide-react';
+import { Building2, LogOut, LayoutDashboard, Sun, Moon, Package, Users, Calendar, Receipt, Settings, Package2, UserCog, History, FileText, Landmark, LayoutGrid, Store, Wheat, Factory, Wallet, SlidersHorizontal, Tags, Wrench, ChevronDown, Cog, Plus, ArrowLeftRight, Calculator, ClipboardList, Gauge, PiggyBank, CreditCard, Boxes, CalendarClock, Wallet2, PackageMinus, Truck, ShieldCheck, FileInput, Send, HandCoins, Bot, HelpCircle, LifeBuoy, BookOpen } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import apiClient from '../api/client';
 import { useThemeStore } from '../store/themeStore';
@@ -324,6 +324,9 @@ export default function Layout() {
             )}
             {user?.role === 'SUPER_ADMIN' && (
               <NavLink to="/admin/companies" icon={Building2} label="Empresas" active={isActive('/admin/companies')} />
+            )}
+            {user?.role === 'SUPER_ADMIN' && (
+              <NavLink to="/catalogo-referencia" icon={BookOpen} label="Catálogo" active={isActive('/catalogo-referencia')} />
             )}
             {user?.role === 'SUPER_ADMIN' && (
               <NavLink to="/configuracoes" icon={SlidersHorizontal} label="Configurações" active={isActive('/configuracoes')} />
