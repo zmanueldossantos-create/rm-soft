@@ -168,3 +168,12 @@ body {
 .scrollbar-hover-thin:hover::-webkit-scrollbar-thumb {
   background-color: var(--color-border);
 }
+
+/* The row being read: a click on any table row marks it (one per table) until another row is clicked - see
+   markReadingRow in Layout. Unlayered, so it shows over the rows' own utility backgrounds. */
+tbody tr[data-reading] > td {
+  background-color: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+tbody tr[data-reading] > td:first-child {
+  box-shadow: inset 3px 0 0 var(--accent);
+}

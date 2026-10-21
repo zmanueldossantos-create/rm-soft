@@ -192,6 +192,18 @@ export default function Layout() {
     }
   }, [user?.role]);
 
+  // The row being read: a click on a table row marks it (one per table), so the eye keeps its place in long lists
+  useEffect(() => {
+    function markReadingRow(e) {
+      const row = e.target.closest?.('tbody tr');
+      if (!row || row.hasAttribute('data-reading')) return;
+      row.closest('tbody').querySelectorAll('tr[data-reading]').forEach((r) => r.removeAttribute('data-reading'));
+      row.setAttribute('data-reading', '');
+    }
+    document.addEventListener('click', markReadingRow);
+    return () => document.removeEventListener('click', markReadingRow);
+  }, []);
+
   function handleLogout() {
     logout();
     navigate('/login');
