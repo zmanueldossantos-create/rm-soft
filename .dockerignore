@@ -12,6 +12,7 @@ frontend/.env
 frontend/.env.*
 !frontend/.env.example
 uploads/
+backups/
 .git/
 .pytest_cache/
 *.log

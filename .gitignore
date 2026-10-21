@@ -33,6 +33,7 @@ frontend/dist/
 
 # Uploads em runtime - logos, fotos de produtos gerados pela aplicacao
 uploads/
+backups/
 
 # Scripts pontuais de sessao (fix_*.py, apply_*.py) e saidas de teste avulsas -
 # nao fazem parte do codigo fonte, sao descartaveis apos cada sessao de trabalho.

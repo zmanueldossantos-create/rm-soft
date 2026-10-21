@@ -48,6 +48,8 @@ services:
     environment: *backend-env
     volumes:
       - uploads:/app/uploads
+      # the companies' backup copies (company_backup_jobs), next to the nightly database dumps on the VPS
+      - ${BACKUP_DIR:-./backups}/empresas:/app/backups
     depends_on:
       postgres:
         condition: service_healthy

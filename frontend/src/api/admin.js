@@ -123,3 +123,31 @@ export async function inspectCompanyBase(file) {
   const res = await apiClient.post('/admin/company-base/inspect', backupForm(file), MULTIPART);
   return res.data;
 }
+
+// Cópias de segurança, the platform's side: every company's state, one company's copies, a copy now, download.
+export async function getBackupsOverview() {
+  const res = await apiClient.get('/admin/backups');
+  return res.data;
+}
+
+export async function getCompanyBackups(companyId) {
+  const res = await apiClient.get(`/admin/companies/${companyId}/backups`);
+  return res.data;
+}
+
+export async function makeCompanyBackup(companyId) {
+  const res = await apiClient.post(`/admin/companies/${companyId}/backups`);
+  return res.data;
+}
+
+export async function downloadCompanyBackupCopy(backupId, fileName) {
+  const res = await apiClient.get(`/admin/backups/${backupId}/download`, { responseType: 'blob' });
+  const url = URL.createObjectURL(res.data);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName || 'copia.zip';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}

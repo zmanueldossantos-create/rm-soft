@@ -22,8 +22,17 @@ from app.services.company_service import list_bank_accounts, add_bank_account, u
 from app.schemas.admin import BankAccountInput
 from app.services.setup_checklist_service import get_setup_checklist
 from app.services.support_service import list_support_sessions
+from app.services.company_backup_jobs import (BackupSettingsError, backup_file, backup_view, get_backup_settings,
+                                              list_backups, make_backup, save_backup_settings, settings_view)
+from fastapi.responses import FileResponse
+from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/v1/company", tags=["company"])
+
+
+class BackupSettingsRequest(BaseModel):
+    mode: str
+    times: list[str] = []
 
 
 def _duplicate_field_message(error: IntegrityError) -> str:
@@ -51,6 +60,53 @@ async def get_my_company_setup(
 ):
     """Configuração inicial: the set-up steps of the caller's company, each read from the real data."""
     return await get_setup_checklist(db, current_user.company_id)
+
+
+@router.get("/me/backups")
+async def get_my_company_backups(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("company:backup")),
+):
+    """Cópias de segurança: the settings (automatic / manual, the hours) and the copies kept."""
+    settings = await get_backup_settings(db, current_user.company_id)
+    return {"settings": settings_view(settings),
+            "copies": [backup_view(r) for r in await list_backups(db, current_user.company_id)]}
+
+
+@router.put("/me/backups/settings")
+async def update_my_company_backup_settings(
+    payload: BackupSettingsRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("company:backup")),
+):
+    """Automatic at 1 to 3 hours a day (Luanda), or manual only."""
+    try:
+        return settings_view(await save_backup_settings(db, current_user.company_id, payload.mode, payload.times))
+    except BackupSettingsError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.post("/me/backups")
+async def make_my_company_backup(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("company:backup")),
+):
+    """«Fazer cópia agora»."""
+    return backup_view(await make_backup(db, current_user.company_id, "MANUAL", current_user.id))
+
+
+@router.get("/me/backups/{backup_id}/download")
+async def download_my_company_backup(
+    backup_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("company:backup")),
+):
+    """A copy of this company only - never served by the web as a file address."""
+    try:
+        path, name = await backup_file(db, current_user.company_id, backup_id)
+    except BackupSettingsError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    return FileResponse(path, media_type="application/zip", filename=name)
 
 
 @router.get("/me/support-sessions")

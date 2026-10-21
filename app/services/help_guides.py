@@ -597,6 +597,9 @@ PAGES = [
             "Séries de Facturação: a numeração dos documentos por ano. No modo manual com série automática, são criadas na "
             "primeira emissão.",
             "Email: o servidor de envio (SMTP) da empresa, para enviar as faturas aos clientes.",
+            "Cópias de segurança: escolha «Automática» (1 a 3 horas por dia) ou «Só manual», e «Fazer cópia agora» a "
+            "qualquer momento. Cada cópia guarda todos os dados da empresa e pode ser descarregada; guardam-se as dos "
+            "últimos 7 dias e uma por semana durante 4 semanas. A reposição de uma cópia é feita pela RM SOFT.",
         ],
         "errors": [("O NIF ou o nome não se alteram", "A identidade fiscal é definida pela RM SOFT: contacte o suporte.")],
     },
@@ -617,6 +620,9 @@ PLATFORM_PAGES = [
             "O estado ativa / inativa suspende ou reativa a empresa inteira.",
             "O botão de descarga (seta para baixo) exporta uma cópia de segurança da empresa: um ficheiro .zip com todos os "
             "seus dados - documentos, clientes, artigos, stock, utilizadores e imagens. Guarde-o fora do servidor.",
+            "«Cópias de segurança» mostra o estado das cópias de todas as empresas: modo, última cópia feita, erros e "
+            "espaço ocupado - em vermelho, uma empresa ativa sem cópia há mais de um dia. As cópias de uma empresa: lápis → "
+            "separador Cópias de segurança (descarregar, fazer uma agora).",
             "«Restaurar empresa» repõe uma empresa a partir dessa cópia, tal como estava no momento da cópia (mesmos "
             "documentos, numeração e palavras-passe) - depois de uma avaria, ou para a passar para outra instalação da "
             "mesma versão. Mostra primeiro o que o ficheiro contém; recusa se a empresa já existe aqui (nunca a substitui).",

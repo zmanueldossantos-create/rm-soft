@@ -43,6 +43,12 @@ class Settings(BaseSettings):
     # Mode SaaS : Telegram appelle le webhook. False pour couper la lecture (un seul serveur par bot).
     TELEGRAM_POLLING: bool = True
 
+    # --- Copies de securite des entreprises (company_backup_jobs) ---
+    # Le dossier des copies : jamais sous uploads/ (servi par le web). En local, de preference un disque externe ou un
+    # dossier reseau. BACKUP_LOOP=false : ce serveur ne fait pas les copies automatiques (un autre s'en charge).
+    BACKUP_DIR: str = "backups"
+    BACKUP_LOOP: bool = True
+
     # --- Licence (mode local uniquement) ---
     LICENSE_NIF: str | None = None
 

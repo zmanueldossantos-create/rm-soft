@@ -70,6 +70,7 @@ Le backend applique lui-même les migrations au démarrage. Faire une sauvegarde
 ## 5. Sauvegardes
 
 - Une fois par jour, dans `BACKUP_DIR` : `rmsoft_db_<date>.dump` (la base) et `rmsoft_uploads_<date>.tar.gz` (les logos et les images).
+- Dans `BACKUP_DIR/empresas/<id de l'entreprise>/` : les **copies de chaque entreprise** (automatiques aux heures choisies par son gestor, ou manuelles), gardées 7 jours puis une par semaine pendant 4 semaines. Elles se voient dans Empresas → « Cópias de segurança » ; une copie se restaure avec « Restaurar empresa ».
 - **Copier ce dossier ailleurs** (un autre serveur, un stockage externe). Une sauvegarde qui reste sur le même VPS ne protège pas d'une panne du VPS.
 - Sauvegarde immédiate : `docker compose ... restart backup` (il en fait une au démarrage).
 

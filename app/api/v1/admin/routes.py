@@ -44,6 +44,9 @@ from app.services.sector_service import (
 from app.services.company_service import get_company_gestor
 from app.services.company_backup_service import BackupError, export_company, inspect_backup, restore_company
 from app.services.company_base_service import inspect_base
+from app.services.company_backup_jobs import (BackupSettingsError, backup_file, backup_view, backups_overview,
+                                              get_backup_settings, list_backups, make_backup, settings_view)
+from fastapi.responses import FileResponse
 from app.services.setup_checklist_service import get_setup_checklist
 from app.services.support_service import SupportError, list_support_sessions, start_support
 from app.schemas.auth import UserResponse
@@ -122,6 +125,50 @@ async def create_new_company(
 
 
 MAX_BACKUP_BYTES = 200 * 1024 * 1024  # a company's copy, images included
+
+
+@router.get("/backups")
+async def get_backups_overview(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role("SUPER_ADMIN")),
+):
+    """Cópias de segurança of every company: settings, last copy, failures, space used."""
+    return await backups_overview(db)
+
+
+@router.get("/companies/{company_id}/backups")
+async def get_company_backups(
+    company_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role("SUPER_ADMIN")),
+):
+    return {"settings": settings_view(await get_backup_settings(db, company_id)),
+            "copies": [backup_view(r) for r in await list_backups(db, company_id)]}
+
+
+@router.post("/companies/{company_id}/backups")
+async def make_company_backup(
+    company_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role("SUPER_ADMIN")),
+):
+    """A copy now, made by the platform."""
+    if await db.get(Company, company_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Empresa não encontrada")
+    return backup_view(await make_backup(db, company_id, "PLATAFORMA", current_user.id))
+
+
+@router.get("/backups/{backup_id}/download")
+async def download_company_backup(
+    backup_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role("SUPER_ADMIN")),
+):
+    try:
+        path, name = await backup_file(db, None, backup_id)
+    except BackupSettingsError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    return FileResponse(path, media_type="application/zip", filename=name)
 
 
 async def _backup_content(file: UploadFile) -> bytes:

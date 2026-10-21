@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Building2, Plus, Loader2, Search, Mail, Phone, Pencil, UserCog, Check, X, KeyRound, Landmark, LifeBuoy, Download, Upload, Copy, FileArchive } from 'lucide-react';
+import { Building2, Plus, Loader2, Search, Mail, Phone, Pencil, UserCog, Check, X, KeyRound, Landmark, LifeBuoy, Download, Upload, Copy, FileArchive, DatabaseBackup } from 'lucide-react';
 import Modal from '../components/Modal';
 import apiClient from '../api/client';
 import Select from '../components/Select';
@@ -8,6 +8,8 @@ import {
   getCompanyGestor,
   listBankAccounts, addBankAccount, updateBankAccount, toggleBankAccountStatus, getCompanyRegimeHistory, getCompanySetup, startSupport, listSupportSessions, downloadCompanyBackup, inspectCompanyBase } from '../api/admin';
 import RestoreCompanyModal from '../components/RestoreCompanyModal';
+import BackupsOverviewModal from '../components/BackupsOverviewModal';
+import CompanyBackupsPanel from '../components/CompanyBackupsPanel';
 import SupportSessionsList from '../components/SupportSessionsList';
 import SetupChecklist from '../components/SetupChecklist';
 import { extractErrorMessage } from '../utils/errors';
@@ -84,6 +86,7 @@ export default function AdminCompanies() {
   // Cópia de segurança: «Exportar» one company to a file; «Restaurar empresa» puts one back from its file
   const [exportingId, setExportingId] = useState(null);
   const [restoreOpen, setRestoreOpen] = useState(false);
+  const [backupsOpen, setBackupsOpen] = useState(false);
   async function handleExport(company) {
     setExportingId(company.id);
     setError('');
@@ -614,6 +617,13 @@ export default function AdminCompanies() {
         </div>
         <div className="flex items-center gap-2 flex-wrap">
         <button
+          onClick={() => setBackupsOpen(true)}
+          className="flex items-center gap-2 border border-border hover:border-accent text-text-primary font-semibold text-sm px-4 py-2.5 rounded-md transition-colors cursor-pointer"
+        >
+          <DatabaseBackup size={16} />
+          Cópias de segurança
+        </button>
+        <button
           onClick={() => setRestoreOpen(true)}
           className="flex items-center gap-2 border border-border hover:border-accent text-text-primary font-semibold text-sm px-4 py-2.5 rounded-md transition-colors cursor-pointer"
         >
@@ -735,6 +745,7 @@ export default function AdminCompanies() {
               ['modulos', 'Módulos'],
               ...(editingId ? [['ia', 'Assistente IA']] : []),
               ...(editingId ? [['configuracao', 'Configuração inicial']] : []),
+              ...(editingId ? [['copias', 'Cópias de segurança']] : []),
               ...(editingId ? [['suporte', 'Acessos de suporte']] : []),
             ].map(([key, label]) => (
               <button
@@ -1071,6 +1082,10 @@ export default function AdminCompanies() {
             </div>
           )}
 
+          {activeTab === 'copias' && editingId && (
+            <div className="min-h-[420px]"><CompanyBackupsPanel companyId={editingId} /></div>
+          )}
+
           {activeTab === 'suporte' && (
             <div className="flex flex-col gap-3 min-h-[420px]">
               <p className="text-[12px] text-text-muted">Cada entrada da RM SOFT nesta empresa (botão boia na lista) - o gestor vê a mesma lista em Definições da Empresa.</p>
@@ -1198,6 +1213,9 @@ export default function AdminCompanies() {
 
         </form>
       </Modal>
+
+      <BackupsOverviewModal open={backupsOpen} onClose={() => setBackupsOpen(false)}
+        onOpenCompany={(id) => { const company = companies.find((c) => c.id === id); if (company) { setBackupsOpen(false); openEditModal(company).then(() => setActiveTab('copias')); } }} />
 
       <RestoreCompanyModal open={restoreOpen} onClose={() => setRestoreOpen(false)} onRestored={loadCompanies} />
 

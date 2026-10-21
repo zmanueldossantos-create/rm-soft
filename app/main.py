@@ -99,6 +99,15 @@ async def seed_permissions_on_startup() -> None:
 
 
 @app.on_event("startup")
+async def start_backup_loop() -> None:
+    """The companies' automatic backup copies, at the hours their gestor chose (company_backup_jobs)."""
+    import asyncio
+    from app.services.company_backup_jobs import backup_loop
+    if get_settings().BACKUP_LOOP:
+        app.state.backup_loop = asyncio.create_task(backup_loop())
+
+
+@app.on_event("startup")
 async def start_telegram_polling() -> None:
     """Local installation: the application reads the Telegram bot's messages itself (it waits while no bot is set).
     In SaaS Telegram calls the webhook instead. One reader per bot: TELEGRAM_POLLING=false on any other server."""

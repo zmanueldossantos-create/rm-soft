@@ -132,6 +132,7 @@ PERMISSION_CATALOG: list[tuple[str, str, str, list[str]]] = [
     ("saf_t:export", "Exportar SAF-T", "Contabilidade", []),
     ("company:view", "Ver dados da empresa", "Empresa", []),
     ("company:manage", "Editar dados e logotipo da empresa", "Empresa", []),
+    ("company:backup", "Gerir e descarregar as cópias de segurança da empresa", "Empresa", []),
     ("company_bank_accounts:view", "Ver contas bancárias da empresa", "Empresa", ["CAIXA"]),
     ("company_bank_accounts:manage", "Criar, editar e ativar/desativar contas bancárias da empresa", "Empresa", []),
     ("dashboard:view", "Ver painel de resumo", "Painel", ["ARMAZENISTA", "CONTABILISTA"]),

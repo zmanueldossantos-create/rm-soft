@@ -1,7 +1,7 @@
 import { API_ORIGIN } from '../api/config';
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Building2, Loader2, Save, Lock, Image, Upload, Store, Plus, Pencil, Landmark, X, Check, Trash2, FileStack, Sparkles, ChevronDown, CreditCard, Link2, Unlink, Users, Bot, Mail, LifeBuoy } from 'lucide-react';
+import { Building2, Loader2, Save, Lock, Image, Upload, Store, Plus, Pencil, Landmark, X, Check, Trash2, FileStack, Sparkles, ChevronDown, CreditCard, Link2, Unlink, Users, Bot, Mail, LifeBuoy, DatabaseBackup } from 'lucide-react';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
 import { getMySupportSessions, getMyCompany, updateMyCompanyContact, uploadMyCompanyLogo, removeMyCompanyLogo, getMyCompanyBankAccounts, addMyCompanyBankAccount, updateMyCompanyBankAccount, toggleMyCompanyBankAccountStatus } from '../api/company';
@@ -16,6 +16,7 @@ import { getPharmacyContext } from '../api/pharmacy';
 import { getMyCompanyAi } from '../api/ai';
 import AiCompanySettingsTab from '../components/AiCompanySettingsTab';
 import EmailSettingsTab from '../components/EmailSettingsTab';
+import CompanyBackupsPanel from '../components/CompanyBackupsPanel';
 import SupportSessionsList from '../components/SupportSessionsList';
 import { listUsers } from '../api/users';
 import { listCashPointAssociations, assignUserToCashPoint, unassignUserFromCashPoint } from '../api/tesouraria';
@@ -734,6 +735,7 @@ export default function CompanySettings() {
           ['bancarias', 'Coordenadas Bancárias', Landmark],
           ['series', 'Séries de Facturação', FileStack],
           ['email', 'Email', Mail],
+          ...(can('company:backup') ? [['copias', 'Cópias de segurança', DatabaseBackup]] : []),
           ...(can('company:manage') ? [['suporte', 'Acessos de suporte', LifeBuoy]] : []),
           ...(aiInfo?.ai_enabled ? [['ia', 'Assistente IA', Bot]] : []),
         ].map(([key, label, Icon]) => (
@@ -1110,6 +1112,8 @@ export default function CompanySettings() {
       {activeTab === 'email' && <EmailSettingsTab canManage={can('company:manage')} />}
 
       {activeTab === 'suporte' && <SupportTab />}
+
+      {activeTab === 'copias' && can('company:backup') && <CompanyBackupsPanel canManage={can('company:backup')} />}
 
       {activeTab === 'ia' && aiInfo?.ai_enabled && (
         <AiCompanySettingsTab info={aiInfo} onChange={setAiInfo} canManage={can('company:manage')} />
