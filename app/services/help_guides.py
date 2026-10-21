@@ -612,6 +612,11 @@ PLATFORM_PAGES = [
             "Por baixo do nome de cada empresa aparece o seu endereço (subdomínio).",
             "«Redefinir palavra-passe do Gestor» dá uma nova palavra-passe ao gestor da empresa.",
             "O estado ativa / inativa suspende ou reativa a empresa inteira.",
+            "O botão de descarga (seta para baixo) exporta uma cópia de segurança da empresa: um ficheiro .zip com todos os "
+            "seus dados - documentos, clientes, artigos, stock, utilizadores e imagens. Guarde-o fora do servidor.",
+            "«Restaurar empresa» repõe uma empresa a partir dessa cópia, tal como estava no momento da cópia (mesmos "
+            "documentos, numeração e palavras-passe) - depois de uma avaria, ou para a passar para outra instalação da "
+            "mesma versão. Mostra primeiro o que o ficheiro contém; recusa se a empresa já existe aqui (nunca a substitui).",
         ],
     },
     {

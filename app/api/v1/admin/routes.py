@@ -5,7 +5,7 @@ never internal business operations of a specific company.
 """
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -42,6 +42,7 @@ from app.services.sector_service import (
     UnknownCapabilityError, NoSectorDefaultsError,
 )
 from app.services.company_service import get_company_gestor
+from app.services.company_backup_service import BackupError, export_company, inspect_backup, restore_company
 from app.services.setup_checklist_service import get_setup_checklist
 from app.services.support_service import SupportError, list_support_sessions, start_support
 from app.schemas.auth import UserResponse
@@ -113,6 +114,64 @@ async def create_new_company(
     except InvalidCurrencySelectionError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     return company
+
+
+MAX_BACKUP_BYTES = 200 * 1024 * 1024  # a company's copy, images included
+
+
+async def _backup_content(file: UploadFile) -> bytes:
+    content = await file.read(MAX_BACKUP_BYTES + 1)
+    if len(content) > MAX_BACKUP_BYTES:
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Ficheiro demasiado grande (máx. 200 MB)")
+    return content
+
+
+@router.get("/companies/{company_id}/export")
+async def export_company_backup(
+    company_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role("SUPER_ADMIN")),
+):
+    """«Exportar»: the company's backup file - all its data and images, to keep or to restore later."""
+    try:
+        content, filename = await export_company(db, company_id)
+    except BackupError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    return Response(content=content, media_type="application/zip",
+                    headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+
+
+@router.post("/companies/restore/inspect")
+async def inspect_company_backup(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role("SUPER_ADMIN")),
+):
+    """«Restaurar», first step: what the file holds and what would stop it - nothing is written."""
+    try:
+        return await inspect_backup(db, await _backup_content(file))
+    except BackupError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.post("/companies/restore")
+async def restore_company_backup(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role("SUPER_ADMIN")),
+):
+    """«Restaurar»: puts the company back from its file, identical - never over a company that exists here."""
+    from sqlalchemy.exc import IntegrityError
+    try:
+        return await restore_company(db, await _backup_content(file))
+    except BackupError as e:
+        await db.rollback()
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    except IntegrityError as e:
+        await db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="Não foi possível restaurar: um dado do ficheiro já existe nesta plataforma ("
+                                   + str(e.orig).split("DETAIL:")[-1].strip()[:200] + ")")
 
 
 @router.get("/companies", response_model=list[CompanyResponse])

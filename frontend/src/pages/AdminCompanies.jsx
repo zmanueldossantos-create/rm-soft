@@ -1,12 +1,13 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Building2, Plus, Loader2, Search, Mail, Phone, Pencil, UserCog, Check, X, KeyRound, Landmark, LifeBuoy } from 'lucide-react';
+import { Building2, Plus, Loader2, Search, Mail, Phone, Pencil, UserCog, Check, X, KeyRound, Landmark, LifeBuoy, Download, Upload } from 'lucide-react';
 import Modal from '../components/Modal';
 import apiClient from '../api/client';
 import Select from '../components/Select';
 import {
   listCompanies, createCompany, updateCompany, toggleCompanyStatus,
   getCompanyGestor,
-  listBankAccounts, addBankAccount, updateBankAccount, toggleBankAccountStatus, getCompanyRegimeHistory, getCompanySetup, startSupport, listSupportSessions } from '../api/admin';
+  listBankAccounts, addBankAccount, updateBankAccount, toggleBankAccountStatus, getCompanyRegimeHistory, getCompanySetup, startSupport, listSupportSessions, downloadCompanyBackup } from '../api/admin';
+import RestoreCompanyModal from '../components/RestoreCompanyModal';
 import SupportSessionsList from '../components/SupportSessionsList';
 import SetupChecklist from '../components/SetupChecklist';
 import { extractErrorMessage } from '../utils/errors';
@@ -66,6 +67,20 @@ export default function AdminCompanies() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
+  // Cópia de segurança: «Exportar» one company to a file; «Restaurar empresa» puts one back from its file
+  const [exportingId, setExportingId] = useState(null);
+  const [restoreOpen, setRestoreOpen] = useState(false);
+  async function handleExport(company) {
+    setExportingId(company.id);
+    setError('');
+    try {
+      await downloadCompanyBackup(company.id);
+    } catch (err) {
+      setError(extractErrorMessage(err, 'Não foi possível exportar a empresa'));
+    } finally {
+      setExportingId(null);
+    }
+  }
   const [togglingId, setTogglingId] = useState(null);
 
   const [modalOpen, setModalOpen] = useState(false);
@@ -527,6 +542,14 @@ export default function AdminCompanies() {
             className="w-full bg-bg-elevated border border-border rounded-md pl-10 pr-4 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors"
           />
         </div>
+        <div className="flex items-center gap-2 flex-wrap">
+        <button
+          onClick={() => setRestoreOpen(true)}
+          className="flex items-center gap-2 border border-border hover:border-accent text-text-primary font-semibold text-sm px-4 py-2.5 rounded-md transition-colors cursor-pointer"
+        >
+          <Upload size={16} />
+          Restaurar empresa
+        </button>
         <button
           onClick={openCreateModal}
           className="flex items-center gap-2 bg-accent hover:bg-accent-hover text-white font-semibold text-sm px-4 py-2.5 rounded-md transition-colors cursor-pointer"
@@ -534,6 +557,7 @@ export default function AdminCompanies() {
           <Plus size={17} />
           Nova empresa
         </button>
+        </div>
       </div>
 
       <div className="bg-bg-elevated border border-border rounded-lg overflow-hidden">
@@ -587,6 +611,15 @@ export default function AdminCompanies() {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-right whitespace-nowrap">
+                      <button
+                        onClick={() => handleExport(c)}
+                        disabled={exportingId === c.id}
+                        aria-label="Exportar cópia"
+                        title="Exportar cópia (todos os dados da empresa num ficheiro)"
+                        className="inline-flex items-center justify-center w-8 h-8 mr-2 rounded-md border border-border text-text-muted hover:text-text-primary hover:border-accent transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-wait"
+                      >
+                        {exportingId === c.id ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                      </button>
                       <button
                         onClick={() => openSupport(c)}
                         disabled={!c.is_active}
@@ -1020,6 +1053,8 @@ export default function AdminCompanies() {
 
         </form>
       </Modal>
+
+      <RestoreCompanyModal open={restoreOpen} onClose={() => setRestoreOpen(false)} onRestored={loadCompanies} />
 
       <Modal open={!!supportCompany} onClose={() => setSupportCompany(null)} title="Entrar como suporte">
         {supportCompany && (

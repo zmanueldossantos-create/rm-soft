@@ -84,3 +84,36 @@ export async function listSupportSessions(companyId) {
   const res = await apiClient.get(`/admin/companies/${companyId}/support`);
   return res.data;
 }
+
+// Cópia de segurança de uma empresa: «Exportar» downloads its file; «Restaurar» checks a file, then puts it back.
+export async function downloadCompanyBackup(companyId) {
+  const res = await apiClient.get(`/admin/companies/${companyId}/export`, { responseType: 'blob' });
+  const match = /filename="([^"]+)"/.exec(res.headers['content-disposition'] || '');
+  const blobUrl = URL.createObjectURL(res.data);
+  const link = document.createElement('a');
+  link.href = blobUrl;
+  link.download = match ? match[1] : 'rmsoft_copia.zip';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(blobUrl);
+}
+
+// the shared client sends JSON by default: a file goes as a form
+const MULTIPART = { headers: { 'Content-Type': 'multipart/form-data' } };
+
+function backupForm(file) {
+  const form = new FormData();
+  form.append('file', file);
+  return form;
+}
+
+export async function inspectCompanyBackup(file) {
+  const res = await apiClient.post('/admin/companies/restore/inspect', backupForm(file), MULTIPART);
+  return res.data;
+}
+
+export async function restoreCompanyBackup(file) {
+  const res = await apiClient.post('/admin/companies/restore', backupForm(file), MULTIPART);
+  return res.data;
+}
