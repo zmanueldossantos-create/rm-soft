@@ -41,6 +41,8 @@ async def create_activity(
     cash point. Invoice numbering never depends on the activity: it goes through document_series."""
     if not await is_module_granted(db, company_id, module_id):
         raise ModuleNotGrantedError("A empresa não tem acesso a este modulo - contacte o administrador da plataforma")
+    from app.services.plan_service import check_limit
+    await check_limit(db, company_id, "max_pos")  # every activity comes with its own till
 
     # Stock is received centrally (Armazem Principal) and internally
     # transferred to this activity's own point-of-sale warehouse before

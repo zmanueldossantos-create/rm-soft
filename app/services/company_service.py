@@ -166,6 +166,10 @@ async def create_company(
     base_token: str | None = None,
     base_parts: list[str] | None = None,
     reference_catalog: bool = False,
+    plan_id: uuid.UUID | None = None,
+    billing: str = "TESTE",
+    deployment_mode: str | None = None,
+    contract_start: date | None = None,
 ) -> Company:
     """
     Creates a new client company, seeds its VAT rates (limited to what the
@@ -180,6 +184,8 @@ async def create_company(
     await _check_all_fields_available(db, name, nif, email, phone_number)
     _validate_currencies(primary_currency_id, secondary_currency_id)
     await ensure_modules_grantable(db, module_ids or [])
+    from app.services.plan_service import check_plan_limit
+    await check_plan_limit(db, plan_id, "max_modules", len(set(module_ids or [])))
     # its own address (SaaS): the one typed, else made from the short name
     try:
         subdomain = await ensure_subdomain_available(db, subdomain) if (subdomain or "").strip() \
@@ -281,6 +287,19 @@ async def create_company(
         await db.flush()
         from app.services.reference_catalog_service import take_reference_catalog
         catalog_counts = await take_reference_catalog(db, company)
+
+    if plan_id is not None:  # its contract (Planos) - same transaction: a refused contract creates nothing
+        from app.core.config import get_settings
+        from app.services.plan_service import PlanError, set_contract
+        await db.flush()
+        try:
+            await set_contract(db, company.id, {
+                "plan_id": plan_id, "billing": billing, "start_date": contract_start or date.today(),
+                "deployment_mode": deployment_mode or get_settings().DEPLOYMENT_MODE.upper(),
+            }, commit=False)
+        except PlanError as e:
+            await db.rollback()
+            raise CompanyAlreadyExistsError(str(e))  # answered 409 with the message, like the other refusals here
 
     await grant_default_role_permissions(db, company.id)
     await db.commit()

@@ -10,6 +10,8 @@ import {
 import RestoreCompanyModal from '../components/RestoreCompanyModal';
 import BackupsOverviewModal from '../components/BackupsOverviewModal';
 import CompanyBackupsPanel from '../components/CompanyBackupsPanel';
+import ContractPanel, { periodEnd, dateText } from '../components/ContractPanel';
+import { getCompanyContract, listPlans } from '../api/plans';
 import SupportSessionsList from '../components/SupportSessionsList';
 import SetupChecklist from '../components/SetupChecklist';
 import { extractErrorMessage } from '../utils/errors';
@@ -64,7 +66,14 @@ const emptyForm = {
   gestorName: '', gestorPhone: '', gestorPassword: '',
   baseParts: [],
   referenceCatalog: true,
+  // its contract (Planos), chosen with its modules: the plan says how many modules it may have
+  planId: '', billing: 'TESTE', contractStart: '',
 };
+const BILLING_OPTIONS = [
+  { value: 'TESTE', label: 'Teste gratuito (15 dias)' }, { value: 'MENSAL', label: 'Mensal' }, { value: 'TRIMESTRAL', label: 'Trimestral' },
+  { value: 'SEMESTRAL', label: 'Semestral' }, { value: 'ANUAL', label: 'Anual' },
+];
+const todayIso = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
 
 // «Base»: what a new company can take from a backup file, and what it never takes
 const BASE_PARTS = [
@@ -190,6 +199,25 @@ export default function AdminCompanies() {
     currenciesApi.list().then((data) => setCurrencies(data.filter((c) => c.is_active))).catch(() => {});
     banksApi.list().then((data) => setBanks(data.filter((b) => b.is_active))).catch(() => {});
   }, []);
+
+  // Planos: the plans to choose from (a new company), and how many modules the plan allows (null: no limit)
+  const [plans, setPlans] = useState([]);
+  const [editModulesLimit, setEditModulesLimit] = useState(null);
+  const selectedPlan = plans.find((p) => p.id === form.planId);
+  const modulesLimit = editingId ? editModulesLimit : (selectedPlan ? selectedPlan.limits.max_modules ?? null : null);
+  useEffect(() => {
+    if (!modalOpen) return;
+    if (editingId) {
+      setEditModulesLimit(null);
+      getCompanyContract(editingId).then((v) => setEditModulesLimit(v.limits ? v.limits.max_modules ?? null : null)).catch(() => {});
+      return;
+    }
+    listPlans().then((list) => {
+      const active = list.filter((p) => p.is_active);
+      setPlans(active);
+      setForm((prev) => (prev.planId ? prev : { ...prev, planId: (active.find((p) => p.is_popular) || active[0])?.id || '', contractStart: prev.contractStart || todayIso() }));
+    }).catch(() => setPlans([]));
+  }, [modalOpen, editingId]);
 
   function toggleModuleSelection(moduleId) {
     setForm((prev) => ({
@@ -568,6 +596,9 @@ export default function AdminCompanies() {
           reference_catalog: !!(form.referenceCatalog && offer && offer.products > 0),
           fiscal_regime_id: form.fiscalRegimeId || null,
           module_ids: form.moduleIds,
+          plan_id: form.planId || null,
+          billing: form.billing,
+          contract_start: form.contractStart || null,
           gestor_full_name: form.gestorName,
           gestor_phone_number: fullGestorPhone,
           gestor_password: form.gestorPassword,
@@ -610,7 +641,7 @@ export default function AdminCompanies() {
 
   const isFormValid = editingId
     ? form.name && form.nif && form.email && form.phone
-    : form.name && form.nif && form.email && form.phone && form.fiscalRegimeId && form.gestorName && form.gestorPhone && form.gestorPassword.length >= 8
+    : form.name && form.nif && form.email && form.phone && form.fiscalRegimeId && form.planId && form.gestorName && form.gestorPhone && form.gestorPassword.length >= 8
       && !baseLoading && !(base && (base.problems.length > 0 || form.baseParts.length === 0));
 
   return (
@@ -750,7 +781,8 @@ export default function AdminCompanies() {
               // the order a client is set up in: who it is (NIF, regime), what it does (its sectors), what it starts
               // with (Base: counts follow the sectors and the regime), who uses it, then the optional bank details
               ['dados', 'Dados da Empresa'],
-              ['modulos', 'Módulos'],
+              ['modulos', editingId ? 'Módulos' : 'Plano e módulos'],
+              ...(editingId ? [['contrato', 'Contrato']] : []),
               ...(editingId ? [] : [['base', 'Base']]),
               ['gestor', 'Conta do Gestor'],
               ['bancarias', 'Coordenadas Bancárias'],
@@ -1088,17 +1120,45 @@ export default function AdminCompanies() {
           )}
 
           {activeTab === 'modulos' && (
-            <div className="min-h-[420px]">
-              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-2 block">Módulos ativos</label>
+            <div className="min-h-[420px] flex flex-col gap-4">
+              {!editingId && (
+                <div className="flex flex-col gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <Field label="Plano *">
+                      <Select value={form.planId} onChange={(v) => updateField('planId', v)} placeholder="Selecionar"
+                        options={plans.map((p) => ({ value: p.id, label: p.name + (p.limits.max_modules == null ? ' - módulos ilimitados' : ' - até ' + p.limits.max_modules + (p.limits.max_modules === 1 ? ' módulo' : ' módulos')) }))} />
+                    </Field>
+                    <Field label="Pagamento *">
+                      <Select value={form.billing} onChange={(v) => updateField('billing', v)} options={BILLING_OPTIONS} />
+                    </Field>
+                    <Field label="Início do contrato *" hint={form.contractStart ? 'Até ' + dateText(periodEnd(form.billing, form.contractStart)) + ' - alterável depois, no separador Contrato' : undefined}>
+                      <input type="date" value={form.contractStart} onChange={(e) => updateField('contractStart', e.target.value)} className={inputClass} />
+                    </Field>
+                  </div>
+                  {selectedPlan && (
+                    <p className="text-[12px] text-text-muted">
+                      {selectedPlan.name}: {selectedPlan.limits.max_users == null ? 'utilizadores ilimitados' : selectedPlan.limits.max_users + ' utilizadores'}
+                      {' · '}{selectedPlan.limits.max_pos == null ? 'caixas ilimitadas' : selectedPlan.limits.max_pos + (selectedPlan.limits.max_pos === 1 ? ' caixa' : ' caixas')}
+                      {' · '}{selectedPlan.limits.max_establishments == null ? 'lojas ilimitadas' : selectedPlan.limits.max_establishments + (selectedPlan.limits.max_establishments === 1 ? ' loja' : ' lojas')}
+                      {selectedPlan.options.includes('ASSISTENTE_IA') ? ' · assistente IA' : ''}. Os detalhes estão em Planos.
+                    </p>
+                  )}
+                </div>
+              )}
+              <div>
+              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-2 block">
+                Módulos ativos{modulesLimit != null && <span className={'ml-1 normal-case ' + (form.moduleIds.length >= modulesLimit ? 'text-amber-500 [.light_&]:text-amber-700' : '')}>- {form.moduleIds.length} de {modulesLimit} {editingId ? '(plano do contrato)' : 'permitidos pelo plano'}</span>}
+              </label>
               <div className="grid grid-cols-2 gap-2">
                 {modules.map((m) => {
                   const info = sectorInfo[m.id];
                   const selected = form.moduleIds.includes(m.id);
-                  const blocked = !!info && !info.is_ready && !selected;
+                  const full = modulesLimit != null && form.moduleIds.length >= modulesLimit && !selected;
+                  const blocked = (!!info && !info.is_ready && !selected) || full;
                   return (
                     <label
                       key={m.id}
-                      title={blocked ? (info.ready_note || 'Em desenvolvimento') : undefined}
+                      title={full ? 'O plano permite ' + modulesLimit + (modulesLimit === 1 ? ' módulo' : ' módulos') + ' - retire um, ou mude de plano' : blocked ? (info.ready_note || 'Em desenvolvimento') : undefined}
                       className={'flex items-center gap-2.5 select-none border border-border rounded-md px-3 py-2.5 transition-colors ' + (blocked ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:border-accent')}
                     >
                       <input type="checkbox" checked={selected} disabled={blocked} onChange={() => toggleModuleSelection(m.id)} className="w-4 h-4 accent-accent cursor-pointer" />
@@ -1108,6 +1168,14 @@ export default function AdminCompanies() {
                   );
                 })}
               </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'contrato' && editingId && (
+            <div className="min-h-[420px]">
+              <ContractPanel companyId={editingId} defaultMode={deploymentMode === 'saas' ? 'SAAS' : 'LOCAL'}
+                onChanged={(v) => setEditModulesLimit(v.limits ? v.limits.max_modules ?? null : null)} />
             </div>
           )}
 
@@ -1227,6 +1295,7 @@ export default function AdminCompanies() {
           )}
 
 
+          {activeTab !== 'contrato' && ( // the Contrato has its own «Guardar novo contrato»
           <button
             type="submit"
             disabled={saving || !isFormValid}
@@ -1235,6 +1304,7 @@ export default function AdminCompanies() {
             {saving ? <Loader2 size={17} className="animate-spin" /> : <Plus size={17} />}
             {saving ? 'A guardar...' : editingId ? 'Guardar alterações' : 'Criar empresa'}
           </button>
+          )}
 
         </form>
       </Modal>

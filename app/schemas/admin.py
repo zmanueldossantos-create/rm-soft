@@ -5,7 +5,7 @@ reference legalized software.
 """
 import re
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 import phonenumbers
 from typing import Literal
@@ -106,6 +106,11 @@ class CompanyCreateRequest(BaseModel):
     base_token: str | None = None
     base_parts: list[Literal["artigos", "servicos", "fornecedores"]] = []
     reference_catalog: bool = False  # the reference catalog of its sectors (Catálogo de referência)
+    # its contract (Planos): the plan, how it pays and from when - the modules ticked must fit the plan
+    plan_id: uuid.UUID | None = None
+    billing: str = "TESTE"
+    deployment_mode: str | None = None  # empty: this installation's mode (DEPLOYMENT_MODE)
+    contract_start: date | None = None
 
     @field_validator("name")
     @classmethod

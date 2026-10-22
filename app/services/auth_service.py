@@ -48,6 +48,8 @@ async def create_user(
     )
     if existing.scalar_one_or_none() is not None:
         raise UserAlreadyExistsError("Já existe um utilizador registado com este número de telefone nesta empresa")
+    from app.services.plan_service import check_limit
+    await check_limit(db, company_id, "max_users")
 
     user = User(
         company_id=company_id,
@@ -167,6 +169,9 @@ async def toggle_user_status(db: AsyncSession, company_id: uuid.UUID, user_id: u
     user = result.scalar_one_or_none()
     if user is None:
         raise UserNotFoundError("Utilizador não encontrado")
+    if not user.is_active:  # switched back on: one more active user
+        from app.services.plan_service import check_limit
+        await check_limit(db, company_id, "max_users")
 
     user.is_active = not user.is_active
     await db.commit()

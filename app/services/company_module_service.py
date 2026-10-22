@@ -33,6 +33,8 @@ async def set_company_modules(db: AsyncSession, company_id: uuid.UUID, module_id
     creation for modules no longer granted.
     """
     await ensure_modules_grantable(db, module_ids)
+    from app.services.plan_service import check_limit
+    await check_limit(db, company_id, "max_modules", total=len(set(module_ids)))
     existing_result = await db.execute(select(CompanyModule).where(CompanyModule.company_id == company_id))
     existing = {cm.module_id: cm for cm in existing_result.scalars().all()}
 

@@ -221,6 +221,10 @@ async def has_permission(db: AsyncSession, company_id: uuid.UUID, role: str, cod
     # whose capability the company does not have is refused (no-op while ENFORCE_CAPABILITIES is off).
     if not await capability_allows(db, company_id, code):
         return False
+    # Then the plan: an option the company's plan does not include (suppliers, guias, the assistant...) is refused too.
+    from app.services.plan_service import plan_allows
+    if not await plan_allows(db, company_id, code):
+        return False
     if role == ALWAYS_ALLOWED_ROLE:
         return True
     result = await db.execute(
@@ -238,7 +242,9 @@ async def get_permission_matrix(db: AsyncSession, company_id: uuid.UUID) -> list
     permissions_result = await db.execute(select(Permission).order_by(Permission.category, Permission.label))
     permissions = list(permissions_result.scalars().all())
     active_capabilities = await _active_capabilities_or_none(db, company_id)
-    permissions = [p for p in permissions if _is_allowed(active_capabilities, p.code)]
+    from app.services.plan_service import company_options_or_none, plan_allows_code
+    options = await company_options_or_none(db, company_id)
+    permissions = [p for p in permissions if _is_allowed(active_capabilities, p.code) and plan_allows_code(options, p.code)]
 
     grants_result = await db.execute(select(RolePermission).where(RolePermission.company_id == company_id))
     granted_roles_by_permission: dict[uuid.UUID, set[str]] = {}
@@ -262,6 +268,8 @@ async def set_role_permission(db: AsyncSession, company_id: uuid.UUID, role: str
         raise ProtectedRoleError("O perfil Gestor tem sempre todas as permissões e não pode ser alterado")
     if role not in EDITABLE_ROLES:
         raise ProtectedRoleError("Perfil inválido para configuração de permissões")
+    from app.services.plan_service import require_option
+    await require_option(db, company_id, "PERMISSOES_PERSONALIZADAS")
 
     existing_result = await db.execute(
         select(RolePermission).where(RolePermission.company_id == company_id, RolePermission.role == UserRole(role), RolePermission.permission_id == permission_id)
@@ -334,4 +342,6 @@ async def list_my_permissions(db: AsyncSession, company_id: uuid.UUID, role: str
     the frontend builds the menu, the route guards and the buttons from."""
     codes = await _list_my_permissions_unfiltered(db, company_id, role)
     active = await _active_capabilities_or_none(db, company_id)
-    return [c for c in codes if _is_allowed(active, c)]
+    from app.services.plan_service import company_options_or_none, plan_allows_code
+    options = await company_options_or_none(db, company_id)  # and minus what the company's plan does not include
+    return [c for c in codes if _is_allowed(active, c) and plan_allows_code(options, c)]

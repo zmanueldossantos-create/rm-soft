@@ -22,6 +22,8 @@ async def list_establishments(db: AsyncSession, company_id: uuid.UUID) -> list[E
 
 
 async def create_establishment(db: AsyncSession, company_id: uuid.UUID, code: str, name: str, description: str | None = None) -> Establishment:
+    from app.services.plan_service import check_limit
+    await check_limit(db, company_id, "max_establishments")
     establishment = Establishment(company_id=company_id, code=code, name=name, description=description)
     db.add(establishment)
     await db.commit()
@@ -47,6 +49,9 @@ async def toggle_establishment(db: AsyncSession, company_id: uuid.UUID, establis
     establishment = result.scalar_one_or_none()
     if establishment is None:
         raise EstablishmentNotFoundError("Estabelecimento não encontrado")
+    if not establishment.is_active:
+        from app.services.plan_service import check_limit
+        await check_limit(db, company_id, "max_establishments")
     establishment.is_active = not establishment.is_active
     await db.commit()
     await db.refresh(establishment)

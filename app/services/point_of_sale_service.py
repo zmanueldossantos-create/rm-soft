@@ -71,6 +71,9 @@ async def create_point_of_sale(
     _check_printing(print_after_sale, print_ticket, print_a4)
     await get_activity_or_raise(db, company_id, activity_id)
     await _check_name_available(db, activity_id, name)
+    if not is_default:  # an activity's own till: checked before the activity is created (activity_service)
+        from app.services.plan_service import check_limit
+        await check_limit(db, company_id, "max_pos")
 
     pos = PointOfSale(company_id=company_id, activity_id=activity_id, name=name, is_default=is_default, billetage_enabled=billetage_enabled,
                       print_after_sale=print_after_sale, print_ticket=print_ticket, print_a4=print_a4,
@@ -120,6 +123,9 @@ async def toggle_pos_status(db: AsyncSession, company_id: uuid.UUID, pos_id: uui
     pos = await get_pos_or_raise(db, company_id, pos_id)
     if pos.is_default:
         raise DefaultPosNotModifiableError("A caixa por defeito da atividade não pode ser desativada")
+    if not pos.is_active:  # switched back on: one more till
+        from app.services.plan_service import check_limit
+        await check_limit(db, company_id, "max_pos")
     if pos.is_active:
         # An inactive point of sale cannot open a session: deactivating one with an open session would leave the drawer
         # uncounted - close it first.

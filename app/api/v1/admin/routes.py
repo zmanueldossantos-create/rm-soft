@@ -118,6 +118,10 @@ async def create_new_company(
             base_token=payload.base_token,
             base_parts=payload.base_parts,
             reference_catalog=payload.reference_catalog,
+            plan_id=payload.plan_id,
+            billing=payload.billing,
+            deployment_mode=payload.deployment_mode,
+            contract_start=payload.contract_start,
         )
     except BackupError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
@@ -731,3 +735,92 @@ async def get_company_regime_history(
     """The company's fiscal regimes, most recent first, each with the day it took effect."""
     from app.services.company_service import list_regime_history
     return await list_regime_history(db, company_id)
+
+
+# ---------------------------------------------------------------------------------------------- Planos and contracts
+
+from app.core.plan_features import BILLING_TYPES, DEPLOYMENT_MODES, LIMITS as PLAN_LIMITS, OPTIONS as PLAN_OPTIONS, TRIAL_DAYS  # noqa: E402
+from app.schemas.plan import CompanyContractView, ContractRequest, ContractResponse, PlanRequest, PlanResponse  # noqa: E402
+from app.services import plan_service  # noqa: E402
+
+
+def _plan_view(plan, counts: dict) -> dict:
+    data = PlanRequest.model_validate(plan, from_attributes=True).model_dump()
+    return {**data, "id": plan.id, "companies": counts.get(plan.id, 0)}
+
+
+def _contract_view(contract) -> dict:
+    return {**{c: getattr(contract, c) for c in ("id", "plan_id", "deployment_mode", "billing", "start_date", "end_date",
+                                                  "maintenance_until", "addons", "price", "notes", "is_current", "created_at")},
+            "plan_name": contract.plan.name}
+
+
+@router.get("/plan-catalog")
+async def get_plan_catalog(current_user: User = Depends(require_role("SUPER_ADMIN"))):
+    """What a plan can limit and switch on, and how a contract is paid - the plan editor's and the Contrato's lists."""
+    return {
+        "limits": [{"code": lim.code, "label": lim.label} for lim in PLAN_LIMITS.values()],
+        "options": [{"code": o.code, "label": o.label, "description": o.description} for o in PLAN_OPTIONS.values()],
+        "billing_types": [{"code": code, "label": label} for code, (label, _) in BILLING_TYPES.items()],
+        "deployment_modes": [{"code": code, "label": label} for code, label in DEPLOYMENT_MODES.items()],
+        "trial_days": TRIAL_DAYS,
+    }
+
+
+@router.get("/plans", response_model=list[PlanResponse])
+async def get_plans(db: AsyncSession = Depends(get_db), current_user: User = Depends(require_role("SUPER_ADMIN"))):
+    counts = await plan_service.plan_usage_counts(db)
+    return [_plan_view(p, counts) for p in await plan_service.list_plans(db)]
+
+
+@router.post("/plans", response_model=PlanResponse, status_code=status.HTTP_201_CREATED)
+async def post_plan(payload: PlanRequest, db: AsyncSession = Depends(get_db),
+                    current_user: User = Depends(require_role("SUPER_ADMIN"))):
+    try:
+        plan = await plan_service.save_plan(db, None, payload.model_dump())
+    except plan_service.PlanError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    return _plan_view(plan, {})
+
+
+@router.put("/plans/{plan_id}", response_model=PlanResponse)
+async def put_plan(plan_id: uuid.UUID, payload: PlanRequest, db: AsyncSession = Depends(get_db),
+                   current_user: User = Depends(require_role("SUPER_ADMIN"))):
+    try:
+        plan = await plan_service.save_plan(db, plan_id, payload.model_dump())
+    except plan_service.PlanError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    return _plan_view(plan, await plan_service.plan_usage_counts(db))
+
+
+async def _company_contract_view(db: AsyncSession, company_id: uuid.UUID) -> dict:
+    history = await plan_service.list_contracts(db, company_id)
+    current = next((c for c in history if c.is_current), None)
+    rights = await plan_service.entitlements(db, company_id)
+    return {"current": _contract_view(current) if current else None, "history": [_contract_view(c) for c in history],
+            "limits": rights["limits"] if rights else None, "usage": await plan_service.usage(db, company_id)}
+
+
+@router.get("/companies/{company_id}/contract", response_model=CompanyContractView)
+async def get_company_contract(company_id: uuid.UUID, db: AsyncSession = Depends(get_db),
+                               current_user: User = Depends(require_role("SUPER_ADMIN"))):
+    await get_company_or_raise(db, company_id)
+    return await _company_contract_view(db, company_id)
+
+
+@router.post("/companies/{company_id}/contract", response_model=CompanyContractView)
+async def post_company_contract(company_id: uuid.UUID, payload: ContractRequest, db: AsyncSession = Depends(get_db),
+                                current_user: User = Depends(require_role("SUPER_ADMIN"))):
+    """A new contract (renewal, change of plan, add-ons): the current one goes to the history."""
+    await get_company_or_raise(db, company_id)
+    data = payload.model_dump(exclude_unset=True)
+    data["plan_id"] = payload.plan_id
+    if payload.no_end:
+        data["end_date"] = None
+    elif payload.end_date is None:
+        data.pop("end_date", None)  # empty: the end of the period paid
+    try:
+        await plan_service.set_contract(db, company_id, data, current_user.id)
+    except plan_service.PlanError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    return await _company_contract_view(db, company_id)

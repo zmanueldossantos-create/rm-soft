@@ -94,3 +94,4 @@ from app.models.ai_channel import AiChannelLink, AiLinkCode  # noqa: E402,F401 -
 from app.models.support_session import SupportSession  # noqa: E402,F401 - the platform's support access to a company
 from app.models.company_backup import CompanyBackup, CompanyBackupSettings  # noqa: E402,F401 - a company's backup copies
 from app.models.reference_product import ReferenceProduct, ReferenceProductUnit  # noqa: E402,F401 - the platform's reference catalog
+from app.models.plan import CompanyContract, Plan  # noqa: E402,F401 - the plans and each company's contract

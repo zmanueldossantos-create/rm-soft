@@ -97,6 +97,8 @@ async def create_warehouse(
 ) -> Warehouse:
     """Creates an additional (secondary) warehouse for the company - GESTOR only. The
     default/central warehouse itself is only ever auto-created at company creation."""
+    from app.services.plan_service import check_limit
+    await check_limit(db, company_id, "max_warehouses")
     warehouse = Warehouse(
         company_id=company_id, name=name, code=code, province_id=province_id,
         municipality_id=municipality_id, address=address,
@@ -145,6 +147,11 @@ async def toggle_warehouse_status(db: AsyncSession, company_id: uuid.UUID, wareh
     central = await get_default_warehouse(db, company_id)
     if warehouse.id == central.id:
         raise CentralWarehouseNotEditableError("O armazem central não pode ser desativado")
+    if not warehouse.is_active:  # switched back on - unless an activity's own warehouse (not counted)
+        from app.models.activity import Activity
+        from app.services.plan_service import check_limit
+        if (await db.execute(select(Activity.id).where(Activity.warehouse_id == warehouse.id))).first() is None:
+            await check_limit(db, company_id, "max_warehouses")
     warehouse.is_active = not warehouse.is_active
     await db.commit()
     await db.refresh(warehouse)

@@ -19,6 +19,7 @@ import { listProducts } from '../api/products';
 import { extractErrorMessage } from '../utils/errors';
 import { useCan } from '../utils/permissions';
 import { useToastState } from '../components/Toaster';
+import { toast } from '../store/toastStore';
 
 const LOSS_CATEGORIES = [
   { value: 'EXPIRACAO', label: 'Expiração' },
@@ -279,8 +280,9 @@ export default function Stock() {
   async function handleToggleWarehouseStatus(warehouseId) {
     setTogglingWarehouseId(warehouseId);
     try {
-      await toggleWarehouseStatus(warehouseId);
+      const toggled = await toggleWarehouseStatus(warehouseId);
       await loadWarehouses();
+      toast.success('Armazém «' + toggled.name + '» ' + (toggled.is_active ? 'ativado' : 'desativado'));
     } catch (err) {
       setError(extractErrorMessage(err, 'Erro ao atualizar estado do armazem'));
     } finally {
@@ -340,11 +342,13 @@ export default function Stock() {
         setNewWarehouseModalOpen(false);
         await loadWarehouses();
         setSelectedWarehouseId(updated.id);
+        toast.success('Armazém «' + updated.name + '» guardado');
       } else {
         const created = await createWarehouse(payload);
         setNewWarehouseModalOpen(false);
         await loadWarehouses();
         setSelectedWarehouseId(created.id);
+        toast.success('Armazém «' + created.name + '» criado');
       }
     } catch (err) {
       setNewWarehouseError(extractErrorMessage(err, 'Erro ao guardar armazem'));

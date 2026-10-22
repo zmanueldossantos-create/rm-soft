@@ -260,6 +260,15 @@ async def _pt_validation_handler(request: _Request, exc: _RequestValidationError
 
 
 
+# What the company's plan does not allow (a 4th user on a plan of 3, an option not included): a clear 422.
+from app.services.plan_service import PlanLimitError as _PlanLimitError  # noqa: E402
+
+
+@app.exception_handler(_PlanLimitError)
+async def _plan_limit_handler(request: _Request, exc: _PlanLimitError):
+    return _JSONResponse(status_code=422, content={"detail": str(exc)})
+
+
 # A fiscal period refusal (closed, soft-closed for an automatic operation...) that no route catches itself: a clear 409.
 from app.services.fiscal_period_service import PeriodClosedError as _PeriodClosedError  # noqa: E402
 

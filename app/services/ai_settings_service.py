@@ -116,6 +116,11 @@ async def update_company_ai_switches(db: AsyncSession, company_id: uuid.UUID, ai
     """SUPER_ADMIN: the assistant and its channels for a company. The channels only work with the assistant on."""
     if monthly_limit is not None and monthly_limit < 0:
         raise AiSettingsError("O limite mensal não pode ser negativo")
+    from app.services.plan_service import has_option  # the company's plan decides first
+    if ai_enabled and not await has_option(db, company_id, "ASSISTENTE_IA"):
+        raise AiSettingsError("O plano desta empresa não inclui o assistente IA - mude o plano no separador Contrato")
+    if (whatsapp_enabled or telegram_enabled) and ai_enabled and not await has_option(db, company_id, "IA_CANAIS"):
+        raise AiSettingsError("O plano desta empresa não inclui a IA por WhatsApp e Telegram - mude o plano no separador Contrato")
     row = await _company_settings(db, company_id)
     row.ai_enabled = ai_enabled
     row.whatsapp_enabled, row.telegram_enabled, row.email_enabled = (

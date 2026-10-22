@@ -76,6 +76,10 @@ async def save_backup_settings(db: AsyncSession, company_id: uuid.UUID, mode: st
         raise BackupSettingsError(f"No máximo {MAX_TIMES} cópias automáticas por dia")
     if mode == "AUTOMATICA" and not clean:
         raise BackupSettingsError("Escolha pelo menos uma hora para a cópia automática")
+    if mode == "AUTOMATICA":
+        from app.services.plan_service import has_option
+        if not await has_option(db, company_id, "COPIAS_AUTOMATICAS"):
+            raise BackupSettingsError("As cópias automáticas não estão incluídas no seu plano - use «Fazer cópia agora»")
     row = (await db.execute(select(CompanyBackupSettings).where(CompanyBackupSettings.company_id == company_id))).scalar_one_or_none()
     if row is None:
         row = CompanyBackupSettings(company_id=company_id)
