@@ -89,6 +89,22 @@ const BASE_COUNT_LABELS = {
 
 const emptyBankRow = { bankId: '', accountNumber: '', iban: '', currencyId: '' };
 
+// the company's plan and where its contract is, under its name in the list
+const CONTRACT_TONES = {
+  A_EXPIRAR: ['text-amber-500 [.light_&]:text-amber-700', 'termina a '],
+  TOLERANCIA: ['text-danger', 'terminou a '],
+  BLOQUEADO: ['text-danger font-semibold', 'só leitura · terminou a '],
+};
+function ContractBadge({ company }) {
+  const [tone, prefix] = CONTRACT_TONES[company.contract_status] || ['text-text-muted', company.contract_end_date ? 'até ' : ''];
+  return (
+    <p className={'text-[11px] mt-0.5 ' + tone}>
+      {company.plan_name}
+      {company.contract_end_date ? ' · ' + prefix + dateText(company.contract_end_date) : ' · sem data de fim'}
+    </p>
+  );
+}
+
 export default function AdminCompanies() {
   const [companies, setCompanies] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -723,6 +739,7 @@ export default function AdminCompanies() {
                     <td className="px-6 py-4">
                       <p className="font-display font-medium text-text-primary">{c.short_name || c.name}</p>
                       {c.subdomain && <p className="text-[11px] font-mono text-text-muted">{c.subdomain}.{baseDomain}</p>}
+                      {c.plan_name && <ContractBadge company={c} />}
                     </td>
                     <td className="px-6 py-4 font-mono text-text-muted">{c.nif}</td>
                     <td className="px-6 py-4">

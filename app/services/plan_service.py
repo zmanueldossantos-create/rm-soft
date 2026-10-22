@@ -19,7 +19,8 @@ import calendar
 from sqlalchemy import func, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.plan_features import BILLING_TYPES, DEPLOYMENT_MODES, LIMITS, OPTIONS, TRIAL_DAYS, option_of_permission
+from app.core.plan_features import (BILLING_TYPES, DEPLOYMENT_MODES, GRACE_DAYS, LIMITS, OPTIONS, TRIAL_DAYS, WARN_DAYS,
+                                    option_of_permission)
 from app.models.plan import CompanyContract, Plan
 
 
@@ -316,3 +317,70 @@ async def plan_allows(db: AsyncSession, company_id: uuid.UUID, code: str) -> boo
     if option_of_permission(code) is None:
         return True
     return plan_allows_code(await company_options_or_none(db, company_id), code)
+
+
+# ------------------------------------------------------------------------------------------------------------ the end
+
+def contract_status(contract: CompanyContract | None, today: date | None = None) -> dict:
+    """Where the company is in its contract:
+      ATIVO       - nothing to say (no contract, no end, the lifetime licence, or more than 15 days left)
+      A_EXPIRAR   - 15 days or less before the end: the gestor is told
+      TOLERANCIA  - ended less than 7 days ago: everything still works, the gestor is told it stops soon
+      BLOQUEADO   - ended more than 7 days ago: read only (see everything, export the SAF-T, download the copies;
+                    no sale, no document, no change) until a new contract
+    The lifetime licence never ends; its maintenance can (maintenance_over: no more updates - nothing blocked)."""
+    today = today or date.today()
+    view = {"status": "ATIVO", "plan": None, "billing": None, "end_date": None, "days_left": None,
+            "grace_until": None, "read_only": False, "maintenance_until": None, "maintenance_over": False}
+    if contract is None:
+        return view
+    view.update(plan=contract.plan.name, billing=contract.billing, end_date=contract.end_date,
+                maintenance_until=contract.maintenance_until)
+    if contract.billing == "VITALICIA":
+        view["maintenance_over"] = contract.maintenance_until is not None and contract.maintenance_until < today
+        return view
+    if contract.end_date is None:
+        return view
+    grace_until = contract.end_date + timedelta(days=GRACE_DAYS)
+    view["grace_until"] = grace_until
+    if today <= contract.end_date:
+        days = (contract.end_date - today).days
+        view["days_left"] = days
+        if days < WARN_DAYS:
+            view["status"] = "A_EXPIRAR"
+    elif today <= grace_until:
+        view.update(status="TOLERANCIA", days_left=(grace_until - today).days)
+    else:
+        view.update(status="BLOQUEADO", read_only=True, days_left=0)
+    return view
+
+
+async def subscription(db: AsyncSession, company_id: uuid.UUID) -> dict:
+    return contract_status(await current_contract(db, company_id))
+
+
+async def statuses_by_company(db: AsyncSession) -> dict[uuid.UUID, dict]:
+    """Every company's contract status in one query - the platform's company list."""
+    rows = (await db.execute(select(CompanyContract).where(CompanyContract.is_current.is_(True)))).scalars().all()
+    return {row.company_id: contract_status(row) for row in rows}
+
+
+READ_ONLY_MESSAGE = ("O contrato desta empresa terminou: o sistema está só de leitura (consultar, exportar o SAF-T e "
+                     "descarregar as cópias continua possível). Para voltar a vender, contacte a RM SOFT.")
+
+# what a company in read only may still do (POST...): sign in, change its password, end a support access, a copy now
+_ALLOWED_WHEN_READ_ONLY = ("/api/v1/auth/login", "/api/v1/auth/refresh", "/api/v1/auth/me/password",
+                           "/api/v1/auth/support/", "/api/v1/company/me/backups")
+
+
+def allowed_when_read_only(method: str, path: str) -> bool:
+    return method in ("GET", "HEAD", "OPTIONS") or any(path.startswith(p) for p in _ALLOWED_WHEN_READ_ONLY)
+
+
+async def is_read_only(db: AsyncSession, company_id: uuid.UUID) -> bool:
+    """One small query: the current contract's dates only."""
+    row = (await db.execute(select(CompanyContract.billing, CompanyContract.end_date)
+                            .where(CompanyContract.company_id == company_id, CompanyContract.is_current.is_(True)))).first()
+    if row is None or row.billing == "VITALICIA" or row.end_date is None:
+        return False
+    return date.today() > row.end_date + timedelta(days=GRACE_DAYS)

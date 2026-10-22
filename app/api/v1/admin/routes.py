@@ -343,9 +343,15 @@ async def list_companies(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role("SUPER_ADMIN")),
 ):
-    """Lists all client companies on the platform."""
-    result = await db.execute(select(Company).order_by(Company.created_at.desc()))
-    return result.scalars().all()
+    """Lists all client companies on the platform - with their contract (plan, status, end)."""
+    from app.services.plan_service import statuses_by_company
+    companies = (await db.execute(select(Company).order_by(Company.created_at.desc()))).scalars().all()
+    statuses = await statuses_by_company(db)
+    for company in companies:
+        st = statuses.get(company.id)
+        if st:
+            company.plan_name, company.contract_status, company.contract_end_date = st["plan"], st["status"], st["end_date"]
+    return companies
 
 
 @router.patch("/companies/{company_id}", response_model=CompanyResponse)

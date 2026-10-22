@@ -13,6 +13,7 @@ import { useCan } from '../utils/permissions';
 import Footer from './Footer';
 import AssistantPanel, { readStored, writeStored } from './AssistantPanel';
 import HelpPanel from './HelpPanel';
+import SubscriptionBanner from './SubscriptionBanner';
 import { getAssistantStatus } from '../api/ai';
 
 // A square icon button of the top bar, its name shown below it on hover (keeps the bar narrow).
@@ -411,6 +412,7 @@ export default function Layout() {
       )}
 
       <div className={(support ? 'pt-[92px]' : 'pt-14') + ' pb-11 min-h-screen'}>
+        <SubscriptionBanner role={user?.role} />
         <Outlet />
       </div>
 

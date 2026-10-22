@@ -294,3 +294,18 @@ async def toggle_my_company_bank_account(
         return await toggle_bank_account(db, current_user.company_id, account_id)
     except BankAccountNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+# ---------- The company's contract, as its users see it (the banner: ending soon, ended, read only)
+
+from app.api.deps import get_current_user  # noqa: E402
+from app.services.plan_service import subscription  # noqa: E402
+
+
+@router.get("/me/subscription")
+async def read_my_subscription(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """The plan and where the company is in its contract - every user of the company (the cashier sees the read
+    only state too: the reason a sale is refused)."""
+    if current_user.company_id is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sem empresa")
+    return await subscription(db, current_user.company_id)

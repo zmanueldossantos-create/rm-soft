@@ -195,7 +195,65 @@ async def test_the_platform_screens(db, company_with_essentials):
             no_end = (await client.post(f"/api/v1/admin/companies/{company_id}/contract", headers=h, json={
                 "plan_id": plan_id, "billing": "ANUAL", "no_end": True})).json()
             assert no_end["current"]["end_date"] is None and len(no_end["history"]) == 2
+            listed = [c for c in (await client.get("/api/v1/admin/companies", headers=h)).json() if c["id"] == str(company_id)][0]
+            assert listed["plan_name"] == "Mini" and listed["contract_status"] == "ATIVO" and listed["contract_end_date"] is None
             plans = (await client.get("/api/v1/admin/plans", headers=h)).json()
             assert [p["companies"] for p in plans if p["id"] == plan_id] == [1]
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+
+# ---------------------------------------------------------------------------------------------------- P2: the end
+
+def _contract(billing="MENSAL", end=None, maintenance=None):
+    from types import SimpleNamespace
+    return SimpleNamespace(plan=SimpleNamespace(name="Mini"), billing=billing, end_date=end, maintenance_until=maintenance)
+
+
+def test_the_status_along_the_contract():
+    from app.services.plan_service import contract_status
+    end = date(2026, 11, 30)
+    assert contract_status(None)["status"] == "ATIVO"
+    assert contract_status(_contract(end=end), date(2026, 11, 15))["status"] == "ATIVO"  # 15 days left
+    soon = contract_status(_contract(end=end), date(2026, 11, 16))
+    assert soon["status"] == "A_EXPIRAR" and soon["days_left"] == 14 and not soon["read_only"]
+    assert contract_status(_contract(end=end), end)["days_left"] == 0
+    grace = contract_status(_contract(end=end), date(2026, 12, 1))
+    assert grace["status"] == "TOLERANCIA" and grace["days_left"] == 6 and grace["grace_until"] == date(2026, 12, 7)
+    assert contract_status(_contract(end=end), date(2026, 12, 7))["status"] == "TOLERANCIA"
+    over = contract_status(_contract(end=end), date(2026, 12, 8))
+    assert over["status"] == "BLOQUEADO" and over["read_only"]
+    assert contract_status(_contract(end=None), date(2030, 1, 1))["status"] == "ATIVO"  # sem data de fim
+    life = contract_status(_contract("VITALICIA", maintenance=date(2027, 10, 31)), date(2028, 1, 1))
+    assert life["status"] == "ATIVO" and not life["read_only"] and life["maintenance_over"]
+
+
+async def test_a_company_ended_long_ago_is_read_only(db, company_with_essentials):
+    ctx = company_with_essentials
+    company_id = ctx["company"].id
+    await seed_permission_catalog(db)
+    plan = await save_plan(db, None, {**PLAN, "limits": {}})
+    await set_contract(db, company_id, {"plan_id": plan.id, "billing": "MENSAL", "start_date": date(2020, 1, 1)})
+
+    async def same_session():
+        yield db
+    app.dependency_overrides[get_db] = same_session
+    try:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            gestor = {"Authorization": "Bearer " + create_access_token(
+                subject=str(ctx["gestor"].id), company_id=str(company_id), role="GESTOR")}
+            sub = (await client.get("/api/v1/company/me/subscription", headers=gestor)).json()
+            assert sub["status"] == "BLOQUEADO" and sub["read_only"] and sub["plan"] == "Mini"
+            refused = await client.post("/api/v1/establishments", json={"code": "L1", "name": "Loja 1"}, headers=gestor)
+            assert refused.status_code == 423 and "só de leitura" in refused.json()["detail"]
+            assert (await client.get("/api/v1/establishments", headers=gestor)).status_code == 200  # reading stays
+            assert (await client.get("/api/v1/saf-t/export", headers=gestor)).status_code != 423
+            copy = await client.post("/api/v1/company/me/backups", headers=gestor)  # a copy now stays possible
+            assert copy.status_code != 423
+
+            # a renewal opens it again at once
+            await set_contract(db, company_id, {"plan_id": plan.id, "billing": "MENSAL"})
+            again = await client.post("/api/v1/establishments", json={"code": "L1", "name": "Loja 1"}, headers=gestor)
+            assert again.status_code in (200, 201)
     finally:
         app.dependency_overrides.pop(get_db, None)

@@ -67,6 +67,8 @@ BILLING_TYPES: dict[str, tuple[str, int | None]] = {
     "VITALICIA": ("Vitalícia", None),
 }
 TRIAL_DAYS = 15
+WARN_DAYS = 15   # the gestor is told this many days before the end
+GRACE_DAYS = 7   # after the end, everything still works this many days; then read only
 DEPLOYMENT_MODES = {"SAAS": "SaaS (servidor RM SOFT)", "LOCAL": "Local (servidor do cliente)"}
 
 

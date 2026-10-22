@@ -215,6 +215,10 @@ class CompanyResponse(BaseModel):
     subdomain: str | None = None
     base_counts: dict[str, int] | None = None  # after a creation from a base file: what was copied (not stored)
     catalog_counts: dict[str, int] | None = None  # after a creation with the reference catalog: what it received
+    # its contract (the platform's list): plan, status ATIVO / A_EXPIRAR / TOLERANCIA / BLOQUEADO, end (not stored here)
+    plan_name: str | None = None
+    contract_status: str | None = None
+    contract_end_date: date | None = None
     name: str
     nif: str
     email: str

@@ -69,6 +69,8 @@ apiClient.interceptors.response.use(
 
     // the server's own troubles, shown once whatever the screen (the screen's message, the same text, is not repeated)
     if (!error.response && error.request) toast.error(SERVER_UNREACHABLE);
+    // a company whose contract ended: read only (the server's message says why and what still works)
+    else if (error.response?.status === 423) toast.error(error.response.data?.detail || 'O sistema está só de leitura');
     else if (error.response?.status >= 500) toast.error('Erro no servidor - tente de novo; se continuar, contacte o suporte RM SOFT');
 
     return Promise.reject(error);

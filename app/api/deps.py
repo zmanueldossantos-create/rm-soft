@@ -80,6 +80,7 @@ async def get_current_user(
                                 headers={"WWW-Authenticate": "Bearer"})
         user = found[0]
         current_user_id.set(user.id)  # what is done is recorded in the platform user's own name
+        await _refuse_when_read_only(request, db, user)
         return user
     result = await db.execute(select(User).where(User.id == uuid.UUID(user_id), User.is_active == True))
     user = result.scalar_one_or_none()
@@ -92,7 +93,20 @@ async def get_current_user(
                             headers={"WWW-Authenticate": "Bearer"})
 
     current_user_id.set(user.id)  # who makes this request: every document it creates records it
+    await _refuse_when_read_only(request, db, user)
     return user
+
+
+async def _refuse_when_read_only(request: Request, db: AsyncSession, user: User) -> None:
+    """A company whose contract ended more than 7 days ago is read only: any change is refused (423), whatever the
+    route - reading, the SAF-T export and the copies stay possible (plan_service.contract_status)."""
+    if user.company_id is None:
+        return
+    from app.services.plan_service import READ_ONLY_MESSAGE, allowed_when_read_only, is_read_only
+    if allowed_when_read_only(request.method, request.url.path):
+        return
+    if await is_read_only(db, user.company_id):
+        raise HTTPException(status_code=status.HTTP_423_LOCKED, detail=READ_ONLY_MESSAGE)
 
 
 def require_role(*allowed_roles: str):
