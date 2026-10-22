@@ -102,11 +102,11 @@ async def _refuse_when_read_only(request: Request, db: AsyncSession, user: User)
     route - reading, the SAF-T export and the copies stay possible (plan_service.contract_status)."""
     if user.company_id is None:
         return
-    from app.services.plan_service import READ_ONLY_MESSAGE, allowed_when_read_only, is_read_only
+    from app.services.plan_service import allowed_when_read_only, is_read_only, read_only_message
     if allowed_when_read_only(request.method, request.url.path):
         return
     if await is_read_only(db, user.company_id):
-        raise HTTPException(status_code=status.HTTP_423_LOCKED, detail=READ_ONLY_MESSAGE)
+        raise HTTPException(status_code=status.HTTP_423_LOCKED, detail=read_only_message())
 
 
 def require_role(*allowed_roles: str):

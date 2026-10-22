@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { FileSignature, Loader2, Save } from 'lucide-react';
+import { FileKey2, FileSignature, Loader2, Save } from 'lucide-react';
 import Select from './Select';
-import { getCompanyContract, getPlanCatalog, kz, limitText, listPlans, saveCompanyContract } from '../api/plans';
+import { generateLicense, getCompanyContract, getPlanCatalog, kz, limitText, listPlans, saveCompanyContract } from '../api/plans';
 import { extractErrorMessage } from '../utils/errors';
 import { useToastState } from './Toaster';
 import { toast } from '../store/toastStore';
@@ -38,7 +38,7 @@ function Field({ label, children, className = '' }) {
   );
 }
 
-export default function ContractPanel({ companyId, defaultMode = 'SAAS', onChanged }) {
+export default function ContractPanel({ companyId, defaultMode = 'SAAS', canSign = false, onChanged }) {
   const [catalog, setCatalog] = useState(null);
   const [plans, setPlans] = useState([]);
   const [view, setView] = useState(null);
@@ -94,6 +94,22 @@ export default function ContractPanel({ companyId, defaultMode = 'SAAS', onChang
       setError(extractErrorMessage(err, 'Não foi possível guardar o contrato'));
     } finally {
       setSaving(false);
+    }
+  }
+
+  // «Gerar licença» (a local installation's contract): the .lic file for the client's server showing this code
+  const [installCode, setInstallCode] = useState('');
+  const [generating, setGenerating] = useState(false);
+  async function makeLicense() {
+    setGenerating(true);
+    setError('');
+    try {
+      const name = await generateLicense(companyId, installCode);
+      toast.success('Licença gerada: ' + name + ' - envie o ficheiro ao cliente');
+    } catch (err) {
+      setError(extractErrorMessage(err, 'Não foi possível gerar a licença'));
+    } finally {
+      setGenerating(false);
     }
   }
 
@@ -157,6 +173,34 @@ export default function ContractPanel({ companyId, defaultMode = 'SAAS', onChang
           })}
         </div>
       </div>
+
+      {/* the licence of a local installation: made from the current contract */}
+      {current && current.deployment_mode === 'LOCAL' && (
+        <div className="border border-border rounded-lg p-4 flex flex-col gap-3">
+          <div>
+            <h4 className="text-[14px] font-semibold text-text-primary flex items-center gap-2"><FileKey2 size={16} className="text-accent" /> Licença do servidor do cliente</h4>
+            <p className="text-[12px] text-text-muted">
+              O ficheiro .lic do contrato atual, para o servidor que mostra este código (Definições da Empresa → Licença, no
+              servidor do cliente). Gere uma nova licença a cada renovação ou mudança de servidor.
+            </p>
+          </div>
+          {canSign ? (
+            <div className="flex items-center gap-3 flex-wrap">
+              <input value={installCode} onChange={(e) => setInstallCode(e.target.value.toUpperCase())} placeholder="Código de instalação (ex.: 3F2A-91C0-7B4E-D218)"
+                className={inputClass + ' max-w-[340px] tracking-wider'} />
+              <button type="button" onClick={makeLicense} disabled={generating || installCode.replace(/[^0-9A-F]/g, '').length !== 16}
+                className="flex items-center gap-2 bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-sm px-4 py-2.5 rounded-md cursor-pointer">
+                {generating ? <Loader2 size={16} className="animate-spin" /> : <FileKey2 size={16} />} Gerar licença
+              </button>
+            </div>
+          ) : (
+            <p className="text-[12px] text-amber-500 [.light_&]:text-amber-700">
+              Este servidor não tem a chave de licenças da RM SOFT: as licenças são geradas no servidor da plataforma
+              (configurado uma vez com python -m app.tools.license_keys).
+            </p>
+          )}
+        </div>
+      )}
 
       {/* a new contract */}
       <div className="border border-border rounded-lg p-4 flex flex-col gap-4">

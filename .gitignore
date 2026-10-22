@@ -51,3 +51,4 @@ patch_*.py
 # Segredos da instalação SaaS
 docker/saas/.env.saas
 docker/saas/backups/
+.rmsoft_installation

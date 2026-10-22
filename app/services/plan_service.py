@@ -205,9 +205,23 @@ def _effective_limits(plan: Plan, addons: dict) -> dict:
     return result
 
 
+def _license_mode() -> bool:
+    from app.core.config import get_settings
+    return get_settings().LICENSE_REQUIRED
+
+
+async def current_terms(db: AsyncSession, company_id: uuid.UUID):
+    """What the company's limits, options and dates are read from: its current contract - or, on a client's server
+    (LICENSE_REQUIRED), its licence file (license_service), the database's contracts being ignored there."""
+    if _license_mode():
+        from app.services.license_service import license_contract
+        return await license_contract(db, company_id)
+    return await current_contract(db, company_id)
+
+
 async def entitlements(db: AsyncSession, company_id: uuid.UUID) -> dict | None:
     """{"plan": name, "limits": {...}, "options": [...]} - None without a current contract (nothing limited)."""
-    contract = await current_contract(db, company_id)
+    contract = await current_terms(db, company_id)
     if contract is None:
         return None
     return {"plan": contract.plan.name, "limits": _effective_limits(contract.plan, contract.addons),
@@ -299,6 +313,8 @@ async def require_option(db: AsyncSession, company_id: uuid.UUID, option: str) -
 
 async def company_options_or_none(db: AsyncSession, company_id: uuid.UUID) -> set[str] | None:
     """The plan's options - None without a contract (everything allowed). One small query."""
+    if _license_mode():
+        return set((await current_terms(db, company_id)).plan.options or [])
     row = (await db.execute(select(Plan.options).join(CompanyContract, CompanyContract.plan_id == Plan.id)
                             .where(CompanyContract.company_id == company_id, CompanyContract.is_current.is_(True)))).first()
     return None if row is None else set(row[0] or [])
@@ -331,11 +347,13 @@ def contract_status(contract: CompanyContract | None, today: date | None = None)
     The lifetime licence never ends; its maintenance can (maintenance_over: no more updates - nothing blocked)."""
     today = today or date.today()
     view = {"status": "ATIVO", "plan": None, "billing": None, "end_date": None, "days_left": None,
-            "grace_until": None, "read_only": False, "maintenance_until": None, "maintenance_over": False}
+            "grace_until": None, "read_only": False, "maintenance_until": None, "maintenance_over": False,
+            "license_problem": None}
     if contract is None:
         return view
     view.update(plan=contract.plan.name, billing=contract.billing, end_date=contract.end_date,
-                maintenance_until=contract.maintenance_until)
+                maintenance_until=contract.maintenance_until,
+                license_problem=getattr(contract, "problem", None))  # a client's server without a valid licence
     if contract.billing == "VITALICIA":
         view["maintenance_over"] = contract.maintenance_until is not None and contract.maintenance_until < today
         return view
@@ -356,21 +374,33 @@ def contract_status(contract: CompanyContract | None, today: date | None = None)
 
 
 async def subscription(db: AsyncSession, company_id: uuid.UUID) -> dict:
-    return contract_status(await current_contract(db, company_id))
+    return contract_status(await current_terms(db, company_id))
 
 
 async def statuses_by_company(db: AsyncSession) -> dict[uuid.UUID, dict]:
     """Every company's contract status in one query - the platform's company list."""
+    if _license_mode():
+        from app.models.company import Company
+        ids = (await db.execute(select(Company.id))).scalars().all()
+        return {company_id: await subscription(db, company_id) for company_id in ids}
     rows = (await db.execute(select(CompanyContract).where(CompanyContract.is_current.is_(True)))).scalars().all()
     return {row.company_id: contract_status(row) for row in rows}
 
 
 READ_ONLY_MESSAGE = ("O contrato desta empresa terminou: o sistema está só de leitura (consultar, exportar o SAF-T e "
                      "descarregar as cópias continua possível). Para voltar a vender, contacte a RM SOFT.")
+LICENSE_READ_ONLY_MESSAGE = ("Esta instalação não tem licença válida: o sistema está só de leitura (consultar, exportar o "
+                             "SAF-T e descarregar as cópias continua possível). Importe a licença em Definições da "
+                             "Empresa → Licença, ou contacte a RM SOFT.")
+
+
+def read_only_message() -> str:
+    return LICENSE_READ_ONLY_MESSAGE if _license_mode() else READ_ONLY_MESSAGE
 
 # what a company in read only may still do (POST...): sign in, change its password, end a support access, a copy now
+# and import its new licence (a client's server)
 _ALLOWED_WHEN_READ_ONLY = ("/api/v1/auth/login", "/api/v1/auth/refresh", "/api/v1/auth/me/password",
-                           "/api/v1/auth/support/", "/api/v1/company/me/backups")
+                           "/api/v1/auth/support/", "/api/v1/company/me/backups", "/api/v1/company/me/license")
 
 
 def allowed_when_read_only(method: str, path: str) -> bool:
@@ -379,6 +409,8 @@ def allowed_when_read_only(method: str, path: str) -> bool:
 
 async def is_read_only(db: AsyncSession, company_id: uuid.UUID) -> bool:
     """One small query: the current contract's dates only."""
+    if _license_mode():
+        return (await subscription(db, company_id))["read_only"]
     row = (await db.execute(select(CompanyContract.billing, CompanyContract.end_date)
                             .where(CompanyContract.company_id == company_id, CompanyContract.is_current.is_(True)))).first()
     if row is None or row.billing == "VITALICIA" or row.end_date is None:

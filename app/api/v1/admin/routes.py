@@ -830,3 +830,52 @@ async def post_company_contract(company_id: uuid.UUID, payload: ContractRequest,
     except plan_service.PlanError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     return await _company_contract_view(db, company_id)
+
+
+# ---------------------------------------------------------------------------------------------- Licenças (local servers)
+
+from app.core.license import LicenseError, can_sign, installation_code  # noqa: E402
+from app.services import license_service  # noqa: E402
+
+
+class LicenseCodeRequest(BaseModel):
+    installation_code: str
+
+
+class LicenseContentRequest(BaseModel):
+    content: str
+
+
+@router.get("/license-info")
+async def get_license_info(current_user: User = Depends(require_role("SUPER_ADMIN"))):
+    """This server: does it need licences (a client's server), can it issue them (the RM SOFT platform), its code."""
+    from app.core.config import get_settings
+    return {"required": get_settings().LICENSE_REQUIRED, "can_sign": can_sign(), "installation_code": installation_code()}
+
+
+@router.post("/companies/{company_id}/license")
+async def post_generate_license(company_id: uuid.UUID, payload: LicenseCodeRequest, db: AsyncSession = Depends(get_db),
+                                current_user: User = Depends(require_role("SUPER_ADMIN"))):
+    """«Gerar licença»: the file of the company's current contract, for the client's server showing this code."""
+    try:
+        content, filename = await license_service.generate_license(db, company_id, payload.installation_code)
+    except LicenseError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    return Response(content=content, media_type="text/plain; charset=utf-8",
+                    headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+
+
+@router.get("/companies/{company_id}/license")
+async def get_company_license(company_id: uuid.UUID, db: AsyncSession = Depends(get_db),
+                              current_user: User = Depends(require_role("SUPER_ADMIN"))):
+    await get_company_or_raise(db, company_id)
+    return await license_service.license_view(db, company_id)
+
+
+@router.post("/companies/{company_id}/license/import")
+async def post_import_license(company_id: uuid.UUID, payload: LicenseContentRequest, db: AsyncSession = Depends(get_db),
+                              current_user: User = Depends(require_role("SUPER_ADMIN"))):
+    try:
+        return await license_service.import_license(db, company_id, payload.content, current_user.id)
+    except LicenseError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))

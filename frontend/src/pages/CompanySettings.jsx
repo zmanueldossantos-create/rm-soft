@@ -1,7 +1,7 @@
 import { API_ORIGIN } from '../api/config';
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Building2, Loader2, Save, Lock, Image, Upload, Store, Plus, Pencil, Landmark, X, Check, Trash2, FileStack, Sparkles, ChevronDown, CreditCard, Link2, Unlink, Users, Bot, Mail, LifeBuoy, DatabaseBackup } from 'lucide-react';
+import { Building2, Loader2, Save, Lock, Image, Upload, Store, Plus, Pencil, Landmark, X, Check, Trash2, FileStack, Sparkles, ChevronDown, CreditCard, Link2, Unlink, Users, Bot, Mail, LifeBuoy, DatabaseBackup, FileKey2 } from 'lucide-react';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
 import { getMySupportSessions, getMyCompany, updateMyCompanyContact, uploadMyCompanyLogo, removeMyCompanyLogo, getMyCompanyBankAccounts, addMyCompanyBankAccount, updateMyCompanyBankAccount, toggleMyCompanyBankAccountStatus } from '../api/company';
@@ -17,6 +17,8 @@ import { getMyCompanyAi } from '../api/ai';
 import AiCompanySettingsTab from '../components/AiCompanySettingsTab';
 import EmailSettingsTab from '../components/EmailSettingsTab';
 import CompanyBackupsPanel from '../components/CompanyBackupsPanel';
+import LicensePanel from '../components/LicensePanel';
+import { getMyLicense, importMyLicense } from '../api/plans';
 import SupportSessionsList from '../components/SupportSessionsList';
 import { listUsers } from '../api/users';
 import { listCashPointAssociations, assignUserToCashPoint, unassignUserFromCashPoint } from '../api/tesouraria';
@@ -72,6 +74,11 @@ export default function CompanySettings() {
   const [aiInfo, setAiInfo] = useState(null);
   useEffect(() => {
     getMyCompanyAi().then(setAiInfo).catch(() => setAiInfo(null));
+  }, []);
+  // The licence: its tab only on a client's server (LICENSE_REQUIRED)
+  const [licenseRequired, setLicenseRequired] = useState(false);
+  useEffect(() => {
+    getMyLicense().then((v) => setLicenseRequired(!!v.required)).catch(() => setLicenseRequired(false));
   }, []);
   // ?tab=series (from the Configuração inicial "Ir" buttons) opens that tab directly
   const [searchParams] = useSearchParams();
@@ -734,6 +741,7 @@ export default function CompanySettings() {
           ...(can('company:backup') ? [['copias', 'Cópias de segurança', DatabaseBackup]] : []),
           ...(can('company:manage') ? [['suporte', 'Acessos de suporte', LifeBuoy]] : []),
           ...(aiInfo?.ai_enabled ? [['ia', 'Assistente IA', Bot]] : []),
+          ...(licenseRequired ? [['licenca', 'Licença', FileKey2]] : []),
         ].map(([key, label, Icon]) => (
           <button
             key={key}
@@ -1108,6 +1116,7 @@ export default function CompanySettings() {
       {activeTab === 'suporte' && <SupportTab />}
 
       {activeTab === 'copias' && can('company:backup') && <CompanyBackupsPanel canManage={can('company:backup')} />}
+      {activeTab === 'licenca' && licenseRequired && <LicensePanel load={getMyLicense} save={importMyLicense} canImport={can('company:manage')} />}
 
       {activeTab === 'ia' && aiInfo?.ai_enabled && (
         <AiCompanySettingsTab info={aiInfo} onChange={setAiInfo} canManage={can('company:manage')} />

@@ -309,3 +309,31 @@ async def read_my_subscription(db: AsyncSession = Depends(get_db), current_user:
     if current_user.company_id is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sem empresa")
     return await subscription(db, current_user.company_id)
+
+
+# ---------- The licence of this server (a client's local installation)
+
+from app.core.license import LicenseError  # noqa: E402
+from app.services import license_service  # noqa: E402
+
+
+class LicenseImportRequest(BaseModel):
+    content: str
+
+
+@router.get("/me/license")
+async def read_my_license(db: AsyncSession = Depends(get_db), current_user: User = Depends(require_permission("company:view"))):
+    from app.core.config import get_settings
+    return {"required": get_settings().LICENSE_REQUIRED, **await license_service.license_view(db, current_user.company_id)}
+
+
+@router.post("/me/license")
+async def import_my_license(payload: LicenseImportRequest, db: AsyncSession = Depends(get_db),
+                            current_user: User = Depends(require_permission("company:manage"))):
+    """The gestor imports the licence file RM SOFT sent (a renewal...) - allowed even in read only."""
+    from app.core.config import get_settings
+    try:
+        view = await license_service.import_license(db, current_user.company_id, payload.content, current_user.id)
+    except LicenseError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    return {"required": get_settings().LICENSE_REQUIRED, **view}

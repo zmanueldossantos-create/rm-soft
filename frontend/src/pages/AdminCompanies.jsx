@@ -11,7 +11,8 @@ import RestoreCompanyModal from '../components/RestoreCompanyModal';
 import BackupsOverviewModal from '../components/BackupsOverviewModal';
 import CompanyBackupsPanel from '../components/CompanyBackupsPanel';
 import ContractPanel, { periodEnd, dateText } from '../components/ContractPanel';
-import { getCompanyContract, listPlans } from '../api/plans';
+import { getCompanyContract, getCompanyLicense, getLicenseInfo, importCompanyLicense, listPlans } from '../api/plans';
+import LicensePanel from '../components/LicensePanel';
 import SupportSessionsList from '../components/SupportSessionsList';
 import SetupChecklist from '../components/SetupChecklist';
 import { extractErrorMessage } from '../utils/errors';
@@ -215,6 +216,10 @@ export default function AdminCompanies() {
     currenciesApi.list().then((data) => setCurrencies(data.filter((c) => c.is_active))).catch(() => {});
     banksApi.list().then((data) => setBanks(data.filter((b) => b.is_active))).catch(() => {});
   }, []);
+
+  // Licenças: a client's server (licence required) shows the licence in Contrato; the platform can issue them
+  const [licenseInfo, setLicenseInfo] = useState({ required: false, can_sign: false });
+  useEffect(() => { getLicenseInfo().then(setLicenseInfo).catch(() => {}); }, []);
 
   // Planos: the plans to choose from (a new company), and how many modules the plan allows (null: no limit)
   const [plans, setPlans] = useState([]);
@@ -799,7 +804,7 @@ export default function AdminCompanies() {
               // with (Base: counts follow the sectors and the regime), who uses it, then the optional bank details
               ['dados', 'Dados da Empresa'],
               ['modulos', editingId ? 'Módulos' : 'Plano e módulos'],
-              ...(editingId ? [['contrato', 'Contrato']] : []),
+              ...(editingId ? [['contrato', licenseInfo.required ? 'Licença' : 'Contrato']] : []),
               ...(editingId ? [] : [['base', 'Base']]),
               ['gestor', 'Conta do Gestor'],
               ['bancarias', 'Coordenadas Bancárias'],
@@ -1191,8 +1196,12 @@ export default function AdminCompanies() {
 
           {activeTab === 'contrato' && editingId && (
             <div className="min-h-[420px]">
-              <ContractPanel companyId={editingId} defaultMode={deploymentMode === 'saas' ? 'SAAS' : 'LOCAL'}
-                onChanged={(v) => setEditModulesLimit(v.limits ? v.limits.max_modules ?? null : null)} />
+              {licenseInfo.required ? (
+                <LicensePanel load={() => getCompanyLicense(editingId)} save={(content) => importCompanyLicense(editingId, content)} />
+              ) : (
+                <ContractPanel companyId={editingId} defaultMode={deploymentMode === 'saas' ? 'SAAS' : 'LOCAL'} canSign={licenseInfo.can_sign}
+                  onChanged={(v) => setEditModulesLimit(v.limits ? v.limits.max_modules ?? null : null)} />
+              )}
             </div>
           )}
 

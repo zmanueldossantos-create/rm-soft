@@ -10,7 +10,7 @@ import uuid
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Integer, Numeric, String, func, text
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Integer, Numeric, String, Text, func, text
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -61,3 +61,19 @@ class CompanyContract(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     plan: Mapped[Plan] = relationship(lazy="selectin")
+
+
+class CompanyLicense(Base):
+    """A licence file imported on a client's server (app/core/license.py): kept as it came - checked again each time it
+    is read, so a changed row is worth nothing. The previous ones stay as history."""
+    __tablename__ = "company_licenses"
+    __table_args__ = (
+        Index("uq_company_license_current", "company_id", unique=True, postgresql_where=text("is_current")),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    company_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("companies.id"), nullable=False, index=True)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    is_current: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
+    imported_by_user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    imported_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

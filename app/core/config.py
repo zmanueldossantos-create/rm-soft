@@ -49,8 +49,13 @@ class Settings(BaseSettings):
     BACKUP_DIR: str = "backups"
     BACKUP_LOOP: bool = True
 
-    # --- Licence (mode local uniquement) ---
-    LICENSE_NIF: str | None = None
+    # --- Licence (app/core/license.py) ---
+    # Serveur d un client (installation locale) : LICENSE_REQUIRED=true - le plan, les limites et les dates viennent du
+    # fichier de licence signe par RM SOFT (sans licence valide : 7 jours, puis lecture seule). False : le contrat de la
+    # base (la plateforme, le developpement).
+    LICENSE_REQUIRED: bool = False
+    # La plateforme RM SOFT seulement : la cle privee qui signe les licences (python -m app.tools.license_keys).
+    LICENSE_PRIVATE_KEY: str | None = None
 
     @property
     def is_saas(self) -> bool:

@@ -20,11 +20,24 @@ export default function SubscriptionBanner({ role }) {
     const load = () => apiClient.get('/company/me/subscription').then((r) => setSub(r.data)).catch(() => {});
     load();
     const timer = setInterval(load, 30 * 60 * 1000);
-    return () => clearInterval(timer);
+    window.addEventListener('subscription-changed', load); // a licence just imported: read again at once
+    return () => { clearInterval(timer); window.removeEventListener('subscription-changed', load); };
   }, [role]);
 
   if (!sub) return null;
   const gestor = role === 'GESTOR';
+
+  if (sub.license_problem) { // a client's server without a valid licence
+    if (!sub.read_only && !gestor) return null;
+    return (
+      <Bar tone="danger" icon={sub.read_only ? Lock : AlertTriangle}>
+        <b>{sub.read_only ? 'Sem licença válida - o sistema está só de leitura.' : 'Sem licença válida.'}</b>
+        {' '}{sub.license_problem}.{' '}
+        {sub.read_only ? '' : 'Tudo funciona até ' + dateText(sub.grace_until) + '; depois, só leitura. '}
+        {gestor ? 'Importe a licença em Definições da Empresa → Licença.' : 'Avise o gestor.'}
+      </Bar>
+    );
+  }
 
   if (sub.status === 'BLOQUEADO') {
     return (
