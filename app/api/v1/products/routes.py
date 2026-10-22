@@ -11,6 +11,8 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from pydantic import BaseModel
+from app.services.reference_catalog_service import ReferenceCatalogError, company_catalog, lookup_barcode, take_for_company
 from app.api.deps import require_permission
 from app.schemas.product_sale_unit import ProductSaleUnitRequest, ProductSaleUnitResponse
 from app.services.product_sale_unit_service import (
@@ -349,3 +351,42 @@ async def get_product_cost_history(
         return await get_cost_history(db, current_user.company_id, product_id, date_from, date_to)
     except CostHistoryProductNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+# ---------- Catálogo de referência: an existing company picks its products (reference_catalog_service)
+
+class ReferenceTakeRequest(BaseModel):
+    ids: list[uuid.UUID]
+
+
+@router.get("/reference-catalog/lookup")
+async def lookup_reference_barcode(
+    barcode: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("products:manage")),
+):
+    """«Novo produto»: the reference catalog's product of this barcode (or null)."""
+    return await lookup_barcode(db, current_user.company_id, barcode)
+
+
+@router.get("/reference-catalog")
+async def get_company_reference_catalog(
+    q: str = "", sector: str | None = None, mine: bool = True, limit: int = 100, offset: int = 0,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("products:manage")),
+):
+    """«Importar do catálogo»: the reference products, those the company has already marked."""
+    return await company_catalog(db, current_user.company_id, q, sector, mine, min(max(limit, 1), 500), max(offset, 0))
+
+
+@router.post("/reference-catalog/take")
+async def take_reference_products_route(
+    payload: ReferenceTakeRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("products:manage")),
+):
+    """The chosen reference products become the company's articles (its VAT, stock 0, without price off the Caixa)."""
+    try:
+        return await take_for_company(db, current_user.company_id, payload.ids)
+    except ReferenceCatalogError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))

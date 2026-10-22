@@ -64,3 +64,19 @@ export async function getCostHistory(productId, filters = {}) {
   const res = await apiClient.get('/products/' + productId + '/cost-history', { params });
   return res.data;
 }
+
+// Catálogo de referência, from a company: a barcode's product, the list to pick from, and taking the chosen ones
+export async function lookupReferenceBarcode(barcode) {
+  const res = await apiClient.get('/products/reference-catalog/lookup', { params: { barcode } });
+  return res.data;
+}
+
+export async function listCompanyReferenceCatalog({ q = '', sector = null, mine = true, offset = 0, limit = 100 } = {}) {
+  const res = await apiClient.get('/products/reference-catalog', { params: { q, sector: sector || undefined, mine, offset, limit } });
+  return res.data;
+}
+
+export async function takeReferenceProducts(ids) {
+  const res = await apiClient.post('/products/reference-catalog/take', { ids });
+  return res.data;
+}

@@ -5,7 +5,7 @@ import VatReclassify from '../components/VatReclassify';
 import ExemptionMotiveField from '../components/ExemptionMotiveField';
 import { getPharmacyContext, createPharmaceuticalForm, DISPENSING_REGIMES, medicineSearchText, medicineSummary } from '../api/pharmacy';
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { Package, Plus, Loader2, Search, Pencil, Barcode, Scale, Upload, X, Pill, Snowflake } from 'lucide-react';
+import { Package, Plus, Loader2, Search, Pencil, Barcode, Scale, Upload, X, Pill, Snowflake, BookOpen } from 'lucide-react';
 import Modal from '../components/Modal';
 import CostHistory from '../components/CostHistory';
 
@@ -18,6 +18,8 @@ import { unitsApi, withholdingTaxesApi, vatCodesApi } from '../api/catalogs';
 import { extractErrorMessage } from '../utils/errors';
 import { useToastState } from '../components/Toaster';
 import { toast } from '../store/toastStore';
+import ReferencePickerModal from '../components/ReferencePickerModal';
+import { lookupReferenceBarcode, takeReferenceProducts } from '../api/products';
 
 function ToggleSwitch({ checked, onChange, disabled }) {
   const trackClass = 'relative w-10 h-5.5 rounded-full transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ' + (checked ? 'bg-success' : 'bg-border');
@@ -104,6 +106,7 @@ export default function Products() {
   const [categoryFormError, setCategoryFormError] = useToastState('error');
 
   async function loadData() {
+    let loaded = [];
     setLoading(true);
     setError('');
     try {
@@ -111,6 +114,7 @@ export default function Products() {
         listProducts(), listVatRates(), listProductCategories(), unitsApi.list(), vatCodesApi.list(),
       ]);
       setProducts(productsData.filter((p) => !p.is_raw_material));
+      loaded = productsData;
       setVatRates(vatData);
       setCategories(categoriesData.filter((c) => c.is_active));
       setUnits(unitsData.filter((u) => u.is_active));
@@ -119,6 +123,32 @@ export default function Products() {
       setError(extractErrorMessage(err, 'Erro ao carregar produtos'));
     } finally {
       setLoading(false);
+    }
+    return loaded;
+  }
+
+  // Catálogo de referência: «Importar do catálogo», and a new product's barcode the catalog knows
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [referenceHit, setReferenceHit] = useState(null);
+  const [takingHit, setTakingHit] = useState(false);
+  async function checkReferenceBarcode() {
+    const code = (form.barcode || '').trim();
+    if (editingId || !code) { setReferenceHit(null); return; }
+    try { setReferenceHit(await lookupReferenceBarcode(code)); } catch { setReferenceHit(null); }
+  }
+  async function useReferenceHit() {
+    setTakingHit(true);
+    try {
+      const result = await takeReferenceProducts([referenceHit.id]);
+      const fresh = await loadData();
+      const created = fresh.find((p) => p.id === result.product_ids[0]);
+      toast.success('«' + referenceHit.name + '» criado a partir do catálogo' + (result.sem_preco ? ' - defina o preço' : ''));
+      setReferenceHit(null);
+      if (created) openEditModal(created); else closeModal();  // straight to its sheet: the price, the details
+    } catch (err) {
+      setFormError(extractErrorMessage(err, 'Não foi possível usar o catálogo'));
+    } finally {
+      setTakingHit(false);
     }
   }
 
@@ -151,6 +181,7 @@ export default function Products() {
     setProductTab('geral');
     setForm({ ...emptyForm });
     setFormError('');
+    setReferenceHit(null);
     setModalOpen(true);
   }
 
@@ -392,6 +423,14 @@ export default function Products() {
         )}
         <div className="flex-1" />
         <button
+          type="button"
+          onClick={() => setPickerOpen(true)}
+          className="flex items-center gap-2 border border-border hover:border-accent text-text-primary font-semibold text-sm px-4 py-2.5 rounded-md transition-colors cursor-pointer"
+        >
+          <BookOpen size={16} />
+          Importar do catálogo
+        </button>
+        <button
           onClick={openCreateModal}
           disabled={vatRates.length === 0}
           className="flex items-center gap-2 bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-sm px-4 py-2.5 rounded-md transition-colors cursor-pointer"
@@ -549,7 +588,26 @@ export default function Products() {
               </div>
             </Field>
             <Field label="Código de barras">
-              <input value={form.barcode} onChange={(e) => updateField('barcode', e.target.value)} className={inputClass} />
+              <input value={form.barcode} onChange={(e) => { updateField('barcode', e.target.value); setReferenceHit(null); }}
+                onBlur={checkReferenceBarcode}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); checkReferenceBarcode(); } }}
+                className={inputClass} />
+              {referenceHit && (
+                referenceHit.owned ? (
+                  <p className="text-[12px] text-amber-500 [.light_&]:text-amber-700 mt-1.5">Já tem «{referenceHit.name}» com este código de barras.</p>
+                ) : (
+                  <div className="mt-1.5 flex flex-col gap-1.5 border border-accent/50 bg-accent/5 rounded-md px-3 py-2">
+                    <span className="text-[12px] text-text-primary flex items-start gap-1.5">
+                      <BookOpen size={13} className="text-accent shrink-0 mt-0.5" />
+                      <span>No catálogo: <b>{referenceHit.name}</b>{referenceHit.units.length ? ' · ' + referenceHit.units.length + (referenceHit.units.length === 1 ? ' embalagem' : ' embalagens') : ''}{referenceHit.price == null ? ' · sem preço' : ''}</span>
+                    </span>
+                    <button type="button" onClick={useReferenceHit} disabled={takingHit}
+                      className="self-start text-[12px] font-semibold text-accent hover:underline cursor-pointer disabled:opacity-50">
+                      {takingHit ? 'A criar...' : 'Usar o catálogo (com as embalagens) →'}
+                    </button>
+                  </div>
+                )
+              )}
             </Field>
             <Field label="Unidade base *">
               <Select value={form.unitOfMeasureId} onChange={(v) => updateField('unitOfMeasureId', v)} options={units.map((u) => ({ value: u.id, label: u.code + ' - ' + u.name }))} placeholder="Selecionar" />
@@ -705,6 +763,7 @@ export default function Products() {
           </button>
         </form>
       </Modal>
+      <ReferencePickerModal open={pickerOpen} onClose={() => setPickerOpen(false)} units={units} onTaken={() => loadData()} />
     </main>
   );
 }

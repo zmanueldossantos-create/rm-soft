@@ -336,7 +336,34 @@ async def catalog_offer(db: AsyncSession, module_ids: list) -> dict:
 
 
 async def take_reference_catalog(db: AsyncSession, company) -> dict:
-    """The new company receives the reference catalog of its sectors, in the creation's transaction (no commit):
+    """The new company receives the reference catalog of its sectors (see take_reference_products) - no commit."""
+    from app.models.company_module import CompanyModule
+    module_ids = (await db.execute(select(CompanyModule.module_id).where(CompanyModule.company_id == company.id))).scalars().all()
+    sectors = await sectors_of_modules(db, list(module_ids))
+    refs = (await db.execute(_for_sectors(sectors).order_by(ReferenceProduct.name))).scalars().all()
+    counts, _ = await take_reference_products(db, company, refs)
+    return counts
+
+
+async def company_barcodes(db: AsyncSession, company_id) -> tuple[set, set]:
+    """The barcodes a company already reads (its products' and their packs'), and its products' names (lowercase)."""
+    from app.models.product import Product
+    from app.models.product_sale_unit import ProductSaleUnit
+    rows = (await db.execute(select(Product.barcode, Product.name).where(Product.company_id == company_id))).all()
+    packs = (await db.execute(select(ProductSaleUnit.barcode).where(
+        ProductSaleUnit.company_id == company_id, ProductSaleUnit.barcode.is_not(None)))).scalars().all()
+    return {r.barcode for r in rows if r.barcode} | set(packs), {r.name.lower() for r in rows}
+
+
+def already_owned(ref: ReferenceProduct, barcodes: set, names: set) -> bool:
+    """The company has it: one of its barcodes (the product's or a pack's) is read already, or - without barcode - a
+    product of that name."""
+    codes = {ref.barcode, *(u.barcode for u in ref.units)} - {None}
+    return bool(codes & barcodes) if codes else ref.name.lower() in names
+
+
+async def take_reference_products(db: AsyncSession, company, refs) -> tuple[dict, list]:
+    """These reference products become the company's own articles (no commit):
     each product becomes its own article - stock 0, its category, its sale units - with THE company's VAT:
     - the product's nature (NOR / RED / ISE) gives the company's rate of that category, when its regime allows it;
     - a regime imposing a motive (M00, M04) gives its exempt rate and that motive, unless the product's own motive is
@@ -344,8 +371,8 @@ async def take_reference_catalog(db: AsyncSession, company) -> dict:
     - otherwise the product is taken with the rate of its category, inactive: the reclassification banner shows it
       and it is never sold before (vat_rule_service).
     Without price: price 0, off the Caixa and never sold until the gestor sets it (awaiting_price).
-    A product the company already has (same barcode, else same name) is skipped."""
-    from app.models.company_module import CompanyModule
+    A product the company already has (one of its barcodes, else its name) is skipped. Returns the counts and the
+    new articles' ids."""
     from app.models.fiscal_regime import FiscalRegime
     from app.models.legal_vat_rate import LegalVatRate
     from app.models.product import Product, ProductType
@@ -353,8 +380,6 @@ async def take_reference_catalog(db: AsyncSession, company) -> dict:
     from app.models.product_sale_unit import ProductSaleUnit
     from app.models.vat import VAT
 
-    module_ids = (await db.execute(select(CompanyModule.module_id).where(CompanyModule.company_id == company.id))).scalars().all()
-    sectors = await sectors_of_modules(db, list(module_ids))
     regime = await db.get(FiscalRegime, company.fiscal_regime_id) if company.fiscal_regime_id else None
     rates = {}
     for vat in (await db.execute(select(VAT).where(VAT.company_id == company.id))).scalars().all():
@@ -389,17 +414,16 @@ async def take_reference_catalog(db: AsyncSession, company) -> dict:
             return rates["ISE"].id, product.exemption_id if product.exemption_id in kept else imposed, False
         return (await rate_of(product.tax_category)).id, product.exemption_id, True
 
-    existing = (await db.execute(select(Product.code, Product.barcode, Product.name).where(Product.company_id == company.id))).all()
-    codes = {r.code for r in existing}
-    barcodes = {r.barcode for r in existing if r.barcode}
-    names = {r.name.lower() for r in existing}
+    codes = set((await db.execute(select(Product.code).where(Product.company_id == company.id))).scalars().all())
+    barcodes, names = await company_barcodes(db, company.id)
     categories = {c.name.lower(): c.id for c in (await db.execute(
         select(ProductCategory).where(ProductCategory.company_id == company.id))).scalars().all()}
 
     counts = {"artigos": 0, "sem_preco": 0, "a_rever": 0, "unidades_de_venda": 0, "categorias": 0}
     serial = 0
-    for ref in (await db.execute(_for_sectors(sectors).order_by(ReferenceProduct.name))).scalars().all():
-        if (ref.barcode and ref.barcode in barcodes) or (not ref.barcode and ref.name.lower() in names):
+    created = []
+    for ref in refs:
+        if already_owned(ref, barcodes, names):
             continue
         category_id = None
         if ref.category:
@@ -428,11 +452,79 @@ async def take_reference_catalog(db: AsyncSession, company) -> dict:
             db.add(ProductSaleUnit(company_id=company.id, product_id=product.id, unit_of_measure_id=unit.unit_of_measure_id,
                                    factor=unit.factor, price=unit_price, barcode=unit.barcode))
             counts["unidades_de_venda"] += 1
+        created.append(product.id)
         counts["artigos"] += 1
         counts["sem_preco"] += no_price
         counts["a_rever"] += review
-        if ref.barcode:
-            barcodes.add(ref.barcode)
+        barcodes.update({ref.barcode, *(u.barcode for u in ref.units)} - {None})
         names.add(ref.name.lower())
     await db.flush()
-    return counts
+    return counts, created
+
+
+# ------------------------------------------------------------------------- an existing company picks from the catalog
+
+def company_item_view(ref: ReferenceProduct, owned: bool) -> dict:
+    return {**product_view(ref), "owned": owned}
+
+
+async def _company(db: AsyncSession, company_id):
+    from app.models.company import Company
+    return await db.get(Company, company_id)
+
+
+async def company_catalog(db: AsyncSession, company_id, q: str = "", sector: str | None = None, mine: bool = True,
+                          limit: int = 100, offset: int = 0) -> dict:
+    """Artigos > «Importar do catálogo»: the active reference products - by default those of the company's sectors and
+    of every sector («mine») - each marked when the company has it already."""
+    from app.models.company_module import CompanyModule
+    module_ids = (await db.execute(select(CompanyModule.module_id).where(CompanyModule.company_id == company_id))).scalars().all()
+    sectors = await sectors_of_modules(db, list(module_ids))
+    query = _for_sectors(sectors) if mine and not sector else select(ReferenceProduct).where(ReferenceProduct.is_active.is_(True))
+    term = (q or "").strip()
+    if term:
+        like = f"%{term.lower()}%"
+        query = query.where(or_(
+            func.lower(ReferenceProduct.name).like(like), ReferenceProduct.barcode == term,
+            func.lower(ReferenceProduct.category).like(like),
+            ReferenceProduct.id.in_(select(ReferenceProductUnit.reference_product_id).where(ReferenceProductUnit.barcode == term)),
+        ))
+    if sector == GENERAL:
+        query = query.where(func.cardinality(ReferenceProduct.sectors) == 0)
+    elif sector:
+        query = query.where(ReferenceProduct.sectors.any(sector))
+    total = (await db.execute(select(func.count()).select_from(query.subquery()))).scalar_one()
+    rows = (await db.execute(query.order_by(func.lower(ReferenceProduct.name)).limit(limit).offset(offset))).scalars().all()
+    barcodes, names = await company_barcodes(db, company_id)
+    names_of = {s["code"]: s["name"] for s in catalog_sectors()}
+    return {"total": total, "my_sectors": [{"code": s, "name": names_of.get(s, s)} for s in sectors],
+            "sectors": catalog_sectors(),
+            "items": [company_item_view(r, already_owned(r, barcodes, names)) for r in rows]}
+
+
+async def lookup_barcode(db: AsyncSession, company_id, barcode: str) -> dict | None:
+    """Artigos > «Novo produto»: a barcode typed or scanned that the reference catalog knows (the product's own, or one
+    of its packs')."""
+    code = (barcode or "").strip()
+    if not code:
+        return None
+    ref = (await db.execute(select(ReferenceProduct).where(ReferenceProduct.is_active.is_(True), or_(
+        ReferenceProduct.barcode == code,
+        ReferenceProduct.id.in_(select(ReferenceProductUnit.reference_product_id).where(ReferenceProductUnit.barcode == code)),
+    )))).scalars().first()
+    if ref is None:
+        return None
+    barcodes, names = await company_barcodes(db, company_id)
+    return company_item_view(ref, already_owned(ref, barcodes, names))
+
+
+async def take_for_company(db: AsyncSession, company_id, ids: list) -> dict:
+    """The chosen reference products become the company's articles - the same rules as at its creation (its VAT, stock
+    0, without price off the Caixa); the ones it has already are skipped."""
+    if not ids:
+        raise ReferenceCatalogError("Escolha pelo menos um produto do catálogo")
+    refs = (await db.execute(select(ReferenceProduct).where(ReferenceProduct.id.in_(ids), ReferenceProduct.is_active.is_(True))
+                             .order_by(ReferenceProduct.name))).scalars().all()
+    counts, created = await take_reference_products(db, await _company(db, company_id), refs)
+    await db.commit()
+    return {**counts, "ignorados": len(refs) - counts["artigos"], "product_ids": [str(i) for i in created]}

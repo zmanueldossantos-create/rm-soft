@@ -306,6 +306,10 @@ PAGES = [
             "Marque «Gerido por stocks» para controlar as quantidades; «Gerido por lotes» e «Gerido por validade» para "
             "seguir lotes e datas de validade.",
             "Clique em «Criar produto». O separador «Histórico do custo» mostra a evolução do custo médio.",
+            "«Importar do catálogo»: os produtos que as lojas do seu setor vendem - marque os que quer; entram com stock a "
+            "zero, as embalagens e o IVA do seu regime. Os que já tem aparecem marcados «já tem».",
+            "No «Novo produto», escreva ou leia o código de barras: se o catálogo de referência o conhece, «Usar o "
+            "catálogo» cria o produto com as embalagens e abre a ficha para definir o preço.",
             "«Sem preço» (botão laranja): os produtos recebidos do catálogo de referência ainda sem preço - fora da Caixa "
             "e nunca vendidos até definir o preço; ao guardar um preço, ficam à venda.",
         ],

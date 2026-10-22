@@ -74,12 +74,12 @@ async def catalog(db):
     return {"regimes": {k: r.id for k, r in regimes.items()}, "modules": modules, "motives": motives}
 
 
-async def _new(db, regime_id, module_codes, modules):
+async def _new(db, regime_id, module_codes, modules, reference_catalog=True):
     n = uuid.uuid4().int % 10**9
     return await create_company(
         db, name=f"Loja {n}", nif=f"5{n:09d}", email=f"l{n}@t.ao", phone_number=f"+2449{n % 10**8:08d}",
         gestor_full_name="Gestor", gestor_phone_number=f"+2449{(n + 3) % 10**8:08d}", gestor_password="Teste@2026",
-        fiscal_regime_id=regime_id, module_ids=[modules[c] for c in module_codes], reference_catalog=True)
+        fiscal_regime_id=regime_id, module_ids=[modules[c] for c in module_codes], reference_catalog=reference_catalog)
 
 
 async def test_a_shop_receives_its_sectors_products_with_its_vat(db, catalog):
@@ -153,3 +153,21 @@ async def test_the_packs_follow_the_unit_price_unless_priced_on_their_own(db, ca
     await db.commit()
     await price(130)
     assert float(pack.price) == 650  # kept
+
+
+async def test_an_existing_shop_picks_from_the_catalog(db, catalog):
+    from app.services.reference_catalog_service import company_catalog, lookup_barcode, take_for_company
+    shop = await _new(db, catalog["regimes"]["geral"], ["COMERCIO"], catalog["modules"], reference_catalog=False)
+    offer = await company_catalog(db, shop.id)  # its sectors and every sector: eggs, water - not the bar's cement
+    assert {i["name"] for i in offer["items"]} == {"Água 1,5L", "Ovos frescos"} and not any(i["owned"] for i in offer["items"])
+    assert {i["name"] for i in (await company_catalog(db, shop.id, mine=False))["items"]} >= {"Cimento", "Pão de forma"}
+
+    found = await lookup_barcode(db, shop.id, "5602")  # a pack's barcode finds its product
+    assert (found["name"], found["owned"]) == ("Ovos frescos", False)
+    assert await lookup_barcode(db, shop.id, "999") is None
+
+    taken = await take_for_company(db, shop.id, [found["id"]])
+    assert (taken["artigos"], taken["sem_preco"], taken["ignorados"], len(taken["product_ids"])) == (1, 1, 0, 1)
+    assert (await lookup_barcode(db, shop.id, "5601"))["owned"] is True
+    again = await take_for_company(db, shop.id, [found["id"]])
+    assert (again["artigos"], again["ignorados"]) == (0, 1)  # never twice
