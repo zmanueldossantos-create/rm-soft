@@ -103,7 +103,7 @@ async def shared_sale(
     (the patient's document - None when the insurer pays everything, the insurer's Fatura), both committed.
     """
     from app.services import invoice_service
-    from app.workers.agt_worker import submit_invoice_to_agt
+    from app.services.agt_queue import queue_for_agt
 
     insurer = await get_insurer(db, company_id, insurance.get("insurer_id"))
     card = " ".join((insurance.get("card_number") or "").split())
@@ -162,7 +162,7 @@ async def shared_sale(
     for invoice in (insurer_invoice, patient_invoice):
         if invoice is not None:
             await db.refresh(invoice)
-            submit_invoice_to_agt.delay(str(invoice.id))
+            await queue_for_agt(db, invoice)
     return patient_invoice, insurer_invoice
 
 

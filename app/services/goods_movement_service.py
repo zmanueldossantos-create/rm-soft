@@ -313,7 +313,7 @@ async def invoice_goods_movements(db: AsyncSession, company_id: uuid.UUID, movem
     """
     from app.models.invoice import Invoice
     from app.services import invoice_service
-    from app.workers.agt_worker import submit_invoice_to_agt
+    from app.services.agt_queue import queue_for_agt
     ids = list(dict.fromkeys(movement_ids or []))
     if not ids:
         raise GoodsMovementError("Escolha as guias de remessa a faturar")
@@ -362,7 +362,7 @@ async def invoice_goods_movements(db: AsyncSession, company_id: uuid.UUID, movem
         m.invoice_id = invoice.id
     await db.commit()
     invoice = (await db.execute(select(Invoice).where(Invoice.id == invoice.id))).scalar_one()
-    submit_invoice_to_agt.delay(str(invoice.id))  # a fiscal invoice: sent to the AGT like any other
+    await queue_for_agt(db, invoice)  # a fiscal invoice: sent to the AGT like any other
     return invoice
 
 

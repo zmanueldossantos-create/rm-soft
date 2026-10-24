@@ -30,7 +30,16 @@ class Settings(BaseSettings):
     DATABASE_URL: str
 
     # --- Redis / Celery ---
-    REDIS_URL: str
+    # Empty on the Windows installation (no Redis there: AGT_QUEUE=base).
+    REDIS_URL: str | None = None
+
+    # --- File d'envoi AGT ---
+    # celery : Celery + Redis (Docker, SaaS). base : la base de donnees est la file - une boucle du serveur envoie les
+    # documents dus et reessaie (installation Windows RMSOFT-Setup.exe, sans Redis). Voir app/services/agt_queue.py.
+    AGT_QUEUE: str = "celery"
+
+    # --- Ecrans servis par le backend lui-meme (installation Windows, sans Caddy) : le dossier du build du frontend ---
+    FRONTEND_DIR: str | None = None
 
     # --- Authentification JWT (connexion par numero de telephone) ---
     JWT_SECRET_KEY: str

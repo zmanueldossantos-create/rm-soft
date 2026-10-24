@@ -56,7 +56,7 @@ from app.services.fiscal_period_service import ensure_period_open, PeriodClosedE
 from app.services.stock_service import deduct_stock_for_sale, InsufficientStockError, return_stock_for_credit_note
 from app.models.stock_movement import MovementType, StockMovement
 from app.services.document_series_service import get_or_create_current_series, get_next_number, SeriesNotFoundError
-from app.workers.agt_worker import submit_invoice_to_agt
+from app.services.agt_queue import queue_for_agt
 
 # Maps the (legacy) InvoiceType enum to the platform DocumentType catalog code -
 # see decision on integrating DocumentSeries into invoicing.
@@ -614,7 +614,7 @@ async def create_invoice(
     # Trigger AGT submission asynchronously - section 4.2 requires submission
     # within 30s of creation, via a Celery task fired immediately.
     if rules.sent_to_agt:
-        submit_invoice_to_agt.delay(str(invoice.id))
+        await queue_for_agt(db, invoice)
 
     return invoice
 
@@ -1194,7 +1194,7 @@ async def create_credit_note(
     await db.refresh(credit_note)
 
     if rules.sent_to_agt:
-        submit_invoice_to_agt.delay(str(credit_note.id))
+        await queue_for_agt(db, credit_note)
 
     return credit_note
 
@@ -1429,7 +1429,7 @@ async def create_debit_note(
     await db.refresh(debit_note)
 
     if rules.sent_to_agt:
-        submit_invoice_to_agt.delay(str(debit_note.id))
+        await queue_for_agt(db, debit_note)
 
     return debit_note
 
@@ -1602,7 +1602,7 @@ async def create_receipt(
     await db.refresh(receipt)
 
     if rules.sent_to_agt:
-        submit_invoice_to_agt.delay(str(receipt.id))
+        await queue_for_agt(db, receipt)
 
     return receipt
 
@@ -1627,7 +1627,7 @@ async def create_pro_forma(
     valid until a date (30 days when not given), after which it is no longer converted into an invoice.
 
     Creates a Fatura Pro-forma (FP) - a non-fiscal quote/preview document. Unlike FT/FR/NC/ND/RC:
-    - Never submitted to AGT (no submit_invoice_to_agt.delay call)
+    - Never submitted to AGT (no queue_for_agt call)
     - Does not deduct stock (no real sale has happened yet)
     - atcud/hash/qr are simulated placeholders only, never meaningful for compliance
     See Video 4 spec: "FP Factura Pro-forma" in the tipo de documento list, and the SAF-T
@@ -1835,7 +1835,7 @@ async def create_pro_forma(
     await db.commit()
     await db.refresh(pro_forma)
 
-    # Deliberately NOT calling submit_invoice_to_agt.delay() here - FP is non-fiscal.
+    # Deliberately NOT calling queue_for_agt() here - FP is non-fiscal.
 
     return pro_forma
 

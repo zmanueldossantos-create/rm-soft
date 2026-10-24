@@ -108,6 +108,15 @@ async def start_backup_loop() -> None:
 
 
 @app.on_event("startup")
+async def start_agt_queue_loop() -> None:
+    """AGT_QUEUE=base (the Windows installation, no Redis): the server itself sends the documents due to the AGT."""
+    import asyncio
+    from app.services.agt_queue import agt_queue_loop
+    if get_settings().AGT_QUEUE == "base":
+        app.state.agt_queue_loop = asyncio.create_task(agt_queue_loop())
+
+
+@app.on_event("startup")
 async def start_telegram_polling() -> None:
     """Local installation: the application reads the Telegram bot's messages itself (it waits while no bot is set).
     In SaaS Telegram calls the webhook instead. One reader per bot: TELEGRAM_POLLING=false on any other server."""
@@ -172,9 +181,13 @@ os.makedirs("uploads/logos", exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 
-@app.get("/")
+@app.get("/", include_in_schema=False)
 async def root():
-    """Health check route - confirms the API is responding."""
+    """The screens' first page when the backend serves them (FRONTEND_DIR, the Windows installation); else the health
+    check that confirms the API is responding."""
+    if settings.FRONTEND_DIR:
+        from fastapi.responses import FileResponse
+        return FileResponse(os.path.join(settings.FRONTEND_DIR, "index.html"))
     return {
         "status": "ok",
         "app": settings.APP_NAME,
@@ -388,3 +401,20 @@ from app.services.pharmacy_service import MedicineError as _MedicineError  # noq
 @app.exception_handler(_MedicineError)
 async def _medicine_handler(request: _Request, exc: _MedicineError):
     return _JSONResponse(status_code=422, content={"detail": str(exc)})
+
+
+# The screens, when the backend serves them itself (FRONTEND_DIR: the Windows installation, no Caddy): the built
+# frontend, and index.html for any other path (React decides the page). Mounted last: /api, /uploads and /health first.
+if settings.FRONTEND_DIR:
+    from starlette.exceptions import HTTPException as _StarletteHTTPException  # noqa: E402
+
+    class _ScreensFiles(StaticFiles):
+        async def get_response(self, path, scope):
+            try:
+                return await super().get_response(path, scope)
+            except _StarletteHTTPException as e:
+                if e.status_code != 404 or path.startswith(("api/", "uploads/")):
+                    raise
+                return await super().get_response("index.html", scope)
+
+    app.mount("/", _ScreensFiles(directory=settings.FRONTEND_DIR, html=True), name="screens")

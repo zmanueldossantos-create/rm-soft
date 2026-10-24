@@ -11,8 +11,8 @@ settings = get_settings()
 
 celery_app = Celery(
     "rm_system",
-    broker=settings.REDIS_URL,
-    backend=settings.REDIS_URL,
+    broker=settings.REDIS_URL or "memory://",  # no Redis (AGT_QUEUE=base): Celery is never used there
+    backend=settings.REDIS_URL or "cache+memory://",
 )
 
 celery_app.conf.update(

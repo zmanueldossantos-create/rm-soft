@@ -12,7 +12,7 @@ from app.core.database import get_db
 from app.api.deps import require_permission
 from app.models.user import User
 from app.models.invoice import Invoice, InvoiceStatus
-from app.workers.agt_worker import submit_invoice_to_agt
+from app.services.agt_queue import queue_for_agt
 from app.services.invoice_service import (
     CashPointRequiredError, RefundNotAllowedError, attach_amount_due, get_credit_note_info, list_open_cash_points,
 )
@@ -450,5 +450,5 @@ async def resubmit_invoice(
     await db.commit()
     await db.refresh(invoice)
 
-    submit_invoice_to_agt.delay(str(invoice.id))
+    await queue_for_agt(db, invoice)
     return invoice

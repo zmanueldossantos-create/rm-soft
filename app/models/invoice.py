@@ -88,6 +88,10 @@ class Invoice(Base):
     vat_total: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
     total: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
     status: Mapped[InvoiceStatus] = mapped_column(Enum(InvoiceStatus), nullable=False, default=InvoiceStatus.PENDENTE)
+    # AGT_QUEUE=base (app/services/agt_queue.py): when this document is next sent to the AGT (None: not queued), and
+    # how many attempts failed so far
+    agt_next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    agt_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     # Fiscal lifecycle - separate from the AGT submission `status` above. See Video 5:
     # a Nota de Credito referencing this invoice moves it to RECTIFICADO/RECTIFICADO_PARCIAL/ANULADO.
     document_status: Mapped[DocumentLifecycleStatus] = mapped_column(Enum(DocumentLifecycleStatus), nullable=False, default=DocumentLifecycleStatus.EMITIDO)

@@ -9,7 +9,6 @@ from app.models.payment import Payment
 from app.models.product import Product, ProductType
 from app.models.service import Service
 from app.models.stock import Stock
-from app.services import invoice_service
 from app.services.invoice_service import create_invoice, create_receipt
 
 
@@ -38,7 +37,8 @@ async def test_sending_to_the_agt_follows_the_sent_to_agt_rule(db, company_with_
     company_id, activity_id = ctx["company"].id, ctx["activity"].id
     lines = [{"service_id": await _service(db, ctx, "SRV-AG"), "quantity": 1}]
     sent = []
-    monkeypatch.setattr(invoice_service.submit_invoice_to_agt, "delay", lambda invoice_id: sent.append(invoice_id))
+    from app.workers.agt_worker import submit_invoice_to_agt
+    monkeypatch.setattr(submit_invoice_to_agt, "delay", lambda invoice_id: sent.append(invoice_id))
 
     ft = await create_invoice(db, company_id, activity_id, customer_id=None, invoice_type="FACTURA", lines_input=lines)
     ft_id = ft.id

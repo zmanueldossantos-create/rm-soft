@@ -15,8 +15,6 @@ ERRO and can be manually re-sent from the app (see resubmit_invoice_to_agt
 route in invoices/routes.py - the "Reenviar" button).
 """
 import asyncio
-import random
-import time
 import uuid
 
 from celery.exceptions import MaxRetriesExceededError
@@ -25,15 +23,9 @@ from sqlalchemy import select
 from app.workers.celery_app import celery_app
 from app.core.database import AsyncSessionLocal, engine
 from app.models.invoice import Invoice, InvoiceStatus
+from app.services.agt_service import AgtSendError, send_document
 
-# Simulated network failure rate - lets us exercise the retry/ERRO path
-# without a real AGT endpoint. Remove once a real integration exists.
-SIMULATED_FAILURE_RATE = 0.2
-
-
-class SimulatedAgtError(Exception):
-    """Raised to simulate a transient AGT network/server failure."""
-    pass
+SimulatedAgtError = AgtSendError  # the name the retry policy below always used
 
 
 async def _mark_status(invoice_id: str, status: InvoiceStatus) -> None:
@@ -49,13 +41,7 @@ async def _mark_status(invoice_id: str, status: InvoiceStatus) -> None:
 async def _submit_invoice_async(invoice_id: str) -> None:
     try:
         await _mark_status(invoice_id, InvoiceStatus.POR_ENVIAR)
-
-        # Simulated network round trip to the Mock AGT server
-        await asyncio.sleep(3)
-
-        if random.random() < SIMULATED_FAILURE_RATE:
-            raise SimulatedAgtError("Falha simulada na comunicação com o servidor da AGT")
-
+        await send_document(invoice_id)
         await _mark_status(invoice_id, InvoiceStatus.ENVIADA)
     finally:
         # Celery (--pool=solo) calls asyncio.run() once per task, creating
@@ -65,7 +51,6 @@ async def _submit_invoice_async(invoice_id: str) -> None:
         # crashes the NEXT task with "Event loop is closed". Disposing here,
         # inside the still-live loop, prevents that stale handoff.
         await engine.dispose()
-
 
 @celery_app.task(
     bind=True,
