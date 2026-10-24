@@ -38,19 +38,45 @@ Les **copies de chaque entreprise** (Definições da Empresa → Cópias de segu
 - Dans le routeur : une **adresse IP fixe** pour le serveur (réservation DHCP), ex. `192.168.1.10`.
 - Câble réseau pour le serveur (pas le Wi-Fi).
 
-Deux systèmes possibles pour le serveur :
+Trois façons d'installer le serveur :
 
-| | **Ubuntu Server** (recommandé) | **Windows + Docker Desktop** |
-|---|---|---|
-| Coût | gratuit | licence Windows |
-| Démarrage après coupure | RM SOFT redémarre seul | Docker Desktop démarre à l'**ouverture de session** : il faut l'ouverture de session automatique de Windows |
-| Script | `sudo ./instalar.sh` | `.\instalar.ps1` (administrateur) |
-
-Pour un serveur Windows sans Docker, voir plus tard l'installateur `RMSOFT-Setup.exe`.
+| | **Windows : RMSOFT-Setup.exe** (le plus simple) | **Ubuntu Server** | **Windows + Docker Desktop** |
+|---|---|---|---|
+| Coût | licence Windows | gratuit | licence Windows |
+| Démarrage après coupure | RM SOFT redémarre seul (services Windows) | RM SOFT redémarre seul | il faut l'ouverture de session automatique de Windows |
+| Code source sur le serveur | non | oui | oui |
+| Installation | double-clic | `sudo ./instalar.sh` | `.\instalar.ps1` (administrateur) |
 
 ---
 
-## 2. Installation — serveur Ubuntu
+## 2. Installation — serveur Windows avec RMSOFT-Setup.exe
+
+Le fichier `RMSOFT-Setup-<version>.exe` (fabriqué par RM SOFT, voir section 8) sur une clé USB.
+
+1. Sur le serveur (Windows 10/11 ou Windows Server, 64 bits), double-cliquer `RMSOFT-Setup-<version>.exe`.
+   Si Windows affiche « Windows a protégé votre ordinateur » : **Informations complémentaires → Exécuter quand même**.
+   Répondre **Oui** à la demande d'administrateur.
+2. Les questions : le **port** (laisser 80), le **dossier des copies** (le disque externe, ex. `E:\RMSOFT\copias`),
+   le **compte SUPER_ADMIN** (nom, téléphone `+244…`, mot de passe).
+3. **Instalar** → l'installation configure la base de données et les services (quelques minutes).
+4. Le dernier écran affiche les **adresses des postes** et le **code d'installation** (aussi dans
+   `C:\ProgramData\RMSOFT\codigo_instalacao.txt`). Une icône **RM SOFT** est sur le bureau du serveur.
+
+Ce qui est installé :
+
+| | |
+|---|---|
+| `C:\Program Files\RMSOFT` | le programme (sans code source) |
+| `C:\ProgramData\RMSOFT` | les données : base, `.env`, logos, journaux (`logs\`) — gardées à la désinstallation |
+| Service **RMSOFT-BaseDados** | la base de données (PostgreSQL, accessible depuis ce PC seulement) |
+| Service **RMSOFT-Servidor** | les écrans, l'API, l'envoi AGT, les copies automatiques |
+| Tâche **RMSOFT-CopiaBase** | une copie de toute la base chaque jour à 23:30 dans `<dossier des copies>\base` (14 jours) |
+
+**Mise à jour** : lancer le nouveau `RMSOFT-Setup-<version>.exe` sur le serveur. Aucune question : il copie d'abord
+toute la base (`<dossier des copies>\base\antes_atualizacao_….dump`), remplace le programme, met la base à jour et
+redémarre. Sur les postes : Ctrl+F5.
+
+## 2 bis. Installation — serveur Ubuntu
 
 1. Installer **Ubuntu Server 24.04** (option « OpenSSH server » cochée), brancher le disque des copies.
 2. Copier RM SOFT sur le serveur :
@@ -67,7 +93,7 @@ Pour un serveur Windows sans Docker, voir plus tard l'installateur `RMSOFT-Setup
    port (laisser 80), puis le **téléphone et le mot de passe du SUPER_ADMIN RM SOFT** de ce serveur.
 4. À la fin il affiche les adresses des postes et le **code d'installation** (ex. `3F2A-91C0-7B4E-D218`).
 
-## 2 bis. Installation — serveur Windows
+## 2 ter. Installation — serveur Windows avec Docker Desktop
 
 1. Installer **Docker Desktop** (https://www.docker.com/products/docker-desktop), l'ouvrir une fois, attendre
    « Engine running ». Dans Settings → General : cocher **Start Docker Desktop when you sign in**.
@@ -122,6 +148,7 @@ Rien à installer. Dans **Chrome** :
 
 ## 6. Mises à jour (dont les changements AGT)
 
+RMSOFT-Setup.exe : lancer le nouveau setup sur le serveur (voir section 2).
 Ubuntu : `cd /opt/rmsoft/docker/cliente && sudo ./atualizar.sh`
 Windows : `.\atualizar.ps1` (PowerShell administrateur)
 
@@ -134,7 +161,10 @@ redémarre. Les données restent ; la base se met à jour seule. Sur les postes 
 
 | Situation | Que faire |
 |---|---|
-| Voir l'état | `docker compose -f docker-compose.yml ps` (dans `docker/cliente`) |
+| RMSOFT-Setup.exe : voir l'état | `services.msc` → RMSOFT-BaseDados et RMSOFT-Servidor « En cours d'exécution » |
+| RMSOFT-Setup.exe : messages d'erreur | `C:\ProgramData\RMSOFT\logs\` : `instalacao.log` (installation), `rmsoft-servico.out.log` / `.err.log` (serveur) |
+| RMSOFT-Setup.exe : le port 80 est occupé | ouvrir `C:\ProgramData\RMSOFT\.env` (Bloc-notes en administrateur), `RMSOFT_PORT=8080`, relancer le setup |
+| Docker : voir l'état | `docker compose -f docker-compose.yml ps` (dans `docker/cliente`) |
 | Voir les messages d'erreur | `docker compose -f docker-compose.yml logs --tail 100 backend` |
 | Tout redémarrer | `docker compose -f docker-compose.yml restart` |
 | Le serveur est remplacé | nouvelle installation, **nouvelle licence** (le code change), puis **Restaurar empresa** avec la dernière copie (`empresas/`) |
@@ -144,3 +174,16 @@ redémarre. Les données restent ; la base se met à jour seule. Sur les postes 
 
 Ne jamais modifier `JWT_SECRET_KEY` dans `.env` : les secrets enregistrés deviendraient illisibles.
 Ne jamais envoyer le fichier `.env` : il contient les mots de passe.
+
+---
+
+## 8. Fabriquer RMSOFT-Setup.exe (PC de développement RM SOFT)
+
+Une fois : **Inno Setup 6** (https://jrsoftware.org/isdl.php) et Node.js. Puis, dans `C:\Projects\rm-system` :
+
+```powershell
+powershell -ExecutionPolicy Bypass -File instalador\fabricar_setup.ps1 -Versao 1.0.0
+```
+
+Résultat : `instalador\saida\RMSOFT-Setup-1.0.0.exe`. La 1re fois, le script télécharge PostgreSQL 16, WinSW et
+Visual C++ dans `instalador\cache\` (gardés pour les fois suivantes). Changer `-Versao` à chaque livraison.

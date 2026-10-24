@@ -52,3 +52,8 @@ patch_*.py
 docker/saas/.env.saas
 docker/saas/backups/
 .rmsoft_installation
+
+# Instalador Windows (instalador/fabricar_setup.ps1): downloads, build, the setup made
+instalador/cache/
+instalador/trabalho/
+instalador/saida/
