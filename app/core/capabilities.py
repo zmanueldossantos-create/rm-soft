@@ -120,6 +120,8 @@ SECTORS: tuple[Sector, ...] = (
     Sector("COMERCIO", "Comércio geral", "Venda ao balcão e stock", ("STOCK",)),
     Sector("SERVICOS", "Prestação de serviços", "Faturação de serviços", ()),
     Sector("FARMACIA", "Farmácia", "Venda e stock de medicamentos, por lote e validade", ("STOCK", "PHARMACY")),
+    Sector("CONTABILIDADE", "Contabilidade", "Plano de contas, lançamentos, balancete e demonstrações financeiras", (), False,
+           "Em desenvolvimento"),
     Sector("RH", "Recursos Humanos", "Gestão de colaboradores e salários", (), False, "Em desenvolvimento"),
     Sector("HOSPITAL", "Hospital", "Pacientes, consultas e faturação", (), False, "Em desenvolvimento"),
     Sector("ESCOLA", "Escola", "Alunos, matrículas e propinas", (), False, "Em desenvolvimento"),
