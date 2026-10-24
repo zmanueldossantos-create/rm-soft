@@ -62,6 +62,7 @@ services:
 
   worker:
     image: rmsoft-backend
+    pull_policy: never  # the image the backend service builds (never on Docker Hub)
     restart: unless-stopped
     command: ["worker"]
     environment: *backend-env

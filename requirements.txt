@@ -1,7 +1,7 @@
 # =============================================================================
-# ERP Multisecteurs — Angola | requirements.txt
+# ERP Multisecteurs â€” Angola | requirements.txt
 # Cible : Python 3.11.9
-# Architecture v7 — Hybride Local (.exe / Docker) + SaaS (Docker)
+# Architecture v7 â€” Hybride Local (.exe / Docker) + SaaS (Docker)
 # =============================================================================
 
 # --- Framework Web / API ---------------------------------------------------
@@ -9,28 +9,28 @@ fastapi==0.111.0
 uvicorn[standard]==0.30.1
 python-multipart==0.0.9
 
-# --- Base de données / ORM --------------------------------------------------
+# --- Base de donnÃ©es / ORM --------------------------------------------------
 sqlalchemy==2.0.30
 asyncpg==0.29.0
 alembic==1.13.1
 psycopg2-binary==2.9.9
 
-# --- Validation des données --------------------------------------------------
+# --- Validation des donnÃ©es --------------------------------------------------
 pydantic==2.7.1
 pydantic-settings==2.2.1
 email-validator==2.1.1
 
-# --- Authentification (téléphone) ------
+# --- Authentification (tÃ©lÃ©phone) ------
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 bcrypt==4.0.1
 phonenumbers==8.13.37
 
-# --- Tâches en arrière-plan ---------------------------------------
+# --- TÃ¢ches en arriÃ¨re-plan ---------------------------------------
 celery==5.4.0
 redis==5.0.4
 
-# --- Génération PDF ---------------------------------------
+# --- GÃ©nÃ©ration PDF ---------------------------------------
 reportlab==4.2.0
 qrcode[pil]==7.4.2
 Pillow==10.3.0

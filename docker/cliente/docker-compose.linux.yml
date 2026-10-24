@@ -1,0 +1,5 @@
+# Linux server: the licence's server code comes from the host's own machine-id (never from the container's).
+services:
+  backend:
+    volumes:
+      - /etc/machine-id:/etc/machine-id:ro

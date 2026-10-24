@@ -1,0 +1,131 @@
+# RM SOFT - the client's own server (local installation): the application for the shop's network, without internet
+# except for the AGT. Installed by RM SOFT with instalar.sh (Ubuntu) or instalar.ps1 (Windows + Docker Desktop) - see
+# INSTALLATION_LOCAL.md. The workstations open http://<server> in a browser; nothing is installed on them.
+#
+#   Linux:   docker compose -f docker-compose.yml -f docker-compose.linux.yml --env-file .env up -d --build
+#   Windows: docker compose -f docker-compose.yml --env-file .env up -d --build
+name: rmsoft-cliente
+
+x-backend-env: &backend-env
+  DEPLOYMENT_MODE: local
+  LICENSE_REQUIRED: "true"
+  APP_NAME: RM SOFT
+  DEBUG: "false"
+  DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+  REDIS_URL: redis://redis:6379/0
+  JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+  ENFORCE_CAPABILITIES: "true"
+  TELEGRAM_POLLING: "true"
+  BACKUP_DIR: /app/backups
+  # Windows only (Docker Desktop cannot read the host's registry): the server's MachineGuid, written by instalar.ps1.
+  # Linux: empty - the host's /etc/machine-id is mounted instead (docker-compose.linux.yml).
+  RMSOFT_MACHINE_ID: ${RMSOFT_MACHINE_ID:-}
+  RMSOFT_INSTALLATION_FILE: /app/data/installation
+  TZ: Africa/Luanda
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      TZ: Africa/Luanda
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+
+  backend:
+    build:
+      context: ../..
+      dockerfile: docker/saas/Dockerfile.backend
+    image: rmsoft-backend
+    restart: unless-stopped
+    command: ["api"]
+    environment: *backend-env
+    volumes:
+      - uploads:/app/uploads
+      - appdata:/app/data
+      # the companies' backup copies (Cópias de segurança), on the backups disk
+      - ${BACKUP_DIR}/empresas:/app/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      start_period: 60s
+
+  worker:
+    image: rmsoft-backend
+    pull_policy: never  # the image the backend service builds (never on Docker Hub)
+    restart: unless-stopped
+    command: ["worker"]
+    environment: *backend-env
+    volumes:
+      - uploads:/app/uploads
+      - appdata:/app/data
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ../..
+      dockerfile: docker/saas/Dockerfile.web
+      args:
+        VITE_SUPPLIER_NAME: ${SUPPLIER_NAME}
+        VITE_SUPPLIER_EMAIL: ${SUPPLIER_EMAIL}
+        VITE_SUPPLIER_PHONE: ${SUPPLIER_PHONE}
+        VITE_SUPPLIER_WEBSITE: ${SUPPLIER_WEBSITE}
+        VITE_APP_VERSION: ${APP_VERSION:-1.0.0}
+    image: rmsoft-web
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-80}:80"
+    volumes:
+      # the shop's network: plain HTTP on port 80 (no certificate, no domain) - replaces the SaaS Caddyfile
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddydata:/data
+    depends_on:
+      - backend
+
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    # (tr: a Windows checkout gives the script CRLF line ends)
+    entrypoint: ["/bin/sh", "-c", "tr -d '\\r' < /backup.sh > /tmp/backup.sh && exec /bin/sh /tmp/backup.sh"]
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+      TZ: Africa/Luanda
+    volumes:
+      - ../saas/backup.sh:/backup.sh:ro
+      - uploads:/uploads:ro
+      # the whole database once a day (the platform's own copy, next to the companies' copies)
+      - ${BACKUP_DIR}/base:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  redisdata:
+  uploads:
+  appdata:
+  caddydata:

@@ -42,7 +42,12 @@ def _unb64(text: str) -> bytes:
 
 def _machine_identity() -> str:
     """Something only this machine has: Linux /etc/machine-id (Docker: mount the host's), Windows MachineGuid. Else
-    a random identity kept in a file next to the application (weaker: copied with the folder)."""
+    a random identity kept in a file next to the application (weaker: copied with the folder).
+    RMSOFT_MACHINE_ID first: Docker Desktop on a Windows server, where the container cannot read the host's registry -
+    the installation kit (docker/cliente/instalar.ps1) writes the host's MachineGuid there."""
+    given = (os.getenv("RMSOFT_MACHINE_ID") or "").strip()
+    if given:
+        return given
     for path in ("/etc/machine-id", "/var/lib/dbus/machine-id"):
         try:
             value = Path(path).read_text().strip()

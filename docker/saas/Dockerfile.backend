@@ -15,7 +15,8 @@ COPY app ./app
 COPY alembic ./alembic
 COPY alembic.ini .
 COPY docker/saas/backend-entrypoint.sh /usr/local/bin/backend-entrypoint
-RUN chmod +x /usr/local/bin/backend-entrypoint && mkdir -p /app/uploads/logos \
+# a Windows checkout gives the script CRLF line ends: Linux would refuse to run it
+RUN sed -i 's/\r$//' /usr/local/bin/backend-entrypoint && chmod +x /usr/local/bin/backend-entrypoint && mkdir -p /app/uploads/logos /app/data /app/backups \
     && useradd --create-home --uid 1000 rmsoft && chown -R rmsoft /app
 USER rmsoft
 
