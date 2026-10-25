@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { BadgePercent, Check, CheckCircle2, CloudOff, FileCheck2, FileSpreadsheet, Gift, Mail, MessageCircle, Minus, Moon, Server, Sun, X } from 'lucide-react';
 import { API_BASE_URL } from '../src/api/config';
 import { EN, LANGS, TEXT, initialLang, saveLang } from './i18n';
+import DemoForm from './DemoForm';
 
 // The public site (rmsystem.co.ao): one page, its data from GET /public/site (plans, sectors, contacts, AGT number).
 // Its pictures: real RM SOFT screens (the demonstration company, app/tools/demo.py) in the visitor's theme, and an
@@ -64,6 +65,7 @@ export default function Site() {
   const [billing, setBilling] = useState(null);
   const [screen, setScreen] = useState('painel'); // the hero already shows the till
   const [clientOpen, setClientOpen] = useState(false);
+  const [wantedPlan, setWantedPlan] = useState(''); // «Pedir este plano»: the form opens with that plan chosen
   const t = TEXT[lang];
   const trialDays = site?.trial_days ?? 15;
 
@@ -100,8 +102,6 @@ export default function Site() {
   const email = site?.contacts?.email;
   const whatsappLink = (extra) => 'https://wa.me/' + whatsapp.replace(/\D/g, '') + '?text='
     + encodeURIComponent(t.whatsappHello + (extra ? ' ' + extra : ''));
-  const demoHref = whatsapp ? whatsappLink() : '#contacto';
-  const demoTarget = whatsapp ? '_blank' : undefined;
 
   const ready = (site?.sectors || []).filter((s) => s.ready && image('setor-' + s.code.toLowerCase()));
   const soon = (site?.sectors || []).filter((s) => !s.ready);
@@ -151,7 +151,7 @@ export default function Site() {
               </h1>
               <p className="mt-6 text-[17px] sm:text-[18px] leading-[1.6] text-text-muted max-w-[50ch]">{t.heroText}</p>
               <div className="mt-8 flex flex-wrap gap-3">
-                <a href={demoHref} target={demoTarget} rel="noreferrer"
+                <a href="#contacto"
                   className="bg-accent hover:bg-accent-hover text-white font-semibold text-[15px] px-6 py-3.5 rounded-md">{t.askDemo}</a>
                 <a href="#planos" className="border border-border hover:border-accent text-text-primary font-medium text-[15px] px-6 py-3.5 rounded-md">{t.seePlans}</a>
               </div>
@@ -304,7 +304,11 @@ export default function Site() {
                         <span className="absolute -top-3 left-6 bg-accent text-white text-[12px] font-semibold px-2.5 py-0.5 rounded">{t.popular}</span>
                       )}
                       <h3 className="font-display font-semibold text-[22px] text-text-primary">{plan.name}</h3>
-                      {plan.description && <p className="mt-1.5 text-[14px] leading-[1.5] text-text-muted min-h-[42px]">{plan.description}</p>}
+                      {plan.description && (
+                        <p className="mt-1.5 text-[14px] leading-[1.5] text-text-muted min-h-[42px]">
+                          {(lang === 'en' && plan.description_en) || plan.description}
+                        </p>
+                      )}
                       <div className="mt-5 min-h-[64px]">
                         {!anyPrice ? (
                           <div className="font-display font-semibold text-[26px] text-text-primary">{t.onRequest}</div>
@@ -339,7 +343,7 @@ export default function Site() {
                           );
                         })}
                       </ul>
-                      <a href={whatsapp ? whatsappLink('(' + plan.name + ')') : '#contacto'} target={demoTarget} rel="noreferrer"
+                      <a href="#contacto" onClick={() => setWantedPlan(plan.id)}
                         className={'mt-6 text-center font-semibold text-[14px] px-4 py-2.5 rounded-md ' + (plan.is_popular ? 'bg-accent hover:bg-accent-hover text-white' : 'border border-border hover:border-accent text-text-primary')}>
                         {t.choosePlan}
                       </a>
@@ -351,27 +355,33 @@ export default function Site() {
           </div>
         </section>
 
-        {/* ------------------------------------------------------------------------------------- final call */}
+        {/* --------------------------------------------------------------------- final call: the demo form */}
         <section id="contacto" className="scroll-mt-16 px-4 sm:px-6 pb-20">
-          <div className="max-w-6xl mx-auto rounded-2xl bg-accent text-white px-6 py-12 sm:px-12 sm:py-14 grid md:grid-cols-[1.3fr_1fr] gap-8 items-center">
-            <div>
+          <div className="max-w-6xl mx-auto rounded-2xl bg-accent text-white p-6 sm:p-10 lg:p-12 grid lg:grid-cols-[0.85fr_1.15fr] gap-10 items-start">
+            <div className="lg:pt-2">
               <h2 className="font-display font-bold text-[28px] sm:text-[36px] leading-[1.12] tracking-[-0.015em]">{t.contactTitle}</h2>
-              <p className="mt-4 text-[16px] sm:text-[17px] leading-[1.6] text-white/85 max-w-[48ch]">{t.contactText}</p>
+              <p className="mt-4 text-[16px] sm:text-[17px] leading-[1.6] text-white/85 max-w-[44ch]">{t.contactText}</p>
+              <ul className="mt-7 flex flex-col gap-3">
+                {t.contactSteps.map((step) => (
+                  <li key={step} className="flex gap-2.5 text-[15px] text-white/95"><Check size={18} className="shrink-0 mt-0.5" /> {step}</li>
+                ))}
+              </ul>
+              <div className="mt-8 flex flex-col sm:flex-row lg:flex-col gap-3 sm:items-start">
+                {whatsapp && (
+                  <a href={whatsappLink()} target="_blank" rel="noreferrer"
+                    className="inline-flex items-center justify-center gap-2.5 bg-white text-[#14532D] hover:bg-white/90 font-semibold text-[15px] px-5 py-3 rounded-md">
+                    <MessageCircle size={18} className="text-[#1F9D55]" /> {t.whatsapp}
+                  </a>
+                )}
+                {email && (
+                  <a href={'mailto:' + email} className="inline-flex items-center justify-center gap-2.5 border border-white/50 hover:border-white text-white font-medium text-[15px] px-5 py-3 rounded-md">
+                    <Mail size={18} /> {email}
+                  </a>
+                )}
+              </div>
             </div>
-            <div className="flex flex-col sm:flex-row md:flex-col gap-3 md:items-stretch">
-              {whatsapp && (
-                <a href={whatsappLink()} target="_blank" rel="noreferrer"
-                  className="flex items-center justify-center gap-2.5 bg-white text-[#14532D] hover:bg-white/90 font-semibold text-[16px] px-6 py-3.5 rounded-md">
-                  <MessageCircle size={19} className="text-[#1F9D55]" /> {t.whatsapp}
-                </a>
-              )}
-              {email && (
-                <a href={'mailto:' + email} className="flex items-center justify-center gap-2.5 border border-white/50 hover:border-white text-white font-medium text-[15px] px-6 py-3.5 rounded-md">
-                  <Mail size={18} /> {email}
-                </a>
-              )}
-              {site && !whatsapp && !email && <p className="text-[15px] text-white/85">{t.noContacts}</p>}
-            </div>
+            <DemoForm t={t} lang={lang} sectors={ready} sectorName={sectorName} plans={site?.plans || []}
+              wantedPlan={wantedPlan} whatsappLink={whatsapp ? whatsappLink : null} />
           </div>
         </section>
       </main>

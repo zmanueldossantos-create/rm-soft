@@ -136,12 +136,12 @@ export default function Planos() {
 
 function PlanForm({ plan, catalog, nextOrder, onClose, onSaved }) {
   const [form, setForm] = useState(() => {
-    const base = plan || { name: '', description: '', limits: {}, options: [], is_popular: false, is_active: true, sort_order: nextOrder };
+    const base = plan || { name: '', description: '', description_en: '', limits: {}, options: [], is_popular: false, is_active: true, sort_order: nextOrder };
     const limits = {};
     catalog.limits.forEach((lim) => { limits[lim.code] = base.limits[lim.code] == null ? '' : String(base.limits[lim.code]); });
     const prices = {};
     [...PRICES.map(([k]) => k), 'price_lifetime', 'maintenance_percent'].forEach((k) => { prices[k] = base[k] == null ? '' : String(Number(base[k])); });
-    return { ...base, description: base.description || '', ...prices, limits };
+    return { ...base, description: base.description || '', description_en: base.description_en || '', ...prices, limits };
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useToastState('error');
@@ -158,7 +158,7 @@ function PlanForm({ plan, catalog, nextOrder, onClose, onSaved }) {
       const limits = {};
       Object.entries(form.limits).forEach(([code, value]) => { limits[code] = value === '' ? null : parseInt(value, 10); });
       const saved = await savePlan(plan?.id, {
-        name: form.name, description: form.description || null, limits, options: form.options,
+        name: form.name, description: form.description || null, description_en: form.description_en || null, limits, options: form.options,
         is_popular: form.is_popular, is_active: form.is_active, sort_order: parseInt(form.sort_order, 10) || 0,
         price_monthly: num(form.price_monthly), price_quarterly: num(form.price_quarterly), price_semiannual: num(form.price_semiannual),
         price_annual: num(form.price_annual), price_lifetime: num(form.price_lifetime), maintenance_percent: num(form.maintenance_percent),
@@ -180,6 +180,7 @@ function PlanForm({ plan, catalog, nextOrder, onClose, onSaved }) {
           <Field label="Nome *" className="sm:col-span-2"><input value={form.name} onChange={(e) => set('name', e.target.value)} required maxLength={60} className={inputClass} /></Field>
           <Field label="Descrição" className="sm:col-span-3"><input value={form.description} onChange={(e) => set('description', e.target.value)} maxLength={300} placeholder="Ex.: Para começar: um negócio, uma caixa" className={inputClass} /></Field>
           <Field label="Ordem"><input type="number" min="0" value={form.sort_order} onChange={(e) => set('sort_order', e.target.value)} className={inputClass} /></Field>
+          <Field label="Descrição em inglês (site público)" className="sm:col-span-5 sm:col-start-3"><input value={form.description_en} onChange={(e) => set('description_en', e.target.value)} maxLength={300} placeholder="Ex.: To start: one business, one till" className={inputClass} /></Field>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">

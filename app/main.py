@@ -48,6 +48,7 @@ from app.api.v1.ai.routes import router as ai_router
 from app.api.v1.admin.ai_routes import router as admin_ai_router
 from app.api.v1.help.routes import router as help_router
 from app.api.v1.public.routes import router as public_router
+from app.api.v1.admin.demo_request_routes import router as demo_requests_router
 from app.core.database import AsyncSessionLocal
 from app.models.company import Company
 from app.services.permission_service import seed_permission_catalog, seed_default_role_permissions
@@ -177,6 +178,7 @@ app.include_router(ai_router)
 app.include_router(admin_ai_router)
 app.include_router(help_router)
 app.include_router(public_router)
+app.include_router(demo_requests_router)
 
 # Serve uploaded files (company logos, etc.) - local storage for Phase 1.
 os.makedirs("uploads/logos", exist_ok=True)

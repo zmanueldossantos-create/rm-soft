@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { ChefHat, History as KitchenHistoryIcon } from 'lucide-react';
 import { Link, useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { createPortal } from 'react-dom';
-import { Building2, LogOut, LayoutDashboard, Sun, Moon, Package, Users, Calendar, Receipt, Settings, Package2, UserCog, History, FileText, Landmark, LayoutGrid, Store, Wheat, Factory, Wallet, SlidersHorizontal, Tags, Wrench, ChevronDown, Cog, Plus, ArrowLeftRight, Calculator, ClipboardList, Gauge, PiggyBank, CreditCard, Boxes, CalendarClock, Wallet2, PackageMinus, Truck, ShieldCheck, FileInput, Send, HandCoins, Bot, HelpCircle, LifeBuoy, BookOpen, Layers } from 'lucide-react';
+import { Building2, LogOut, LayoutDashboard, Sun, Moon, Package, Users, Calendar, Receipt, Settings, Package2, UserCog, History, FileText, Landmark, LayoutGrid, Store, Wheat, Factory, Wallet, SlidersHorizontal, Tags, Wrench, ChevronDown, Cog, Plus, ArrowLeftRight, Calculator, ClipboardList, Gauge, PiggyBank, CreditCard, Boxes, CalendarClock, Wallet2, PackageMinus, Truck, ShieldCheck, FileInput, Send, HandCoins, Bot, HelpCircle, LifeBuoy, BookOpen, Layers, Inbox } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import apiClient from '../api/client';
 import { useThemeStore } from '../store/themeStore';
@@ -15,6 +15,7 @@ import AssistantPanel, { readStored, writeStored } from './AssistantPanel';
 import HelpPanel from './HelpPanel';
 import SubscriptionBanner from './SubscriptionBanner';
 import { getAssistantStatus } from '../api/ai';
+import { getDemoRequestsSummary } from '../api/demoRequests';
 
 // A square icon button of the top bar, its name shown below it on hover (keeps the bar narrow).
 function IconButton({ icon: Icon, label, active, onClick }) {
@@ -32,7 +33,7 @@ function IconButton({ icon: Icon, label, active, onClick }) {
   );
 }
 
-function NavLink({ to, icon: Icon, label, active }) {
+function NavLink({ to, icon: Icon, label, active, badge = 0 }) {
   return (
     <Link
       to={to}
@@ -45,6 +46,9 @@ function NavLink({ to, icon: Icon, label, active }) {
     >
       <Icon size={16} />
       <span className="hidden sm:inline">{label}</span>
+      {badge > 0 && (
+        <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-danger text-white text-[11px] font-bold leading-[18px] text-center">{badge}</span>
+      )}
     </Link>
   );
 }
@@ -183,6 +187,17 @@ export default function Layout() {
         .then(setPermissions)
         .catch(() => { if (user.role !== 'GESTOR') setPermissions([]); });
     }
+  }, [user?.role]);
+
+  // «Pedidos» (SUPER_ADMIN, the platform running the public site): the new demonstration requests on the menu's badge
+  const [demoRequests, setDemoRequests] = useState(null);
+  useEffect(() => {
+    if (user?.role !== 'SUPER_ADMIN') return undefined;
+    const load = () => getDemoRequestsSummary().then(setDemoRequests).catch(() => {});
+    load();
+    const timer = setInterval(load, 5 * 60 * 1000);
+    window.addEventListener('demo-requests-changed', load);
+    return () => { clearInterval(timer); window.removeEventListener('demo-requests-changed', load); };
   }, [user?.role]);
 
   // The Farmácia's screens only for a company with the Farmácia sector (read from its modules).
@@ -342,6 +357,9 @@ export default function Layout() {
             )}
             {user?.role === 'SUPER_ADMIN' && (
               <NavLink to="/planos" icon={Layers} label="Planos" active={isActive('/planos')} />
+            )}
+            {user?.role === 'SUPER_ADMIN' && demoRequests?.enabled && (
+              <NavLink to="/pedidos" icon={Inbox} label="Pedidos" active={isActive('/pedidos')} badge={demoRequests.counts.NOVO} />
             )}
             {user?.role === 'SUPER_ADMIN' && (
               <NavLink to="/configuracoes" icon={SlidersHorizontal} label="Configurações" active={isActive('/configuracoes')} />

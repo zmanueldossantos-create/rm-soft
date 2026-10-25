@@ -3,7 +3,7 @@ The public site (rmsystem.co.ao): what it shows, read from the database - no log
 
 Only on the RM SOFT platform (PUBLIC_SITE=true): on a client's server these routes answer 404, as if they did not exist.
 """
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,6 +12,8 @@ from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.plan_features import LIMITS, OPTIONS, TRIAL_DAYS
 from app.models.plan import Plan
+from app.schemas.demo_request import DemoRequestCreate
+from app.services.demo_request_service import DemoRequestError, create_demo_request
 from app.services.platform_settings_service import get_or_create_platform_settings
 
 router = APIRouter(prefix="/api/v1/public", tags=["public"])
@@ -37,6 +39,7 @@ async def get_site(response: Response, db: AsyncSession = Depends(get_db)):
             "id": str(plan.id),
             "name": plan.name,
             "description": plan.description,
+            "description_en": plan.description_en,
             "prices": {
                 "MENSAL": _price(plan.price_monthly), "TRIMESTRAL": _price(plan.price_quarterly),
                 "SEMESTRAL": _price(plan.price_semiannual), "ANUAL": _price(plan.price_annual),
@@ -55,3 +58,20 @@ async def get_site(response: Response, db: AsyncSession = Depends(get_db)):
         "agt_validation_number": platform.software_validation_number,
         "vendor_tax_id": platform.vendor_tax_id,
     }
+
+
+def _client_ip(request: Request) -> str | None:
+    """The visitor's address: the first of X-Forwarded-For behind the proxy (Caddy), else the connection's."""
+    forwarded = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip()
+    return (forwarded or (request.client.host if request.client else "") or None)
+
+
+@router.post("/demo-requests", status_code=status.HTTP_201_CREATED, dependencies=[Depends(_public_site_only)])
+async def post_demo_request(payload: DemoRequestCreate, request: Request, db: AsyncSession = Depends(get_db)):
+    """«Pedir demonstração»: kept for the SUPER_ADMIN («Pedidos») - a robot's (hidden field filled) as DESCARTADO."""
+    try:
+        await create_demo_request(db, payload.model_dump(), _client_ip(request))
+    except DemoRequestError as e:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS if e.too_many
+                            else status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    return {"ok": True}

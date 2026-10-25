@@ -138,7 +138,7 @@ def test_every_api_route_is_protected():
               # the company's address opening a support access: its one-time code is the proof
               "/api/v1/auth/support/redeem",
               # the public site (rmsystem.co.ao, PUBLIC_SITE only): the plans and contacts anyone may read
-              "/api/v1/public/site"}
+              "/api/v1/public/site", "/api/v1/public/demo-requests"}
 
     def dependency_names(dependant) -> set[str]:
         names: set[str] = set()

@@ -81,6 +81,7 @@ async def save_plan(db: AsyncSession, plan_id: uuid.UUID | None, data: dict) -> 
     plan = await get_plan_or_raise(db, plan_id) if plan_id else Plan()
     plan.name = name
     plan.description = (data.get("description") or "").strip() or None
+    plan.description_en = (data.get("description_en") or "").strip() or None
     for field in ("price_monthly", "price_quarterly", "price_semiannual", "price_annual", "price_lifetime",
                   "maintenance_percent"):
         value = data.get(field)

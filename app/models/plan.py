@@ -23,6 +23,7 @@ class Plan(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(60), nullable=False, unique=True)
     description: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    description_en: Mapped[str | None] = mapped_column(String(300), nullable=True)  # the public site in English
     # prices in Kz; null: not sold that way ("sob cotação" when all are null)
     price_monthly: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
     price_quarterly: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)

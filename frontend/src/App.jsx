@@ -13,6 +13,7 @@ import Configuracoes from './pages/Configuracoes';
 import Toaster from './components/Toaster';
 import CatalogoReferencia from './pages/CatalogoReferencia';
 import Planos from './pages/Planos';
+import Pedidos from './pages/Pedidos';
 import Categorias from './pages/Categorias';
 import Services from './pages/Services';
 import Customers from './pages/Customers';
@@ -84,6 +85,7 @@ export default function App() {
           <Route path="/visao-global" element={<SuperAdminRoute><VisaoGlobal /></SuperAdminRoute>} />
           <Route path="/catalogo-referencia" element={<SuperAdminRoute><CatalogoReferencia /></SuperAdminRoute>} />
           <Route path="/planos" element={<SuperAdminRoute><Planos /></SuperAdminRoute>} />
+          <Route path="/pedidos" element={<SuperAdminRoute><Pedidos /></SuperAdminRoute>} />
           <Route path="/categorias" element={<RequirePermission anyOf={['product_categories:manage', 'service_types:manage', 'tesouraria:reasons_manage', 'resource_types:manage', 'consumption_reasons:manage', 'tesouraria:payment_prefs_manage']}><Categorias /></RequirePermission>} />
           <Route path="/services" element={<RequirePermission perm="services:manage"><Services /></RequirePermission>} />
           <Route path="/customers" element={<RequirePermission perm="customers:manage"><Customers /></RequirePermission>} />
