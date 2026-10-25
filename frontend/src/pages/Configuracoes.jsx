@@ -27,7 +27,7 @@ const modulesApi = {
 };
 
 import { extractErrorMessage } from '../utils/errors';
-import { getPlatformSettings, updatePlatformSettings } from '../api/admin';
+import { getPlatformSettings, updatePlatformSettings, getSiteSettings, updateSiteSettings } from '../api/admin';
 import { getPlatformAi, updatePlatformAi, testPlatformAi, setTelegramBot, getWhatsAppSettings, updateWhatsAppSettings } from '../api/ai';
 import { useToastState } from '../components/Toaster';
 import { toast } from '../store/toastStore';
@@ -392,6 +392,68 @@ function PlatformSettingsCard() {
           {saved ? 'Guardado' : 'Guardar'}
         </button>
       </div>
+    </div>
+  );
+}
+
+// «Site público» (rmsystem.co.ao): the WhatsApp number and the email its «Contacto» buttons open.
+function SiteSettingsCard() {
+  const [values, setValues] = useState({ whatsapp: '', email: '' });
+  const [loaded, setLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [, setError] = useToastState('error');
+
+  useEffect(() => {
+    getSiteSettings()
+      .then((data) => setValues({ whatsapp: data.site_whatsapp || '', email: data.site_email || '' }))
+      .catch(() => {})
+      .finally(() => setLoaded(true));
+  }, []);
+
+  async function handleSave() {
+    setError('');
+    setSaving(true);
+    try {
+      const data = await updateSiteSettings(values.whatsapp.trim(), values.email.trim());
+      setValues({ whatsapp: data.site_whatsapp || '', email: data.site_email || '' });
+      toast.success('Contactos do site guardados');
+    } catch (err) {
+      setError(extractErrorMessage(err, 'Erro ao guardar'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!loaded) return null;
+  const inputClass = 'w-full bg-bg-inset border border-border rounded-md px-3 py-2 text-sm text-text-primary outline-none focus:border-accent transition-colors';
+
+  return (
+    <div className="bg-bg-elevated border border-border rounded-lg px-5 py-4 mb-6">
+      <div className="flex items-center gap-2.5 mb-4">
+        <div className="w-9 h-9 rounded-md bg-accent/10 flex items-center justify-center shrink-0">
+          <Globe size={17} className="text-accent" />
+        </div>
+        <div>
+          <p className="text-[11px] uppercase tracking-wide text-text-muted">Site público</p>
+          <p className="text-[11px] text-text-muted/70">Os contactos mostrados em rmsystem.co.ao (botões WhatsApp e email)</p>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+        <div>
+          <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1 block">WhatsApp</label>
+          <input value={values.whatsapp} onChange={(e) => setValues((v) => ({ ...v, whatsapp: e.target.value }))}
+            placeholder="+244923000000" className={inputClass + ' font-mono'} />
+        </div>
+        <div>
+          <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1 block">Email</label>
+          <input type="email" value={values.email} onChange={(e) => setValues((v) => ({ ...v, email: e.target.value }))}
+            placeholder="geral@rmsystem.co.ao" className={inputClass} />
+        </div>
+      </div>
+      <button onClick={handleSave} disabled={saving}
+        className="flex items-center gap-1.5 bg-accent hover:bg-accent-hover disabled:opacity-50 text-white text-sm font-medium px-3.5 py-2 rounded-md transition-colors cursor-pointer">
+        {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Guardar
+      </button>
     </div>
   );
 }
@@ -911,6 +973,7 @@ export default function Configuracoes() {
       </p>
 
       <PlatformSettingsCard />
+      <SiteSettingsCard />
       <AiSettingsCard />
 
 

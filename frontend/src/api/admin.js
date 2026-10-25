@@ -56,6 +56,15 @@ export async function updatePlatformSettings(softwareValidationNumber, vendorTax
   return res.data;
 }
 
+// The contacts the public site shows (rmsystem.co.ao)
+export async function getSiteSettings() {
+  return (await apiClient.get('/admin/site-settings')).data;
+}
+
+export async function updateSiteSettings(siteWhatsapp, siteEmail) {
+  return (await apiClient.put('/admin/site-settings', { site_whatsapp: siteWhatsapp || null, site_email: siteEmail || null })).data;
+}
+
 
 export async function getCompanyGestor(companyId) {
   const res = await apiClient.get('/admin/companies/' + companyId + '/gestor');

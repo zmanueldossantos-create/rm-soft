@@ -1,0 +1,40 @@
+/* The public site: Tailwind built from site/ only (a small file), with the application's look (src/theme.css). */
+@import "tailwindcss" source(none);
+@source "./";
+@import "../src/theme.css";
+
+html { scroll-behavior: smooth; }
+
+a:focus-visible, button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* The hero: a soft light of the accent behind the screen */
+.hero-glow {
+  background:
+    radial-gradient(60% 70% at 85% 40%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%);
+}
+
+/* The page's one orchestrated moment: the screen rises in, then the "sent to the AGT" note pops on it */
+.hero-screen { animation: screen-in 0.9s cubic-bezier(0.2, 0.8, 0.25, 1) both; }
+.hero-chip { animation: chip-in 0.45s cubic-bezier(0.3, 1.4, 0.5, 1) 0.9s both; }
+.screen-swap { animation: swap-in 0.35s ease-out both; }
+
+@keyframes screen-in {
+  from { opacity: 0; transform: translateY(28px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes chip-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.92); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes swap-in {
+  from { opacity: 0.2; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .hero-screen, .hero-chip, .screen-swap { animation: none; }
+}

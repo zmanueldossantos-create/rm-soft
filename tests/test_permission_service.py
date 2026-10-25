@@ -136,7 +136,9 @@ def test_every_api_route_is_protected():
               # before the login: whose login screen an address is, and (for the HTTPS proxy) whether it exists
               "/api/v1/auth/tenant", "/api/v1/auth/domain-check",
               # the company's address opening a support access: its one-time code is the proof
-              "/api/v1/auth/support/redeem"}
+              "/api/v1/auth/support/redeem",
+              # the public site (rmsystem.co.ao, PUBLIC_SITE only): the plans and contacts anyone may read
+              "/api/v1/public/site"}
 
     def dependency_names(dependant) -> set[str]:
         names: set[str] = set()

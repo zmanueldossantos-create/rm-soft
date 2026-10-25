@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     # --- Ecrans servis par le backend lui-meme (installation Windows, sans Caddy) : le dossier du build du frontend ---
     FRONTEND_DIR: str | None = None
 
+    # --- Site public (rmsystem.co.ao) : les routes /api/v1/public (plans, secteurs, contacts) - la plateforme SaaS
+    # seulement ; sur le serveur d'un client elles n'existent pas (404).
+    PUBLIC_SITE: bool = False
+
     # --- Authentification JWT (connexion par numero de telephone) ---
     JWT_SECRET_KEY: str
     JWT_ALGORITHM: str = "HS256"

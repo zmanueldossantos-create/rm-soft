@@ -1,0 +1,102 @@
+/* RM SOFT look, shared by the application (index.css) and the public site (site/site.css): fonts, the two
+   themes' colours, the Tailwind tokens. Imported right after tailwindcss. */
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/inter.woff2') format('woff2');
+  font-weight: 400 600;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Space Grotesk';
+  src: url('/fonts/space-grotesk.woff2') format('woff2');
+  font-weight: 500 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('/fonts/jetbrains-mono.woff2') format('woff2');
+  font-weight: 400 600;
+  font-display: swap;
+}
+
+/* Accent (blue) - one shade per theme, both checked for contrast (WCAG): on the dark theme a lighter blue, readable
+   as text on the dark surfaces (4.1-4.8:1) and under white bold button text (3.9:1); on the light theme a deeper blue
+   (5:1 on the light surfaces, 5.8:1 under white text). Red stays for errors and dangers only (--danger). */
+:root {
+  --accent: #3D7FE6;
+  --accent-hover: #2F6BCC;
+}
+
+/* Dark theme (default) */
+:root {
+  --bg-primary: #12181A;
+  --bg-elevated: #1B2326;
+  --bg-inset: #0D1214;
+  --text-primary: #EDEFEE;
+  --text-muted: #8B9490;
+  --success: #4FAE7C;
+  --danger: #E5645A;
+  --border: #2A3336;
+}
+
+/* Light theme - surfaces/text invert, the accent deepens */
+:root.light {
+  --accent: #1F5FD1;
+  --accent-hover: #1A4FB0;
+  --bg-primary: #F7F6F3;
+  --bg-elevated: #F0EEE8;
+  --bg-inset: #EFEDE8;
+  --text-primary: #1A1F1D;
+  --text-muted: #5C6560;
+  --success: #2F8557;
+  --danger: #C33D33;
+  --border: #DAD6CC;
+}
+
+@theme {
+
+  --animate-drawer-in: drawer-in 280ms cubic-bezier(0.22, 1, 0.36, 1);
+  --animate-drawer-out: drawer-out 220ms cubic-bezier(0.4, 0, 1, 1) forwards;
+  --animate-fade-in: fade-in 280ms ease-out;
+  --animate-fade-out: fade-out 220ms ease-in forwards;
+  @keyframes drawer-in {
+    from { transform: translateX(-100%); opacity: 0.4; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+  @keyframes drawer-out {
+    from { transform: translateX(0); opacity: 1; }
+    to { transform: translateX(-100%); opacity: 0.4; }
+  }
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes fade-out {
+    from { opacity: 1; }
+    to { opacity: 0; }
+  }
+  --color-bg-primary: var(--bg-primary);
+  --color-bg-elevated: var(--bg-elevated);
+  --color-bg-inset: var(--bg-inset);
+  --color-text-primary: var(--text-primary);
+  --color-text-muted: var(--text-muted);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-success: var(--success);
+  --color-danger: var(--danger);
+  --color-border: var(--border);
+
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Courier New', monospace;
+}
+
+body {
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}

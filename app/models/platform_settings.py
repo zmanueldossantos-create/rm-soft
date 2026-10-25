@@ -48,6 +48,10 @@ class PlatformSettings(Base):
     whatsapp_app_secret_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)  # checks Meta's signature
     whatsapp_verify_token: Mapped[str | None] = mapped_column(String(64), nullable=True)  # given to Meta for the webhook
 
+    # The public site (rmsystem.co.ao, PUBLIC_SITE): the contacts it shows - the WhatsApp button and the email
+    site_whatsapp: Mapped[str | None] = mapped_column(String(20), nullable=True)  # +244923000000
+    site_email: Mapped[str | None] = mapped_column(String(120), nullable=True)
+
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     def __repr__(self) -> str:

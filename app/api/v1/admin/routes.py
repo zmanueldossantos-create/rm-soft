@@ -15,7 +15,7 @@ from app.api.deps import require_role
 from app.models.company import Company
 from app.models.user import User
 from app.schemas.admin import CompanyCreateRequest, CompanyUpdateRequest, CompanyResponse
-from app.schemas.platform_settings import PlatformSettingsResponse, PlatformSettingsUpdateRequest
+from app.schemas.platform_settings import PlatformSettingsResponse, PlatformSettingsUpdateRequest, SiteSettings
 from app.services.platform_settings_service import get_or_create_platform_settings, update_platform_settings
 from app.schemas.fiscal_regime import FiscalRegimeCreateRequest, FiscalRegimeUpdateRequest, FiscalRegimeResponse
 from app.services.fiscal_regime_service import (
@@ -459,6 +459,23 @@ async def patch_platform_settings(
         product_version=payload.product_version,
     )
 
+
+
+@router.get("/site-settings", response_model=SiteSettings)
+async def get_site_settings(db: AsyncSession = Depends(get_db), current_user: User = Depends(require_role("SUPER_ADMIN"))):
+    """The contacts the public site shows (rmsystem.co.ao)."""
+    return await get_or_create_platform_settings(db)
+
+
+@router.put("/site-settings", response_model=SiteSettings)
+async def put_site_settings(payload: SiteSettings, db: AsyncSession = Depends(get_db),
+                            current_user: User = Depends(require_role("SUPER_ADMIN"))):
+    platform = await get_or_create_platform_settings(db)
+    platform.site_whatsapp = payload.site_whatsapp
+    platform.site_email = payload.site_email
+    await db.commit()
+    await db.refresh(platform)
+    return platform
 
 
 @router.get("/fiscal-regimes", response_model=list[FiscalRegimeResponse])

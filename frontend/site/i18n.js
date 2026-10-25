@@ -1,0 +1,180 @@
+// The public site's texts, in Portuguese (default) and English. The plans' names and descriptions come from the
+// database (PT); the sectors, limits and options are translated here by their code (English only - the Portuguese
+// comes from the server, the same words as the application).
+
+export const LANGS = ['pt', 'en'];
+
+export const TEXT = {
+  pt: {
+    nav: { sectors: 'Setores', program: 'O programa', plans: 'Planos', contact: 'Contacto' },
+    clientArea: 'Área de cliente',
+    clientAreaTitle: 'Entrar na sua empresa',
+    clientAreaHelp: 'Escreva o endereço da sua empresa, como aparece no seu acesso.',
+    clientAreaGo: 'Abrir',
+    clientAreaInvalid: 'Só letras minúsculas, números e «-».',
+    close: 'Fechar',
+    themeLight: 'Tema claro',
+    themeDark: 'Tema escuro',
+    heroTitle: 'Venda, fature e controle o stock. Mesmo quando a internet falha.',
+    heroText: 'O programa de gestão para hotéis, restaurantes, bares, padarias, farmácias e comércio em Angola. Faturas conforme a AGT, enviadas sozinhas quando a ligação volta.',
+    askDemo: 'Pedir demonstração',
+    seePlans: 'Ver os planos',
+    heroChipTitle: 'FR 2026/167 · 1 881,00 Kz',
+    heroChipText: 'Enviada à AGT',
+    shotAlt: (name) => `Ecrã ${name} do RM SOFT`,
+    facts: [
+      { title: (days) => `${days} dias grátis`, text: 'Experimente com os seus produtos, sem compromisso.' },
+      { title: () => 'Funciona sem internet', text: 'A caixa nunca para. As faturas seguem quando a ligação volta.' },
+      { title: () => 'SAF-T em dois cliques', text: 'O ficheiro do mês pronto para a AGT, sem retrabalho.' },
+      { title: () => 'IVA 14 %, 5 % e 0 %', text: 'As taxas de Angola aplicadas a cada artigo, linha a linha.' },
+    ],
+    sectorsTitle: 'Feito para o seu negócio',
+    sectorsText: 'Cada empresa escolhe os módulos de que precisa. Várias atividades podem viver sob o mesmo NIF, com a mesma numeração de faturas.',
+    soonTitle: 'Em breve',
+    programTitle: 'Veja o programa',
+    programText: 'Ecrãs reais do RM SOFT, com os dados de uma padaria de demonstração.',
+    program: [
+      { key: 'painel', label: 'Painel', title: 'O dia num olhar', points: ['Faturação de hoje e do mês', 'Faturas por estado de envio à AGT', 'Produtos em alerta e últimas faturas'] },
+      { key: 'caixa', label: 'Caixa', title: 'Vender em segundos', points: ['Toque nos produtos ou leia o código de barras', 'Numerário, Multicaixa ou pagamento dividido', 'Talão ou A4, com QR code e ATCUD'] },
+      { key: 'faturas', label: 'Faturas', title: 'Todos os documentos num só lugar', points: ['Fatura, fatura-recibo, nota de crédito, recibo', 'O estado do envio à AGT de cada documento', 'Pesquisa por período, cliente ou número'] },
+      { key: 'stock', label: 'Stock', title: 'O stock sempre certo', points: ['Cada venda e cada compra atualizam o stock', 'Alertas de stock baixo e de validade', 'Valor do stock e margem por produto'] },
+    ],
+    howTitle: 'Tranquilo com a AGT',
+    how: [
+      { title: 'Faturas conforme a AGT', text: 'Cada documento é assinado, numerado e leva o código QR e o ATCUD.' },
+      { title: 'Sem internet, sem paragem', text: 'As faturas ficam em fila e são enviadas à AGT quando a internet volta.' },
+      { title: 'No seu servidor ou na nuvem', text: 'Instalado no seu escritório, com a licença do seu NIF, ou alojado pela RM SOFT.' },
+    ],
+    validatedBadge: (n) => `Software validado pela AGT, n.º ${n}`,
+    plansTitle: 'Planos',
+    plansText: (days) => `Comece com ${days} dias de teste gratuito. Os preços estão em kwanzas.`,
+    trialBadge: (days) => `${days} dias grátis em todos os planos`,
+    billing: { MENSAL: 'Mensal', TRIMESTRAL: 'Trimestral', SEMESTRAL: 'Semestral', ANUAL: 'Anual', VITALICIA: 'Vitalícia' },
+    per: { MENSAL: '/mês', TRIMESTRAL: '/trimestre', SEMESTRAL: '/semestre', ANUAL: '/ano', VITALICIA: 'pagamento único' },
+    lifetimeNote: 'Instalação local. Pagamento único.',
+    maintenance: (p) => `Manutenção e atualizações: ${p}% por ano`,
+    onRequest: 'Sob consulta',
+    notThisWay: 'Não disponível nesta modalidade',
+    popular: 'Mais escolhido',
+    unlimited: 'Ilimitado',
+    choosePlan: 'Pedir este plano',
+    noPlans: 'Os planos estão a ser preparados. Fale connosco para uma proposta.',
+    contactTitle: 'Veja o RM SOFT com os seus produtos',
+    contactText: 'Diga-nos a sua atividade e quantas caixas tem. Preparamos uma demonstração à sua medida.',
+    whatsapp: 'Falar no WhatsApp',
+    noContacts: 'Os contactos estarão disponíveis em breve.',
+    whatsappHello: 'Olá, gostaria de ver uma demonstração do RM SOFT.',
+    loadError: 'Não foi possível carregar os planos. Atualize a página dentro de momentos.',
+    footer: 'RM SOFT é um produto da Rock Mayika Serviços, LDA.',
+    nif: 'NIF',
+  },
+  en: {
+    nav: { sectors: 'Sectors', program: 'The program', plans: 'Plans', contact: 'Contact' },
+    clientArea: 'Client area',
+    clientAreaTitle: 'Open your company',
+    clientAreaHelp: 'Type your company address, as shown in your access details.',
+    clientAreaGo: 'Open',
+    clientAreaInvalid: 'Lowercase letters, numbers and «-» only.',
+    close: 'Close',
+    themeLight: 'Light theme',
+    themeDark: 'Dark theme',
+    heroTitle: 'Sell, invoice and track stock. Even when the internet drops.',
+    heroText: 'The management software for hotels, restaurants, bars, bakeries, pharmacies and shops in Angola. AGT-compliant invoices, sent on their own once the connection is back.',
+    askDemo: 'Request a demo',
+    seePlans: 'See the plans',
+    heroChipTitle: 'FR 2026/167 · 1 881,00 Kz',
+    heroChipText: 'Sent to the AGT',
+    shotAlt: (name) => `RM SOFT ${name} screen`,
+    facts: [
+      { title: (days) => `${days}-day free trial`, text: 'Try it with your own products, no commitment.' },
+      { title: () => 'Works offline', text: 'The till never stops. Invoices follow once the connection is back.' },
+      { title: () => 'SAF-T in two clicks', text: "The month's file ready for the AGT, no rework." },
+      { title: () => 'VAT 14 %, 5 % and 0 %', text: "Angola's rates applied to every item, line by line." },
+    ],
+    sectorsTitle: 'Built for your business',
+    sectorsText: 'Each company picks the modules it needs. Several activities can share one tax number (NIF) and one invoice numbering.',
+    soonTitle: 'Coming soon',
+    programTitle: 'See the program',
+    programText: 'Real RM SOFT screens, with the data of a demonstration bakery.',
+    program: [
+      { key: 'painel', label: 'Dashboard', title: 'The day at a glance', points: ["Today's and this month's revenue", 'Invoices by AGT submission status', 'Products in alert and latest invoices'] },
+      { key: 'caixa', label: 'Till', title: 'Sell in seconds', points: ['Tap the products or scan the barcode', 'Cash, Multicaixa or split payment', 'Receipt or A4, with QR code and ATCUD'] },
+      { key: 'faturas', label: 'Invoices', title: 'Every document in one place', points: ['Invoice, invoice-receipt, credit note, receipt', 'The AGT submission status of each document', 'Search by period, customer or number'] },
+      { key: 'stock', label: 'Stock', title: 'Stock always right', points: ['Every sale and purchase updates the stock', 'Low-stock and expiry alerts', 'Stock value and margin per product'] },
+    ],
+    howTitle: 'Peace of mind with the AGT',
+    how: [
+      { title: 'AGT-compliant invoices', text: 'Every document is signed, numbered and carries the QR code and ATCUD.' },
+      { title: 'No internet, no stop', text: 'Invoices wait in a queue and are sent to the AGT once the internet is back.' },
+      { title: 'On your server or in the cloud', text: 'Installed in your office, licensed to your NIF, or hosted by RM SOFT.' },
+    ],
+    validatedBadge: (n) => `Software validated by the AGT, no. ${n}`,
+    plansTitle: 'Plans',
+    plansText: (days) => `Start with a ${days}-day free trial. Prices are in kwanzas.`,
+    trialBadge: (days) => `${days}-day free trial on every plan`,
+    billing: { MENSAL: 'Monthly', TRIMESTRAL: 'Quarterly', SEMESTRAL: 'Half-yearly', ANUAL: 'Yearly', VITALICIA: 'Lifetime' },
+    per: { MENSAL: '/month', TRIMESTRAL: '/quarter', SEMESTRAL: '/half-year', ANUAL: '/year', VITALICIA: 'one-time payment' },
+    lifetimeNote: 'On-premises installation. One-time payment.',
+    maintenance: (p) => `Maintenance and updates: ${p}% a year`,
+    onRequest: 'On request',
+    notThisWay: 'Not offered with this billing',
+    popular: 'Most chosen',
+    unlimited: 'Unlimited',
+    choosePlan: 'Ask for this plan',
+    noPlans: 'The plans are being prepared. Contact us for a quote.',
+    contactTitle: 'See RM SOFT with your own products',
+    contactText: 'Tell us your business and how many tills you run. We prepare a demo that fits.',
+    whatsapp: 'Chat on WhatsApp',
+    noContacts: 'Contact details will be available soon.',
+    whatsappHello: 'Hello, I would like to see a demo of RM SOFT.',
+    loadError: 'The plans could not be loaded. Refresh the page in a moment.',
+    footer: 'RM SOFT is a product of Rock Mayika Serviços, LDA.',
+    nif: 'Tax no. (NIF)',
+  },
+};
+
+// English names of what the server sends in Portuguese, by code (an unknown code keeps the Portuguese)
+export const EN = {
+  sectors: {
+    HOTEL: ['Hotel', 'Rooms, bookings, stays and extras'],
+    RESTAURANTE: ['Restaurant', 'Tables, open tabs, bill splitting and transfer, kitchen'],
+    BAR: ['Bar', 'Counter sales, tables and open tabs'],
+    PADARIA: ['Bakery', 'Counter sales, stock and production'],
+    SPA_SALAO: ['Spa / Salon / Clinic', 'Appointments per practitioner, service durations and calendar'],
+    COMERCIO: ['Retail', 'Counter sales and stock'],
+    SERVICOS: ['Services', 'Invoicing of services'],
+    FARMACIA: ['Pharmacy', 'Sale and stock of medicines, by batch and expiry date'],
+    CONTABILIDADE: ['Accounting', 'Chart of accounts, entries, trial balance and financial statements'],
+    RH: ['Human resources', 'Staff and payroll management'],
+    HOSPITAL: ['Hospital', 'Patients, appointments and billing'],
+    ESCOLA: ['School', 'Students, enrolments and fees'],
+  },
+  limits: {
+    max_users: 'Users',
+    max_modules: 'Modules (sectors)',
+    max_establishments: 'Shops / premises',
+    max_pos: 'Tills (points of sale)',
+    max_warehouses: 'Warehouses',
+  },
+  options: {
+    FORNECEDORES_COMPRAS: 'Suppliers, purchases and payments',
+    GUIAS: 'Delivery and transport notes',
+    APURAMENTO_IVA: 'VAT return and VAT map',
+    COPIAS_AUTOMATICAS: 'Automatic backups',
+    PERMISSOES_PERSONALIZADAS: 'Custom permissions',
+    ASSISTENTE_IA: 'AI assistant',
+    IA_CANAIS: 'AI assistant on Telegram and WhatsApp',
+  },
+};
+
+export function initialLang() {
+  try {
+    const saved = localStorage.getItem('rmsoft_site_lang');
+    if (LANGS.includes(saved)) return saved;
+  } catch { /* private mode */ }
+  return (navigator.language || 'pt').toLowerCase().startsWith('pt') ? 'pt' : 'en';
+}
+
+export function saveLang(lang) {
+  try { localStorage.setItem('rmsoft_site_lang', lang); } catch { /* private mode */ }
+}
