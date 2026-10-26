@@ -26,6 +26,8 @@ LUANDA = ZoneInfo("Africa/Luanda")
 CHANNELS = {"TELEGRAM": "telegram_enabled", "WHATSAPP": "whatsapp_enabled"}
 CODE_LIFETIME = timedelta(minutes=10)
 LINK_PATTERN = re.compile(r"^(?:/start\s+|ligar\s+)?(\d{6})$", re.IGNORECASE)
+# a recipient of the Notificações opening the link the gestor gave him (app/services/notification_service.py)
+NOTIFICATION_LINK = re.compile(r"^(?:/start\s+)?(NT[A-Z0-9]{8})$", re.IGNORECASE)
 NOT_LINKED = ("Este contacto não está ligado a nenhuma conta RM SOFT. Na aplicação: Definições da Empresa → "
               "Assistente IA → Ligar, e envie aqui o código mostrado.")
 
@@ -114,6 +116,10 @@ async def handle_incoming(db: AsyncSession, channel: str, external_id: str, exte
     text = (text or "").strip()
     if not text:
         return [{"text": "Só sei ler mensagens de texto."}]
+    notification = NOTIFICATION_LINK.match(text) if channel == "TELEGRAM" else None
+    if notification:
+        from app.services.notification_service import link_recipient
+        return [{"text": await link_recipient(db, notification.group(1), external_id, external_name)}]
     match = LINK_PATTERN.match(text)
     if match:
         return [{"text": await _link(db, channel, external_id, external_name, match.group(1))}]

@@ -54,6 +54,8 @@ OPTIONS: dict[str, Option] = {
                "O gestor muda o que cada perfil pode fazer"),
         Option("ASSISTENTE_IA", "Assistente IA", "O assistente no sistema", ("assistant:use",)),
         Option("IA_CANAIS", "IA por WhatsApp e Telegram", "O assistente nas conversas do WhatsApp e do Telegram"),
+        Option("NOTIFICACOES", "Notificações automáticas",
+               "Avisos por email e Telegram: quartos, mesas, vendas, fecho de caixa, stock baixo"),
     )
 }
 

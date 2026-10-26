@@ -1,7 +1,7 @@
 import { API_ORIGIN } from '../api/config';
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Building2, Loader2, Save, Lock, Image, Upload, Store, Plus, Pencil, Landmark, X, Check, Trash2, FileStack, Sparkles, ChevronDown, CreditCard, Link2, Unlink, Users, Bot, Mail, LifeBuoy, DatabaseBackup, FileKey2 } from 'lucide-react';
+import { Building2, Loader2, Save, Lock, Image, Upload, Store, Plus, Pencil, Landmark, X, Check, Trash2, FileStack, Sparkles, ChevronDown, CreditCard, Link2, Unlink, Users, Bot, Mail, LifeBuoy, DatabaseBackup, FileKey2, BellRing } from 'lucide-react';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
 import { getMySupportSessions, getMyCompany, updateMyCompanyContact, uploadMyCompanyLogo, removeMyCompanyLogo, getMyCompanyBankAccounts, addMyCompanyBankAccount, updateMyCompanyBankAccount, toggleMyCompanyBankAccountStatus } from '../api/company';
@@ -16,6 +16,8 @@ import { getPharmacyContext } from '../api/pharmacy';
 import { getMyCompanyAi } from '../api/ai';
 import AiCompanySettingsTab from '../components/AiCompanySettingsTab';
 import EmailSettingsTab from '../components/EmailSettingsTab';
+import NotificationsTab from '../components/NotificationsTab';
+import { getNotifications } from '../api/notifications';
 import CompanyBackupsPanel from '../components/CompanyBackupsPanel';
 import LicensePanel from '../components/LicensePanel';
 import { getMyLicense, importMyLicense } from '../api/plans';
@@ -75,6 +77,12 @@ export default function CompanySettings() {
   useEffect(() => {
     getMyCompanyAi().then(setAiInfo).catch(() => setAiInfo(null));
   }, []);
+  // Notificações: its tab only when the plan has the option (and for whoever manages the company)
+  const [notificationsAllowed, setNotificationsAllowed] = useState(false);
+  const canManageCompany = can('company:manage'); // the permissions arrive after the first render
+  useEffect(() => {
+    if (canManageCompany) getNotifications().then((d) => setNotificationsAllowed(!!d.allowed)).catch(() => setNotificationsAllowed(false));
+  }, [canManageCompany]);
   // The licence: its tab only on a client's server (LICENSE_REQUIRED)
   const [licenseRequired, setLicenseRequired] = useState(false);
   useEffect(() => {
@@ -738,6 +746,7 @@ export default function CompanySettings() {
           ['bancarias', 'Coordenadas Bancárias', Landmark],
           ['series', 'Séries de Facturação', FileStack],
           ['email', 'Email', Mail],
+          ...(notificationsAllowed ? [['notificacoes', 'Notificações', BellRing]] : []),
           ...(can('company:backup') ? [['copias', 'Cópias de segurança', DatabaseBackup]] : []),
           ...(can('company:manage') ? [['suporte', 'Acessos de suporte', LifeBuoy]] : []),
           ...(aiInfo?.ai_enabled ? [['ia', 'Assistente IA', Bot]] : []),
@@ -1112,6 +1121,7 @@ export default function CompanySettings() {
       )}
 
       {activeTab === 'email' && <EmailSettingsTab canManage={can('company:manage')} />}
+      {activeTab === 'notificacoes' && notificationsAllowed && <NotificationsTab canManage={can('company:manage')} onAllowed={setNotificationsAllowed} />}
 
       {activeTab === 'suporte' && <SupportTab />}
 

@@ -96,3 +96,4 @@ from app.models.company_backup import CompanyBackup, CompanyBackupSettings  # no
 from app.models.reference_product import ReferenceProduct, ReferenceProductUnit  # noqa: E402,F401 - the platform's reference catalog
 from app.models.plan import CompanyContract, CompanyLicense, Plan  # noqa: E402,F401 - the plans and each company's contract
 from app.models.demo_request import DemoRequest  # noqa: E402,F401 - «Pedir demonstração» of the public site
+from app.models.notification import NotificationOutbox, NotificationRecipient, NotificationSettings  # noqa: E402,F401 - Notificações

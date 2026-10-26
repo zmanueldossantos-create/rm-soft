@@ -49,6 +49,7 @@ from app.api.v1.admin.ai_routes import router as admin_ai_router
 from app.api.v1.help.routes import router as help_router
 from app.api.v1.public.routes import router as public_router
 from app.api.v1.admin.demo_request_routes import router as demo_requests_router
+from app.api.v1.company.notification_routes import router as notifications_router
 from app.core.database import AsyncSessionLocal
 from app.models.company import Company
 from app.services.permission_service import seed_permission_catalog, seed_default_role_permissions
@@ -119,6 +120,15 @@ async def start_agt_queue_loop() -> None:
 
 
 @app.on_event("startup")
+async def start_notification_loop() -> None:
+    """Notificações (app/services/notification_service.py): the messages waiting in the outbox are sent from here."""
+    import asyncio
+    from app.services.notification_service import notification_loop
+    if get_settings().NOTIFICATION_LOOP:
+        app.state.notification_loop = asyncio.create_task(notification_loop())
+
+
+@app.on_event("startup")
 async def start_telegram_polling() -> None:
     """Local installation: the application reads the Telegram bot's messages itself (it waits while no bot is set).
     In SaaS Telegram calls the webhook instead. One reader per bot: TELEGRAM_POLLING=false on any other server."""
@@ -179,6 +189,7 @@ app.include_router(admin_ai_router)
 app.include_router(help_router)
 app.include_router(public_router)
 app.include_router(demo_requests_router)
+app.include_router(notifications_router)
 
 # Serve uploaded files (company logos, etc.) - local storage for Phase 1.
 os.makedirs("uploads/logos", exist_ok=True)

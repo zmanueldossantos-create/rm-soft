@@ -62,6 +62,9 @@ class Settings(BaseSettings):
     BACKUP_DIR: str = "backups"
     BACKUP_LOOP: bool = True
 
+    # --- Notificacoes (app/services/notification_service.py) : false = ce serveur n'envoie pas la file des notifications
+    NOTIFICATION_LOOP: bool = True
+
     # --- Licence (app/core/license.py) ---
     # Serveur d un client (installation locale) : LICENSE_REQUIRED=true - le plan, les limites et les dates viennent du
     # fichier de licence signe par RM SOFT (sans licence valide : 7 jours, puis lecture seule). False : le contrat de la
