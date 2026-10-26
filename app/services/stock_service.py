@@ -147,12 +147,35 @@ async def toggle_warehouse_status(db: AsyncSession, company_id: uuid.UUID, wareh
     central = await get_default_warehouse(db, company_id)
     if warehouse.id == central.id:
         raise CentralWarehouseNotEditableError("O armazem central não pode ser desativado")
+    if warehouse.is_active and warehouse.is_default:
+        raise DefaultWarehouseError("Este é o armazém por defeito: escolha primeiro outro armazém por defeito")
     if not warehouse.is_active:  # switched back on - unless an activity's own warehouse (not counted)
         from app.models.activity import Activity
         from app.services.plan_service import check_limit
         if (await db.execute(select(Activity.id).where(Activity.warehouse_id == warehouse.id))).first() is None:
             await check_limit(db, company_id, "max_warehouses")
     warehouse.is_active = not warehouse.is_active
+    await db.commit()
+    await db.refresh(warehouse)
+    return warehouse
+
+
+class DefaultWarehouseError(Exception):
+    """A warehouse that cannot be (or stop being) the default one - the message is shown as it is."""
+
+
+async def set_default_warehouse(db: AsyncSession, company_id: uuid.UUID, warehouse_id: uuid.UUID) -> Warehouse:
+    """The gestor's «por defeito»: the warehouse the Stock screen opens with and Compras proposes. One per company."""
+    warehouse = await get_warehouse_or_raise(db, company_id, warehouse_id)
+    if not warehouse.is_active:
+        raise DefaultWarehouseError("Um armazém inativo não pode ser o armazém por defeito")
+    previous = (await db.execute(select(Warehouse).where(
+        Warehouse.company_id == company_id, Warehouse.is_default.is_(True), Warehouse.id != warehouse.id,
+    ))).scalars().all()
+    for other in previous:
+        other.is_default = False
+    await db.flush()  # the old one first: the unique index allows one default per company at any moment
+    warehouse.is_default = True
     await db.commit()
     await db.refresh(warehouse)
     return warehouse

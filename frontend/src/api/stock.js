@@ -18,6 +18,12 @@ export async function updateWarehouseFull(warehouseId, payload) {
   return res.data;
 }
 
+// the gestor's «Armazém por defeito»: the Stock screen opens with it, Compras proposes it
+export async function setDefaultWarehouse(warehouseId) {
+  const res = await apiClient.post('/stock/warehouses/' + warehouseId + '/default');
+  return res.data;
+}
+
 export async function toggleWarehouseStatus(warehouseId) {
   const res = await apiClient.patch('/stock/warehouses/' + warehouseId + '/toggle-status');
   return res.data;

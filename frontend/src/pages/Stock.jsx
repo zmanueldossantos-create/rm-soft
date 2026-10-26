@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Package2, Plus, Loader2, Search, AlertTriangle, ArrowDownToLine, SlidersHorizontal, Warehouse, Pencil, Check, X, ArrowRightLeft, Trash2, Power, ClipboardCheck, MapPin } from 'lucide-react';
+import { Package2, Plus, Loader2, Search, AlertTriangle, ArrowDownToLine, SlidersHorizontal, Warehouse, Pencil, Check, X, ArrowRightLeft, Trash2, Power, ClipboardCheck, MapPin, Star } from 'lucide-react';
 import Modal from '../components/Modal';
 import MovementForm from '../components/MovementForm';
 import StockInventory from '../components/StockInventory';
@@ -13,7 +13,7 @@ import DateInput from '../components/DateInput';
 import PostingPeriodSelect from '../components/PostingPeriodSelect';
 import UnitBreakdown from '../components/UnitBreakdown';
 import Select from '../components/Select';
-import { listWarehouseLocations, setProductLocation, listExpiringLots, listStockLevels, adjustStock, transferStock, recordStockLoss, listWarehouses, createWarehouse, updateWarehouseFull, toggleWarehouseStatus } from '../api/stock';
+import { listWarehouseLocations, setProductLocation, listExpiringLots, listStockLevels, adjustStock, transferStock, recordStockLoss, listWarehouses, createWarehouse, updateWarehouseFull, toggleWarehouseStatus, setDefaultWarehouse } from '../api/stock';
 import { provincesApi, municipalitiesApi } from '../api/catalogs';
 import { listProducts } from '../api/products';
 import { extractErrorMessage } from '../utils/errors';
@@ -32,7 +32,7 @@ function formatQty(value) {
   return value % 1 === 0 ? String(value) : String(value).replace('.', ',');
 }
 
-function WarehouseCard({ warehouse, isCentral, onEditClick, onToggleStatus, togglingId, onLocationsClick, locationCount }) {
+function WarehouseCard({ warehouse, isCentral, isDefault, onMakeDefault, makingDefault, onEditClick, onToggleStatus, togglingId, onLocationsClick, locationCount }) {
   const can = useCan();
 
   return (
@@ -48,12 +48,25 @@ function WarehouseCard({ warehouse, isCentral, onEditClick, onToggleStatus, togg
             {!warehouse.is_active && (
               <span className="text-[10px] font-semibold uppercase tracking-wide text-danger bg-danger/10 px-1.5 py-0.5 rounded">Inativo</span>
             )}
+            {isDefault && (
+              <span className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-accent bg-accent/10 px-1.5 py-0.5 rounded"><Star size={10} className="fill-current" />Por defeito</span>
+            )}
           </div>
           {warehouse.code && <p className="text-[12px] text-text-muted font-mono">{warehouse.code}</p>}
         </div>
       </div>
 
       <div className="flex items-center gap-2">
+      {/* the gestor's choice: the warehouse this screen opens with (and Compras proposes) */}
+      {can('warehouses:manage') && warehouse.is_active && !isDefault && (
+        <button
+          onClick={() => onMakeDefault(warehouse)}
+          disabled={makingDefault}
+          className="flex items-center gap-1.5 h-8 px-3 rounded-md border border-border text-[13px] text-text-primary hover:border-accent transition-colors cursor-pointer disabled:opacity-50"
+        >
+          {makingDefault ? <Loader2 size={14} className="animate-spin" /> : <Star size={14} className="text-text-muted" />} Definir como por defeito
+        </button>
+      )}
       {/* emplacements (optional): the places of this warehouse */}
       <button
         onClick={() => onLocationsClick(warehouse)}
@@ -168,7 +181,8 @@ export default function Stock() {
       const data = await listWarehouses();
       setWarehouses(data);
       if (data.length > 0 && !selectedWarehouseId) {
-        setSelectedWarehouseId(data[0].id);
+        // the gestor's «por defeito» first; none chosen: the central one (the first created)
+        setSelectedWarehouseId((data.find((w) => w.is_default && w.is_active) || data[0]).id);
       }
       return data;
     } catch (err) {
@@ -207,6 +221,7 @@ export default function Stock() {
   const selectedWarehouse = warehouses.find((w) => w.id === selectedWarehouseId);
   const centralWarehouse = warehouses[0]; // first created = central (see stock_service.get_default_warehouse ordering)
   const isCentralSelected = selectedWarehouseId === centralWarehouse?.id;
+  const defaultWarehouse = warehouses.find((w) => w.is_default && w.is_active) || centralWarehouse;
 
   const filteredLevels = levels.filter((l) => {
     if (!search.trim()) return true;
@@ -277,6 +292,20 @@ export default function Stock() {
     setTransferModalOpen(true);
   }
 
+  const [makingDefault, setMakingDefault] = useState(false);
+  async function handleMakeDefault(warehouse) {
+    setMakingDefault(true);
+    try {
+      await setDefaultWarehouse(warehouse.id);
+      await loadWarehouses();
+      toast.success('«' + warehouse.name + '» é agora o armazém por defeito');
+    } catch (err) {
+      toast.error(extractErrorMessage(err, 'Erro ao definir o armazém por defeito'));
+    } finally {
+      setMakingDefault(false);
+    }
+  }
+
   async function handleToggleWarehouseStatus(warehouseId) {
     setTogglingWarehouseId(warehouseId);
     try {
@@ -284,7 +313,7 @@ export default function Stock() {
       await loadWarehouses();
       toast.success('Armazém «' + toggled.name + '» ' + (toggled.is_active ? 'ativado' : 'desativado'));
     } catch (err) {
-      setError(extractErrorMessage(err, 'Erro ao atualizar estado do armazem'));
+      toast.error(extractErrorMessage(err, 'Erro ao atualizar estado do armazem'));
     } finally {
       setTogglingWarehouseId(null);
     }
@@ -551,7 +580,7 @@ export default function Stock() {
         </div>
       </div>
 
-      {selectedWarehouse && view === 'niveis' && <div className="mb-5"><WarehouseCard key={selectedWarehouse.id} warehouse={selectedWarehouse} isCentral={selectedWarehouse.id === centralWarehouse?.id} onEditClick={openEditWarehouseModal} onToggleStatus={handleToggleWarehouseStatus} togglingId={togglingWarehouseId} onLocationsClick={setLocationsOf} locationCount={whLocations.length} /></div>}
+      {selectedWarehouse && view === 'niveis' && <div className="mb-5"><WarehouseCard key={selectedWarehouse.id} warehouse={selectedWarehouse} isCentral={selectedWarehouse.id === centralWarehouse?.id} isDefault={selectedWarehouse.id === defaultWarehouse?.id} onMakeDefault={handleMakeDefault} makingDefault={makingDefault} onEditClick={openEditWarehouseModal} onToggleStatus={handleToggleWarehouseStatus} togglingId={togglingWarehouseId} onLocationsClick={setLocationsOf} locationCount={whLocations.length} /></div>}
 
       <div className="flex items-center gap-3 mb-5 flex-wrap">
       <div className="flex gap-1 border-b border-border">

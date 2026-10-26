@@ -105,9 +105,10 @@ export default function Compras() {
 
   function openForm() {
     const normal = rates.find((r) => r.tax_category === 'NOR') || rates[0];
-    // the goods enter the central warehouse (the first one) unless another is chosen - or not at all
+    // the goods enter the gestor's «Armazém por defeito» (none chosen: the central one, the first) unless another is
+    // chosen - or not at all
     setForm({ supplierId: '', purchaseType: 'FT', supplierDocument: '', supplierHash: '', referenceInvoiceId: '', documentDate: todayIso(), dueDate: '', periodId: '', description: '',
-      stockEntry: can('stock:receive'), warehouseId: warehouses.find((w) => w.is_active)?.id || '',
+      stockEntry: can('stock:receive'), warehouseId: (warehouses.find((w) => w.is_default && w.is_active) || warehouses.find((w) => w.is_active))?.id || '',
       lines: [{ ...emptyLine(), rateId: normal?.id || '' }] });
     setFormError('');
     setFormOpen(true);

@@ -20,6 +20,7 @@ class WarehouseResponse(BaseModel):
     entradas_bloqueadas: bool = False
     saidas_bloqueadas: bool = False
     is_active: bool
+    is_default: bool = False
     created_at: datetime
 
     class Config:

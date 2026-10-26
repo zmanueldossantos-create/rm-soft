@@ -35,6 +35,8 @@ from app.services.stock_service import (
     create_warehouse,
     update_warehouse,
     toggle_warehouse_status,
+    set_default_warehouse,
+    DefaultWarehouseError,
     CentralWarehouseNotEditableError,
     adjust_stock,
     transfer_stock,
@@ -320,6 +322,21 @@ async def patch_warehouse(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
 
 
+@router.post("/warehouses/{warehouse_id}/default", response_model=WarehouseResponse)
+async def post_default_warehouse(
+    warehouse_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("warehouses:manage")),
+):
+    """Makes this warehouse the company's «por defeito» (Stock opens with it, Compras proposes it)."""
+    try:
+        return await set_default_warehouse(db, current_user.company_id, warehouse_id)
+    except WarehouseNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except DefaultWarehouseError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
 @router.patch("/warehouses/{warehouse_id}/toggle-status", response_model=WarehouseResponse)
 async def patch_warehouse_toggle_status(
     warehouse_id: uuid.UUID,
@@ -335,6 +352,8 @@ async def patch_warehouse_toggle_status(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except CentralWarehouseNotEditableError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    except DefaultWarehouseError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
 
 @router.get("/production-estimate", response_model=ProductionEstimateResponse)
 async def get_production_estimate(

@@ -10,7 +10,7 @@ changing this model.
 import uuid
 from datetime import datetime
 
-from sqlalchemy import String, Boolean, DateTime, ForeignKey, func
+from sqlalchemy import String, Boolean, DateTime, ForeignKey, Index, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import UUID
 
@@ -19,6 +19,10 @@ from app.core.database import Base
 
 class Warehouse(Base):
     __tablename__ = "warehouses"
+    # at most one «por defeito» per company (the one the Stock screen and Compras open with)
+    __table_args__ = (
+        Index("uq_warehouses_one_default", "company_id", unique=True, postgresql_where=text("is_default")),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     company_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("companies.id"), nullable=False, index=True)
@@ -31,6 +35,9 @@ class Warehouse(Base):
     entradas_bloqueadas: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     saidas_bloqueadas: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # chosen by the gestor: the warehouse shown first (Stock) and proposed (Compras). None chosen: the central one.
+    # Not the central warehouse itself (the first created, where receptions land) - that one never changes.
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
