@@ -321,6 +321,8 @@ async def close_session(
     session.status = CashSessionStatus.FECHADA
     from sqlalchemy import func as sa_func
     session.closed_at = sa_func.now()
+    from app.services.notification_service import _user, notify_till_closed  # Notificações: caixa fechada
+    await notify_till_closed(db, session, await _user(db, closed_by_user_id))
 
     await db.commit()
     await db.refresh(session)

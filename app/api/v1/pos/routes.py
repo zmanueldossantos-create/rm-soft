@@ -204,7 +204,7 @@ async def post_checkout(
     try:
         await ensure_issuable(db, payload.invoice_type, "pos")
         await ensure_may_bill_later(db, current_user, payload.invoice_type)
-        return await checkout(
+        invoice = await checkout(
             db, current_user.company_id, pos_id, current_user, payload.customer_id,
             line_inputs(payload.lines),
             [{"payment_method_id": p.payment_method_id, "amount": p.amount} for p in payload.payments],
@@ -217,6 +217,10 @@ async def post_checkout(
             prescription=payload.prescription.model_dump() if payload.prescription else None,
             insurance=payload.insurance.model_dump() if payload.insurance else None,
         )
+        from app.services.notification_service import notify_sale  # Notificações: «Venda»
+        await notify_sale(db, current_user, invoice, pos_id)
+        await db.commit()
+        return invoice
     except NoOpenSessionError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except ActivityNotFoundError as e:

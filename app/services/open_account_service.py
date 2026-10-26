@@ -64,6 +64,10 @@ async def open_account(
         customer_id=customer_id, label=label, notes=notes, opened_by_user_id=opened_by_user_id, booking_id=booking_id,
     )
     db.add(account)
+    if booking_id is None:  # a table, a counter account - a hotel stay is told by its check-in
+        from app.services.notification_service import notify_table_opened
+        await db.flush()
+        await notify_table_opened(db, account)
     await db.commit()
     await db.refresh(account)
     return account
@@ -324,6 +328,8 @@ async def close_account(
             from datetime import datetime, timezone
             booking.status = BookingStatus.CONCLUIDA
             booking.checked_out_at = datetime.now(timezone.utc)
+    from app.services.notification_service import notify_table_closed  # Notificações: mesa fechada / check-out
+    await notify_table_closed(db, account, invoice, closing_user)
     await db.commit()
     await db.refresh(account)
     return account

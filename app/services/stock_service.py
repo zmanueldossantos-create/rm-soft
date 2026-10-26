@@ -506,7 +506,13 @@ async def deduct_stock_for_sale(
         product_name = product.name if product else str(product_id)
         raise InsufficientStockError(f"Stock insuficiente para {product_name} (disponível: {_format_quantity(float(stock.quantity))})")
 
-    stock.quantity = float(stock.quantity) - quantity
+    before = float(stock.quantity)
+    stock.quantity = before - quantity
+    product = (await db.execute(select(Product).where(Product.id == product_id))).scalar_one_or_none()
+    minimum = float(product.min_stock_threshold or 0) if product is not None else 0
+    if minimum > 0 and before > minimum >= before - quantity:  # Notificações: stock baixo, once, at the crossing
+        from app.services.notification_service import notify_low_stock
+        await notify_low_stock(db, company_id, product, warehouse, before, before - quantity)
     movement = StockMovement(
         company_id=company_id, fiscal_period_id=posting_period.id, product_id=product_id, warehouse_id=warehouse_id,
         movement_type=MovementType.SAIDA, quantity=quantity, reference=reference,

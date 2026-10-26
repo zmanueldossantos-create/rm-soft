@@ -297,3 +297,181 @@ async def notification_loop() -> None:
             await asyncio.wait_for(_wake.wait(), timeout=POLL_SECONDS)
         except asyncio.TimeoutError:
             pass
+
+
+# ------------------------------------------------------------------------------------- the events' messages (N2)
+# Called by the operations themselves, before their commit (the message is kept with the operation, or not at all).
+# _safe: whatever goes wrong while writing a notification, the operation goes on - its own changes are flushed first
+# (their errors stay theirs), the notification's work is done in a savepoint, undone alone if it fails.
+
+import functools  # noqa: E402
+
+
+def _safe(helper):
+    @functools.wraps(helper)
+    async def wrapper(db: AsyncSession, *args, **kwargs):
+        await db.flush()
+        try:
+            async with db.begin_nested():
+                await helper(db, *args, **kwargs)
+        except Exception:  # noqa: BLE001
+            log.exception("notification %s not written", helper.__name__)
+    return wrapper
+
+LUANDA_TZ = timezone(timedelta(hours=1))  # Africa/Luanda, no summer time
+
+
+def money(value) -> str:
+    """1 234,50 Kz - as on the documents."""
+    text = f"{float(value or 0):,.2f}".replace(",", " ").replace(".", ",")
+    return f"{text} Kz"
+
+
+def _qty(value) -> str:
+    value = float(value or 0)
+    return str(int(value)) if value == int(value) else f"{value:.3f}".rstrip("0").replace(".", ",")
+
+
+def _day(moment: datetime) -> str:
+    return moment.astimezone(LUANDA_TZ).strftime("%d/%m")
+
+
+def _hour(moment: datetime) -> str:
+    return moment.astimezone(LUANDA_TZ).strftime("%H:%M")
+
+
+async def _user(db: AsyncSession, user_id):
+    from app.models.user import User
+    return await db.get(User, user_id) if user_id else None
+
+
+async def _guest(db: AsyncSession, booking) -> str:
+    if booking.guest_name:
+        return booking.guest_name
+    if booking.customer_id:
+        from app.models.customer import Customer
+        customer = await db.get(Customer, booking.customer_id)
+        if customer is not None and not customer.is_final_consumer:
+            return customer.name
+    return "Hóspede"
+
+
+def _document(invoice) -> str:
+    return f"{invoice.series}/{invoice.number}"
+
+
+MAX_SALE_LINES = 10  # a long sale keeps its message readable on a phone: the rest is counted
+
+
+async def _sale_detail(db: AsyncSession, invoice) -> str:
+    """The articles of a sale and how it was paid:
+        2 × Donut - 2 280,00 Kz
+        1 × Café - 1 824,00 Kz
+        Pago: Numerário 4 104,00 Kz"""
+    from app.models.invoice_line import InvoiceLine
+    from app.models.payment import Payment
+    from app.models.payment_method_catalog import PaymentMethodCatalog
+    lines = (await db.execute(
+        select(InvoiceLine).where(InvoiceLine.invoice_id == invoice.id).order_by(InvoiceLine.created_at, InvoiceLine.id)
+    )).scalars().all()
+    rows = []
+    for line in lines[:MAX_SALE_LINES]:
+        unit = f" {line.unit_code_snapshot}" if line.unit_code_snapshot and line.unit_code_snapshot != "UN" else ""
+        rows.append(f"{_qty(line.quantity)}{unit} × {line.product_name_snapshot} - {money(line.line_total)}")
+    if len(lines) > MAX_SALE_LINES:
+        hidden = len(lines) - MAX_SALE_LINES
+        rows.append(f"+ {hidden} artigo{'s' if hidden > 1 else ''}")
+    payments = (await db.execute(
+        select(PaymentMethodCatalog.name, Payment.amount)
+        .join(PaymentMethodCatalog, PaymentMethodCatalog.id == Payment.payment_method_id)
+        .where(Payment.invoice_id == invoice.id).order_by(Payment.created_at)
+    )).all()
+    if payments:
+        rows.append("Pago: " + " + ".join(f"{name} {money(amount)}" for name, amount in payments))
+    return "\n".join(rows)
+
+
+@_safe
+async def notify_sale(db: AsyncSession, user, invoice, pos_id) -> None:
+    """VENDA: a sale made at a till (Caixa) - not the closing of a table or a stay (their own events)."""
+    from app.models.point_of_sale import PointOfSale
+    pos = await db.get(PointOfSale, pos_id)
+    detail = await _sale_detail(db, invoice)
+    await notify(db, invoice.company_id, "VENDA",
+                 f"Venda {_document(invoice)} - {money(invoice.total)}\n{detail}\n"
+                 f"Caixa: {pos.name if pos else '-'} · Vendedor: {user.full_name}",
+                 actor=user, amount=float(invoice.total))
+
+
+@_safe
+async def notify_table_opened(db: AsyncSession, account) -> None:
+    from app.models.activity import Activity
+    user = await _user(db, account.opened_by_user_id)
+    activity = await db.get(Activity, account.activity_id)
+    await notify(db, account.company_id, "MESA_ABERTA",
+                 f"{account.label} aberta por {user.full_name if user else '-'}" + (f" - {activity.name}" if activity else ""),
+                 actor=user)
+
+
+@_safe
+async def notify_table_closed(db: AsyncSession, account, invoice, user) -> None:
+    """MESA_FECHADA - or CHECK_OUT when the account is a hotel stay paid at the till."""
+    if account.booking_id is not None:
+        from app.models.booking import Booking
+        booking = await db.get(Booking, account.booking_id)
+        guest = await _guest(db, booking) if booking else "Hóspede"
+        await notify(db, account.company_id, "CHECK_OUT",
+                     f"{account.label} libertado - {guest}\nTotal {money(invoice.total)} ({_document(invoice)})\n"
+                     f"{await _sale_detail(db, invoice)}\n{user.full_name}", actor=user)
+        return
+    await notify(db, account.company_id, "MESA_FECHADA",
+                 f"{account.label} fechada - {money(invoice.total)} ({_document(invoice)})\n"
+                 f"{await _sale_detail(db, invoice)}\n{user.full_name}", actor=user)
+
+
+@_safe
+async def notify_check_in(db: AsyncSession, booking, resource_name: str, user, walk_in_service: str | None = None) -> None:
+    guest = await _guest(db, booking)
+    if walk_in_service:
+        detail = f"{walk_in_service}, até às {_hour(booking.ends_at)}"
+    else:
+        nights = max(1, (booking.ends_at.astimezone(LUANDA_TZ).date() - booking.starts_at.astimezone(LUANDA_TZ).date()).days)
+        detail = f"{nights} noite{'s' if nights > 1 else ''}, até {_day(booking.ends_at)}"
+    await notify(db, booking.company_id, "CHECK_IN", f"{resource_name} ocupado - {guest}\n{detail} · {user.full_name}",
+                 actor=user)
+
+
+@_safe
+async def notify_check_out(db: AsyncSession, booking, resource_name: str, user) -> None:
+    """A check-out with nothing left to pay (the one paid at the till comes from notify_table_closed)."""
+    guest = await _guest(db, booking)
+    await notify(db, booking.company_id, "CHECK_OUT",
+                 f"{resource_name} libertado - {guest}" + (f"\n{user.full_name}" if user else ""), actor=user)
+
+
+@_safe
+async def notify_till_closed(db: AsyncSession, session, user) -> None:
+    from app.models.point_of_sale import PointOfSale
+    pos = await db.get(PointOfSale, session.pos_id)
+    difference = float(session.closing_difference or 0)
+    text = (f"{pos.name if pos else 'Caixa'} fechada por {user.full_name if user else '-'}\n"
+            f"Esperado {money(session.closing_amount_expected)} · contado {money(session.closing_amount_counted)}")
+    text += f"\nDiferença {'+' if difference > 0 else ''}{money(difference)}" if difference else "\nSem diferença"
+    if session.closing_notes and difference:
+        text += f" - {session.closing_notes}"
+    await notify(db, session.company_id, "CAIXA_FECHADA", text, actor=user)
+
+
+@_safe
+async def notify_low_stock(db: AsyncSession, company_id, product, warehouse, before: float, after: float) -> None:
+    """STOCK_BAIXO: once, when a sale takes the product to its minimum or under it (not at every following sale)."""
+    minimum = float(product.min_stock_threshold or 0)
+    if minimum <= 0 or not (before > minimum >= after):
+        return
+    unit = "UN"
+    if product.unit_of_measure_id:
+        from app.models.unit_of_measure_catalog import UnitOfMeasureCatalog
+        row = await db.get(UnitOfMeasureCatalog, product.unit_of_measure_id)
+        unit = row.code if row else unit
+    await notify(db, company_id, "STOCK_BAIXO",
+                 f"{product.name}: {_qty(after)} {unit} (mínimo {_qty(minimum)})" + (f" - {warehouse.name}" if warehouse else ""))

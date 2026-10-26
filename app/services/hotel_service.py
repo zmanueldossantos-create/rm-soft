@@ -166,6 +166,8 @@ async def check_in(
                            stay_rate=True)
 
     booking.status = BookingStatus.EM_CURSO
+    from app.services.notification_service import notify_check_in  # Notificações: quarto ocupado
+    await notify_check_in(db, booking, resource.name, checking_in_user)
     await db.commit()
     await db.refresh(booking)
     await db.refresh(account)
@@ -173,7 +175,7 @@ async def check_in(
     return booking, account
 
 
-async def check_out(db: AsyncSession, company_id: uuid.UUID, booking_id: uuid.UUID) -> Booking:
+async def check_out(db: AsyncSession, company_id: uuid.UUID, booking_id: uuid.UUID, user: "User | None" = None) -> Booking:
     """Ends a stay with nothing left to pay. A stay whose account holds articles is paid at the till - closing
     that account concludes the booking (open_account_service.close_account) - so it is refused here: no money
     ever leaves this path without a payment. An account without articles is closed without any document."""
@@ -195,6 +197,9 @@ async def check_out(db: AsyncSession, company_id: uuid.UUID, booking_id: uuid.UU
 
     booking.status = BookingStatus.CONCLUIDA
     booking.checked_out_at = datetime.now(timezone.utc)
+    from app.services.notification_service import notify_check_out  # Notificações: quarto libertado
+    resource = await get_resource_or_raise(db, company_id, booking.resource_id)
+    await notify_check_out(db, booking, resource.name, user)
     await db.commit()
     await db.refresh(booking)
     return booking
@@ -247,6 +252,8 @@ async def walk_in(
         guest_name=_clean_guest_name(guest_name), party_size=party_size, invoice_id=invoice.id,
     )
     db.add(booking)
+    from app.services.notification_service import notify_check_in  # Notificações: quarto ocupado (entrada imediata)
+    await notify_check_in(db, booking, resource.name, selling_user, walk_in_service=service.name)
     await db.commit()
     await db.refresh(booking)
     return booking, invoice

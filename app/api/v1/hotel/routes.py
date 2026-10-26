@@ -64,7 +64,7 @@ async def post_check_out(
 ):
     """Only a stay with nothing left to pay - a stay with articles is paid at the till, which concludes it."""
     try:
-        return await check_out(db, current_user.company_id, booking_id)
+        return await check_out(db, current_user.company_id, booking_id, current_user)
     except BookingNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except InvalidStayStateError as e:
