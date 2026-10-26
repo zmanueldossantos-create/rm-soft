@@ -44,7 +44,7 @@ Trois façons d'installer le serveur :
 |---|---|---|---|
 | Coût | licence Windows | gratuit | licence Windows |
 | Démarrage après coupure | RM SOFT redémarre seul (services Windows) | RM SOFT redémarre seul | il faut l'ouverture de session automatique de Windows |
-| Code source sur le serveur | non | oui | oui |
+| Code source sur le serveur | non | non (paquet d'images, section 9) | non (paquet d'images, section 9) |
 | Installation | double-clic | `sudo ./instalar.sh` | `.\instalar.ps1` (administrateur) |
 
 ---
@@ -79,14 +79,11 @@ redémarre. Sur les postes : Ctrl+F5.
 ## 2 bis. Installation — serveur Ubuntu
 
 1. Installer **Ubuntu Server 24.04** (option « OpenSSH server » cochée), brancher le disque des copies.
-2. Copier RM SOFT sur le serveur :
+2. Copier le **paquet** `rmsoft-docker-<version>` (fabriqué par RM SOFT, section 9) depuis la clé USB vers
+   `/opt/rmsoft`. Jamais le code source, jamais `git clone` : le serveur du client n'a pas accès au GitHub de RM SOFT.
+3. Lancer l'installation (Docker est installé par le script s'il manque : il faut internet pour cela) :
    ```bash
-   sudo git clone https://github.com/zmanueldossantos-create/rm-soft.git /opt/rmsoft
-   ```
-   (sans internet : copier le dossier depuis une clé USB vers `/opt/rmsoft`)
-3. Lancer l'installation :
-   ```bash
-   cd /opt/rmsoft/docker/cliente
+   cd /opt/rmsoft
    sudo ./instalar.sh
    ```
    Le script demande : le nom du client, le dossier des copies (ex. `/media/copias` pour le disque externe), le
@@ -99,10 +96,11 @@ redémarre. Sur les postes : Ctrl+F5.
    « Engine running ». Dans Settings → General : cocher **Start Docker Desktop when you sign in**.
 2. Configurer l'**ouverture de session automatique** de Windows (sinon, après une coupure de courant, RM SOFT ne
    redémarre qu'à la connexion d'un utilisateur).
-3. Copier RM SOFT dans `C:\RMSOFT\rm-soft` (git clone ou clé USB).
+3. Copier le **paquet** `rmsoft-docker-<version>` (section 9) depuis la clé USB vers `C:\RMSOFT` — jamais le
+   code source.
 4. Ouvrir **PowerShell en administrateur** :
    ```powershell
-   cd C:\RMSOFT\rm-soft\docker\cliente
+   cd C:\RMSOFT
    Set-ExecutionPolicy -Scope Process Bypass
    .\instalar.ps1
    ```
@@ -149,11 +147,13 @@ Rien à installer. Dans **Chrome** :
 ## 6. Mises à jour (dont les changements AGT)
 
 RMSOFT-Setup.exe : lancer le nouveau setup sur le serveur (voir section 2).
-Ubuntu : `cd /opt/rmsoft/docker/cliente && sudo ./atualizar.sh`
-Windows : `.\atualizar.ps1` (PowerShell administrateur)
+Docker : copier les fichiers du **nouveau paquet** `rmsoft-docker-<version>` par-dessus le dossier installé
+(`/opt/rmsoft` ou `C:\RMSOFT`) — le `.env` du serveur reste, le paquet n'en contient pas — puis :
+Ubuntu : `cd /opt/rmsoft && sudo ./atualizar.sh`
+Windows : `.\atualizar.ps1` (PowerShell administrateur, dans `C:\RMSOFT`)
 
-Le script fait d'abord une copie de la base (`antes_atualizacao_….dump`), prend la version nouvelle, reconstruit et
-redémarre. Les données restent ; la base se met à jour seule. Sur les postes : Ctrl+F5.
+Le script fait d'abord une copie de la base (`antes_atualizacao_….dump`), charge les images de la nouvelle version,
+redémarre, puis efface les anciennes. Les données restent ; la base se met à jour seule. Sur les postes : Ctrl+F5.
 
 ---
 
@@ -164,7 +164,7 @@ redémarre. Les données restent ; la base se met à jour seule. Sur les postes 
 | RMSOFT-Setup.exe : voir l'état | `services.msc` → RMSOFT-BaseDados et RMSOFT-Servidor « En cours d'exécution » |
 | RMSOFT-Setup.exe : messages d'erreur | `C:\ProgramData\RMSOFT\logs\` : `instalacao.log` (installation), `rmsoft-servico.out.log` / `.err.log` (serveur) |
 | RMSOFT-Setup.exe : le port 80 est occupé | ouvrir `C:\ProgramData\RMSOFT\.env` (Bloc-notes en administrateur), `RMSOFT_PORT=8080`, relancer le setup |
-| Docker : voir l'état | `docker compose -f docker-compose.yml ps` (dans `docker/cliente`) |
+| Docker : voir l'état | `docker compose -f docker-compose.yml ps` (dans le dossier installé) |
 | Voir les messages d'erreur | `docker compose -f docker-compose.yml logs --tail 100 backend` |
 | Tout redémarrer | `docker compose -f docker-compose.yml restart` |
 | Le serveur est remplacé | nouvelle installation, **nouvelle licence** (le code change), puis **Restaurar empresa** avec la dernière copie (`empresas/`) |
@@ -187,3 +187,25 @@ powershell -ExecutionPolicy Bypass -File instalador\fabricar_setup.ps1 -Versao 1
 
 Résultat : `instalador\saida\RMSOFT-Setup-1.0.0.exe`. La 1re fois, le script télécharge PostgreSQL 16, WinSW et
 Visual C++ dans `instalador\cache\` (gardés pour les fois suivantes). Changer `-Versao` à chaque livraison.
+
+---
+
+## 9. Fabriquer le paquet Docker (PC de développement RM SOFT)
+
+Docker Desktop ouvert (« Engine running »). Puis, dans `C:\Projects\rm-system` :
+
+```powershell
+powershell -ExecutionPolicy Bypass -File instalador\fabricar_pacote_docker.ps1 -Versao 1.0.0
+```
+
+Résultat : le dossier `instalador\saida\rmsoft-docker-1.0.0\`, à copier tel quel sur la clé USB :
+
+| Fichier | Rôle |
+|---|---|
+| `rmsoft-imagens-1.0.0.tar.gz` | les images : le programme **compilé seulement** (aucun `.py`), les écrans, PostgreSQL, Redis |
+| `VERSAO` | la version du paquet |
+| `docker-compose.yml`, `docker-compose.linux.yml`, `Caddyfile`, `backup.sh` | le fonctionnement du serveur |
+| `.env.example` | le modèle du `.env` (le `.env` est créé sur le serveur, avec ses mots de passe) |
+| `instalar.*`, `atualizar.*`, `INSTALLATION_LOCAL.md` | l'installation et les mises à jour |
+
+Le script vérifie que l'image du programme ne contient aucun fichier `.py`. Changer `-Versao` à chaque livraison.

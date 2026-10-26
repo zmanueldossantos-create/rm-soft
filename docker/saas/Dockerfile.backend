@@ -1,4 +1,21 @@
 # RM SOFT - the backend (FastAPI) and the AGT worker (Celery): one image, two commands (see docker-compose.saas.yml).
+#
+# SOURCELESS=true (the clients' package, instalador/fabricar_pacote_docker.ps1): the code goes into the image compiled
+# only (.pyc, no .py) - done in a separate stage, so no layer of the image ever holds the source.
+FROM python:3.11.9-slim AS code
+WORKDIR /src
+COPY app ./app
+COPY alembic ./alembic
+COPY alembic.ini .
+ARG SOURCELESS=false
+RUN if [ "$SOURCELESS" = "true" ]; then \
+      python -m compileall -b -q app alembic \
+      && find app alembic -name "*.py" -delete \
+      && find app alembic -name "__pycache__" -type d -prune -exec rm -rf {} + \
+      && sed -i 's/\r$//; s/^# sourceless = false$/sourceless = true/' alembic.ini \
+      && grep -q '^sourceless = true$' alembic.ini; \
+    fi
+
 FROM python:3.11.9-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 TZ=Africa/Luanda
@@ -11,9 +28,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends tzdata fonts-de
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app ./app
-COPY alembic ./alembic
-COPY alembic.ini .
+COPY --from=code /src/app ./app
+COPY --from=code /src/alembic ./alembic
+COPY --from=code /src/alembic.ini .
 COPY docker/saas/backend-entrypoint.sh /usr/local/bin/backend-entrypoint
 # a Windows checkout gives the script CRLF line ends: Linux would refuse to run it
 RUN sed -i 's/\r$//' /usr/local/bin/backend-entrypoint && chmod +x /usr/local/bin/backend-entrypoint && mkdir -p /app/uploads/logos /app/data /app/backups \

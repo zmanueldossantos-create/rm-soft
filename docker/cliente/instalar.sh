@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# RM SOFT - instala o RM SOFT no servidor do cliente (Ubuntu Server 22.04 / 24.04).
-# Feito pelo técnico da RM SOFT, uma vez:   sudo ./instalar.sh
+# RM SOFT - instala o RM SOFT no servidor do cliente (Ubuntu Server 22.04 / 24.04), a partir da pasta do pacote
+# (rmsoft-docker-<versão>, copiada por pen USB): as imagens vêm prontas, sem código-fonte.
+# Feito pelo técnico da RM SOFT, uma vez, dentro dessa pasta:   sudo ./instalar.sh
 # Pode ser repetido sem perigo: nunca muda as palavras-passe já criadas nem apaga dados.
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -10,23 +11,25 @@ say()  { printf '\n\033[1;34m== %s\033[0m\n' "$1"; }
 fail() { printf '\n\033[1;31mERRO: %s\033[0m\n' "$1"; exit 1; }
 
 [ "$(id -u)" -eq 0 ] || fail "execute com sudo: sudo ./instalar.sh"
+[ -f VERSAO ] || fail "ficheiro VERSAO em falta: execute este script dentro da pasta do pacote rmsoft-docker-<versão>"
+VERSAO=$(head -n 1 VERSAO | tr -d '\r[:space:]')
 grep -qi ubuntu /etc/os-release || echo "Aviso: testado em Ubuntu Server; noutro Linux pode precisar de ajustes."
 
-say "1/7 Docker"
+say "1/8 Docker"
 if ! command -v docker >/dev/null 2>&1; then
   curl -fsSL https://get.docker.com | sh || fail "não foi possível instalar o Docker (sem internet?)"
 fi
 systemctl enable --now docker >/dev/null
 docker compose version >/dev/null || fail "o Docker Compose não está disponível"
 
-say "2/7 Nome do servidor na rede (rmsoft.local)"
+say "2/8 Nome do servidor na rede (rmsoft.local)"
 apt-get install -y -qq avahi-daemon >/dev/null 2>&1 || echo "Aviso: avahi não instalado - use o endereço IP."
 if [ "$(hostname)" != "rmsoft" ]; then
   read -r -p "Chamar este servidor 'rmsoft' (os postos abrem http://rmsoft.local)? [S/n] " ans
   if [ "${ans:-S}" != "n" ] && [ "${ans:-S}" != "N" ]; then hostnamectl set-hostname rmsoft; fi
 fi
 
-say "3/7 Configuração (.env)"
+say "3/8 Configuração (.env)"
 if [ ! -f .env ]; then
   cp .env.example .env
   read -r -p "Nome do cliente (ex.: Padaria Kilamba): " client
@@ -43,16 +46,28 @@ if [ ! -f .env ]; then
 else
   echo ".env já existe: mantido (as palavras-passe nunca mudam)."
 fi
+# the version of this package (an older .env may not have the line)
+if grep -q '^APP_VERSION=' .env; then sed -i "s|^APP_VERSION=.*|APP_VERSION=${VERSAO}|" .env; else echo "APP_VERSION=${VERSAO}" >> .env; fi
 set -a; . ./.env; set +a
 [ -n "${JWT_SECRET_KEY}" ] && [ -n "${POSTGRES_PASSWORD}" ] || fail ".env incompleto (JWT_SECRET_KEY / POSTGRES_PASSWORD)"
 [ -s /etc/machine-id ] || fail "/etc/machine-id em falta: necessário para a licença"
 
-say "4/7 Pastas das cópias"
+say "4/8 Pastas das cópias"
 mkdir -p "${BACKUP_DIR}/empresas" "${BACKUP_DIR}/base"
 chown -R 1000:1000 "${BACKUP_DIR}/empresas"   # the application's user in the container
 
-say "5/7 Construir e arrancar (alguns minutos na primeira vez)"
-"${COMPOSE[@]}" up -d --build
+say "5/8 Imagens do RM SOFT ${VERSAO}"
+if docker image inspect "rmsoft-backend:${VERSAO}" >/dev/null 2>&1; then
+  echo "Já carregadas."
+else
+  images="rmsoft-imagens-${VERSAO}.tar.gz"
+  [ -f "$images" ] || fail "$images não está nesta pasta (copie o pacote inteiro)"
+  echo "A carregar $images (alguns minutos)..."
+  docker load -i "$images" || fail "não foi possível carregar as imagens"
+fi
+
+say "6/8 Arrancar"
+"${COMPOSE[@]}" up -d
 echo -n "A aguardar o arranque"
 for _ in $(seq 1 60); do
   if "${COMPOSE[@]}" exec -T backend python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" >/dev/null 2>&1; then
@@ -61,10 +76,10 @@ for _ in $(seq 1 60); do
   echo -n "."; sleep 5
 done
 
-say "6/7 Conta SUPER_ADMIN da RM SOFT"
+say "7/8 Conta SUPER_ADMIN da RM SOFT"
 "${COMPOSE[@]}" exec backend python -m app.cli create-superadmin --if-none
 
-say "7/7 Pronto"
+say "8/8 Pronto"
 code=$("${COMPOSE[@]}" exec -T backend python -m app.cli installation-code | tr -d '\r')
 port_suffix=""; [ "${HTTP_PORT:-80}" != "80" ] && port_suffix=":${HTTP_PORT}"
 echo "Cliente:                 ${CLIENT_NAME:-?}"
