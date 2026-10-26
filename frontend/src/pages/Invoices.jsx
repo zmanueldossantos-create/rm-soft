@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { WORKING_TYPES, isExpired, workingDocumentState } from '../utils/documentStatus';
 import { API_BASE_URL } from '../api/config';
 import { useCan } from '../utils/permissions';
 import { useAuthStore } from '../store/authStore';
@@ -37,11 +38,6 @@ const INVOICE_TYPE_CODE = {
   ORCAMENTO: 'OR',
 };
 
-// a working document (pro-forma, orçamento): not fiscal, never sent to the AGT
-const WORKING_TYPES = ['PRO_FORMA', 'ORCAMENTO'];
-const todayIsoDate = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Africa/Luanda' });
-// an orçamento past its validity date and not converted: no longer converted into an invoice
-const isExpired = (inv) => !!inv.valid_until && !inv.converted_to_invoice_id && inv.valid_until < todayIsoDate();
 const ptDate = (iso) => (iso ? iso.split('-').reverse().join('/') : '-');
 
 const PDF_BASE_URL = API_BASE_URL + '/invoices';
@@ -604,14 +600,10 @@ export default function Invoices() {
                       <td className="px-4 py-3 font-mono text-text-muted whitespace-nowrap">{inv.business_date}</td>
                       <td className={'px-4 py-3 font-mono whitespace-nowrap ' + (isExpired(inv) ? 'text-danger' : 'text-text-muted')} title={inv.valid_until ? 'Válido até' : undefined}>{inv.due_date || inv.valid_until || '-'}</td>
                       <td className="px-4 py-3 whitespace-nowrap">
-                        {WORKING_TYPES.includes(inv.invoice_type) ? (
-                          isExpired(inv) ? (
-                            <span className="text-[11px] font-semibold uppercase tracking-wide px-2.5 py-1 rounded bg-danger/10 text-danger">Expirado</span>
-                          ) : (
-                            <span className="text-[11px] font-semibold uppercase tracking-wide px-2.5 py-1 rounded bg-text-muted/10 text-text-muted">
-                              {inv.converted_to_invoice_id ? 'Faturado' : 'Não Fiscal'}
-                            </span>
-                          )
+                        {workingDocumentState(inv) ? (
+                          <span className={'text-[11px] font-semibold uppercase tracking-wide px-2.5 py-1 rounded ' + workingDocumentState(inv).className}>
+                            {workingDocumentState(inv).label}
+                          </span>
                         ) : (
                           <div className="flex items-center gap-2">
                             <span className={'text-[11px] font-semibold uppercase tracking-wide px-2.5 py-1 rounded ' + (STATUS_STYLE[inv.status] || '')}>
@@ -779,8 +771,9 @@ export default function Invoices() {
                 )}
               </div>
               <div className="flex items-center gap-2">
-                <span className={'text-[11px] font-semibold uppercase tracking-wide px-2.5 py-1 rounded ' + (STATUS_STYLE[detailInvoice.status] || '')}>
-                  {detailInvoice.status}
+                {/* a working document never shows an AGT state: «Não fiscal», «Faturado» or «Expirado» */}
+                <span className={'text-[11px] font-semibold uppercase tracking-wide px-2.5 py-1 rounded ' + (workingDocumentState(detailInvoice)?.className || STATUS_STYLE[detailInvoice.status] || '')}>
+                  {workingDocumentState(detailInvoice)?.label || detailInvoice.status}
                 </span>
                 <span className="text-[11px] font-semibold uppercase tracking-wide px-2.5 py-1 rounded bg-bg-inset text-text-muted">
                   {detailInvoice.document_status}

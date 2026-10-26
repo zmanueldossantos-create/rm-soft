@@ -1,4 +1,5 @@
 import DateInput from '../components/DateInput';
+import { workingDocumentState } from '../utils/documentStatus';
 import { useState, useEffect, useMemo } from 'react';
 import { Users, Plus, Loader2, Search, Mail, Phone, Pencil, X } from 'lucide-react';
 import Modal from '../components/Modal';
@@ -686,7 +687,7 @@ export default function Customers() {
                         <td className="px-2 py-2 font-mono text-text-primary">{inv.series}/{inv.number}</td>
                         <td className="px-2 py-2 font-mono text-text-muted">{inv.business_date}</td>
                         <td className="px-2 py-2 font-mono text-text-primary text-right">{Number(inv.total).toFixed(2)}</td>
-                        <td className="px-2 py-2 text-text-muted">{inv.status}</td>
+                        <td className="px-2 py-2 text-text-muted">{workingDocumentState(inv)?.label || inv.status}</td>
                       </tr>
                     ))}
                   </tbody>
