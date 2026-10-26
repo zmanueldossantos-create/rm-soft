@@ -14,6 +14,7 @@ import Toaster from './components/Toaster';
 import CatalogoReferencia from './pages/CatalogoReferencia';
 import Planos from './pages/Planos';
 import Pedidos from './pages/Pedidos';
+import EcraCliente from './pages/EcraCliente';
 import Categorias from './pages/Categorias';
 import Services from './pages/Services';
 import Customers from './pages/Customers';
@@ -44,6 +45,7 @@ import Layout from './components/Layout';
 import { useAuthStore } from './store/authStore';
 import RequirePermission from './components/RequirePermission';
 import { homeFor } from './utils/roleHome';
+import { useLoadPermissions } from './utils/permissions';
 
 function ProtectedRoute({ children }) {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -53,6 +55,12 @@ function ProtectedRoute({ children }) {
 function SuperAdminRoute({ children }) {
   const user = useAuthStore((state) => state.user);
   return user?.role === 'SUPER_ADMIN' ? children : <Navigate to={homeFor(user?.role)} replace />;
+}
+
+// a screen outside the Layout (no menu) loads the permissions itself
+function WithPermissions({ children }) {
+  useLoadPermissions();
+  return children;
 }
 
 function GestorRoute({ children }) {
@@ -67,6 +75,8 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/suporte" element={<Suporte />} />
+        {/* the till's second monitor, turned to the customer: full screen, no menu */}
+        <Route path="/ecra-cliente" element={<ProtectedRoute><WithPermissions><RequirePermission perm="pos:checkout"><EcraCliente /></RequirePermission></WithPermissions></ProtectedRoute>} />
 
         <Route
           element={

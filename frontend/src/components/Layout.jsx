@@ -7,9 +7,8 @@ import { useAuthStore } from '../store/authStore';
 import apiClient from '../api/client';
 import { useThemeStore } from '../store/themeStore';
 import { getCurrentPeriod } from '../api/fiscal';
-import { getMyPermissions } from '../api/permissions';
 import { getPharmacyContext } from '../api/pharmacy';
-import { useCan } from '../utils/permissions';
+import { useCan, useLoadPermissions } from '../utils/permissions';
 import Footer from './Footer';
 import AssistantPanel, { readStored, writeStored } from './AssistantPanel';
 import HelpPanel from './HelpPanel';
@@ -141,7 +140,6 @@ export default function Layout() {
   const location = useLocation();
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
-  const setPermissions = useAuthStore((state) => state.setPermissions);
   const theme = useThemeStore((state) => state.theme);
   const toggleTheme = useThemeStore((state) => state.toggleTheme);
   const can = useCan();
@@ -178,16 +176,8 @@ export default function Layout() {
     }
   }, [user?.role]);
 
-  // Loads this user's permission codes once per session (Layout mounts after
-  // login). Fails closed: if the call fails, non-GESTOR users see no gated
-  // items - the backend refuses their requests anyway.
-  useEffect(() => {
-    if (user?.role && user.role !== 'SUPER_ADMIN') {
-      getMyPermissions()
-        .then(setPermissions)
-        .catch(() => { if (user.role !== 'GESTOR') setPermissions([]); });
-    }
-  }, [user?.role]);
+  // this user's permission codes, once per session (Layout mounts after login)
+  useLoadPermissions();
 
   // «Pedidos» (SUPER_ADMIN, the platform running the public site): the new demonstration requests on the menu's badge
   const [demoRequests, setDemoRequests] = useState(null);

@@ -56,6 +56,8 @@ OPTIONS: dict[str, Option] = {
         Option("IA_CANAIS", "IA por WhatsApp e Telegram", "O assistente nas conversas do WhatsApp e do Telegram"),
         Option("NOTIFICACOES", "Notificações automáticas",
                "Avisos por email e Telegram: quartos, mesas, vendas, fecho de caixa, stock baixo"),
+        Option("ECRA_CLIENTE", "Ecrã do cliente",
+               "Segundo ecrã da caixa virado para o cliente: artigos, total, troco e publicidade"),
     )
 }
 

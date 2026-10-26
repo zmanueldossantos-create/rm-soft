@@ -1,7 +1,7 @@
 import { API_ORIGIN } from '../api/config';
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Building2, Loader2, Save, Lock, Image, Upload, Store, Plus, Pencil, Landmark, X, Check, Trash2, FileStack, Sparkles, ChevronDown, CreditCard, Link2, Unlink, Users, Bot, Mail, LifeBuoy, DatabaseBackup, FileKey2, BellRing } from 'lucide-react';
+import { Building2, Loader2, Save, Lock, Image, Upload, Store, Plus, Pencil, Landmark, X, Check, Trash2, FileStack, Sparkles, ChevronDown, CreditCard, Link2, Unlink, Users, Bot, Mail, LifeBuoy, DatabaseBackup, FileKey2, BellRing, MonitorUp } from 'lucide-react';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
 import { getMySupportSessions, getMyCompany, updateMyCompanyContact, uploadMyCompanyLogo, removeMyCompanyLogo, getMyCompanyBankAccounts, addMyCompanyBankAccount, updateMyCompanyBankAccount, toggleMyCompanyBankAccountStatus } from '../api/company';
@@ -17,6 +17,8 @@ import { getMyCompanyAi } from '../api/ai';
 import AiCompanySettingsTab from '../components/AiCompanySettingsTab';
 import EmailSettingsTab from '../components/EmailSettingsTab';
 import NotificationsTab from '../components/NotificationsTab';
+import CustomerDisplayModal from '../components/CustomerDisplayModal';
+import { getCustomerDisplay } from '../api/customerDisplay';
 import { getNotifications } from '../api/notifications';
 import CompanyBackupsPanel from '../components/CompanyBackupsPanel';
 import LicensePanel from '../components/LicensePanel';
@@ -83,6 +85,9 @@ export default function CompanySettings() {
   useEffect(() => {
     if (canManageCompany) getNotifications().then((d) => setNotificationsAllowed(!!d.allowed)).catch(() => setNotificationsAllowed(false));
   }, [canManageCompany]);
+  // Ecrã do cliente: its button on each activity only when the plan has the option
+  const [displayAllowed, setDisplayAllowed] = useState(false);
+  const [displayActivity, setDisplayActivity] = useState(null);
   // The licence: its tab only on a client's server (LICENSE_REQUIRED)
   const [licenseRequired, setLicenseRequired] = useState(false);
   useEffect(() => {
@@ -244,6 +249,13 @@ export default function CompanySettings() {
       setLoading(false);
     }
   }
+
+  const firstActivityId = activities[0]?.id;
+  useEffect(() => {
+    if (canManageCompany && firstActivityId) {
+      getCustomerDisplay(firstActivityId).then((d) => setDisplayAllowed(!!d.allowed)).catch(() => setDisplayAllowed(false));
+    }
+  }, [canManageCompany, firstActivityId]);
 
   async function loadActivities() {
     setActivitiesLoading(true);
@@ -1008,6 +1020,11 @@ export default function CompanySettings() {
                         <p className="font-display font-medium text-text-primary">{a.name}</p>
                         <div className="flex items-center gap-2">
                           {!a.is_active && <span className="text-[10px] font-semibold uppercase tracking-wide text-danger bg-danger/10 px-1.5 py-0.5 rounded">Inativa</span>}
+                          {displayAllowed && (
+                            <button onClick={() => setDisplayActivity(a)} title="Ecrã do cliente: mensagem e imagens" className="flex items-center gap-1.5 h-8 px-2.5 rounded-md border border-border text-text-muted hover:text-text-primary hover:border-accent text-[12px] font-medium transition-colors cursor-pointer">
+                              <MonitorUp size={14} />Ecrã do cliente
+                            </button>
+                          )}
                           <button onClick={() => openEditActivity(a)} aria-label="Editar atividade" className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-border text-text-muted hover:text-text-primary hover:border-accent transition-colors cursor-pointer">
                             <Pencil size={14} />
                           </button>
@@ -1069,6 +1086,8 @@ export default function CompanySettings() {
           )}
         </div>
       )}
+
+      <CustomerDisplayModal activity={displayActivity} onClose={() => setDisplayActivity(null)} />
 
       {activeTab === 'estabelecimentos' && (
         <div className="bg-bg-elevated border border-border rounded-lg p-6 sm:p-8">

@@ -14,7 +14,8 @@ import useDocumentRules, { DOC_CODE_BY_TYPE } from '../utils/documentRules';
 import { getMyCompanyBankAccounts } from '../api/company';
 import { createProFormaFromPos, getPosStock } from '../api/pos';
 import { listPaymentMethodPreferences } from '../api/tesouraria';
-import { Wallet, Plus, Minus, Trash2, Loader2, Search, X, ShoppingCart, LogOut, CheckCircle2, FileSearch, ArrowLeftRight, Coins, Receipt, Printer, FileText, ChevronLeft, Snowflake } from 'lucide-react';
+import { Wallet, Plus, Minus, Trash2, Loader2, Search, X, ShoppingCart, LogOut, CheckCircle2, FileSearch, ArrowLeftRight, Coins, Receipt, Printer, FileText, ChevronLeft, Snowflake, MonitorUp } from 'lucide-react';
+import { useCustomerDisplay } from '../utils/customerDisplay';
 import Modal from '../components/Modal';
 import DenominationGrid, { denominationLines, denominationTotal } from '../components/DenominationGrid';
 import OpenAccountsPanel from '../components/OpenAccountsPanel';
@@ -165,6 +166,8 @@ export default function Caixa() {
 
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [payments, setPayments] = useState([]);
+  // the notes the customer hands over for the cash part (only to work out the change - the payment stays the amount due)
+  const [cashGiven, setCashGiven] = useState('');
   const [checkoutSaving, setCheckoutSaving] = useState(false);
   const [checkoutError, setCheckoutError] = useToastState('error');
   const [lastInvoice, setLastInvoice] = useState(null);
@@ -924,6 +927,7 @@ export default function Caixa() {
   const [prescriptionNeed, setPrescriptionNeed] = useState(null);
   function startConfirmation() {
     setPayments([]);
+    setCashGiven('');
     const need = selectedInvoiceType === 'PRO_FORMA' ? null : prescriptionNeedOf(cart, Object.fromEntries(products.map((p) => [p.id, p])));
     if (need) { setPrescriptionNeed(need); return; }
     setPrescription(null);
@@ -1186,6 +1190,43 @@ export default function Caixa() {
     return Math.round(n * 100) / 100;
   }
 
+  // the change: what the customer handed over for the cash part, minus that cash part
+  const cashPayment = payments.find((p) => posPaymentMethods.find((m) => m.id === p.paymentMethodId)?.is_cash);
+  const cashPart = parseFloat(cashPayment?.amount) || 0;
+  const cashHanded = parseFloat(cashGiven) || 0;
+  const cashChange = cashPayment && cashHanded > cashPart ? round2(cashHanded - cashPart) : 0;
+
+  // Ecrã do cliente: what the customer sees on the till's second monitor follows the cart and the payment
+  const customerDisplay = useCustomerDisplay(selectedPosId, pointsOfSale.find((p) => p.id === selectedPosId)?.activity_id);
+  const customerChange = cashChange;
+  const customerView = paymentMode !== 'sale' || cart.length === 0 ? { type: 'idle' } : {
+    type: 'sale',
+    lines: cart.map((line) => {
+      const vatRate = vatRates.find((v) => v.id === line.vatId)?.rate || 0;
+      const unit = line.saleUnitId ? line.saleUnits?.find((u) => u.id === line.saleUnitId)?.unit_of_measure_code : line.baseUnit;
+      const total = (line.price - insurerUnit(line)) * line.quantity * (1 - line.discountPercent / 100) * (1 + vatRate / 100);
+      return { key: line.key, name: line.name, quantity: line.quantity, unit: unit || '', total: round2(total) };
+    }),
+    discount: round2(globalDiscountAmount),
+    retention: round2(cartCalculation.retention),
+    total: cartTotal,
+    received: round2(paymentsTotal - cashPart + Math.max(cashHanded, cashPart)),
+    change: round2(customerChange),
+  };
+  const customerViewKey = JSON.stringify(customerView);
+  useEffect(() => {
+    if (customerDisplay.allowed) customerDisplay.send(JSON.parse(customerViewKey));
+  }, [customerViewKey, customerDisplay.allowed, customerDisplay.send]);
+
+  function showSaleDoneToCustomer(invoice, change) {
+    customerDisplay.send({
+      type: 'done',
+      document: invoice.series ? invoice.series + '/' + invoice.number : '',
+      total: Number(invoice.total),
+      change: round2(change),
+    });
+  }
+
   async function handleConfirmSale() {
     setCheckoutError('');
     setCheckoutSaving(true);
@@ -1193,6 +1234,7 @@ export default function Caixa() {
       const validPayments = payments.filter((p) => parseFloat(p.amount) > 0);
       if (paymentMode === 'liquidation') {
         const invoice = await liquidatePendingInvoice(selectedPosId, liquidationTarget.id, liquidationTargetType, validPayments);
+        showSaleDoneToCustomer(invoice, customerChange);
         setLastInvoice(invoice);
         setPaymentModalOpen(false);
         setSuccessModalOpen(true);
@@ -1210,6 +1252,7 @@ export default function Caixa() {
           globalDiscountPercent,
           { prescription, insurance: insurancePayload() },
         );
+        showSaleDoneToCustomer(invoice, customerChange);
         setLastInvoice(invoice);
         setSuccessModalOpen(true);
 
@@ -1320,6 +1363,12 @@ export default function Caixa() {
         <button onClick={() => toggleSideDrawer('reservas', () => setReservasModalOpen(true))} disabled={!selectedPosId} className={'group relative w-11 h-11 flex items-center justify-center rounded-lg border hover:border-accent hover:bg-accent/5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer ' + (activeSideDrawer === 'reservas' ? 'border-accent bg-accent/5' : 'border-accent/20 bg-bg-inset')}>
           <CalendarClock size={18} className="text-accent" />
           <span className="pointer-events-none absolute left-full ml-2 whitespace-nowrap rounded-md bg-bg-elevated border border-border px-2.5 py-1 text-[12px] text-text-primary shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-50">Reservas</span>
+        </button>
+        )}
+        {customerDisplay.allowed && (
+        <button onClick={customerDisplay.open} disabled={!selectedPosId} className="group relative w-11 h-11 flex items-center justify-center rounded-lg border border-accent/20 bg-bg-inset hover:border-accent hover:bg-accent/5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer">
+          <MonitorUp size={18} className="text-accent" />
+          <span className="pointer-events-none absolute left-full ml-2 whitespace-nowrap rounded-md bg-bg-elevated border border-border px-2.5 py-1 text-[12px] text-text-primary shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-50">Ecrã do cliente - arraste-o para o 2.º monitor</span>
         </button>
         )}
       </aside>
@@ -2121,6 +2170,24 @@ export default function Caixa() {
               {paidOnIssue && (
                 <div className={'text-[12px] px-3 py-2 rounded-r border-l-2 ' + (paymentsRemaining === 0 ? 'bg-success/10 border-success text-success' : paymentsRemaining > 0 ? 'bg-accent/10 border-accent text-accent' : 'bg-danger/10 border-danger text-danger')}>
                   {paymentsRemaining === 0 ? 'Valor exato' : paymentsRemaining > 0 ? `Falta ${formatKz(paymentsRemaining)} Kz` : `Excede em ${formatKz(Math.abs(paymentsRemaining))} Kz`}
+                </div>
+              )}
+              {paidOnIssue && cashPart > 0 && (
+                <div className="flex items-center gap-2 mt-1">
+                  <label className="text-[13px] text-text-muted flex-1">Entregue pelo cliente</label>
+                  <input
+                    type="number" step="0.01" min="0"
+                    value={cashGiven}
+                    onChange={(e) => setCashGiven(e.target.value)}
+                    placeholder={formatKz(cashPart)}
+                    className="w-28 bg-bg-inset border border-border rounded-md px-2.5 py-1.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors"
+                  />
+                </div>
+              )}
+              {paidOnIssue && cashChange > 0 && (
+                <div className="flex items-baseline justify-between text-success px-3 py-2 rounded-md bg-success/10">
+                  <span className="text-[13px] font-semibold">Troco</span>
+                  <span className="font-mono font-bold text-lg">{formatKz(cashChange)} Kz</span>
                 </div>
               )}
             </div>

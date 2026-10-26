@@ -97,3 +97,4 @@ from app.models.reference_product import ReferenceProduct, ReferenceProductUnit 
 from app.models.plan import CompanyContract, CompanyLicense, Plan  # noqa: E402,F401 - the plans and each company's contract
 from app.models.demo_request import DemoRequest  # noqa: E402,F401 - «Pedir demonstração» of the public site
 from app.models.notification import NotificationOutbox, NotificationRecipient, NotificationSettings  # noqa: E402,F401 - Notificações
+from app.models.customer_display import CustomerDisplayImage, CustomerDisplaySettings  # noqa: E402,F401 - Ecrã do cliente

@@ -1,4 +1,21 @@
+import { useEffect } from 'react';
 import { useAuthStore } from '../store/authStore';
+import { getMyPermissions } from '../api/permissions';
+
+// Loads this user's permission codes once per session (by the Layout, and by the screens outside it such as the
+// customer's screen). Fails closed: if the call fails, non-GESTOR users see no gated items - the backend refuses
+// their requests anyway.
+export function useLoadPermissions() {
+  const role = useAuthStore((state) => state.user?.role);
+  const setPermissions = useAuthStore((state) => state.setPermissions);
+  useEffect(() => {
+    if (role && role !== 'SUPER_ADMIN') {
+      getMyPermissions()
+        .then(setPermissions)
+        .catch(() => { if (role !== 'GESTOR') setPermissions([]); });
+    }
+  }, [role, setPermissions]);
+}
 
 // Returns can(code). Once the list loaded from /permissions/mine is available it decides for
 // everybody: the backend removes from that list every permission whose capability the company's
