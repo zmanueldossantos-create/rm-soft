@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.api.deps import require_permission
+from app.api.deps import require_any_permission, require_permission
 from app.models.user import User
 from app.schemas.customer import (
     CustomerCreateRequest, CustomerUpdateRequest, CustomerResponse,
@@ -81,8 +81,8 @@ async def create_new_customer(
 @router.get("", response_model=list[CustomerResponse])
 async def get_customers(
     db: AsyncSession = Depends(get_db),
-    # Explicit list - CAIXA needs this for Reservas' "Hospede" selector.
-    current_user: User = Depends(require_permission("customers:view")),
+    # the till (Reservas' «Hóspede» selector...) and the warehouse keeper issuing a Guia de Remessa to a customer
+    current_user: User = Depends(require_any_permission("customers:view", "guias:manage")),
 ):
     """Lists all customers belonging to the caller's company."""
     return await list_customers(db, current_user.company_id)

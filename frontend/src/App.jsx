@@ -88,8 +88,8 @@ export default function App() {
           <Route path="/dashboard" element={<RequirePermission perm="dashboard:view" allowSuperAdmin><Dashboard /></RequirePermission>} />
           <Route path="/products" element={<RequirePermission perm="products:manage"><Products /></RequirePermission>} />
           <Route path="/materia-prima" element={<RequirePermission perm="products:manage"><MateriaPrima /></RequirePermission>} />
-          <Route path="/producao" element={<RequirePermission perm="recipes:view"><Producao /></RequirePermission>} />
-          <Route path="/producao/historico" element={<RequirePermission perm="recipes:view"><ProductionHistory /></RequirePermission>} />
+          <Route path="/producao" element={<RequirePermission anyOf={['recipes:view', 'production:view']}><Producao /></RequirePermission>} />
+          <Route path="/producao/historico" element={<RequirePermission anyOf={['recipes:view', 'production:view']}><ProductionHistory /></RequirePermission>} />
           <Route path="/caixa" element={<RequirePermission perm="pos:view"><Caixa /></RequirePermission>} />
           <Route path="/configuracoes" element={<SuperAdminRoute><Configuracoes /></SuperAdminRoute>} />
           <Route path="/visao-global" element={<SuperAdminRoute><VisaoGlobal /></SuperAdminRoute>} />
@@ -114,7 +114,7 @@ export default function App() {
           <Route path="/reservas" element={<RequirePermission perm="bookings:view"><Reservas /></RequirePermission>} />
           <Route path="/recursos/historico" element={<RequirePermission perm="resources:history"><HistoricoRecursos /></RequirePermission>} />
           <Route path="/consumo-interno" element={<RequirePermission perm="internal_consumption:view"><ConsumoInterno /></RequirePermission>} />
-          <Route path="/fornecedores" element={<RequirePermission perm="suppliers:manage"><Fornecedores /></RequirePermission>} />
+          <Route path="/fornecedores" element={<RequirePermission anyOf={['suppliers:manage', 'suppliers:view']}><Fornecedores /></RequirePermission>} />
           <Route path="/compras" element={<RequirePermission perm="purchases:view"><Compras /></RequirePermission>} />
           <Route path="/pagamentos-fornecedores" element={<RequirePermission perm="purchases:view"><PagamentosFornecedores /></RequirePermission>} />
           <Route path="/guias" element={<RequirePermission perm="guias:view"><Guias /></RequirePermission>} />

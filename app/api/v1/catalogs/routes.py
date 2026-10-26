@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.api.deps import require_permission, require_role
+from app.api.deps import get_current_user, require_permission, require_role
 from app.models.user import User
 from app.api.deps import get_current_user
 from app.schemas.catalog import (
@@ -95,8 +95,9 @@ async def toggle_currency(item_id: uuid.UUID, db: AsyncSession = Depends(get_db)
 
 # ---------- Province ----------
 
+# provinces, municipalities, units: public reference data every user of a form may need (a new warehouse, a recipe)
 @router.get("/provinces", response_model=list[ProvinceResponse])
-async def get_provinces(country_id: uuid.UUID | None = None, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_permission("catalogs:view_reference", also_allow_roles=("SUPER_ADMIN",)))):
+async def get_provinces(country_id: uuid.UUID | None = None, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     return await catalog_service.list_provinces(db, country_id)
 
 
@@ -124,7 +125,7 @@ async def toggle_province(item_id: uuid.UUID, db: AsyncSession = Depends(get_db)
 # ---------- Municipality ----------
 
 @router.get("/municipalities", response_model=list[MunicipalityResponse])
-async def get_municipalities(province_id: uuid.UUID | None = None, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_permission("catalogs:view_reference", also_allow_roles=("SUPER_ADMIN",)))):
+async def get_municipalities(province_id: uuid.UUID | None = None, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     return await catalog_service.list_municipalities(db, province_id)
 
 
@@ -345,7 +346,7 @@ async def toggle_movement_type(item_id: uuid.UUID, db: AsyncSession = Depends(ge
 # ---------- UnitOfMeasureCatalog ----------
 
 @router.get("/units", response_model=list[UnitOfMeasureCatalogResponse])
-async def get_units(db: AsyncSession = Depends(get_db), current_user: User = Depends(require_permission("catalogs:view_reference", also_allow_roles=("SUPER_ADMIN",)))):
+async def get_units(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     return await catalog_service.list_units(db)
 
 

@@ -43,8 +43,12 @@ export default function Fornecedores() {
 
   useEffect(() => {
     loadSuppliers();
-    countriesApi.list().then((data) => setCountries(data.filter((c) => c.is_active))).catch(() => setCountries([]));
   }, []);
+  // read only for who may only see the suppliers (e.g. the warehouse keeper): no form, so no countries to load
+  const canManage = can('suppliers:manage');
+  useEffect(() => {
+    if (canManage) countriesApi.list().then((data) => setCountries(data.filter((c) => c.is_active))).catch(() => setCountries([]));
+  }, [canManage]);
 
   // a supplier of Angola (or without a country) needs its NIF - the purchase invoices are declared with it
   const angolaId = countries.find((c) => c.code === 'AO')?.id;
@@ -154,13 +158,13 @@ export default function Fornecedores() {
             className="w-full bg-bg-elevated border border-border rounded-md pl-10 pr-4 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors"
           />
         </div>
-        <button
+        {canManage && <button
           onClick={openCreateForm}
           className="flex items-center gap-2 bg-accent hover:bg-accent-hover text-white font-medium text-sm px-4 py-2 rounded-md transition-colors cursor-pointer"
         >
           <Plus size={16} />
           Novo fornecedor
-        </button>
+        </button>}
       </div>
 
 
@@ -199,7 +203,7 @@ export default function Fornecedores() {
                     <td className={'px-4 py-2.5 text-right font-mono whitespace-nowrap ' + (balances[s.id] > 0 ? 'text-text-primary font-semibold' : 'text-text-muted')}>{formatKz(balances[s.id] || 0)} Kz</td>
                   )}
                   <td className="px-4 py-2.5">
-                    <ToggleSwitch checked={s.is_active} disabled={togglingId === s.id} onChange={() => handleToggle(s.id)} />
+                    <ToggleSwitch checked={s.is_active} disabled={!canManage || togglingId === s.id} onChange={() => handleToggle(s.id)} />
                   </td>
                   <td className="px-4 py-2.5 text-right whitespace-nowrap">
                     {can('purchases:view') && (
@@ -207,9 +211,9 @@ export default function Fornecedores() {
                         <BookOpen size={13} /> Conta corrente
                       </button>
                     )}
-                    <button onClick={() => openEditForm(s)} className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-border text-text-muted hover:text-text-primary hover:border-accent transition-colors cursor-pointer">
+                    {canManage && <button onClick={() => openEditForm(s)} className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-border text-text-muted hover:text-text-primary hover:border-accent transition-colors cursor-pointer">
                       <Pencil size={13} />
-                    </button>
+                    </button>}
                   </td>
                 </tr>
               ))}

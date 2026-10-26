@@ -7,6 +7,7 @@ import { listResources } from '../api/booking';
 import { listConsumptionReasons, recordConsumption, listInternalConsumption } from '../api/internalConsumption';
 import { getMyPermissions } from '../api/permissions';
 import { extractErrorMessage } from '../utils/errors';
+import { useCan } from '../utils/permissions';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
 
@@ -22,6 +23,7 @@ function formatDateTime(iso) {
 }
 
 export default function ConsumoInterno() {
+  const can = useCan();
   const [activities, setActivities] = useState([]);
   const [selectedActivityId, setSelectedActivityId] = useState('');
   const [products, setProducts] = useState([]);
@@ -56,11 +58,13 @@ export default function ConsumoInterno() {
     getMyPermissions().then((perms) => setCanRecord(perms.includes('internal_consumption:record'))).catch(() => {});
   }, []);
 
+  // the rooms/tables a consumption can be charged to: only for who may see them (the hotel, the restaurant)
+  const canSeeResources = can('resources:view');
   useEffect(() => {
     if (!selectedActivityId) return;
-    listResources(selectedActivityId).then((data) => setResources(data.filter((r) => r.is_active))).catch(() => {});
+    if (canSeeResources) listResources(selectedActivityId).then((data) => setResources(data.filter((r) => r.is_active))).catch(() => {});
     loadHistory();
-  }, [selectedActivityId, dateFrom, dateTo]);
+  }, [selectedActivityId, dateFrom, dateTo, canSeeResources]);
 
   async function loadHistory() {
     setLoading(true);

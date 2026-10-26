@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.api.deps import require_permission
+from app.api.deps import require_any_permission, require_permission
 from app.models.user import User
 from app.schemas.fiscal_period import (
     FiscalYearResponse,
@@ -64,7 +64,8 @@ async def create_fiscal_year(
 @router.get("/years", response_model=list[FiscalYearResponse])
 async def get_fiscal_years(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("fiscal_periods:view")),
+    # also the Resumo de Produção's year/period filter
+    current_user: User = Depends(require_any_permission("fiscal_periods:view", "production:view")),
 ):
     return await list_fiscal_years(db, current_user.company_id)
 
@@ -112,7 +113,7 @@ async def create_fiscal_period(
 async def get_fiscal_periods(
     fiscal_year_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("fiscal_periods:view")),
+    current_user: User = Depends(require_any_permission("fiscal_periods:view", "production:view")),
 ):
     return await list_fiscal_periods(db, current_user.company_id, fiscal_year_id)
 

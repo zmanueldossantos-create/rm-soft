@@ -120,6 +120,10 @@ def test_every_require_permission_code_exists_in_catalog():
     for path in routes_dir.rglob("*.py"):
         for code in re.findall(r'require_permission\(\s*"([^"]+)"', path.read_text(encoding="utf-8")):
             used[code] = path.name
+        # require_any_permission("a", "b"): every code of the list
+        for codes in re.findall(r'require_any_permission\(([^)]*)\)', path.read_text(encoding="utf-8")):
+            for code in re.findall(r'"([^"]+)"', codes):
+                used[code] = path.name
     unknown = {code: file for code, file in used.items() if code not in catalog_codes}
     assert not unknown, f"require_permission codes missing from PERMISSION_CATALOG: {unknown}"
 
@@ -201,6 +205,8 @@ def test_every_catalog_permission_is_enforced_by_a_route():
     for path in routes_dir.rglob("*.py"):
         text = path.read_text(encoding="utf-8")
         used |= set(re.findall(r'require_permission\(\s*"([^"]+)"', text))
+        for codes in re.findall(r'require_any_permission\(([^)]*)\)', text):
+            used |= set(re.findall(r'"([^"]+)"', codes))
         # a permission checked inside a route helper (has_permission - e.g. only for some document types) is enforced too
         used |= set(re.findall(r'has_permission\([^)]*?"([a-z_]+:[a-z_]+)"', text))
     unused = {entry[0] for entry in PERMISSION_CATALOG} - used

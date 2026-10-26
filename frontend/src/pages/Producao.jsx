@@ -8,6 +8,7 @@ import { listWarehouses, getProductionEstimate, produceStock } from '../api/stoc
 import apiClient from '../api/client';
 import { unitsApi } from '../api/catalogs';
 import { extractErrorMessage } from '../utils/errors';
+import { useCan } from '../utils/permissions';
 
 import PostingPeriodSelect from '../components/PostingPeriodSelect';
 import DateInput from '../components/DateInput';
@@ -22,6 +23,8 @@ const emptyRecipeForm = { productId: '', batchYield: '1', batchYieldSaleUnitId: 
 const emptyProduceForm = { productId: '', warehouseId: '', quantity: '', reason: '', fiscalPeriodId: '', lotNumber: '', expiryDate: '' };
 
 export default function Producao() {
+  // the warehouse keeper produces (production:produce); only who may (recipes:manage) configures the recipes
+  const can = useCan();
   const [allProducts, setAllProducts] = useState([]);
   const [units, setUnits] = useState([]);
   const [configuredProducts, setConfiguredProducts] = useState([]);
@@ -302,13 +305,13 @@ export default function Producao() {
             className="w-full bg-bg-elevated border border-border rounded-md pl-10 pr-4 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors"
           />
         </div>
-        <button
+        {can('recipes:manage') && <button
           onClick={openNewRecipeModal}
           className="flex items-center gap-2 bg-accent hover:bg-accent-hover text-white font-semibold text-sm px-4 py-2.5 rounded-md transition-colors cursor-pointer"
         >
           <ChefHat size={17} />
           Configurar nova receita
-        </button>
+        </button>}
       </div>
 
       <div className="bg-bg-elevated border border-border rounded-lg overflow-hidden">
@@ -326,7 +329,7 @@ export default function Producao() {
         {!loading && !error && filteredConfigured.length === 0 && (
           <div className="text-center py-16 text-text-muted text-sm">
             <span className="flex flex-col items-center gap-3">
-              {search ? 'Nenhum produto encontrado' : 'Nenhuma receita configurada ainda - clique em "Configurar nova receita"'}
+              {search ? 'Nenhum produto encontrado' : can('recipes:manage') ? 'Nenhuma receita configurada ainda - clique em "Configurar nova receita"' : 'Nenhuma receita configurada ainda - as receitas são configuradas pelo gestor'}
               <Search size={22} className="text-text-muted/40 mt-1" />
             </span>
           </div>
@@ -351,20 +354,20 @@ export default function Producao() {
                     <td className="px-6 py-4 font-mono text-text-muted text-right">{p.batch_yield} {units.find((u) => u.id === p.unit_of_measure_id)?.code || 'UN'}</td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-1.5">
-                        <button
+                        {can('production:produce') && <button
                           onClick={() => openProduceModal(p)}
                           className="flex items-center gap-1.5 bg-accent hover:bg-accent-hover text-white font-medium text-[12px] px-3 py-2 rounded-md transition-colors cursor-pointer"
                         >
                           <Factory size={13} />
                           Produzir
-                        </button>
-                        <button
+                        </button>}
+                        {can('recipes:manage') && <button
                           onClick={() => openEditRecipeModal(p)}
                           aria-label="Editar receita"
                           className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-border text-text-muted hover:text-text-primary hover:border-accent transition-colors cursor-pointer"
                         >
                           <Pencil size={14} />
-                        </button>
+                        </button>}
                       </div>
                     </td>
                   </tr>

@@ -125,6 +125,22 @@ def require_role(*allowed_roles: str):
     return role_checker
 
 
+def require_any_permission(*codes: str):
+    """Like require_permission, for a read needed by several jobs (e.g. the customers list: the till, and the
+    warehouse keeper issuing a Guia de Remessa to a customer) - any one of the codes is enough."""
+    async def permission_checker(
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db),
+    ) -> User:
+        if current_user.company_id is not None:
+            for code in codes:
+                if await has_permission(db, current_user.company_id, current_user.role.value, code):
+                    return current_user
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Não tem permissão para aceder a este recurso")
+
+    return permission_checker
+
+
 def require_permission(code: str, *, also_allow_roles: tuple[str, ...] = ()):
     """
     Dependency factory - dynamic counterpart to require_role, checking a
