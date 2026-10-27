@@ -17,6 +17,7 @@ from app.models.company import Company
 from app.services import api_key_service as keys
 from app.services import public_api_service as public
 from app.services import invoice_service as inv
+from app.services import public_bookings_service as bookings
 from app.services import public_documents_service as documents
 from app.services.fiscal_period_service import PeriodClosedError
 from app.services.pharmacy_service import MedicineError
@@ -259,6 +260,117 @@ async def document_pdf(document_id: uuid.UUID,
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Documento não encontrado")
     return Response(content=pdf_bytes, media_type="application/pdf",
                     headers={"Content-Disposition": f'inline; filename="{filename}"'})
+
+
+# -------------------------------------------------------------------------------------------------------- bookings
+
+def _booking_error(e: Exception) -> HTTPException:
+    from app.services.booking_service import BookingOverlapError
+    if isinstance(e, LookupError):
+        return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    if isinstance(e, (bookings.NoResourceFreeError, BookingOverlapError)):
+        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    return HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+def _booking_errors() -> tuple:
+    from app.services import booking_service as bs
+    return (LookupError, public.PublicApiError, bookings.NoResourceFreeError, bs.BookingOverlapError,
+            bs.InvalidBookingRangeError, bs.ServiceRequiredError, bs.IncompatibleServiceError)
+
+
+@router.get("/bookings/availability", response_model=list[schemas.Availability], summary="Disponibilidade",
+            tags=["Reservas"])
+async def booking_availability(check_in: date | None = Query(None, description="Dia de chegada (hotel)"),
+                               check_out: date | None = Query(None, description="Dia de partida (hotel)"),
+                               starts_at: datetime | None = Query(None, description="...ou início exato"),
+                               ends_at: datetime | None = Query(None, description="...e fim exato"),
+                               resource_type_id: uuid.UUID | None = Query(None, description="Só este tipo"),
+                               party_size: int | None = Query(None, ge=1, description="Pessoas (capacidade)"),
+                               ctx: ApiContext = Depends(api_key("bookings")), db: AsyncSession = Depends(get_db)):
+    """Por tipo de recurso (Quarto duplo, Suite...): quantos estão livres em todo o período, e as tarifas com o total
+    da estadia. Um hotel pede por dias: as horas de entrada e saída são as do tipo (ex.: 14:00 -> 12:00)."""
+    try:
+        return await bookings.availability(db, ctx.company_id, check_in, check_out, starts_at, ends_at,
+                                           resource_type_id, party_size)
+    except _booking_errors() as e:
+        raise _booking_error(e)
+
+
+@router.post("/bookings", response_model=schemas.BookingOut, status_code=status.HTTP_201_CREATED,
+             summary="Criar uma reserva", tags=["Reservas"],
+             responses={409: {"description": "Já não há recurso livre neste período"},
+                        423: {"description": "Empresa só de leitura (contrato terminado)"}})
+async def create_booking(payload: schemas.BookingCreate, request: Request,
+                         idempotency_key: str = Header(alias="Idempotency-Key", min_length=8, max_length=100,
+                                                       description="Único por pedido (ex.: o n.º da reserva no site)"),
+                         ctx: ApiContext = Depends(api_key("bookings")), db: AsyncSession = Depends(get_db)):
+    """A reserva chega PENDENTE: a receção confirma-a (consulte depois GET /bookings/{id}). Peça um tipo
+    (resource_type_id): o RM SOFT escolhe um recurso livre."""
+    from app.services.notification_service import notify_online_booking
+
+    path, body_hash = request.url.path, public.request_hash(payload.model_dump(mode="json"))
+    try:
+        replay = await public.find_replay(db, ctx.company_id, idempotency_key, path, body_hash)
+    except public.IdempotencyConflictError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    if replay is not None:
+        return _replayed(replay)
+    key_name = ctx.key.name
+    try:
+        booking = await bookings.create_booking(db, ctx.company_id, ctx.key, payload.model_dump())
+        view = await bookings.booking_view(db, booking)
+        public.remember(db, ctx.company_id, ctx.key.id, idempotency_key, path, body_hash, 201, view, booking.id)
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        replay = await public.find_replay(db, ctx.company_id, idempotency_key, path, body_hash)
+        if replay is None:
+            raise
+        return _replayed(replay)
+    except _booking_errors() as e:
+        await db.rollback()
+        raise _booking_error(e)
+    await notify_online_booking(db, booking, key_name)  # the reception is told (Telegram, email)
+    await db.commit()
+    return JSONResponse(status_code=status.HTTP_201_CREATED, content=view)
+
+
+@router.get("/bookings", response_model=schemas.BookingPage, summary="Reservas", tags=["Reservas"])
+async def list_bookings(external_reference: str | None = Query(None, description="O n.º da reserva no site"),
+                        status_: str | None = Query(None, alias="status", description="PENDENTE, CONFIRMADA..."),
+                        date_from: date | None = Query(None, description="Estadias desde (AAAA-MM-DD)"),
+                        date_to: date | None = Query(None, description="Estadias até (AAAA-MM-DD)"),
+                        updated_since: datetime | None = Query(None, description="Só as alteradas desde"),
+                        page: int = Query(1, ge=1), page_size: int = Query(50, ge=1, le=public.MAX_PAGE_SIZE),
+                        ctx: ApiContext = Depends(api_key("bookings")), db: AsyncSession = Depends(get_db)):
+    """As reservas feitas pela API (as do balcão não aparecem). Para seguir as confirmações: updated_since."""
+    try:
+        return await bookings.list_bookings(db, ctx.company_id, external_reference, status_, date_from, date_to,
+                                            updated_since, page, page_size)
+    except public.PublicApiError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.get("/bookings/{booking_id}", response_model=schemas.BookingOut, summary="Uma reserva", tags=["Reservas"],
+            responses=NOT_FOUND)
+async def get_booking(booking_id: uuid.UUID, ctx: ApiContext = Depends(api_key("bookings")),
+                      db: AsyncSession = Depends(get_db)):
+    try:
+        return await bookings.booking_view(db, await bookings.get_booking(db, ctx.company_id, booking_id))
+    except LookupError as e:
+        raise _not_found(e)
+
+
+@router.post("/bookings/{booking_id}/cancel", response_model=schemas.BookingOut, summary="Cancelar uma reserva",
+             tags=["Reservas"], responses=NOT_FOUND)
+async def cancel_booking(booking_id: uuid.UUID, ctx: ApiContext = Depends(api_key("bookings")),
+                         db: AsyncSession = Depends(get_db)):
+    """Só antes do check-in. Cancelar de novo uma reserva cancelada não muda nada."""
+    try:
+        return await bookings.booking_view(db, await bookings.cancel_booking(db, ctx.company_id, booking_id))
+    except (LookupError, public.PublicApiError) as e:
+        raise _booking_error(e)
 
 
 # ------------------------------------------------------------------------------------------- the documentation (PT)

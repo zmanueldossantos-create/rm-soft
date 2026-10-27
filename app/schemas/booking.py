@@ -157,6 +157,9 @@ class BookingResponse(BaseModel):
     # a stay in progress: its open account and what it will cost (listing only)
     stay_account_id: uuid.UUID | None = None
     stay_account_total: float | None = None
+    # a booking made by the web site (public API): the key's name and the site's own booking number
+    external_reference: str | None = None
+    online_source: str | None = None
 
     class Config:
         from_attributes = True

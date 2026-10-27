@@ -62,6 +62,12 @@ class Booking(Base):
 
     created_by_user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    # A booking made by another program through the public API (the hotel's web site): the key that made it and the
+    # program's own booking number. Only such a booking may be cancelled through the API; the reception confirms it.
+    api_key_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("api_keys.id", ondelete="SET NULL"),
+                                                         nullable=True)
+    external_reference: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
 
     def __repr__(self) -> str:
         return f"<Booking resource={self.resource_id} {self.starts_at}-{self.ends_at} {self.status}>"

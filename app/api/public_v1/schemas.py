@@ -209,3 +209,84 @@ class Document(BaseModel):
 
 class DocumentPage(Page):
     items: list[Document]
+
+
+# --------------------------------------------------------------------------------------------------------- bookings
+
+class Rate(BaseModel):
+    service_id: str
+    name: str
+    price: float | None = Field(description="Preço sem IVA (por noite, num quarto)")
+    vat_rate: float
+    price_with_vat: float | None
+    stay_total_with_vat: float | None = Field(description="Total da estadia com IVA (preço x noites)")
+
+
+class FreeResource(BaseModel):
+    id: str
+    name: str
+    capacity: int | None
+
+
+class Availability(BaseModel):
+    resource_type_id: str
+    resource_type: str = Field(description="Ex.: Quarto duplo, Suite, Mesa")
+    starts_at: datetime = Field(description="Início real (com a hora de entrada do tipo)")
+    ends_at: datetime = Field(description="Fim real (com a hora de saída do tipo)")
+    nights: int | None = Field(description="Noites (pedido por dias); null com horas exatas")
+    available: int = Field(description="Quantos estão livres em todo o período")
+    total: int
+    resources: list[FreeResource]
+    rates: list[Rate] = Field(description="As tarifas deste tipo")
+
+
+class BookingCreate(BaseModel):
+    resource_type_id: uuid.UUID | None = Field(default=None, description="O tipo pedido: o RM SOFT escolhe um livre")
+    resource_id: uuid.UUID | None = Field(default=None, description="...ou um recurso preciso")
+    service_id: uuid.UUID | None = Field(default=None, description="A tarifa (obrigatória num quarto)")
+    check_in: date | None = Field(default=None, description="Dia de chegada (hotel)", examples=["2026-12-20"])
+    check_out: date | None = Field(default=None, description="Dia de partida (hotel)", examples=["2026-12-23"])
+    starts_at: datetime | None = Field(default=None, description="...ou início exato (mesa, marcação)")
+    ends_at: datetime | None = Field(default=None, description="...e fim exato")
+    guest_name: str = Field(min_length=2, max_length=150, examples=["Maria Domingos"])
+    party_size: int | None = Field(default=None, ge=1, le=500, description="Número de pessoas")
+    guest_phone: str | None = Field(default=None, max_length=30)
+    guest_email: str | None = Field(default=None, max_length=150)
+    customer_id: uuid.UUID | None = Field(default=None, description="O cliente RM SOFT (faturação), se conhecido")
+    external_reference: str | None = Field(default=None, max_length=100,
+                                           description="O n.º da reserva no site (para a encontrar depois)")
+    notes: str | None = Field(default=None, max_length=300)
+
+    _phone = field_validator("guest_phone")(lambda cls, v: _validate_phone(v))
+    _email = field_validator("guest_email")(lambda cls, v: _validate_email(v))
+
+
+class Named(BaseModel):
+    id: str
+    name: str
+
+
+class BookingService(Named):
+    price: float | None
+
+
+class BookingOut(BaseModel):
+    id: str
+    status: str = Field(description="PENDENTE (a confirmar pela receção), CONFIRMADA, EM_CURSO, CONCLUIDA, "
+                                    "CANCELADA ou NO_SHOW")
+    external_reference: str | None
+    resource: Named | None = Field(description="O recurso atribuído (a receção pode mudá-lo)")
+    resource_type: Named | None
+    service: BookingService | None
+    starts_at: datetime
+    ends_at: datetime
+    guest_name: str | None
+    party_size: int | None
+    customer: DocumentCustomer | None
+    can_cancel: bool = Field(description="Ainda pode ser cancelada pelo site (antes do check-in)")
+    created_at: datetime | None
+    updated_at: datetime | None
+
+
+class BookingPage(Page):
+    items: list[BookingOut]

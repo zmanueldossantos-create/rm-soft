@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import DateInput from '../components/DateInput';
-import { CalendarClock, Plus, Loader2, X, CheckCircle2, Pencil, ChevronLeft, ChevronRight, DoorOpen, Banknote } from 'lucide-react';
+import { CalendarClock, Plus, Loader2, X, CheckCircle2, Pencil, ChevronLeft, ChevronRight, DoorOpen, Banknote, Globe } from 'lucide-react';
 import { useCan } from '../utils/permissions';
 import { listActivities } from '../api/activity';
 import { listResources, listBookings, createBooking, updateBookingStatus, rescheduleBooking, chargeBooking } from '../api/booking';
@@ -939,6 +939,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
                             <p className="font-mono font-semibold">{(sg.startsHere ? s.time : '00:00') + ' - ' + (sg.endsHere ? e.time : '24:00')}</p>
                             {who && <p className="truncate">{who}{b.party_size ? ' (' + b.party_size + ' pax)' : ''}</p>}
                             {svc && <p className="truncate opacity-80">{svc}</p>}
+                            {b.online_source && <p className="truncate font-semibold text-accent">Online</p>}
                           </div>
                         );
                       })}
@@ -1069,6 +1070,14 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
                   <p className="text-text-primary text-[12px] mt-0.5">{b.guest_name}{b.party_size ? (b.guest_name ? ' - ' : '') + b.party_size + ' pax' : ''}</p>
                 )}
                 {b.notes && <p className="text-text-muted text-[12px] mt-0.5">{b.notes}</p>}
+                {b.online_source && (
+                  <p className="mt-1">
+                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded bg-accent/10 text-accent"
+                          title={b.status === 'PENDENTE' ? 'Chegou pelo site - confirme-a ou cancele-a' : 'Chegou pelo site'}>
+                      <Globe size={11} /> Reserva online · {b.online_source}{b.external_reference ? ' · ref. ' + b.external_reference : ''}
+                    </span>
+                  </p>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 {/* a marcação charged at the till: paid, before, during and after the service - it keeps its slot */}

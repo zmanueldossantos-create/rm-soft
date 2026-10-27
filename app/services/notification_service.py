@@ -450,6 +450,20 @@ async def notify_check_out(db: AsyncSession, booking, resource_name: str, user) 
 
 
 @_safe
+async def notify_online_booking(db: AsyncSession, booking, key_name: str) -> None:
+    """A booking arrived from the web site (public API): to confirm at the reception. Nobody «did» it: always sent."""
+    from app.models.resource import Resource
+    resource = await db.get(Resource, booking.resource_id)
+    guest = await _guest(db, booking)
+    if booking.party_size:
+        guest += f" ({booking.party_size} pax)"
+    reference = f" · ref. {booking.external_reference}" if booking.external_reference else ""
+    await notify(db, booking.company_id, "RESERVA_ONLINE",
+                 f"{resource.name if resource else 'Reserva'} - {guest}\n{_day(booking.starts_at)} {_hour(booking.starts_at)}"
+                 f" a {_day(booking.ends_at)} {_hour(booking.ends_at)}\n{key_name}{reference} · a confirmar na receção")
+
+
+@_safe
 async def notify_till_closed(db: AsyncSession, session, user) -> None:
     from app.models.point_of_sale import PointOfSale
     pos = await db.get(PointOfSale, session.pos_id)

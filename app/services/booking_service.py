@@ -101,7 +101,10 @@ async def create_booking(
     starts_at: datetime, ends_at: datetime, customer_id: uuid.UUID | None = None,
     service_id: uuid.UUID | None = None, notes: str | None = None,
     guest_name: str | None = None, party_size: int | None = None,
+    api_key_id: uuid.UUID | None = None, external_reference: str | None = None, commit: bool = True,
 ) -> Booking:
+    """api_key_id / external_reference: a booking made through the public API. commit=False: only flushed (the
+    caller commits it with its own records)."""
     if ends_at <= starts_at:
         raise InvalidBookingRangeError("A data/hora de fim deve ser posterior ao início")
 
@@ -117,8 +120,12 @@ async def create_booking(
         company_id=company_id, resource_id=resource_id, customer_id=customer_id, service_id=service_id,
         starts_at=starts_at, ends_at=ends_at, notes=notes, created_by_user_id=created_by_user_id,
         guest_name=_clean_guest_name(guest_name), party_size=party_size,
+        api_key_id=api_key_id, external_reference=external_reference,
     )
     db.add(booking)
+    if not commit:
+        await db.flush()
+        return booking
     await db.commit()
     await db.refresh(booking)
     return booking
@@ -151,7 +158,17 @@ async def list_bookings(
     result = await db.execute(query.order_by(Booking.starts_at))
     bookings = list(result.scalars().all())
     await _attach_stay_accounts(db, bookings)
+    await _attach_online_sources(db, bookings)
     return bookings
+
+
+async def _attach_online_sources(db: AsyncSession, bookings: list[Booking]) -> None:
+    """A booking from the web site (public API) carries the name of the key that made it: «Reserva online»."""
+    from app.models.api_key import ApiKey
+    key_ids = {b.api_key_id for b in bookings if b.api_key_id}
+    names = dict((await db.execute(select(ApiKey.id, ApiKey.name).where(ApiKey.id.in_(key_ids)))).all()) if key_ids else {}
+    for booking in bookings:
+        booking.online_source = names.get(booking.api_key_id) if booking.api_key_id else None
 
 
 async def _attach_stay_accounts(db: AsyncSession, bookings: list[Booking]) -> None:
