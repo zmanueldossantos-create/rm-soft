@@ -58,6 +58,8 @@ OPTIONS: dict[str, Option] = {
                "Avisos por email e Telegram: quartos, mesas, vendas, fecho de caixa, stock baixo"),
         Option("ECRA_CLIENTE", "Ecrã do cliente",
                "Segundo ecrã da caixa virado para o cliente: artigos, total, troco e publicidade"),
+        Option("INTEGRACAO_API", "Integração API",
+               "Ligação de outros programas (site, loja online, reservas, relatórios) por chaves de acesso"),
     )
 }
 

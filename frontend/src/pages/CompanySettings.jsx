@@ -1,7 +1,7 @@
 import { API_ORIGIN } from '../api/config';
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Building2, Loader2, Save, Lock, Image, Upload, Store, Plus, Pencil, Landmark, X, Check, Trash2, FileStack, Sparkles, ChevronDown, CreditCard, Link2, Unlink, Users, Bot, Mail, LifeBuoy, DatabaseBackup, FileKey2, BellRing, MonitorUp } from 'lucide-react';
+import { Building2, Loader2, Save, Lock, Image, Upload, Store, Plus, Pencil, Landmark, X, Check, Trash2, FileStack, Sparkles, ChevronDown, CreditCard, Link2, Unlink, Users, Bot, Mail, LifeBuoy, DatabaseBackup, FileKey2, BellRing, MonitorUp, Plug } from 'lucide-react';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
 import { getMySupportSessions, getMyCompany, updateMyCompanyContact, uploadMyCompanyLogo, removeMyCompanyLogo, getMyCompanyBankAccounts, addMyCompanyBankAccount, updateMyCompanyBankAccount, toggleMyCompanyBankAccountStatus } from '../api/company';
@@ -17,6 +17,8 @@ import { getMyCompanyAi } from '../api/ai';
 import AiCompanySettingsTab from '../components/AiCompanySettingsTab';
 import EmailSettingsTab from '../components/EmailSettingsTab';
 import NotificationsTab from '../components/NotificationsTab';
+import ApiKeysTab from '../components/ApiKeysTab';
+import { getApiKeys } from '../api/apiKeys';
 import CustomerDisplayModal from '../components/CustomerDisplayModal';
 import { getCustomerDisplay } from '../api/customerDisplay';
 import { getNotifications } from '../api/notifications';
@@ -84,6 +86,11 @@ export default function CompanySettings() {
   const canManageCompany = can('company:manage'); // the permissions arrive after the first render
   useEffect(() => {
     if (canManageCompany) getNotifications().then((d) => setNotificationsAllowed(!!d.allowed)).catch(() => setNotificationsAllowed(false));
+  }, [canManageCompany]);
+  // Integração API: its tab only when the plan has the option (the gestor)
+  const [apiAllowed, setApiAllowed] = useState(false);
+  useEffect(() => {
+    if (canManageCompany) getApiKeys().then((d) => setApiAllowed(!!d.allowed)).catch(() => setApiAllowed(false));
   }, [canManageCompany]);
   // Ecrã do cliente: its button on each activity only when the plan has the option
   const [displayAllowed, setDisplayAllowed] = useState(false);
@@ -759,6 +766,7 @@ export default function CompanySettings() {
           ['series', 'Séries de Facturação', FileStack],
           ['email', 'Email', Mail],
           ...(notificationsAllowed ? [['notificacoes', 'Notificações', BellRing]] : []),
+          ...(apiAllowed ? [['api', 'Integração API', Plug]] : []),
           ...(can('company:backup') ? [['copias', 'Cópias de segurança', DatabaseBackup]] : []),
           ...(can('company:manage') ? [['suporte', 'Acessos de suporte', LifeBuoy]] : []),
           ...(aiInfo?.ai_enabled ? [['ia', 'Assistente IA', Bot]] : []),
@@ -1141,6 +1149,7 @@ export default function CompanySettings() {
 
       {activeTab === 'email' && <EmailSettingsTab canManage={can('company:manage')} />}
       {activeTab === 'notificacoes' && notificationsAllowed && <NotificationsTab canManage={can('company:manage')} onAllowed={setNotificationsAllowed} />}
+      {activeTab === 'api' && apiAllowed && <ApiKeysTab onAllowed={setApiAllowed} />}
 
       {activeTab === 'suporte' && <SupportTab />}
 

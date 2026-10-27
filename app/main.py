@@ -51,6 +51,8 @@ from app.api.v1.public.routes import router as public_router
 from app.api.v1.admin.demo_request_routes import router as demo_requests_router
 from app.api.v1.company.notification_routes import router as notifications_router
 from app.api.v1.company.customer_display_routes import router as customer_display_router
+from app.api.v1.company.api_key_routes import router as api_keys_router
+from app.api.public_v1.routes import docs_router as public_api_docs_router, router as public_api_router
 from app.core.database import AsyncSessionLocal
 from app.models.company import Company
 from app.services.permission_service import seed_permission_catalog, seed_default_role_permissions
@@ -192,6 +194,29 @@ app.include_router(public_router)
 app.include_router(demo_requests_router)
 app.include_router(notifications_router)
 app.include_router(customer_display_router)
+app.include_router(api_keys_router)
+app.include_router(public_api_router)
+app.include_router(public_api_docs_router)
+
+
+@app.middleware("http")
+async def _public_api_journal(request, call_next):
+    """The public API's journal: every call made with a key (whatever its answer) - Configurações → Integração API."""
+    if not request.url.path.startswith("/api/public/"):
+        return await call_next(request)
+    import time
+    started = time.perf_counter()
+    response = await call_next(request)
+    key = getattr(request.state, "api_key", None)
+    if key is not None:
+        from app.services import api_key_service
+        try:
+            async with api_key_service.journal_session() as db:
+                await api_key_service.write_journal(db, key, request.method, request.url.path, response.status_code,
+                                                    int((time.perf_counter() - started) * 1000))
+        except Exception:  # noqa: BLE001 - the journal never breaks the call
+            pass
+    return response
 
 # Serve uploaded files (company logos, etc.) - local storage for Phase 1.
 os.makedirs("uploads/logos", exist_ok=True)
