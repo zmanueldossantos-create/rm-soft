@@ -445,6 +445,10 @@ async def resubmit_invoice(
     invoice = result.scalar_one_or_none()
     if invoice is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Fatura não encontrada")
+    from app.services.agt_queue import sent_to_agt
+    if not sent_to_agt(invoice):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail="Documento emitido em modo manual: não é enviado à AGT (é comunicado pelo SAF-T)")
 
     invoice.status = InvoiceStatus.PENDENTE
     await db.commit()

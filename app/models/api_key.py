@@ -7,8 +7,8 @@ written in the journal (kept JOURNAL_DAYS).
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, func
-from sqlalchemy.dialects.postgresql import ARRAY, UUID
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint, func
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -43,4 +43,23 @@ class ApiRequestLog(Base):
     path: Mapped[str] = mapped_column(String(300), nullable=False)
     status_code: Mapped[int] = mapped_column(Integer, nullable=False)
     duration_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+class ApiIdempotency(Base):
+    """A write of the public API, kept with its answer (IDEMPOTENCY_DAYS): the same Idempotency-Key sent again - the
+    program did not get the answer, the relay delivers twice - gets the same answer, nothing is created twice."""
+    __tablename__ = "api_idempotency"
+    __table_args__ = (UniqueConstraint("company_id", "idem_key", name="uq_api_idempotency_company_key"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    company_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("companies.id"), nullable=False)
+    api_key_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("api_keys.id", ondelete="SET NULL"),
+                                                         nullable=True)
+    idem_key: Mapped[str] = mapped_column(String(100), nullable=False)
+    path: Mapped[str] = mapped_column(String(300), nullable=False)
+    request_hash: Mapped[str] = mapped_column(String(64), nullable=False)  # SHA-256 of the request body
+    status_code: Mapped[int] = mapped_column(Integer, nullable=False)
+    response: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    resource_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)  # the document created
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)

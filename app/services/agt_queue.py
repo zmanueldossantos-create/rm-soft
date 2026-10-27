@@ -29,8 +29,18 @@ def _database_queue() -> bool:
     return get_settings().AGT_QUEUE == "base"
 
 
+def sent_to_agt(invoice: Invoice) -> bool:
+    """Only a document issued in Faturação Eletrónica is sent to the AGT, in real time. A document issued in MANUAL
+    mode is declared through the SAF-T file: never sent, its AGT state does not apply."""
+    mode = invoice.issuance_mode
+    return (mode.value if hasattr(mode, "value") else mode) == "ELETRONICA"
+
+
 async def queue_for_agt(db: AsyncSession, invoice: Invoice) -> None:
-    """Called once the document is committed: it will be sent to the AGT (now, by Celery or by the loop)."""
+    """Called once the document is committed: it will be sent to the AGT (now, by Celery or by the loop) - when it
+    was issued in Faturação Eletrónica (sent_to_agt)."""
+    if not sent_to_agt(invoice):
+        return
     if not _database_queue():
         from app.workers.agt_worker import submit_invoice_to_agt
         submit_invoice_to_agt.delay(str(invoice.id))
@@ -49,7 +59,8 @@ async def send_due(db: AsyncSession, sender=None, now: datetime | None = None) -
     sender = sender or send_document
     now = now or datetime.now(timezone.utc)
     ids = (await db.execute(select(Invoice.id).where(Invoice.agt_next_attempt_at.is_not(None),
-                                                     Invoice.agt_next_attempt_at <= now)
+                                                     Invoice.agt_next_attempt_at <= now,
+                                                     Invoice.issuance_mode == "ELETRONICA")
                             .order_by(Invoice.agt_next_attempt_at).limit(50))).scalars().all()
     for invoice_id in ids:
         invoice = await db.get(Invoice, invoice_id)

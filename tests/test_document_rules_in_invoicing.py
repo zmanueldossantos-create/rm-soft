@@ -39,6 +39,10 @@ async def test_sending_to_the_agt_follows_the_sent_to_agt_rule(db, company_with_
     sent = []
     from app.workers.agt_worker import submit_invoice_to_agt
     monkeypatch.setattr(submit_invoice_to_agt, "delay", lambda invoice_id: sent.append(invoice_id))
+    from app.services import agt_queue
+    monkeypatch.setattr(agt_queue, "sent_to_agt", lambda invoice: True)  # as issued in Faturação Eletrónica
+    from app.core.config import get_settings
+    monkeypatch.setattr(get_settings(), "AGT_QUEUE", "celery")  # the Celery task records it, whatever this PC's .env says
 
     ft = await create_invoice(db, company_id, activity_id, customer_id=None, invoice_type="FACTURA", lines_input=lines)
     ft_id = ft.id

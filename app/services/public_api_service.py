@@ -6,13 +6,16 @@ one waiting for its price, an inactive or blocked one, a category closed to sale
 Prices: «price» is the price before VAT (as stored), «price_with_vat» the price the customer pays; the VAT comes
 from the article's rate (0 / 5 / 14 %).
 """
+import hashlib
+import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.api_key import ApiIdempotency
 from app.models.customer import FINAL_CONSUMER_NIF, Customer
 from app.models.product import Product
 from app.models.product_category import ProductCategory
@@ -271,3 +274,37 @@ async def create_customer(db: AsyncSession, company_id: uuid.UUID, data: dict, k
         legal_person_type=data.get("person_type") or "FISICA", city=data.get("city"),
         description=f"Criado pela API (chave «{key_name}»)")
     return customer_view(customer)
+
+
+# ---------------------------------------------------------------------------------------------------- idempotency
+# Every write may carry an Idempotency-Key (the documents: always). The first answer is kept IDEMPOTENCY_DAYS: the same
+# key with the same request gets it again (nothing created twice); the same key with another request is refused.
+IDEMPOTENCY_DAYS = 30
+
+
+class IdempotencyConflictError(Exception):
+    """The key was already used for another request (422)."""
+
+
+def request_hash(body: dict) -> str:
+    return hashlib.sha256(json.dumps(body, sort_keys=True, default=str).encode()).hexdigest()
+
+
+async def find_replay(db: AsyncSession, company_id: uuid.UUID, idem_key: str, path: str,
+                      body_hash: str) -> ApiIdempotency | None:
+    """The answer already given to this key - None: a new request. (The old records go here.)"""
+    await db.execute(delete(ApiIdempotency).where(
+        ApiIdempotency.company_id == company_id,
+        ApiIdempotency.created_at < datetime.now(timezone.utc) - timedelta(days=IDEMPOTENCY_DAYS)))
+    row = (await db.execute(select(ApiIdempotency).where(
+        ApiIdempotency.company_id == company_id, ApiIdempotency.idem_key == idem_key))).scalar_one_or_none()
+    if row is not None and (row.path != path or row.request_hash != body_hash):
+        raise IdempotencyConflictError("Esta Idempotency-Key já foi usada noutro pedido - use uma chave nova por pedido")
+    return row
+
+
+def remember(db: AsyncSession, company_id: uuid.UUID, api_key_id: uuid.UUID, idem_key: str, path: str,
+             body_hash: str, status_code: int, response: dict, resource_id: uuid.UUID | None = None) -> None:
+    """Kept with the write itself: the caller commits both together."""
+    db.add(ApiIdempotency(company_id=company_id, api_key_id=api_key_id, idem_key=idem_key, path=path,
+                          request_hash=body_hash, status_code=status_code, response=response, resource_id=resource_id))

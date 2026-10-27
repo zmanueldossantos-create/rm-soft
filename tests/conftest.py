@@ -289,3 +289,20 @@ async def legal_vat_rates(db):
     db.add_all(rates)
     await db.commit()
     return rates
+
+
+
+@pytest.fixture
+def mark_electronic(db):
+    """await mark_electronic(company_id): the documents (and the company) as issued in Faturação Eletrónica - the only
+    ones sent to the AGT. (The test company issues in MANUAL mode: a real electronic set-up needs AGT series per
+    establishment.)"""
+    from sqlalchemy import update
+    from app.models.invoice import Invoice
+
+    async def mark(company_id=None) -> None:
+        await db.execute(update(Invoice).values(issuance_mode="ELETRONICA"))
+        if company_id is not None:
+            await db.execute(update(Company).where(Company.id == company_id).values(issuance_mode="ELETRONICA"))
+        await db.commit()
+    return mark

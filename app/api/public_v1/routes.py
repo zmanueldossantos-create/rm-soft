@@ -1,10 +1,11 @@
 """The public API's routes (v1). Field names in English, messages in PT-PT; the documentation (PT) is at
 /api/public/v1/docs."""
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response, status
 from fastapi.responses import HTMLResponse, JSONResponse
+from sqlalchemy.exc import IntegrityError
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.openapi.utils import get_openapi
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,6 +16,10 @@ from app.core.database import get_db
 from app.models.company import Company
 from app.services import api_key_service as keys
 from app.services import public_api_service as public
+from app.services import invoice_service as inv
+from app.services import public_documents_service as documents
+from app.services.fiscal_period_service import PeriodClosedError
+from app.services.pharmacy_service import MedicineError
 
 PREFIX = "/api/public/v1"
 router = APIRouter(prefix=PREFIX, tags=["API pública"])
@@ -33,6 +38,12 @@ API pública do RM SOFT, para ligar outros programas da empresa (site, loja onli
 última vez com `updated_since`.
 
 **Preços:** `price` é o preço sem IVA, `price_with_vat` o que o cliente paga (IVA de 0, 5 ou 14 %).
+
+**Documentos:** cada emissão leva o cabeçalho `Idempotency-Key` (um identificador único por pedido, ex. um UUID ou
+o n.º da encomenda). Se o mesmo pedido for enviado de novo com a mesma chave (falha de rede...), a resposta é a mesma
+e nada é emitido duas vezes.
+
+**Segurança:** a chave nunca vai no código de uma página web (o visitante via-a): o pedido parte do servidor do site.
 
 **Erros:** a resposta traz `{"detail": "mensagem"}` em português (um dado inválido: 422, com a lista dos campos).
 """
@@ -135,6 +146,119 @@ async def create_customer(payload: schemas.CustomerCreate, ctx: ApiContext = Dep
         return JSONResponse(status_code=status.HTTP_409_CONFLICT, content={"detail": str(e), "id": str(e.existing_id)})
     except public.PublicApiError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+# ------------------------------------------------------------------------------------------------------ activities
+
+@router.get("/activities", response_model=list[schemas.Activity], summary="Atividades", tags=["Documentos"])
+async def activities(ctx: ApiContext = Depends(api_key()), db: AsyncSession = Depends(get_db)):
+    """As atividades da empresa (Hotel, Restaurante...). Só é preciso indicar uma ao emitir quando há várias."""
+    return await documents.list_activities(db, ctx.company_id)
+
+
+# ------------------------------------------------------------------------------------------------------- documents
+
+# the refusals of the invoicing services, answered with their message (never a 500)
+_ISSUE_ERRORS = (LookupError, public.PublicApiError, PeriodClosedError, MedicineError, inv.ProductNotFoundError,
+                 inv.CustomerNotFoundError, inv.ActivityNotFoundError, inv.EmptyInvoiceError, inv.StockUnavailableError,
+                 inv.DocumentTypeNotConfiguredError, inv.SeriesNotConfiguredError, inv.PaymentAmountMismatchError,
+                 inv.PaymentMethodNotAllowedError, inv.MissingExemptionReasonError, inv.CashPointRequiredError)
+
+
+def _issue_error(e: Exception) -> HTTPException:
+    if isinstance(e, LookupError):
+        return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    if isinstance(e, (PeriodClosedError, inv.StockUnavailableError, inv.SeriesNotConfiguredError)):
+        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    return HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+def _replayed(row) -> JSONResponse:
+    return JSONResponse(status_code=row.status_code, content=row.response, headers={"Idempotent-Replayed": "true"})
+
+
+@router.post("/documents", response_model=schemas.Document, status_code=status.HTTP_201_CREATED,
+             summary="Emitir um documento", tags=["Documentos"],
+             responses={404: {"description": "Cliente ou atividade não encontrados"},
+                        409: {"description": "Período fechado, stock insuficiente ou série em falta"},
+                        423: {"description": "Empresa só de leitura (contrato terminado)"}})
+async def create_document(payload: schemas.DocumentCreate, request: Request,
+                          idempotency_key: str = Header(alias="Idempotency-Key", min_length=8, max_length=100,
+                                                        description="Único por pedido (ex.: um UUID)"),
+                          ctx: ApiContext = Depends(api_key("documents")), db: AsyncSession = Depends(get_db)):
+    """Emite uma FT, FR ou FP com os preços do catálogo (o pedido só escolhe artigos, quantidades e descontos).
+    As faturas (FT, FR) seguem logo para a AGT: o estado vem em `agt` (consulte depois GET /documents/{id})."""
+    from app.services.agt_queue import queue_for_agt
+
+    path, body_hash = request.url.path, public.request_hash(payload.model_dump(mode="json"))
+    try:
+        replay = await public.find_replay(db, ctx.company_id, idempotency_key, path, body_hash)
+    except public.IdempotencyConflictError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    if replay is not None:
+        return _replayed(replay)
+    try:
+        invoice = await documents.create_document(db, ctx.company_id, payload.model_dump())
+        view = await documents.document_view(db, invoice)
+        public.remember(db, ctx.company_id, ctx.key.id, idempotency_key, path, body_hash, 201, view, invoice.id)
+        await db.commit()
+    except IntegrityError:
+        # the same key arrived twice at the same moment: the first one won - its answer
+        await db.rollback()
+        replay = await public.find_replay(db, ctx.company_id, idempotency_key, path, body_hash)
+        if replay is None:
+            raise
+        return _replayed(replay)
+    except _ISSUE_ERRORS as e:
+        await db.rollback()
+        raise _issue_error(e)
+    if invoice.invoice_type.value in documents.FISCAL:
+        await queue_for_agt(db, invoice)
+    return JSONResponse(status_code=status.HTTP_201_CREATED, content=view)
+
+
+@router.get("/documents", response_model=schemas.DocumentPage, summary="Documentos", tags=["Documentos"])
+async def list_documents(type: str | None = Query(None, description="FT, FR, FP, NC, ND, RC ou OR"),
+                         date_from: date | None = Query(None, description="Desde (AAAA-MM-DD)"),
+                         date_to: date | None = Query(None, description="Até (AAAA-MM-DD)"),
+                         customer_id: uuid.UUID | None = None,
+                         document_reference: str | None = Query(None, description="A sua referência (encomenda)"),
+                         updated_since: datetime | None = Query(None, description="Só os alterados desde (estado AGT...)"),
+                         page: int = Query(1, ge=1), page_size: int = Query(50, ge=1, le=public.MAX_PAGE_SIZE),
+                         ctx: ApiContext = Depends(api_key("documents")), db: AsyncSession = Depends(get_db)):
+    """Todos os documentos da empresa (os emitidos nos ecrãs também), do mais recente ao mais antigo, sem linhas."""
+    try:
+        return await documents.list_documents(db, ctx.company_id, type, date_from, date_to, customer_id,
+                                              document_reference, updated_since, page, page_size)
+    except public.PublicApiError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.get("/documents/{document_id}", response_model=schemas.Document, summary="Um documento",
+            tags=["Documentos"], responses=NOT_FOUND)
+async def get_document(document_id: uuid.UUID, ctx: ApiContext = Depends(api_key("documents")),
+                       db: AsyncSession = Depends(get_db)):
+    """O documento com as suas linhas e o estado na AGT."""
+    try:
+        return await documents.document_view(db, await documents.get_document(db, ctx.company_id, document_id))
+    except LookupError as e:
+        raise _not_found(e)
+
+
+@router.get("/documents/{document_id}/pdf", summary="PDF de um documento", tags=["Documentos"],
+            response_class=Response, responses={200: {"content": {"application/pdf": {}}}, **NOT_FOUND})
+async def document_pdf(document_id: uuid.UUID,
+                       format: str = Query("a4", pattern="^(a4|thermal)$", description="a4 ou thermal (talão 80 mm)"),
+                       ctx: ApiContext = Depends(api_key("documents")), db: AsyncSession = Depends(get_db)):
+    """O PDF do documento, igual ao impresso no RM SOFT (com QR code e ATCUD)."""
+    from app.services.invoice_pdf_service import render_invoice_pdf
+    from app.services.invoice_service import InvoiceNotFoundError
+    try:
+        pdf_bytes, filename = await render_invoice_pdf(db, ctx.company_id, document_id, format)
+    except InvoiceNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Documento não encontrado")
+    return Response(content=pdf_bytes, media_type="application/pdf",
+                    headers={"Content-Disposition": f'inline; filename="{filename}"'})
 
 
 # ------------------------------------------------------------------------------------------- the documentation (PT)

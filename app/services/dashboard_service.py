@@ -79,6 +79,7 @@ async def get_dashboard_summary(db: AsyncSession, company_id: uuid.UUID) -> dict
             Invoice.business_date >= month_start,
             Invoice.business_date <= month_end,
             Invoice.invoice_type.in_(agt_types),  # only documents sent to the AGT have a submission status
+            Invoice.issuance_mode == "ELETRONICA",  # a MANUAL document is declared by the SAF-T, never sent
         ).group_by(Invoice.status)
     )
     status_counts = {status.value: 0 for status in InvoiceStatus}
@@ -123,7 +124,11 @@ async def get_dashboard_summary(db: AsyncSession, company_id: uuid.UUID) -> dict
         for inv, customer_name in recent_result.all()
     ]
 
+    from app.models.company import Company
+    mode = (await db.execute(select(Company.issuance_mode).where(Company.id == company_id))).scalar_one_or_none()
     return {
+        # Faturação Eletrónica: the documents are sent to the AGT in real time (their states below mean something)
+        "agt_realtime": (mode.value if hasattr(mode, "value") else mode) == "ELETRONICA",
         "revenue_today": revenue_today,
         "revenue_month": revenue_month,
         "invoice_count_month": invoice_count_month,

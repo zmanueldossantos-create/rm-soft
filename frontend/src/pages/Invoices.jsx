@@ -604,6 +604,11 @@ export default function Invoices() {
                           <span className={'text-[11px] font-semibold uppercase tracking-wide px-2.5 py-1 rounded ' + workingDocumentState(inv).className}>
                             {workingDocumentState(inv).label}
                           </span>
+                        ) : inv.issuance_mode !== 'ELETRONICA' ? (
+                          <span className="text-[11px] font-semibold uppercase tracking-wide px-2.5 py-1 rounded bg-bg-inset text-text-muted"
+                                title="Modo manual: o documento não é enviado à AGT - é comunicado pelo ficheiro SAF-T">
+                            Manual
+                          </span>
                         ) : (
                           <div className="flex items-center gap-2">
                             <span className={'text-[11px] font-semibold uppercase tracking-wide px-2.5 py-1 rounded ' + (STATUS_STYLE[inv.status] || '')}>

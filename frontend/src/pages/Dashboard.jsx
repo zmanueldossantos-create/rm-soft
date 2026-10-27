@@ -160,7 +160,8 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Invoice status breakdown */}
+          {/* Invoice status breakdown - only in Faturação Eletrónica (a MANUAL document is declared by the SAF-T) */}
+          {summary.agt_realtime && (
           <div className="bg-bg-elevated border border-border rounded-lg p-5">
             <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wide mb-3">Faturas por estado (este mês)</p>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -179,6 +180,7 @@ export default function Dashboard() {
               })}
             </div>
           </div>
+          )}
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Low stock alerts */}

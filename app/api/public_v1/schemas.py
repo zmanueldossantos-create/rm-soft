@@ -1,5 +1,8 @@
 """The public API's answers and requests: field names in English, descriptions (shown in the documentation) in PT."""
-from datetime import datetime
+import uuid
+from datetime import date, datetime
+from datetime import date as Day  # a field is called «date» below
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -121,3 +124,88 @@ class CustomerCreate(BaseModel):
 class AlreadyExists(BaseModel):
     detail: str
     id: str = Field(description="O cliente que já existe com este NIF")
+
+
+# -------------------------------------------------------------------------------------------------------- documents
+
+class Activity(BaseModel):
+    id: str
+    name: str
+
+
+class DocumentLineIn(BaseModel):
+    product_id: uuid.UUID | None = Field(default=None, description="Um produto do catálogo...")
+    service_id: uuid.UUID | None = Field(default=None, description="...ou um serviço (só um dos dois)")
+    quantity: float = Field(gt=0, le=1_000_000, examples=[2])
+    sale_unit_id: uuid.UUID | None = Field(default=None, description="Vender noutra unidade (caixa...): sale_units[].id")
+    discount_percent: float = Field(default=0, ge=0, le=100, description="Desconto da linha, em %")
+
+
+class DocumentCreate(BaseModel):
+    type: Literal["FT", "FR", "FP"] = Field(description="FT Fatura (paga depois), FR Fatura/Recibo (paga já), "
+                                                         "FP Fatura Pro-forma (orçamento, não fiscal)")
+    lines: list[DocumentLineIn] = Field(min_length=1, max_length=200)
+    customer_id: uuid.UUID | None = Field(default=None, description="Sem cliente: consumidor final")
+    activity_id: uuid.UUID | None = Field(default=None, description="Só se a empresa tiver várias atividades")
+    payment_method: str | None = Field(default=None, max_length=4,
+                                       description="Código AGT do meio de pagamento: obrigatório numa FR "
+                                                   "(MB Multicaixa, TB transferência, CC/CD cartão, DE dinheiro "
+                                                   "eletrónico). Numerário não: só na caixa.")
+    due_date: date | None = Field(default=None, description="Vencimento de uma FT")
+    document_reference: str | None = Field(default=None, max_length=100,
+                                           description="A sua referência (n.º da encomenda no site)")
+    observations: str | None = Field(default=None, max_length=500)
+
+
+class DocumentCustomer(BaseModel):
+    id: str
+    name: str
+    nif: str
+
+
+class DocumentAgt(BaseModel):
+    status: str = Field(description="PENDENTE, POR_ENVIAR, ENVIADA ou ERRO")
+    label: str
+    atcud: str | None
+
+
+class DocumentLine(BaseModel):
+    product_id: str | None
+    service_id: str | None
+    name: str
+    quantity: float
+    unit: str | None
+    unit_price: float | None = Field(description="Preço unitário sem IVA")
+    discount_percent: float
+    vat_rate: float
+    subtotal: float | None = Field(description="Sem IVA, desconto deduzido")
+    vat: float | None
+    total: float | None
+
+
+class Document(BaseModel):
+    id: str
+    type: str = Field(description="FT, FR, FP, NC, ND, RC ou OR")
+    number: str = Field(description="Ex.: FT A2026/15")
+    date: Day
+    activity_id: str
+    customer: DocumentCustomer | None
+    document_reference: str | None
+    observations: str | None
+    subtotal: float | None
+    vat_total: float | None
+    retention_total: float | None
+    total: float | None = Field(description="Total com IVA")
+    amount_due: float | None = Field(description="Ainda por pagar (FT)")
+    due_date: Day | None
+    status: str = Field(description="EMITIDO, ANULADO, RECTIFICADO...")
+    converted_to_invoice_id: str | None = Field(description="FP já faturada: a fatura")
+    agt: DocumentAgt | None = Field(description="Estado na AGT (null: documento não fiscal, ou emitido em modo manual - comunicado pelo SAF-T)")
+    pdf: str = Field(description="Caminho do PDF")
+    created_at: datetime | None
+    updated_at: datetime | None
+    lines: list[DocumentLine] | None = Field(default=None, description="Só no detalhe e na criação")
+
+
+class DocumentPage(Page):
+    items: list[Document]
