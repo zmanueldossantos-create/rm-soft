@@ -36,12 +36,14 @@ def api_key(scope: str | None = None):
                               bearer: HTTPAuthorizationCredentials | None = Security(_bearer),
                               header_key: str | None = Security(_header)) -> ApiContext:
         plain = (bearer.credentials if bearer else "") or (header_key or "")
-        key = await keys.find_active_key(db, plain.strip())
-        if key is None:
+        key = await keys.find_key(db, plain.strip())
+        if key is not None:
+            # the journal (app.main's middleware) writes the call under this key, whatever its answer
+            request.state.api_key = {"id": key.id, "company_id": key.company_id,
+                                     "name": key.name if key.is_active else key.name + " (revogada)"}
+        if key is None or not key.is_active:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Chave de acesso inválida ou revogada",
                                 headers={"WWW-Authenticate": "Bearer"})
-        # the journal (app.main's middleware) writes the call under this key, whatever its answer
-        request.state.api_key = {"id": key.id, "company_id": key.company_id, "name": key.name}
         if not await has_option(db, key.company_id, keys.OPTION):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
                                 detail="A Integração API não está incluída no plano desta empresa")

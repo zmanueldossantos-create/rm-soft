@@ -83,11 +83,11 @@ async def revoke_key(db: AsyncSession, company_id: uuid.UUID, key_id: uuid.UUID)
     return _view(key)
 
 
-async def find_active_key(db: AsyncSession, plain: str) -> ApiKey | None:
+async def find_key(db: AsyncSession, plain: str) -> ApiKey | None:
+    """The key, active or revoked (a revoked key's calls are still written in the journal - refused)."""
     if not plain or not plain.startswith(KEY_PREFIX):
         return None
-    key = (await db.execute(select(ApiKey).where(ApiKey.key_hash == hash_key(plain)))).scalar_one_or_none()
-    return key if key is not None and key.is_active else None
+    return (await db.execute(select(ApiKey).where(ApiKey.key_hash == hash_key(plain)))).scalar_one_or_none()
 
 
 # ------------------------------------------------------------------------------------------------------- the limit
