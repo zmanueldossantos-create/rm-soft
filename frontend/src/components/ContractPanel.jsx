@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { FileKey2, FileSignature, Loader2, Save } from 'lucide-react';
+import { AlertTriangle, Check, Copy, FileKey2, FileSignature, Globe, Loader2, Save, Wifi, WifiOff } from 'lucide-react';
+import Modal from './Modal';
+import ConfirmDialog from './ConfirmDialog';
 import Select from './Select';
-import { generateLicense, getCompanyContract, getPlanCatalog, kz, limitText, listPlans, saveCompanyContract } from '../api/plans';
+import { activateCompanyRelay, deactivateCompanyRelay, generateLicense, getCompanyContract, getCompanyRelay, getPlanCatalog, kz, limitText, listPlans, saveCompanyContract } from '../api/plans';
 import { extractErrorMessage } from '../utils/errors';
 import { useToastState } from './Toaster';
 import { toast } from '../store/toastStore';
@@ -38,7 +40,7 @@ function Field({ label, children, className = '' }) {
   );
 }
 
-export default function ContractPanel({ companyId, defaultMode = 'SAAS', canSign = false, onChanged }) {
+export default function ContractPanel({ companyId, defaultMode = 'SAAS', canSign = false, relayServer = false, onChanged }) {
   const [catalog, setCatalog] = useState(null);
   const [plans, setPlans] = useState([]);
   const [view, setView] = useState(null);
@@ -202,6 +204,8 @@ export default function ContractPanel({ companyId, defaultMode = 'SAAS', canSign
         </div>
       )}
 
+      {current && current.deployment_mode === 'LOCAL' && relayServer && <RelayPanel companyId={companyId} />}
+
       {/* a new contract */}
       <div className="border border-border rounded-lg p-4 flex flex-col gap-4">
         <div>
@@ -310,6 +314,111 @@ export default function ContractPanel({ companyId, defaultMode = 'SAAS', canSign
           </table>
         </div>
       )}
+    </div>
+  );
+}
+
+
+const when = (iso) => (iso ? new Date(iso).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-');
+
+// The platform (RELAY_SERVER): the relay of a company installed locally - its web site calls the platform, the
+// company's server comes to take the calls. «Ativar relé» gives the code the technician types on the client's server
+// (Definições da Empresa → Integração API → Ligação ao relé), shown once.
+function RelayPanel({ companyId }) {
+  const [link, setLink] = useState(undefined);
+  const [busy, setBusy] = useState(false);
+  const [secret, setSecret] = useState(null);
+  const [confirm, setConfirm] = useState(null); // 'renew' | 'off'
+
+  async function load() {
+    try { setLink((await getCompanyRelay(companyId)).link); } catch (err) { toast.error(extractErrorMessage(err, 'Erro ao carregar o relé')); }
+  }
+  useEffect(() => { load(); }, [companyId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function activate() {
+    setConfirm(null);
+    setBusy(true);
+    try {
+      const made = await activateCompanyRelay(companyId);
+      setSecret(made.secret);
+      setLink(made);
+    } catch (err) {
+      toast.error(extractErrorMessage(err, 'Não foi possível ativar o relé'));
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function deactivate() {
+    setConfirm(null);
+    setBusy(true);
+    try {
+      setLink((await deactivateCompanyRelay(companyId)).link);
+      toast.success('Relé desativado: o servidor do cliente deixa de receber os pedidos do site');
+    } catch (err) {
+      toast.error(extractErrorMessage(err, 'Não foi possível desativar'));
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function copy(text) {
+    try { await navigator.clipboard.writeText(text); toast.success('Copiado'); } catch { toast.error('Selecione o texto e copie-o à mão'); }
+  }
+
+  if (link === undefined) return null;
+  const active = link && link.is_active;
+  return (
+    <div className="border border-border rounded-lg p-4 flex flex-col gap-3">
+      <div>
+        <h4 className="text-[14px] font-semibold text-text-primary flex items-center gap-2"><Globe size={16} className="text-accent" /> Relé da API (site na internet)</h4>
+        <p className="text-[12px] text-text-muted">
+          Para o site do cliente chegar ao servidor instalado na sua empresa: o site chama esta plataforma e o servidor do
+          cliente vem buscar os pedidos (nenhuma porta aberta no cliente). Precisa da opção «Integração API» no plano.
+        </p>
+      </div>
+      {active ? (
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-[13px] bg-bg-inset border border-border rounded-md px-3 py-2.5">
+          {link.online
+            ? <span className="flex items-center gap-1.5 text-success font-medium"><Wifi size={14} /> Servidor do cliente ligado</span>
+            : <span className="flex items-center gap-1.5 text-text-muted font-medium"><WifiOff size={14} /> Servidor do cliente não ligado{link.last_seen_at ? ' (última vez ' + when(link.last_seen_at) + ')' : ' (nunca ligou)'}</span>}
+          <span className="text-text-muted">Código: <span className="font-mono">{link.secret_prefix}…</span></span>
+          <span className="text-text-muted">Chaves: {link.keys}</span>
+          <span className="text-text-muted">Pedidos à espera: {link.waiting}</span>
+          {link.snapshot_at && <span className="text-text-muted">Última foto: {when(link.snapshot_at)}</span>}
+        </div>
+      ) : (
+        <p className="text-[13px] text-text-muted">{link ? 'Relé desativado.' : 'Relé não ativado.'}</p>
+      )}
+      <div className="flex flex-wrap gap-2">
+        <button type="button" onClick={() => (active ? setConfirm('renew') : activate())} disabled={busy}
+          className="flex items-center gap-2 bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm px-4 py-2.5 rounded-md cursor-pointer">
+          {busy ? <Loader2 size={16} className="animate-spin" /> : <Globe size={16} />} {active ? 'Novo código' : link ? 'Reativar relé' : 'Ativar relé'}
+        </button>
+        {active && (
+          <button type="button" onClick={() => setConfirm('off')} disabled={busy}
+            className="border border-border hover:border-danger hover:text-danger text-text-muted text-sm px-4 py-2.5 rounded-md cursor-pointer disabled:opacity-50">Desativar</button>
+        )}
+      </div>
+
+      <Modal open={!!secret} onClose={() => setSecret(null)} title="Código do relé"
+             footer={(<div className="flex justify-end"><button type="button" onClick={() => setSecret(null)} className="flex items-center gap-2 bg-accent hover:bg-accent-hover text-white text-sm font-medium px-4 py-2 rounded-md cursor-pointer"><Check size={15} />Já copiei</button></div>)}>
+        {secret && (
+          <div className="flex flex-col gap-4">
+            <div className="flex items-start gap-2.5 text-[13px] text-amber-500 [.light_&]:text-amber-700 bg-amber-500/10 border border-amber-500/30 rounded-md px-3 py-2.5">
+              <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+              <span>Só é mostrado agora. Escreva-o no servidor do cliente: Definições da Empresa → Integração API → Ligação ao relé (não o envie por mensagem).</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 font-mono text-sm bg-bg-inset border border-border rounded-md px-3 py-2.5 break-all select-all text-text-primary">{secret}</code>
+              <button type="button" onClick={() => copy(secret)} className="flex items-center gap-1.5 border border-accent text-accent text-sm px-3 py-2.5 rounded-md cursor-pointer shrink-0"><Copy size={14} /> Copiar</button>
+            </div>
+            <p className="text-[13px] text-text-muted">Endereço do relé, no mesmo ecrã: <code className="font-mono text-text-primary">{window.location.origin}</code></p>
+          </div>
+        )}
+      </Modal>
+      <ConfirmDialog open={confirm === 'renew'} confirmLabel="Novo código" onCancel={() => setConfirm(null)} onConfirm={activate}
+        title="Gerar um novo código?" message="O código atual deixa de funcionar: o servidor do cliente perde a ligação até receber o novo." />
+      <ConfirmDialog open={confirm === 'off'} danger confirmLabel="Desativar" onCancel={() => setConfirm(null)} onConfirm={deactivate}
+        title="Desativar o relé?" message="O site do cliente deixa de chegar ao seu servidor (os pedidos à espera ficam guardados)." />
     </div>
   );
 }

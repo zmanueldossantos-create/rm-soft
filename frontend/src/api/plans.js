@@ -75,3 +75,18 @@ export async function getMyLicense() {
 export async function importMyLicense(content) {
   return (await apiClient.post('/company/me/license', { content })).data;
 }
+
+// ---------- Relé da API (the platform: a company installed locally reached by its web site)
+
+export async function getCompanyRelay(companyId) {
+  return (await apiClient.get('/admin/companies/' + companyId + '/relay')).data;
+}
+
+// the answer holds «secret»: the only time it is given
+export async function activateCompanyRelay(companyId) {
+  return (await apiClient.post('/admin/companies/' + companyId + '/relay')).data;
+}
+
+export async function deactivateCompanyRelay(companyId) {
+  return (await apiClient.delete('/admin/companies/' + companyId + '/relay')).data;
+}

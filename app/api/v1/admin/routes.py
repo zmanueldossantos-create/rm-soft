@@ -867,7 +867,8 @@ class LicenseContentRequest(BaseModel):
 async def get_license_info(current_user: User = Depends(require_role("SUPER_ADMIN"))):
     """This server: does it need licences (a client's server), can it issue them (the RM SOFT platform), its code."""
     from app.core.config import get_settings
-    return {"required": get_settings().LICENSE_REQUIRED, "can_sign": can_sign(), "installation_code": installation_code()}
+    return {"required": get_settings().LICENSE_REQUIRED, "can_sign": can_sign(), "installation_code": installation_code(),
+            "relay_server": get_settings().RELAY_SERVER}
 
 
 @router.post("/companies/{company_id}/license")
@@ -896,3 +897,41 @@ async def post_import_license(company_id: uuid.UUID, payload: LicenseContentRequ
         return await license_service.import_license(db, company_id, payload.content, current_user.id)
     except LicenseError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+# ------------------------------------------------------------------- the relay of a company installed locally (P4-5c)
+from app.services import relay_service  # noqa: E402
+
+
+def _relay_server_only() -> None:
+    from app.core.config import get_settings
+    if not get_settings().RELAY_SERVER:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Este servidor não é o relé da RM SOFT")
+
+
+@router.get("/companies/{company_id}/relay")
+async def get_company_relay(company_id: uuid.UUID, db: AsyncSession = Depends(get_db),
+                            current_user: User = Depends(require_role("SUPER_ADMIN"))):
+    _relay_server_only()
+    await get_company_or_raise(db, company_id)
+    return {"link": await relay_service.link_view(db, company_id)}
+
+
+@router.post("/companies/{company_id}/relay")
+async def post_activate_relay(company_id: uuid.UUID, db: AsyncSession = Depends(get_db),
+                              current_user: User = Depends(require_role("SUPER_ADMIN"))):
+    """«Ativar relé» / «Novo código»: the answer holds «secret», shown once (the previous one stops working)."""
+    _relay_server_only()
+    await get_company_or_raise(db, company_id)
+    try:
+        return await relay_service.activate(db, company_id)
+    except relay_service.RelayError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.delete("/companies/{company_id}/relay")
+async def delete_relay(company_id: uuid.UUID, db: AsyncSession = Depends(get_db),
+                       current_user: User = Depends(require_role("SUPER_ADMIN"))):
+    _relay_server_only()
+    await get_company_or_raise(db, company_id)
+    return {"link": await relay_service.deactivate(db, company_id)}

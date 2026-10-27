@@ -79,16 +79,12 @@ def _as_platform(monkeypatch):
 
 async def _link(setup, monkeypatch) -> None:
     """The SUPER_ADMIN activated the relay (platform); the technician typed its secret here (client's server)."""
-    secret = (await relay_service.activate(await anext(_session(setup)), setup["company"].id))["secret"]
+    async with setup["sessions"]() as session:
+        secret = (await relay_service.activate(session, setup["company"].id))["secret"]
     saved = await setup["client"].put(BASE + "/relay", headers=setup["gestor_h"],
                                       json={"relay_url": "http://test", "secret": secret, "is_active": True})
     assert saved.status_code == 200, saved.text
     return secret
-
-
-async def _session(setup):
-    async with setup["sessions"]() as session:
-        yield session
 
 
 async def test_the_gestor_sets_and_tests_the_link(setup, monkeypatch):

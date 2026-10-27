@@ -208,3 +208,42 @@ async def test_only_for_a_local_contract_and_the_callback_stays_outside(db, comp
     for url in ("http://localhost/x", "http://127.0.0.1/x", "http://10.0.0.5/x", "http://192.168.1.10/x",
                 "ftp://site.ao/x", "https:///x"):
         assert not relay.callback_allowed(url), url
+
+
+async def test_the_super_admin_activates_renews_and_switches_off(db, company_with_essentials, monkeypatch):
+    """Empresas → Contrato (the platform): «Ativar relé» gives the code once; a new code stops the old one."""
+    from app.core.security import create_access_token, hash_password
+    from app.models.user import User, UserRole
+    company_id = company_with_essentials["company"].id
+    admin = User(company_id=None, full_name="Admin", phone_number="+244923000777", password_hash=hash_password("x"),
+                 role=UserRole.SUPER_ADMIN)
+    db.add(admin)
+    plan = await save_plan(db, None, {"name": "Local", "options": ["INTEGRACAO_API"]})
+    await set_contract(db, company_id, {"plan_id": plan.id, "billing": "MENSAL", "deployment_mode": "LOCAL"})
+    await db.commit()
+
+    async def same_session():
+        yield db
+    app.dependency_overrides[get_db] = same_session
+    h = {"Authorization": "Bearer " + create_access_token(subject=str(admin.id), company_id=None, role="SUPER_ADMIN")}
+    url = f"/api/v1/admin/companies/{company_id}/relay"
+    try:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            assert (await client.get(url, headers=h)).status_code == 404  # not the relay server
+            monkeypatch.setattr(get_settings(), "RELAY_SERVER", True)
+            assert (await client.get("/api/v1/admin/license-info", headers=h)).json()["relay_server"] is True
+            assert (await client.get(url, headers=h)).json() == {"link": None}
+            first = (await client.post(url, headers=h)).json()
+            assert first["secret"].startswith("rmr_") and first["is_active"] and not first["online"]
+            assert "secret" not in (await client.get(url, headers=h)).json()["link"]
+            second = (await client.post(url, headers=h)).json()
+            assert second["secret"] != first["secret"]
+            assert await relay.agent_link(db, first["secret"]) is None and await relay.agent_link(db, second["secret"])
+            off = (await client.delete(url, headers=h)).json()["link"]
+            assert off["is_active"] is False and await relay.agent_link(db, second["secret"]) is None
+            # a company user is not the platform
+            gestor_h = {"Authorization": "Bearer " + create_access_token(
+                subject=str(company_with_essentials["gestor"].id), company_id=str(company_id), role="GESTOR")}
+            assert (await client.post(url, headers=gestor_h)).status_code == 403
+    finally:
+        app.dependency_overrides.pop(get_db, None)

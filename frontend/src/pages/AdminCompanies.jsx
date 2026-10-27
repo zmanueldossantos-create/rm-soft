@@ -1199,7 +1199,7 @@ export default function AdminCompanies() {
               {licenseInfo.required ? (
                 <LicensePanel load={() => getCompanyLicense(editingId)} save={(content) => importCompanyLicense(editingId, content)} />
               ) : (
-                <ContractPanel companyId={editingId} defaultMode={deploymentMode === 'saas' ? 'SAAS' : 'LOCAL'} canSign={licenseInfo.can_sign}
+                <ContractPanel companyId={editingId} defaultMode={deploymentMode === 'saas' ? 'SAAS' : 'LOCAL'} canSign={licenseInfo.can_sign} relayServer={!!licenseInfo.relay_server}
                   onChanged={(v) => setEditModulesLimit(v.limits ? v.limits.max_modules ?? null : null)} />
               )}
             </div>
