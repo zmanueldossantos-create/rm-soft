@@ -124,6 +124,17 @@ async def start_agt_queue_loop() -> None:
 
 
 @app.on_event("startup")
+async def start_relay_agent() -> None:
+    """The client's server: its relay agent (app/services/relay_agent.py) - idle while no link is set. Never on the
+    platform, which is the relay."""
+    import asyncio
+    from app.services.relay_agent import supervisor_loop
+    settings = get_settings()
+    if settings.RELAY_AGENT_LOOP and not settings.RELAY_SERVER:
+        app.state.relay_agent = asyncio.create_task(supervisor_loop())
+
+
+@app.on_event("startup")
 async def start_notification_loop() -> None:
     """Notificações (app/services/notification_service.py): the messages waiting in the outbox are sent from here."""
     import asyncio

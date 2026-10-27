@@ -38,7 +38,7 @@ from app.models.company import Company
 from app.models.user import User, UserRole
 
 FORMAT = 1
-_SKIPPED = {"ai_link_codes", "api_request_log", "api_idempotency", "relay_links", "relay_requests"}  # one-time linking codes, the public API's call journal: worthless in a copy
+_SKIPPED = {"ai_link_codes", "api_request_log", "api_idempotency", "relay_links", "relay_requests", "relay_agent_settings"}  # one-time linking codes, the public API's call journal: worthless in a copy
 
 
 class BackupError(Exception):

@@ -35,8 +35,12 @@ def api_key(scope: str | None = None):
     async def api_key_checker(request: Request, db: AsyncSession = Depends(get_db),
                               bearer: HTTPAuthorizationCredentials | None = Security(_bearer),
                               header_key: str | None = Security(_header)) -> ApiContext:
-        plain = (bearer.credentials if bearer else "") or (header_key or "")
-        key = await keys.find_key(db, plain.strip())
+        relayed_hash = keys.relayed_key_hash(request)
+        if relayed_hash is not None:  # a call of the relay, run by this server's own agent (in-process only)
+            key = await keys.find_key_by_hash(db, relayed_hash)
+        else:
+            plain = (bearer.credentials if bearer else "") or (header_key or "")
+            key = await keys.find_key(db, plain.strip())
         if key is not None:
             # the journal (app.main's middleware) writes the call under this key, whatever its answer
             request.state.api_key = {"id": key.id, "company_id": key.company_id,

@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { AlertTriangle, Check, Copy, ExternalLink, KeyRound, Loader2, Plug, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { AlertTriangle, Check, Copy, ExternalLink, Globe, KeyRound, Loader2, Plug, Plus, RefreshCw, Save, Trash2, Wifi, WifiOff } from 'lucide-react';
 import Modal from './Modal';
 import ConfirmDialog from './ConfirmDialog';
 import { API_ORIGIN } from '../api/config';
-import { createApiKey, getApiJournal, getApiKeys, revokeApiKey } from '../api/apiKeys';
+import { createApiKey, getApiJournal, getApiKeys, removeRelay, revokeApiKey, saveRelay, testRelay } from '../api/apiKeys';
 import { extractErrorMessage } from '../utils/errors';
 import { toast } from '../store/toastStore';
 
@@ -138,6 +138,8 @@ export default function ApiKeysTab({ onAllowed }) {
         )}
       </div>
 
+      {data.relay && <RelayCard relay={data.relay} onChanged={load} />}
+
       {/* ------------------------------------------------------------------------------------------------- journal */}
       <div className="bg-bg-elevated border border-border rounded-lg p-5 sm:p-6">
         <div className="flex items-start justify-between gap-3 mb-4">
@@ -230,6 +232,99 @@ export default function ApiKeysTab({ onAllowed }) {
 
       <ConfirmDialog open={!!revoking} danger confirmLabel="Revogar" onCancel={() => setRevoking(null)} onConfirm={confirmRevoke}
         title="Revogar a chave?" message={revoking ? 'O programa que usa «' + revoking.name + '» deixa de conseguir ligar-se. Não se pode desfazer.' : ''} />
+    </div>
+  );
+}
+
+
+// Local installation: the site of the company is on the internet, this server is in the shop - the RM SOFT relay joins
+// them. The server goes OUT to the platform (no port opened here); the site calls the platform with its usual key.
+function RelayCard({ relay, onChanged }) {
+  const [form, setForm] = useState({ relay_url: relay.relay_url || 'https://admin.rmsystem.co.ao', secret: '', is_active: relay.configured ? relay.is_active : true });
+  const [busy, setBusy] = useState('');
+  const [removing, setRemoving] = useState(false);
+
+  async function act(kind, fn, message) {
+    setBusy(kind);
+    try {
+      await fn();
+      if (message) toast.success(message);
+      setForm((f) => ({ ...f, secret: '' }));
+      onChanged();
+    } catch (err) {
+      toast.error(extractErrorMessage(err, 'Não foi possível'));
+      onChanged();
+    } finally {
+      setBusy('');
+    }
+  }
+  const save = () => act('save', () => saveRelay({ ...form, secret: form.secret || null }), 'Ligação ao relé guardada - o servidor liga-se dentro de 30 segundos');
+  const test = () => act('test', testRelay, 'Ligação ao relé a funcionar');
+  const remove = () => { setRemoving(false); act('remove', removeRelay, 'Ligação ao relé removida'); };
+
+  const siteAddress = (relay.relay_url || form.relay_url).replace(/\/$/, '') + '/api/public/v1';
+  let state;
+  if (!relay.configured) state = <span className="text-text-muted">Não configurada</span>;
+  else if (!relay.is_active) state = <span className="text-text-muted">Desativada</span>;
+  else if (relay.connected) state = <span className="flex items-center gap-1.5 text-success"><Wifi size={14} /> Ligado - última ligação {when(relay.last_ok_at)}</span>;
+  else state = <span className="flex items-center gap-1.5 text-danger"><WifiOff size={14} /> Sem ligação{relay.last_error ? ': ' + relay.last_error : ''}</span>;
+
+  return (
+    <div className="bg-bg-elevated border border-border rounded-lg p-5 sm:p-6">
+      <div className="flex items-center gap-2.5 mb-1">
+        <Globe size={18} className="text-accent" />
+        <h3 className="font-display font-semibold text-[16px] text-text-primary">Ligação ao relé (site na internet)</h3>
+      </div>
+      <p className="text-sm text-text-muted mb-4 max-w-3xl">Este servidor está na rede da empresa: o site, na internet, não o consegue chamar. Com o relé da RM SOFT, o site chama a plataforma e este servidor vai lá buscar os pedidos - nenhuma porta é aberta. Servidor desligado: os pedidos esperam, e o catálogo e a disponibilidade continuam a responder (última foto).</p>
+
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[13px] mb-4 bg-bg-inset border border-border rounded-md px-4 py-3">
+        <span className="font-medium">{state}</span>
+        {relay.configured && <span className="text-text-muted">Pedidos tratados: {relay.requests_done}</span>}
+        {relay.last_snapshot_at && <span className="text-text-muted">Última foto: {when(relay.last_snapshot_at)}</span>}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-4 items-end">
+        <div>
+          <label className={labelClass}>Endereço do relé</label>
+          <input value={form.relay_url} onChange={(e) => setForm((f) => ({ ...f, relay_url: e.target.value }))} className={inputClass + ' font-mono'} placeholder="https://admin.rmsystem.co.ao" />
+        </div>
+        <div>
+          <label className={labelClass}>Código do relé {relay.configured && <span className="normal-case tracking-normal">({relay.secret_hint})</span>}</label>
+          <input type="password" autoComplete="new-password" value={form.secret} onChange={(e) => setForm((f) => ({ ...f, secret: e.target.value }))}
+            className={inputClass + ' font-mono'} placeholder={relay.configured ? 'Deixe vazio para manter' : 'rmr_... (dado pela RM SOFT)'} />
+        </div>
+        <label className="flex items-center gap-2 text-sm text-text-primary pb-2.5 cursor-pointer">
+          <input type="checkbox" checked={form.is_active} onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.checked }))} className="w-4 h-4 accent-accent cursor-pointer" />
+          Ativa
+        </label>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 mt-4">
+        <button type="button" onClick={save} disabled={!!busy} className="flex items-center gap-2 bg-accent hover:bg-accent-hover text-white text-sm font-medium px-4 py-2 rounded-md cursor-pointer disabled:opacity-50">
+          {busy === 'save' ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}Guardar
+        </button>
+        {relay.configured && (
+          <>
+            <button type="button" onClick={test} disabled={!!busy} className="flex items-center gap-2 border border-border hover:border-accent text-text-primary text-sm px-4 py-2 rounded-md cursor-pointer disabled:opacity-50">
+              {busy === 'test' ? <Loader2 size={15} className="animate-spin" /> : <Wifi size={15} />}Testar ligação
+            </button>
+            <button type="button" onClick={() => setRemoving(true)} disabled={!!busy} className="flex items-center gap-2 border border-border hover:border-danger hover:text-danger text-text-muted text-sm px-4 py-2 rounded-md cursor-pointer disabled:opacity-50">
+              <Trash2 size={15} />Remover
+            </button>
+          </>
+        )}
+      </div>
+
+      {relay.configured && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] mt-4">
+          <span className="text-text-muted">O site usa este endereço da API:</span>
+          <code className="font-mono text-text-primary break-all">{siteAddress}</code>
+          <button type="button" onClick={() => copy(siteAddress, 'Endereço copiado')} className="flex items-center gap-1.5 text-accent hover:text-accent-hover cursor-pointer"><Copy size={13} /> Copiar</button>
+        </div>
+      )}
+
+      <ConfirmDialog open={removing} danger confirmLabel="Remover" onCancel={() => setRemoving(false)} onConfirm={remove}
+        title="Remover a ligação ao relé?" message="O site deixa de chegar a este servidor. Os pedidos à espera na plataforma ficam lá até voltar a ligar." />
     </div>
   );
 }

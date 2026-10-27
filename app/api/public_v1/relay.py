@@ -9,7 +9,7 @@ of a company installed locally is not run here - it is passed to that company's 
 
 A key of a SaaS company of this platform, or an unknown key: the normal API runs (relay_or_none returns None).
 """
-import asyncio
+import base64
 import json
 import uuid
 
@@ -47,6 +47,12 @@ def _answered(row: RelayRequest, replayed: bool = False) -> Response:
         headers["Idempotent-Replayed"] = "true"
     if row.response_status == 204 or row.response_body is None and row.response_status < 300:
         return Response(status_code=row.response_status, headers=headers)
+    body = row.response_body
+    if isinstance(body, dict) and body.get("__binary__"):  # a PDF sent by the agent inside the JSON
+        if body.get("disposition"):
+            headers["Content-Disposition"] = body["disposition"]
+        return Response(content=base64.b64decode(body["base64"]), status_code=row.response_status,
+                        media_type=body.get("content_type") or "application/octet-stream", headers=headers)
     return JSONResponse(status_code=row.response_status, content=row.response_body, headers=headers)
 
 
@@ -70,6 +76,11 @@ def _from_photo(link: RelayLink, path: str, query: str | None) -> Response | Non
                                                "X-RM-Snapshot-At": link.snapshot_at.isoformat() if link.snapshot_at else ""})
 
 
+async def platform_key(db, key_hash: str) -> bool:
+    """A key of a company of this platform (SaaS): never relayed."""
+    return (await db.execute(select(ApiKey.id).where(ApiKey.key_hash == key_hash))).first() is not None
+
+
 async def relay_or_none(request: Request) -> Response | None:
     path = request.url.path
     if not path.startswith(PREFIX + "/") or path in (PREFIX + "/docs", PREFIX + "/openapi.json"):
@@ -82,7 +93,7 @@ async def relay_or_none(request: Request) -> Response | None:
     method = request.method.upper()
 
     async with relay.relay_session() as db:
-        if (await db.execute(select(ApiKey.id).where(ApiKey.key_hash == key_hash))).first() is not None:
+        if await platform_key(db, key_hash):
             return None  # a key of this platform: the API runs here
         link = (await db.execute(select(RelayLink).where(
             RelayLink.is_active.is_(True), RelayLink.keys.contains([{"hash": key_hash}])))).scalar_one_or_none()

@@ -76,6 +76,8 @@ class Settings(BaseSettings):
     # --- Relé da API pública (app/services/relay_service.py) : la plateforme RM SOFT seulement - elle relaie l'API des
     # entreprises installees en local (leur serveur vient chercher les demandes). False partout ailleurs.
     RELAY_SERVER: bool = False
+    # Le serveur d'un client : son agent du relais (Integracao API -> Ligacao ao rele). False : jamais lance ici.
+    RELAY_AGENT_LOOP: bool = True
 
     @property
     def is_saas(self) -> bool:

@@ -170,10 +170,13 @@ async def save_results(db: AsyncSession, link: RelayLink, results: list[dict]) -
 # ---------------------------------------------------------------------------------------------------------- the site
 
 def request_view(row: RelayRequest) -> dict:
+    body = row.response_body
+    if isinstance(body, dict) and body.get("__binary__"):  # a PDF: the site downloads it again (same Idempotency...)
+        body = {"file": True, "content_type": body.get("content_type")}
     return {"request_id": str(row.id), "status": "FEITO" if row.status == "FEITO" else "PENDENTE",
             "method": row.method, "path": row.path, "created_at": row.created_at.isoformat() if row.created_at else None,
             "done_at": row.done_at.isoformat() if row.done_at else None,
-            "response": {"status_code": row.response_status, "body": row.response_body} if row.status == "FEITO" else None}
+            "response": {"status_code": row.response_status, "body": body} if row.status == "FEITO" else None}
 
 
 async def wait_done(request_id: uuid.UUID, seconds: float = WAIT_SECONDS) -> RelayRequest | None:

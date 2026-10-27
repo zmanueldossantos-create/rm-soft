@@ -18,3 +18,16 @@ export async function revokeApiKey(id) {
 export async function getApiJournal(keyId) {
   return (await apiClient.get('/company/me/api-keys/journal', { params: keyId ? { key_id: keyId } : {} })).data;
 }
+
+// Local installation: the link of this server to the RM SOFT relay (the site on the internet reaches it through it)
+export async function saveRelay(data) {
+  return (await apiClient.put('/company/me/api-keys/relay', data)).data;
+}
+
+export async function testRelay() {
+  return (await apiClient.post('/company/me/api-keys/relay/test')).data;
+}
+
+export async function removeRelay() {
+  return (await apiClient.delete('/company/me/api-keys/relay')).data;
+}

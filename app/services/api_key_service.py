@@ -83,6 +83,23 @@ async def revoke_key(db: AsyncSession, company_id: uuid.UUID, key_id: uuid.UUID)
     return _view(key)
 
 
+# The relay's calls (P4 step 5b): the platform knows the site's key by its hash only, so this server's agent runs them
+# with the hash, in-process (never through the network), with this token - made at start, kept in memory, never sent.
+AGENT_TOKEN = secrets.token_urlsafe(32)
+
+
+def relayed_key_hash(request) -> str | None:
+    """The key hash of a call run by this server's relay agent - None for any other call."""
+    token = request.headers.get("x-relay-agent")
+    if not token or not secrets.compare_digest(token, AGENT_TOKEN):
+        return None
+    return request.headers.get("x-relay-key-hash") or None
+
+
+async def find_key_by_hash(db: AsyncSession, key_hash: str) -> ApiKey | None:
+    return (await db.execute(select(ApiKey).where(ApiKey.key_hash == key_hash))).scalar_one_or_none()
+
+
 async def find_key(db: AsyncSession, plain: str) -> ApiKey | None:
     """The key, active or revoked (a revoked key's calls are still written in the journal - refused)."""
     if not plain or not plain.startswith(KEY_PREFIX):
