@@ -99,3 +99,4 @@ from app.models.demo_request import DemoRequest  # noqa: E402,F401 - «Pedir dem
 from app.models.notification import NotificationOutbox, NotificationRecipient, NotificationSettings  # noqa: E402,F401 - Notificações
 from app.models.customer_display import CustomerDisplayImage, CustomerDisplaySettings  # noqa: E402,F401 - Ecrã do cliente
 from app.models.api_key import ApiIdempotency, ApiKey, ApiRequestLog  # noqa: E402,F401 - Integração API
+from app.models.relay import RelayLink, RelayRequest  # noqa: E402,F401 - the platform's relay of the public API

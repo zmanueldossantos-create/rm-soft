@@ -53,6 +53,7 @@ from app.api.v1.company.notification_routes import router as notifications_route
 from app.api.v1.company.customer_display_routes import router as customer_display_router
 from app.api.v1.company.api_key_routes import router as api_keys_router
 from app.api.public_v1.routes import docs_router as public_api_docs_router, router as public_api_router
+from app.api.relay_agent import router as relay_agent_router
 from app.core.database import AsyncSessionLocal
 from app.models.company import Company
 from app.services.permission_service import seed_permission_catalog, seed_default_role_permissions
@@ -197,6 +198,19 @@ app.include_router(customer_display_router)
 app.include_router(api_keys_router)
 app.include_router(public_api_router)
 app.include_router(public_api_docs_router)
+app.include_router(relay_agent_router)
+
+
+@app.middleware("http")
+async def _public_api_relay(request, call_next):
+    """The RM SOFT platform (RELAY_SERVER): a call made with the key of a company installed locally is passed to that
+    company's server - app.api.public_v1.relay. Everywhere else (and for every other key): nothing changes."""
+    if get_settings().RELAY_SERVER and request.url.path.startswith("/api/public/v1/"):
+        from app.api.public_v1.relay import relay_or_none
+        relayed = await relay_or_none(request)
+        if relayed is not None:
+            return relayed
+    return await call_next(request)
 
 
 @app.middleware("http")

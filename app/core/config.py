@@ -73,6 +73,10 @@ class Settings(BaseSettings):
     # La plateforme RM SOFT seulement : la cle privee qui signe les licences (python -m app.tools.license_keys).
     LICENSE_PRIVATE_KEY: str | None = None
 
+    # --- Relé da API pública (app/services/relay_service.py) : la plateforme RM SOFT seulement - elle relaie l'API des
+    # entreprises installees en local (leur serveur vient chercher les demandes). False partout ailleurs.
+    RELAY_SERVER: bool = False
+
     @property
     def is_saas(self) -> bool:
         return self.DEPLOYMENT_MODE == "saas"
