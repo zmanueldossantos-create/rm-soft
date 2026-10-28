@@ -377,11 +377,29 @@ async def cancel_booking(booking_id: uuid.UUID, ctx: ApiContext = Depends(api_ke
 docs_router = APIRouter(prefix=PREFIX, include_in_schema=False)
 
 
+_spec: dict | None = None
+
+
+def public_spec() -> dict:
+    global _spec
+    if _spec is None:
+        _spec = get_openapi(title="RM SOFT - API pública", version="1.0", description=DESCRIPTION, routes=router.routes)
+    return _spec
+
+
 @docs_router.get("/openapi.json")
 async def public_openapi():
-    return get_openapi(title="RM SOFT - API pública", version="1.0", description=DESCRIPTION, routes=router.routes)
+    return public_spec()
 
 
 @docs_router.get("/docs", response_class=HTMLResponse)
 async def public_docs():
-    return get_swagger_ui_html(openapi_url=PREFIX + "/openapi.json", title="RM SOFT - API pública")
+    """The documentation in Portuguese - one self-contained page (it opens without internet)."""
+    from app.api.public_v1.docs_page import render
+    return render(public_spec())
+
+
+@docs_router.get("/docs/experimentar", response_class=HTMLResponse)
+async def public_docs_try():
+    """The interactive page (Swagger: «Authorize», «Try it out») - its files come from the internet."""
+    return get_swagger_ui_html(openapi_url=PREFIX + "/openapi.json", title="RM SOFT - API pública (experimentar)")
