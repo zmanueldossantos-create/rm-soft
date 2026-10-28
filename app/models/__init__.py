@@ -100,3 +100,5 @@ from app.models.notification import NotificationOutbox, NotificationRecipient, N
 from app.models.customer_display import CustomerDisplayImage, CustomerDisplaySettings  # noqa: E402,F401 - Ecrã do cliente
 from app.models.api_key import ApiIdempotency, ApiKey, ApiRequestLog  # noqa: E402,F401 - Integração API
 from app.models.relay import RelayAgentSettings, RelayLink, RelayRequest  # noqa: E402,F401 - the platform's relay of the public API
+from app.models.agt_call import AgtCall  # noqa: E402,F401 - the journal of the calls to the AGT
+from app.models.agt_test_taxpayer import AgtTestTaxpayer  # noqa: E402,F401 - the AGT test NIFs (homologação)

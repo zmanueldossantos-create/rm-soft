@@ -52,6 +52,18 @@ class PlatformSettings(Base):
     site_whatsapp: Mapped[str | None] = mapped_column(String(20), nullable=True)  # +244923000000
     site_email: Mapped[str | None] = mapped_column(String(120), nullable=True)
 
+    # Faturação Eletrónica (AGT): the producer's access (Basic Auth) and the software's identity and signature
+    agt_environment: Mapped[str] = mapped_column(String(20), default="HOMOLOGACAO", server_default="HOMOLOGACAO",
+                                                 nullable=False)  # HOMOLOGACAO | PRODUCAO
+    agt_username: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    agt_password_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)  # app.core.secret_box
+    agt_product_id: Mapped[str | None] = mapped_column(String(100), nullable=True)  # softwareInfoDetail.productId
+    agt_signature_version: Mapped[int | None] = mapped_column(Integer, nullable=True)  # softwareInfoDetail.signatureVersion
+    # The producer's private key: on the RM SOFT platform only (it never leaves the producer) - it signs the software's
+    # identity once; the signature (always the same text for the same identity) is what a client's server keeps.
+    agt_software_key_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    agt_software_signature: Mapped[str | None] = mapped_column(Text, nullable=True)  # jwsSoftwareSignature
+
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     def __repr__(self) -> str:

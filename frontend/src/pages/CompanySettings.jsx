@@ -29,6 +29,7 @@ import SupportSessionsList from '../components/SupportSessionsList';
 import { listUsers } from '../api/users';
 import { listCashPointAssociations, assignUserToCashPoint, unassignUserFromCashPoint } from '../api/tesouraria';
 import { Notify, useToastState } from '../components/Toaster';
+import AgtCompanyPanel from '../components/AgtCompanyPanel';
 
 
 function ToggleSwitch({ checked, onChange, disabled }) {
@@ -145,7 +146,6 @@ export default function CompanySettings() {
   const [saleUnitChecks, setSaleUnitChecks] = useState({ sale_unit_check_above_base: 'warn', sale_unit_check_below_cost: 'warn', sale_unit_check_same_factor: 'warn' });
   const [suggestsLastDocumentDate, setSuggestsLastDocumentDate] = useState(false);
   const [issuanceMode, setIssuanceMode] = useState('MANUAL');
-  const [electronicSignatureKey, setElectronicSignatureKey] = useState('');
 
   const [countries, setCountries] = useState([]);
   const [provinces, setProvinces] = useState([]);
@@ -249,7 +249,6 @@ export default function CompanySettings() {
       setExpiryAlertDays(String(data.expiry_alert_days ?? 30));
       setPrescriptionPolicy(data.prescription_policy || 'OBRIGATORIA');
       setIssuanceMode(data.issuance_mode || 'MANUAL');
-      setElectronicSignatureKey(data.electronic_signature_key || '');
     } catch (err) {
       setError(extractErrorMessage(err, 'Erro ao carregar dados da empresa'));
     } finally {
@@ -586,7 +585,7 @@ export default function CompanySettings() {
         inventory_before_close: inventoryBeforeClose,
         expiry_alert_days: parseInt(expiryAlertDays, 10) || 30,
         ...(pharmacyEnabled ? { prescription_policy: prescriptionPolicy } : {}),
-        issuance_mode: issuanceMode, electronic_signature_key: issuanceMode === 'ELETRONICA' ? (electronicSignatureKey || null) : null,
+        issuance_mode: issuanceMode,
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
@@ -885,11 +884,7 @@ export default function CompanySettings() {
           </div>
 
           <div className="flex flex-col gap-4 pt-6 border-t border-border mt-6">
-            {issuanceMode === 'ELETRONICA' && (
-              <Field label="Assinatura eletrónica (chave privada AGT)">
-                <input type="password" value={electronicSignatureKey} onChange={(e) => setElectronicSignatureKey(e.target.value)} className={inputClass} />
-              </Field>
-            )}
+            {issuanceMode === 'ELETRONICA' && <AgtCompanyPanel />}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
               <label className="flex items-center gap-2.5 cursor-pointer select-none border border-border rounded-md px-3.5 py-3 hover:border-accent transition-colors">
                 <input type="checkbox" checked={usesInvoicing} onChange={(e) => handleUsesInvoicingChange(e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />

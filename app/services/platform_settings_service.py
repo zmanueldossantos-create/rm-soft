@@ -32,6 +32,9 @@ async def update_platform_settings(
     settings.vendor_tax_id = vendor_tax_id
     settings.product_id = product_id
     settings.product_version = product_version
+    # the AGT's signature of the software covers its version and validation number: signed again (platform only)
+    from app.services.agt_settings_service import refresh_software_signature
+    refresh_software_signature(settings)
     await db.commit()
     await db.refresh(settings)
     return settings

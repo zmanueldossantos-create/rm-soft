@@ -52,6 +52,7 @@ from app.api.v1.admin.demo_request_routes import router as demo_requests_router
 from app.api.v1.company.notification_routes import router as notifications_router
 from app.api.v1.company.customer_display_routes import router as customer_display_router
 from app.api.v1.company.api_key_routes import router as api_keys_router
+from app.api.v1.company.agt_routes import router as company_agt_router
 from app.api.public_v1.routes import docs_router as public_api_docs_router, router as public_api_router
 from app.api.relay_agent import router as relay_agent_router
 from app.core.database import AsyncSessionLocal
@@ -207,6 +208,7 @@ app.include_router(demo_requests_router)
 app.include_router(notifications_router)
 app.include_router(customer_display_router)
 app.include_router(api_keys_router)
+app.include_router(company_agt_router)
 app.include_router(public_api_router)
 app.include_router(public_api_docs_router)
 app.include_router(relay_agent_router)

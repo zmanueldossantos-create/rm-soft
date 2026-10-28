@@ -185,7 +185,6 @@ async def update_my_company_contact(
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Regra de receita médica inválida")
         company.prescription_policy = payload.prescription_policy
     company.issuance_mode = payload.issuance_mode
-    company.electronic_signature_key = payload.electronic_signature_key if payload.issuance_mode == "ELETRONICA" else None
 
     try:
         await db.commit()

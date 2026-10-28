@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     # celery : Celery + Redis (Docker, SaaS). base : la base de donnees est la file - une boucle du serveur envoie les
     # documents dus et reessaie (installation Windows RMSOFT-Setup.exe, sans Redis). Voir app/services/agt_queue.py.
     AGT_QUEUE: str = "celery"
+    # Adresse de l'AGT imposee (tests, simulateur local) - vide : celle de l'environnement choisi par le SUPER_ADMIN
+    # (Homologacao https://sifphml.minfin.gov.ao, Producao https://sifp.minfin.gov.ao)
+    AGT_BASE_URL: str = ""
 
     # --- Ecrans servis par le backend lui-meme (installation Windows, sans Caddy) : le dossier du build du frontend ---
     FRONTEND_DIR: str | None = None

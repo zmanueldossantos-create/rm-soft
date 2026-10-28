@@ -1,6 +1,6 @@
 import DateInput from '../components/DateInput';
 import { useState, useEffect } from 'react';
-import { Settings, Globe, DollarSign, MapPin, Building2, Landmark, CreditCard, Calendar, Percent, Plus, Pencil, Loader2, X, FileText, Ruler, ShieldMinus, LayoutGrid, ShieldCheck, Save, Check, ArrowLeftRight, PiggyBank, Bot, Zap } from 'lucide-react';
+import { Settings, Globe, DollarSign, MapPin, Building2, Landmark, CreditCard, Calendar, Percent, Plus, Pencil, Loader2, X, FileText, Ruler, ShieldMinus, LayoutGrid, ShieldCheck, Save, Check, ArrowLeftRight, PiggyBank, Bot, Zap, FileCheck2, KeyRound, Copy } from 'lucide-react';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
 import {
@@ -28,6 +28,7 @@ const modulesApi = {
 
 import { extractErrorMessage } from '../utils/errors';
 import { getPlatformSettings, updatePlatformSettings, getSiteSettings, updateSiteSettings } from '../api/admin';
+import { getAgtSettings, updateAgtSettings, generateAgtSoftwareKey, getAgtTestTaxpayers, importAgtTestTaxpayers, deleteAgtTestTaxpayer } from '../api/agt';
 import { getPlatformAi, updatePlatformAi, testPlatformAi, setTelegramBot, getWhatsAppSettings, updateWhatsAppSettings } from '../api/ai';
 import { useToastState } from '../components/Toaster';
 import { toast } from '../store/toastStore';
@@ -390,6 +391,264 @@ function PlatformSettingsCard() {
         >
           {saving ? <Loader2 size={14} className="animate-spin" /> : saved ? <Check size={14} /> : <Save size={14} />}
           {saved ? 'Guardado' : 'Guardar'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Faturação Eletrónica (AGT), for every company of this installation: the environment, the producer's access (Basic
+// Auth - the password kept encrypted), the software's identity and its signature (jwsSoftwareSignature). On the RM SOFT
+// platform the producer's key is here and signs the identity again whenever it changes; on a client's server only the
+// signature's text is pasted (given by RM SOFT) - the producer's key never leaves the platform.
+const AGT_STATUS = {
+  OK: { label: 'Assinatura válida para esta versão', className: 'text-success' },
+  EM_FALTA: { label: 'Assinatura em falta', className: 'text-amber-500' },
+  DESATUALIZADA: { label: 'Assinatura desatualizada - a identificação mudou', className: 'text-danger' },
+};
+
+function AgtSettingsCard() {
+  const [info, setInfo] = useState(null);
+  const [form, setForm] = useState({ environment: 'HOMOLOGACAO', username: '', password: '', productId: '', signatureVersion: '', softwareKey: '', softwareSignature: '' });
+  const [busy, setBusy] = useState('');
+  const [showPublic, setShowPublic] = useState(false);
+  const [confirmNewPair, setConfirmNewPair] = useState(false);
+
+  function load(data) {
+    setInfo(data);
+    setForm({
+      environment: data.environment, username: data.username || '', password: '', productId: data.product_id || '',
+      signatureVersion: data.signature_version ?? '', softwareKey: '', softwareSignature: data.has_software_key ? '' : (data.software_signature || ''),
+    });
+  }
+
+  useEffect(() => {
+    getAgtSettings().then(load).catch(() => {});
+  }, []);
+
+  function update(field, value) {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  }
+
+  async function save(extra = {}) {
+    setBusy('save');
+    try {
+      load(await updateAgtSettings({
+        ...form,
+        password: form.password ? form.password : null,
+        softwareKey: form.softwareKey.trim() ? form.softwareKey : null,
+        softwareSignature: info.has_software_key ? null : form.softwareSignature,
+        ...extra,
+      }));
+      toast.success('Configuração AGT guardada');
+    } catch (err) {
+      toast.error(extractErrorMessage(err, 'Erro ao guardar'));
+    } finally {
+      setBusy('');
+    }
+  }
+
+  async function newPair() {
+    setBusy('pair');
+    try {
+      load(await generateAgtSoftwareKey(info.has_software_key));
+      setConfirmNewPair(false);
+      setShowPublic(true);
+      toast.success('Par de chaves do produtor gerado - registe a chave pública no portal do parceiro da AGT');
+    } catch (err) {
+      toast.error(extractErrorMessage(err, 'Erro ao gerar as chaves'));
+    } finally {
+      setBusy('');
+    }
+  }
+
+  async function copy(text, what) {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(what + ' copiada');
+    } catch {
+      toast.error('Não foi possível copiar - selecione o texto');
+    }
+  }
+
+  if (!info) return null;
+  const field = 'w-full bg-bg-inset border border-border rounded-md px-3 py-2 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors';
+  const label = 'text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1 block';
+  const button = 'flex items-center gap-1.5 text-sm font-medium px-3.5 py-2 rounded-md transition-colors cursor-pointer disabled:opacity-50';
+  const status = AGT_STATUS[info.signature_status] || AGT_STATUS.EM_FALTA;
+
+  return (
+    <div className="bg-bg-elevated border border-border rounded-lg px-5 py-4 mb-6">
+      <div className="flex items-center justify-between gap-2.5 mb-4 flex-wrap">
+        <div className="flex items-center gap-2.5">
+          <div className="w-9 h-9 rounded-md bg-accent/10 flex items-center justify-center shrink-0">
+            <FileCheck2 size={17} className="text-accent" />
+          </div>
+          <div>
+            <p className="text-[11px] uppercase tracking-wide text-text-muted">Faturação Eletrónica - AGT</p>
+            <p className="text-[11px] text-text-muted/70">Acesso do produtor e assinatura do software - para todas as empresas desta instalação</p>
+          </div>
+        </div>
+        <span className={'text-[12px] font-medium ' + status.className}>{status.label}</span>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-4">
+        <div>
+          <label className={label}>Ambiente</label>
+          <Select value={form.environment} onChange={(v) => update('environment', v)} options={[{ value: 'HOMOLOGACAO', label: 'Homologação (testes)' }, { value: 'PRODUCAO', label: 'Produção' }]} />
+        </div>
+        <div>
+          <label className={label}>Utilizador AGT</label>
+          <input value={form.username} onChange={(e) => update('username', e.target.value)} autoComplete="off" className={field} />
+        </div>
+        <div>
+          <label className={label}>Palavra-passe AGT</label>
+          <input type="password" autoComplete="new-password" value={form.password} onChange={(e) => update('password', e.target.value)}
+            placeholder={info.has_password ? info.password_hint + ' (vazio: manter)' : 'Dada pela AGT'} className={field} />
+        </div>
+        <div>
+          <label className={label}>Nome do software (productId)</label>
+          <input value={form.productId} onChange={(e) => update('productId', e.target.value)} placeholder="Como registado na AGT" className={field} />
+        </div>
+        <div>
+          <label className={label}>Versão da assinatura</label>
+          <input type="number" min="0" value={form.signatureVersion} onChange={(e) => update('signatureVersion', e.target.value)} placeholder="Vazio: não enviada" className={field} />
+        </div>
+      </div>
+      <p className="text-[11px] text-text-muted mb-4">
+        Versão e Nº de validação: os do cartão «Identificação do software» acima. Endereço: <span className="font-mono">{info.base_url}</span>
+      </p>
+
+      <div className="border-t border-border pt-4 flex flex-col gap-3">
+        {info.has_software_key ? (
+          <div className="flex items-center gap-3 flex-wrap text-[12px]">
+            <span className="text-text-muted">Chave do produtor (só nesta plataforma): RSA {info.software_key.bits} bits · <span className="font-mono text-text-primary">{info.software_key.fingerprint}</span></span>
+            <button type="button" onClick={() => setShowPublic(true)} className="text-accent hover:underline cursor-pointer">Ver a chave pública</button>
+            {confirmNewPair ? (
+              <span className="flex items-center gap-2">
+                <span className="text-danger">Gerar outro par obriga a registar a nova chave na AGT e a dar a nova assinatura a todos os servidores.</span>
+                <button type="button" onClick={newPair} disabled={!!busy} className="text-danger font-medium cursor-pointer">Confirmar</button>
+                <button type="button" onClick={() => setConfirmNewPair(false)} className="text-text-muted cursor-pointer">Cancelar</button>
+              </span>
+            ) : (
+              <button type="button" onClick={() => setConfirmNewPair(true)} className="text-text-muted hover:text-danger cursor-pointer">Gerar outro par</button>
+            )}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-3 flex-wrap text-[12px] text-text-muted">
+              <span>Servidor de um cliente: cole só a assinatura dada pela RM SOFT. Plataforma RM SOFT: cole a chave privada do produtor que já tem, ou</span>
+              <button type="button" onClick={newPair} disabled={!!busy} className="flex items-center gap-1 text-accent hover:underline cursor-pointer">
+                {busy === 'pair' ? <Loader2 size={12} className="animate-spin" /> : <KeyRound size={12} />} gere um par novo
+              </button>
+            </div>
+            <div>
+              <label className={label}>Chave privada do produtor (só na plataforma RM SOFT)</label>
+              <textarea value={form.softwareKey} onChange={(e) => update('softwareKey', e.target.value)} rows={3} spellCheck={false} autoComplete="off"
+                placeholder={'-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----'} className={field + ' text-[11px]'} />
+              <p className="text-[11px] text-text-muted mt-1">Guardada cifrada e nunca mais mostrada - a assinatura do software passa a ser calculada aqui.</p>
+            </div>
+          </div>
+        )}
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <label className={label + ' mb-0'}>Assinatura do software (jwsSoftwareSignature)</label>
+            {info.software_signature && (
+              <button type="button" onClick={() => copy(info.software_signature, 'Assinatura')} className="flex items-center gap-1 text-[12px] text-accent cursor-pointer"><Copy size={12} /> Copiar</button>
+            )}
+          </div>
+          {info.has_software_key ? (
+            <textarea readOnly value={info.software_signature || 'Complete o nome do software, a versão e o nº de validação'} rows={3} className={field + ' text-[11px]'} />
+          ) : (
+            <textarea value={form.softwareSignature} onChange={(e) => update('softwareSignature', e.target.value)} rows={3} spellCheck={false}
+              placeholder="eyJhbGciOiJSUzI1NiIs..." className={field + ' text-[11px]'} />
+          )}
+          {info.signed_detail && <p className="text-[11px] text-text-muted mt-1">Assina: <span className="font-mono">{JSON.stringify(info.signed_detail)}</span></p>}
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3 mt-4">
+        <button type="button" onClick={() => save()} disabled={!!busy} className={button + ' bg-accent hover:bg-accent-hover text-white'}>
+          {busy === 'save' ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Guardar
+        </button>
+        {info.has_password && (
+          <button type="button" onClick={() => save({ password: '' })} disabled={!!busy} className="text-[12px] text-text-muted hover:text-danger transition-colors cursor-pointer">Remover a palavra-passe</button>
+        )}
+      </div>
+
+      <AgtTestNifsRow />
+
+      <Modal open={showPublic} onClose={() => setShowPublic(false)} title="Chave pública do produtor" maxWidthClass="max-w-xl"
+        subtitle="Registar no portal do parceiro da AGT (a chave privada fica nesta plataforma)">
+        <pre className="bg-bg-inset border border-border rounded-md p-3 text-[11px] font-mono text-text-primary overflow-auto select-all">{info.software_public_key}</pre>
+        <button type="button" onClick={() => copy(info.software_public_key, 'Chave pública')} className={button + ' mt-3 border border-border hover:border-accent text-text-primary'}>
+          <Copy size={14} /> Copiar
+        </button>
+      </Modal>
+    </div>
+  );
+}
+
+// The AGT's test NIFs (homologação): the TEST_NIF file of the AGT pasted once - each NIF with its name and private key
+// (kept encrypted, never shown again). A company then picks one in Definições da Empresa → Faturação Eletrónica.
+function AgtTestNifsRow() {
+  const [items, setItems] = useState(null);
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    getAgtTestTaxpayers().then(setItems).catch(() => setItems([]));
+  }, []);
+
+  async function importText() {
+    setBusy(true);
+    try {
+      const result = await importAgtTestTaxpayers(text);
+      setItems(result.items);
+      setText('');
+      toast.success(result.imported + (result.imported === 1 ? ' NIF de teste importado' : ' NIFs de teste importados'));
+    } catch (err) {
+      toast.error(extractErrorMessage(err, 'Erro ao importar'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(nif) {
+    try {
+      setItems(await deleteAgtTestTaxpayer(nif));
+      toast.success('NIF de teste ' + nif + ' removido');
+    } catch (err) {
+      toast.error(extractErrorMessage(err, 'Erro ao remover'));
+    }
+  }
+
+  if (!items) return null;
+  return (
+    <div className="border-t border-border mt-4 pt-4 flex flex-col gap-3">
+      <div>
+        <p className="text-[11px] font-medium uppercase tracking-wide text-text-muted">NIFs de teste da AGT (homologação)</p>
+        <p className="text-[11px] text-text-muted/70">Cada empresa pode escolher um, em Definições da Empresa, para testar enquanto o ambiente for Homologação</p>
+      </div>
+      {items.length > 0 && (
+        <div className="border border-border rounded-md divide-y divide-border">
+          {items.map((t) => (
+            <div key={t.nif} className="flex items-center gap-3 px-3 py-2 text-[12px] flex-wrap">
+              <span className="font-mono text-text-primary w-28">{t.nif}</span>
+              <span className="text-text-primary flex-1 min-w-[180px]">{t.name}</span>
+              {t.key && <span className="text-text-muted font-mono">RSA {t.key.bits} · {t.key.fingerprint}</span>}
+              <button type="button" onClick={() => remove(t.nif)} className="text-text-muted hover:text-danger cursor-pointer"><X size={14} /></button>
+            </div>
+          ))}
+        </div>
+      )}
+      <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} spellCheck={false} autoComplete="off"
+        placeholder={'Colar aqui o conteúdo do ficheiro TEST_NIF da AGT (NIF, nome, chave privada, chave pública)'}
+        className="w-full bg-bg-inset border border-border rounded-md px-3 py-2 text-[11px] text-text-primary font-mono outline-none focus:border-accent transition-colors" />
+      <div>
+        <button type="button" onClick={importText} disabled={busy || !text.trim()}
+          className="flex items-center gap-1.5 border border-border hover:border-accent disabled:opacity-50 text-text-primary text-sm font-medium px-3.5 py-2 rounded-md transition-colors cursor-pointer">
+          {busy ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Importar NIFs de teste
         </button>
       </div>
     </div>
@@ -973,6 +1232,7 @@ export default function Configuracoes() {
       </p>
 
       <PlatformSettingsCard />
+      <AgtSettingsCard />
       <SiteSettingsCard />
       <AiSettingsCard />
 

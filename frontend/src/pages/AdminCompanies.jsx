@@ -62,7 +62,7 @@ const emptyForm = {
   primaryCurrencyId: '', secondaryCurrencyId: '',
   fiscalRegimeId: '',
   usesInvoicing: true, autoSeriesYear: true, allowsFutureSaleDate: false, suggestsLastDocumentDate: false,
-  issuanceMode: 'MANUAL', electronicSignatureKey: '',
+  issuanceMode: 'MANUAL',
   moduleIds: [],
   gestorName: '', gestorPhone: '', gestorPassword: '',
   baseParts: [],
@@ -378,7 +378,6 @@ export default function AdminCompanies() {
       allowsFutureSaleDate: company.allows_future_sale_date,
       suggestsLastDocumentDate: company.suggests_last_document_date,
       issuanceMode: company.issuance_mode || 'MANUAL',
-      electronicSignatureKey: company.electronic_signature_key || '',
       moduleIds: [],
       gestorName: '', gestorPhone: '', gestorPassword: '',
     });
@@ -587,7 +586,6 @@ export default function AdminCompanies() {
       allows_future_sale_date: form.allowsFutureSaleDate,
       suggests_last_document_date: form.suggestsLastDocumentDate,
       issuance_mode: form.issuanceMode,
-      electronic_signature_key: form.issuanceMode === 'ELETRONICA' ? (form.electronicSignatureKey || null) : null,
       fiscal_regime_id: form.fiscalRegimeId || null,
     };
   }
@@ -947,9 +945,7 @@ export default function AdminCompanies() {
               </div>
 
               {form.issuanceMode === 'ELETRONICA' && (
-                <Field label="Assinatura eletrónica (chave privada AGT)">
-                  <input type="password" value={form.electronicSignatureKey} onChange={(e) => updateField('electronicSignatureKey', e.target.value)} className={inputClass} />
-                </Field>
+                <p className="text-[12px] text-text-muted">A chave privada do contribuinte (portal da AGT) é colada pela empresa em Definições da Empresa → Faturação Eletrónica - guardada cifrada.</p>
               )}
 
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-4" id="usesInvoicingRow">

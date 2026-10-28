@@ -66,7 +66,6 @@ class CompanyContactUpdateRequest(BaseModel):
     expiry_alert_days: int | None = None  # lots: days before the expiry date a lot is "a expirar" (only changed when sent)
     prescription_policy: str | None = None  # Farmácia: OBRIGATORIA / SE_APRESENTADA (only changed when sent)
     issuance_mode: str = "MANUAL"
-    electronic_signature_key: str | None = None
 
     @field_validator("email")
     @classmethod
@@ -117,7 +116,6 @@ class CompanyContactResponse(BaseModel):
     expiry_alert_days: int = 30
     prescription_policy: str = "OBRIGATORIA"
     issuance_mode: str
-    electronic_signature_key: str | None
 
     class Config:
         from_attributes = True

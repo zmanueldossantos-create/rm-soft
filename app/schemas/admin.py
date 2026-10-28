@@ -100,7 +100,6 @@ class CompanyCreateRequest(BaseModel):
     allows_future_sale_date: bool = False
     suggests_last_document_date: bool = False
     issuance_mode: str = "MANUAL"
-    electronic_signature_key: str | None = None
     bank_accounts: list[BankAccountInput] = []
     # «Base»: a company's backup file, uploaded first (/admin/company-base/inspect), whose catalog is copied
     base_token: str | None = None
@@ -181,7 +180,6 @@ class CompanyUpdateRequest(BaseModel):
     allows_future_sale_date: bool = False
     suggests_last_document_date: bool = False
     issuance_mode: str = "MANUAL"
-    electronic_signature_key: str | None = None
     fiscal_regime_id: uuid.UUID | None = None
 
     @field_validator("name")
@@ -243,7 +241,6 @@ class CompanyResponse(BaseModel):
     allows_future_sale_date: bool
     suggests_last_document_date: bool
     issuance_mode: str
-    electronic_signature_key: str | None
 
     class Config:
         from_attributes = True

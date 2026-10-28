@@ -6,7 +6,7 @@ never internal business operations of a specific company.
 import uuid
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -112,7 +112,6 @@ async def create_new_company(
             allows_future_sale_date=payload.allows_future_sale_date,
             suggests_last_document_date=payload.suggests_last_document_date,
             issuance_mode=payload.issuance_mode,
-            electronic_signature_key=payload.electronic_signature_key,
             bank_accounts=[b.model_dump() for b in payload.bank_accounts],
             subdomain=payload.subdomain,
             base_token=payload.base_token,
@@ -386,7 +385,6 @@ async def edit_company(
             allows_future_sale_date=payload.allows_future_sale_date,
             suggests_last_document_date=payload.suggests_last_document_date,
             issuance_mode=payload.issuance_mode,
-            electronic_signature_key=payload.electronic_signature_key,
             fiscal_regime_id=payload.fiscal_regime_id,
             subdomain=payload.subdomain,
         )
@@ -459,6 +457,77 @@ async def patch_platform_settings(
         product_version=payload.product_version,
     )
 
+
+
+class AgtSettingsRequest(BaseModel):
+    """password / software_key: None keeps the one saved, "" removes it."""
+    environment: str = "HOMOLOGACAO"
+    username: str | None = Field(default=None, max_length=100)
+    password: str | None = Field(default=None, max_length=200)
+    product_id: str | None = Field(default=None, max_length=100)
+    signature_version: int | None = None
+    software_key: str | None = Field(default=None, max_length=10000)
+    software_signature: str | None = Field(default=None, max_length=5000)
+
+
+@router.get("/agt-settings")
+async def get_agt_settings(db: AsyncSession = Depends(get_db), current_user: User = Depends(require_role("SUPER_ADMIN"))):
+    """Faturação Eletrónica: the AGT environment, the producer's access and the software's signature."""
+    from app.services.agt_settings_service import platform_view
+    return platform_view(await get_or_create_platform_settings(db))
+
+
+@router.put("/agt-settings")
+async def put_agt_settings(payload: AgtSettingsRequest, db: AsyncSession = Depends(get_db),
+                           current_user: User = Depends(require_role("SUPER_ADMIN"))):
+    from app.services.agt_settings_service import AgtSettingsError, save_platform
+    from app.services.agt_signing import AgtKeyError
+    try:
+        return await save_platform(db, payload.environment, payload.username, payload.password, payload.product_id,
+                                   payload.signature_version, payload.software_key, payload.software_signature)
+    except (AgtSettingsError, AgtKeyError) as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.post("/agt-settings/software-key")
+async def generate_agt_software_key(replace: bool = False, db: AsyncSession = Depends(get_db),
+                                    current_user: User = Depends(require_role("SUPER_ADMIN"))):
+    """A new producer key pair, made here (the private half never leaves the platform)."""
+    from app.services.agt_settings_service import AgtSettingsError, generate_software_key
+    try:
+        return await generate_software_key(db, replace)
+    except AgtSettingsError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+
+
+class AgtTestImportRequest(BaseModel):
+    text: str = Field(max_length=100000)
+
+
+@router.get("/agt-test-taxpayers")
+async def get_agt_test_taxpayers(db: AsyncSession = Depends(get_db),
+                                 current_user: User = Depends(require_role("SUPER_ADMIN"))):
+    """The AGT's test NIFs (homologação) - their keys are never sent back."""
+    from app.services.agt_settings_service import list_test_taxpayers
+    return await list_test_taxpayers(db)
+
+
+@router.post("/agt-test-taxpayers/import")
+async def import_agt_test_taxpayers(payload: AgtTestImportRequest, db: AsyncSession = Depends(get_db),
+                                    current_user: User = Depends(require_role("SUPER_ADMIN"))):
+    """The TEST_NIF file of the AGT, pasted: every NIF with its name and private key (kept encrypted)."""
+    from app.services.agt_settings_service import AgtSettingsError, import_test_taxpayers
+    try:
+        return await import_test_taxpayers(db, payload.text)
+    except AgtSettingsError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.delete("/agt-test-taxpayers/{nif}")
+async def delete_agt_test_taxpayer(nif: str, db: AsyncSession = Depends(get_db),
+                                   current_user: User = Depends(require_role("SUPER_ADMIN"))):
+    from app.services.agt_settings_service import delete_test_taxpayer
+    return await delete_test_taxpayer(db, nif)
 
 
 @router.get("/site-settings", response_model=SiteSettings)

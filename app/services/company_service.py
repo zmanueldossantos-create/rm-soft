@@ -160,7 +160,6 @@ async def create_company(
     allows_future_sale_date: bool = False,
     suggests_last_document_date: bool = False,
     issuance_mode: str = "MANUAL",
-    electronic_signature_key: str | None = None,
     bank_accounts: list[dict] | None = None,
     subdomain: str | None = None,
     base_token: str | None = None,
@@ -215,7 +214,6 @@ async def create_company(
         allows_future_sale_date=allows_future_sale_date if uses_invoicing else False,
         suggests_last_document_date=suggests_last_document_date if uses_invoicing else False,
         issuance_mode=InvoiceIssuanceMode(issuance_mode),
-        electronic_signature_key=electronic_signature_key if issuance_mode == "ELETRONICA" else None,
         subdomain=subdomain,
     )
     db.add(company)
@@ -351,7 +349,6 @@ async def update_company(
     allows_future_sale_date: bool = False,
     suggests_last_document_date: bool = False,
     issuance_mode: str = "MANUAL",
-    electronic_signature_key: str | None = None,
     fiscal_regime_id: uuid.UUID | None = None,
     subdomain: str | None = None,
 ) -> Company:
@@ -397,7 +394,6 @@ async def update_company(
     company.allows_future_sale_date = allows_future_sale_date if uses_invoicing else False
     company.suggests_last_document_date = suggests_last_document_date if uses_invoicing else False
     company.issuance_mode = InvoiceIssuanceMode(issuance_mode)
-    company.electronic_signature_key = electronic_signature_key if issuance_mode == "ELETRONICA" else None
     if fiscal_regime_id is not None and fiscal_regime_id != company.fiscal_regime_id:
         company.fiscal_regime_id = fiscal_regime_id
         # The new regime takes effect at once, and stays in the company's regime history.

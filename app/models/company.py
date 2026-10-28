@@ -8,7 +8,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import String, Boolean, DateTime, ForeignKey, Enum, Integer, func
+from sqlalchemy import String, Boolean, DateTime, ForeignKey, Enum, Integer, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import UUID
 
@@ -92,7 +92,9 @@ class Company(Base):
     # Fiscal issuance mode - electronic mode requires the AGT-issued private
     # key and turns OFF auto_series_year (series are solicited from AGT instead).
     issuance_mode: Mapped[InvoiceIssuanceMode] = mapped_column(Enum(InvoiceIssuanceMode), nullable=False, default=InvoiceIssuanceMode.MANUAL)
-    electronic_signature_key: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    agt_private_key_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)  # the AGT's key of this taxpayer (secret_box)
+    # Homologação only: the AGT test NIF this company sends as (app.models.agt_test_taxpayer) - ignored in Produção
+    agt_test_nif: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
