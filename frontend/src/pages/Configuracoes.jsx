@@ -766,7 +766,8 @@ const RULE_INFO = [
   ['has_lines', 'Tem linhas de artigos', 'Desmarcado: documento sem linhas (ex.: recibo)', false],
 ];
 
-export default function Configuracoes() {
+// section «sistema»: the platform's settings cards; «catalogos»: the base catalogs only.
+export default function Configuracoes({ section = 'sistema' }) {
   const [counts, setCounts] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useToastState('error');
@@ -1225,19 +1226,24 @@ export default function Configuracoes() {
     <main className="max-w-[1600px] mx-auto px-4 sm:px-6 md:px-8 py-6 sm:py-9">
       <h2 className="font-display font-semibold text-[22px] text-text-primary flex items-center gap-2.5 mb-1">
         <Settings size={22} className="text-accent" />
-        Configurações
+        {section === 'catalogos' ? 'Configurações - Catálogos' : 'Configurações - Sistema'}
       </h2>
       <p className="text-text-muted text-sm mb-6">
-        Catálogos base da plataforma - usados em toda a configuração de empresas, produtos e faturação
+        {section === 'catalogos'
+          ? 'Catálogos base da plataforma - usados em toda a configuração de empresas, produtos e faturação'
+          : 'Identificação do software, Faturação Eletrónica (AGT), site público e assistente - para todas as empresas'}
       </p>
 
-      <PlatformSettingsCard />
-      <AgtSettingsCard />
-      <SiteSettingsCard />
-      <AiSettingsCard />
+      {section === 'sistema' && (
+        <>
+          <PlatformSettingsCard />
+          <AgtSettingsCard />
+          <SiteSettingsCard />
+          <AiSettingsCard />
+        </>
+      )}
 
-
-      {loading ? (
+      {section !== 'catalogos' ? null : loading ? (
         <div className="flex items-center justify-center py-16 text-text-muted text-sm">
           <Loader2 size={18} className="animate-spin mr-2" />
           A carregar...

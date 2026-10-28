@@ -352,7 +352,11 @@ export default function Layout() {
               <NavLink to="/pedidos" icon={Inbox} label="Pedidos" active={isActive('/pedidos')} badge={demoRequests.counts.NOVO} />
             )}
             {user?.role === 'SUPER_ADMIN' && (
-              <NavLink to="/configuracoes" icon={SlidersHorizontal} label="Configurações" active={isActive('/configuracoes')} />
+              // Configurações: the platform's settings (software, AGT, site, assistant) apart from the catalogs
+              <NavGroup icon={SlidersHorizontal} label="Configurações" isActive={isActive} items={[
+                { to: '/configuracoes/sistema', icon: Cog, label: 'Sistema' },
+                { to: '/configuracoes/catalogos', icon: BookOpen, label: 'Catálogos' },
+              ]} />
             )}
             {user?.role === 'SUPER_ADMIN' && (
               <NavLink to="/visao-global" icon={LayoutGrid} label="Visão global" active={isActive('/visao-global')} />

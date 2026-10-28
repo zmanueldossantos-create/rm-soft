@@ -91,7 +91,9 @@ export default function App() {
           <Route path="/producao" element={<RequirePermission anyOf={['recipes:view', 'production:view']}><Producao /></RequirePermission>} />
           <Route path="/producao/historico" element={<RequirePermission anyOf={['recipes:view', 'production:view']}><ProductionHistory /></RequirePermission>} />
           <Route path="/caixa" element={<RequirePermission perm="pos:view"><Caixa /></RequirePermission>} />
-          <Route path="/configuracoes" element={<SuperAdminRoute><Configuracoes /></SuperAdminRoute>} />
+          <Route path="/configuracoes" element={<Navigate to="/configuracoes/sistema" replace />} />
+          <Route path="/configuracoes/sistema" element={<SuperAdminRoute><Configuracoes section="sistema" /></SuperAdminRoute>} />
+          <Route path="/configuracoes/catalogos" element={<SuperAdminRoute><Configuracoes section="catalogos" /></SuperAdminRoute>} />
           <Route path="/visao-global" element={<SuperAdminRoute><VisaoGlobal /></SuperAdminRoute>} />
           <Route path="/catalogo-referencia" element={<SuperAdminRoute><CatalogoReferencia /></SuperAdminRoute>} />
           <Route path="/planos" element={<SuperAdminRoute><Planos /></SuperAdminRoute>} />
