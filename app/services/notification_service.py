@@ -49,9 +49,16 @@ async def get_settings_row(db: AsyncSession, company_id: uuid.UUID) -> Notificat
 
 
 async def available_events(db: AsyncSession, company_id: uuid.UUID) -> list[str]:
-    """The events this company's sectors have (no hotel events for a bakery)."""
+    """The events this company's sectors have (no hotel events for a bakery; the AGT events only in Faturação
+    Eletrónica)."""
+    from app.core.notification_events import ELECTRONIC
+    from app.models.company import Company
     from app.services.sector_service import get_company_capabilities
-    capabilities = await get_company_capabilities(db, company_id)
+    capabilities = set(await get_company_capabilities(db, company_id))
+    company = await db.get(Company, company_id)
+    mode = getattr(company, "issuance_mode", None) if company is not None else None
+    if (mode.value if hasattr(mode, "value") else mode) == "ELETRONICA":
+        capabilities.add(ELECTRONIC)
     return [e.code for e in EVENTS.values() if e.capability is None or e.capability in capabilities]
 
 

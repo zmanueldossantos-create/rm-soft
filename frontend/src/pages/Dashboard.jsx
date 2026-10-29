@@ -162,6 +162,29 @@ export default function Dashboard() {
             </div>
           </div>
 
+          {/* Faturação Eletrónica: the AGT not answering (contingência), documents late (the AGT penalises after 24 h) */}
+          {summary.agt && (summary.agt.contingency || summary.agt.late > 0) && (
+            <div className="flex flex-col gap-2">
+              {summary.agt.contingency && (
+                <div className="flex items-start gap-2.5 border border-amber-500/40 bg-amber-500/10 rounded-lg px-4 py-3 text-sm text-amber-500">
+                  <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+                  <span>
+                    Faturação Eletrónica em <b>contingência</b>{summary.agt.manual ? ' (ativada manualmente)' : ' - a AGT não responde'}
+                    {summary.agt.since ? ' desde ' + new Date(summary.agt.since).toLocaleString('pt-PT') : ''}.
+                    {' '}{summary.agt.waiting} documento(s) em espera - seguem sozinhos quando a ligação voltar.
+                    {!summary.agt.has_c_series && ' Sem série de contingência válida: os documentos usam a série normal - peça uma série C à AGT quando houver ligação.'}
+                  </span>
+                </div>
+              )}
+              {summary.agt.late > 0 && (
+                <div className="flex items-start gap-2.5 border border-danger/40 bg-danger/10 rounded-lg px-4 py-3 text-sm text-danger">
+                  <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+                  <span>{summary.agt.late} documento(s) ainda não validado(s) pela AGT há mais de {summary.agt.late_hours} h - a AGT penaliza a partir das 24 h. Verifique a ligação à internet e a Faturação Eletrónica em Definições da Empresa.</span>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Invoice status breakdown - only in Faturação Eletrónica (a MANUAL document is declared by the SAF-T) */}
           {summary.agt_realtime && (
           <div className="bg-bg-elevated border border-border rounded-lg p-5">

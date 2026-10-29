@@ -95,6 +95,15 @@ class Company(Base):
     agt_private_key_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)  # the AGT's key of this taxpayer (secret_box)
     # Homologação only: the AGT test NIF this company sends as (app.models.agt_test_taxpayer) - ignored in Produção
     agt_test_nif: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # Contingência (app.services.agt_contingency): the AGT cannot be reached - the new documents take the C series.
+    # Switched on by repeated network failures (or by the gestor: manual, until the gestor switches it off), off at
+    # the first answer of the AGT (automatic only).
+    agt_contingency: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    agt_contingency_manual: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    agt_contingency_since: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    agt_net_failures: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    agt_first_failure_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    agt_last_ok_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

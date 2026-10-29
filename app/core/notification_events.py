@@ -8,6 +8,10 @@ the company switched on «also what the gestor does». Stock baixo is always sen
 from dataclasses import dataclass
 
 
+# not a sector's capability: the company issues in Faturação Eletrónica (its AGT events)
+ELECTRONIC = "FATURACAO_ELETRONICA"
+
+
 @dataclass(frozen=True)
 class Event:
     code: str
@@ -27,6 +31,10 @@ EVENTS: dict[str, Event] = {e.code: e for e in (
     Event("VENDA", "Venda", "Cada venda (ou só acima do montante mínimo escolhido): o documento, o total, a caixa"),
     Event("CAIXA_FECHADA", "Caixa fechada", "O fecho de uma caixa: esperado, contado e a diferença"),
     Event("STOCK_BAIXO", "Stock baixo", "Um produto abaixo do seu stock mínimo", "STOCK", by_others=False),
+    Event("AGT_CONTINGENCIA", "AGT: contingência", "A AGT deixou de responder (entrada em contingência) ou voltou "
+          "(saída) - Faturação Eletrónica", ELECTRONIC, by_others=False),
+    Event("AGT_ATRASO", "AGT: documentos em atraso", "Documentos ainda não validados pela AGT 18 h depois de emitidos "
+          "(a AGT penaliza a partir das 24 h) - Faturação Eletrónica", ELECTRONIC, by_others=False),
 )}
 
 CHANNELS = {"EMAIL": "Email", "TELEGRAM": "Telegram", "WHATSAPP": "WhatsApp"}

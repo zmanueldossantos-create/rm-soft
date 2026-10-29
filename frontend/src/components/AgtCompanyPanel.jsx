@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { KeyRound, Loader2, Zap, Trash2, Save, History, CheckCircle2, AlertTriangle } from 'lucide-react';
 import Modal from './Modal';
 import Select from './Select';
-import { getCompanyAgt, saveCompanyAgtKey, testCompanyAgt, getCompanyAgtCalls, setCompanyAgtTestNif } from '../api/agt';
+import { getCompanyAgt, saveCompanyAgtKey, testCompanyAgt, getCompanyAgtCalls, setCompanyAgtTestNif, setCompanyAgtContingency } from '../api/agt';
 import { extractErrorMessage } from '../utils/errors';
 import { toast } from '../store/toastStore';
 
@@ -45,6 +45,18 @@ export default function AgtCompanyPanel() {
       toast.success(nif ? 'Em homologação, envia como o NIF de teste ' + nif : 'Envia como o NIF da empresa');
     } catch (err) {
       toast.error(extractErrorMessage(err, 'Erro ao guardar'));
+    } finally {
+      setBusy('');
+    }
+  }
+
+  async function switchContingency(on) {
+    setBusy('cont');
+    try {
+      setInfo(await setCompanyAgtContingency(on));
+      toast.success(on ? 'Contingência ativada: os novos documentos usam a série de contingência' : 'Contingência desativada');
+    } catch (err) {
+      toast.error(extractErrorMessage(err, 'Erro ao mudar a contingência'));
     } finally {
       setBusy('');
     }
@@ -110,6 +122,29 @@ export default function AgtCompanyPanel() {
               ? <>As chamadas à AGT saem com o NIF de teste <span className="font-mono text-text-primary">{info.sending_as}</span> e a sua chave. Em produção, sempre o NIF da empresa.</>
               : 'As chamadas à AGT saem com o NIF da empresa e a chave abaixo.'}
           </p>
+        </div>
+      )}
+
+      {info.link && (
+        <div className={'border rounded-md px-3 py-2.5 text-[12px] flex items-center justify-between gap-3 flex-wrap ' + (info.link.contingency ? 'border-amber-500/40 bg-amber-500/10' : 'border-border bg-bg-inset')}>
+          <div className="flex flex-col gap-0.5">
+            <span className={info.link.contingency ? 'text-amber-500 font-medium' : 'text-text-primary font-medium'}>
+              {info.link.contingency
+                ? 'Em contingência' + (info.link.manual ? ' (ativada manualmente)' : ' - a AGT não responde') + (info.link.since ? ' desde ' + when(info.link.since) : '')
+                : 'Ligação normal à AGT'}
+            </span>
+            <span className="text-text-muted">
+              Última resposta da AGT: {info.link.last_ok_at ? when(info.link.last_ok_at) : '-'} · Em espera: {info.link.waiting}
+              {info.link.late > 0 && <span className="text-danger"> · {info.link.late} há mais de {info.link.late_hours} h</span>}
+              {!info.link.has_c_series && <span className="text-amber-500"> · sem série de contingência (C) válida</span>}
+            </span>
+          </div>
+          <button type="button" onClick={() => switchContingency(!info.link.contingency)} disabled={!!busy}
+            className={'flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-md border transition-colors cursor-pointer disabled:opacity-50 ' + (info.link.contingency ? 'border-border hover:border-accent text-text-primary' : 'border-amber-500/50 text-amber-500 hover:bg-amber-500/10')}
+            title={info.link.contingency ? 'Voltar à série normal (os documentos em espera seguem)' : 'Os novos documentos passam para a série de contingência até desativar'}>
+            {busy === 'cont' ? <Loader2 size={14} className="animate-spin" /> : null}
+            {info.link.contingency ? 'Sair da contingência' : 'Entrar em contingência'}
+          </button>
         </div>
       )}
 

@@ -297,8 +297,8 @@ async def get_or_create_current_series(db: AsyncSession, company: Company, docum
     caller must be told explicitly rather than silently picking the wrong one.
 
     Contingência (ELETRONICA, a type sent to the AGT): while the AGT cannot be reached the document takes the
-    establishment's C series (within its emission period when the AGT gave one), else the N series. contingency None:
-    the installation's current state (app.services.agt_contingency).
+    establishment's C series (within its emission period when the AGT gave one) - the N series when there is no valid
+    one. contingency None: the company's current state (app.services.agt_contingency).
     """
     year = _current_year()
 
@@ -360,9 +360,8 @@ async def get_or_create_current_series(db: AsyncSession, company: Company, docum
                           and (r.series_end_ts is None or now <= r.series_end_ts)]
                 if usable:
                     return usable[0]
-                raise SeriesNotFoundError(
-                    "AGT inacessível e sem série de contingência válida para este tipo de documento - peça uma série "
-                    "de contingência (C) à AGT em Definições da Empresa → Séries, enquanto houver ligação")
+                # no valid C series: the N series (a sale is never refused for it) - the document waits in the queue
+                # all the same; the screen says that a C series is missing (agt_contingency.status)
         query = query.where((DocumentSeries.contingency_indicator.is_(None))
                             | (DocumentSeries.contingency_indicator == ContingencyIndicator.NORMAL))
 

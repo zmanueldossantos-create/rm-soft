@@ -58,3 +58,8 @@ export async function importAgtTestTaxpayers(text) {
 export async function deleteAgtTestTaxpayer(nif) {
   return (await apiClient.delete('/admin/agt-test-taxpayers/' + encodeURIComponent(nif))).data;
 }
+
+// Contingência: the gestor's switch (on until he switches it off)
+export async function setCompanyAgtContingency(on) {
+  return (await apiClient.post('/company/me/agt/contingency', { on })).data;
+}

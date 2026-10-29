@@ -56,6 +56,20 @@ async def save_test_nif(payload: TestNifRequest, db: AsyncSession = Depends(get_
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
 
 
+class ContingencyRequest(BaseModel):
+    on: bool
+
+
+@router.post("/contingency")
+async def switch_contingency(payload: ContingencyRequest, db: AsyncSession = Depends(get_db),
+                             current_user: User = Depends(require_permission("company:manage"))):
+    """The gestor's switch: contingência on (an outage he knows of) until he switches it off."""
+    from app.services.agt_contingency import set_manual
+    company = await _company(db, current_user)
+    await set_manual(db, company, payload.on)
+    return await agt_settings_service.company_view(db, company)
+
+
 @router.post("/test")
 async def test(db: AsyncSession = Depends(get_db), current_user: User = Depends(require_permission("company:manage"))):
     """listarSeries for this company: the AGT's answer as it came (or why it could not be reached)."""

@@ -105,6 +105,7 @@ class Invoice(Base):
     agt_last_error: Mapped[str | None] = mapped_column(String(300), nullable=True)
     agt_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     agt_validated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    agt_late_notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # the 18 h alert
     # Fiscal lifecycle - separate from the AGT submission `status` above. See Video 5:
     # a Nota de Credito referencing this invoice moves it to RECTIFICADO/RECTIFICADO_PARCIAL/ANULADO.
     document_status: Mapped[DocumentLifecycleStatus] = mapped_column(Enum(DocumentLifecycleStatus), nullable=False, default=DocumentLifecycleStatus.EMITIDO)

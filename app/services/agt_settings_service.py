@@ -234,7 +234,13 @@ async def company_view(db: AsyncSession, company: Company) -> dict:
         "sending_as": nif,
         "sending_as_test": is_test,
         "missing": missing_parts(platform, key, check_key=True),
+        "link": await _link_status(db, company),
     }
+
+
+async def _link_status(db: AsyncSession, company: Company) -> dict:
+    from app.services.agt_contingency import status
+    return await status(db, company)
 
 
 async def save_company_test_nif(db: AsyncSession, company: Company, nif: str | None) -> dict:

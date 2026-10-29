@@ -145,6 +145,21 @@ async def _journal(ctx: AgtContext, service: str, body: dict, status_code: int |
         log.exception("agt journal")
 
 
+async def _link(ctx: AgtContext, reached: bool) -> None:
+    """The company's link to the AGT (contingência - app.services.agt_contingency), in its own session."""
+    if ctx.company_id is None:
+        return
+    from app.services import agt_contingency
+    try:
+        async with agt_session() as db:
+            if reached:
+                await agt_contingency.note_success(db, ctx.company_id)
+            else:
+                await agt_contingency.note_failure(db, ctx.company_id)
+    except Exception:  # noqa: BLE001 - the link's state never stops a call
+        log.exception("agt link state")
+
+
 async def call(ctx: AgtContext, service: str, body: dict):
     """POST the body to the service: the AGT's answer (JSON), or AgtUnavailable / AgtRefused."""
     started = time.monotonic()
@@ -155,6 +170,7 @@ async def call(ctx: AgtContext, service: str, body: dict):
     except httpx.HTTPError as e:
         message = f"AGT inacessível ({type(e).__name__}) - será tentado de novo"
         await _journal(ctx, service, body, None, None, message, started)
+        await _link(ctx, reached=False)
         raise AgtUnavailable(message)
     try:
         answer = response.json()
@@ -164,7 +180,9 @@ async def call(ctx: AgtContext, service: str, body: dict):
     if code >= 500 or code == 429:
         message = f"A AGT não respondeu ({code}) - será tentado de novo"
         await _journal(ctx, service, body, code, answer, message, started)
+        await _link(ctx, reached=code == 429)  # 429: the AGT is there, it only asks to wait
         raise AgtUnavailable(message)
+    await _link(ctx, reached=True)
     if code in (401, 403):
         message = "A AGT recusou o acesso - verifique o utilizador e a palavra-passe da AGT (plataforma RM SOFT)"
         await _journal(ctx, service, body, code, answer, message, started)

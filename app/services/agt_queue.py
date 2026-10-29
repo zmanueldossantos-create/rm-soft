@@ -76,7 +76,26 @@ async def send_due(db: AsyncSession, step=None, now: datetime | None = None) -> 
                 invoice.status = InvoiceStatus.PENDENTE
             invoice.agt_next_attempt_at = datetime.now(timezone.utc) + timedelta(minutes=10)
         await db.commit()
+    await _check_late(db, now)
     return len(ids)
+
+
+_late_checked_at: datetime | None = None
+LATE_CHECK_EVERY = timedelta(minutes=10)
+
+
+async def _check_late(db: AsyncSession, now: datetime) -> None:
+    """Every 10 minutes: the documents still not validated 18 h after they were issued (app.services.agt_contingency)."""
+    global _late_checked_at
+    if _late_checked_at is not None and now - _late_checked_at < LATE_CHECK_EVERY:
+        return
+    _late_checked_at = now
+    from app.services.agt_contingency import check_late
+    try:
+        await check_late(db, now)
+    except Exception:  # noqa: BLE001
+        log.exception("AGT late check failed")
+        await db.rollback()
 
 
 async def agt_queue_loop() -> None:

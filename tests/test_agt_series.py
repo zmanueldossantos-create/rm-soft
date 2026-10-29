@@ -167,8 +167,8 @@ async def test_the_invoice_takes_the_n_series_or_the_c_one_in_contingency(agt, d
     c.series_start_ts = datetime.now(timezone.utc) - timedelta(days=3)
     c.series_end_ts = datetime.now(timezone.utc) - timedelta(days=1)
     await db.commit()
-    with pytest.raises(SeriesNotFoundError, match="sem série de contingência"):
-        await get_or_create_current_series(db, company, ft.id, contingency=True)
+    # no valid C series: the N one (a sale is never refused for it - the document waits in the queue all the same)
+    assert (await get_or_create_current_series(db, company, ft.id, contingency=True)).id == normal.id
 
     # a series used up
     normal.number_end, normal.current_number = 2, 2

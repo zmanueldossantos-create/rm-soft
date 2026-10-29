@@ -125,8 +125,13 @@ async def get_dashboard_summary(db: AsyncSession, company_id: uuid.UUID) -> dict
     ]
 
     from app.models.company import Company
-    mode = (await db.execute(select(Company.issuance_mode).where(Company.id == company_id))).scalar_one_or_none()
+    company = await db.get(Company, company_id)
+    mode = company.issuance_mode if company is not None else None
+    electronic = (mode.value if hasattr(mode, "value") else mode) == "ELETRONICA"
+    from app.services.agt_contingency import status as agt_status
     return {
+        # Faturação Eletrónica: the link to the AGT, the contingência, what waits and what is late
+        "agt": await agt_status(db, company) if electronic else None,
         # Faturação Eletrónica: the documents are sent to the AGT in real time (their states below mean something)
         "agt_realtime": (mode.value if hasattr(mode, "value") else mode) == "ELETRONICA",
         "revenue_today": revenue_today,
