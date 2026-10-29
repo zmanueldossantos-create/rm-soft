@@ -1,7 +1,7 @@
 import { API_ORIGIN } from '../api/config';
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Building2, Loader2, Save, Lock, Image, Upload, Store, Plus, Pencil, Landmark, X, Check, Trash2, FileStack, Sparkles, ChevronDown, CreditCard, Link2, Unlink, Users, Bot, Mail, LifeBuoy, DatabaseBackup, FileKey2, BellRing, MonitorUp, Plug, RefreshCw } from 'lucide-react';
+import { Building2, Loader2, Save, Lock, Image, Upload, Store, Plus, Pencil, Landmark, X, Check, Trash2, FileStack, Sparkles, ChevronDown, CreditCard, Link2, Unlink, Users, Bot, Mail, LifeBuoy, DatabaseBackup, FileKey2, BellRing, MonitorUp, Plug, RefreshCw, KeyRound, ArrowRight } from 'lucide-react';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
 import { getMySupportSessions, getMyCompany, updateMyCompanyContact, uploadMyCompanyLogo, removeMyCompanyLogo, getMyCompanyBankAccounts, addMyCompanyBankAccount, updateMyCompanyBankAccount, toggleMyCompanyBankAccountStatus } from '../api/company';
@@ -40,6 +40,17 @@ function ToggleSwitch({ checked, onChange, disabled }) {
     <button type="button" role="switch" aria-checked={checked} onClick={onChange} disabled={disabled} className={trackClass}>
       <span className={knobClass} />
     </button>
+  );
+}
+
+// A block of the «Dados da Empresa» form: a title, what it is for, its fields.
+function Section({ title, hint, children }) {
+  return (
+    <section className="pt-6 mt-6 border-t border-border">
+      <p className="text-[13px] font-medium text-text-primary mb-1">{title}</p>
+      {hint && <p className="text-[12px] text-text-muted mb-3">{hint}</p>}
+      {children}
+    </section>
   );
 }
 
@@ -603,6 +614,7 @@ export default function CompanySettings() {
         ...(pharmacyEnabled ? { prescription_policy: prescriptionPolicy } : {}),
         issuance_mode: issuanceMode,
       });
+      setCompany((c) => ({ ...c, issuance_mode: issuanceMode }));  // the «Faturação Eletrónica» tab follows the saved mode
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {
@@ -779,6 +791,7 @@ export default function CompanySettings() {
           ['estabelecimentos', 'Estabelecimentos', Store],
           ['bancarias', 'Coordenadas Bancárias', Landmark],
           ['series', 'Séries de Facturação', FileStack],
+          ...(company?.issuance_mode === 'ELETRONICA' ? [['agt', 'Faturação Eletrónica', KeyRound]] : []),
           ['email', 'Email', Mail],
           ...(notificationsAllowed ? [['notificacoes', 'Notificações', BellRing]] : []),
           ...(apiAllowed ? [['api', 'Integração API', Plug]] : []),
@@ -851,6 +864,7 @@ export default function CompanySettings() {
                   Remover
                 </button>
               )}
+              <p className="text-[10px] text-text-muted mt-1.5 text-center">PNG, JPG, WEBP - máx. 2MB</p>
             </div>
 
             <div className="flex-1 flex flex-col gap-4">
@@ -873,34 +887,47 @@ export default function CompanySettings() {
                     <input value={phone2} onChange={(e) => setPhone2(e.target.value)} className="flex-1 bg-transparent border-none px-3 py-2.5 text-sm text-text-primary font-mono outline-none" />
                   </div>
                 </Field>
-                <Field label="Moeda principal">
-                  <Select value={primaryCurrencyId} onChange={setPrimaryCurrencyId} options={currencies.filter((c) => c.id !== secondaryCurrencyId).map((c) => ({ value: c.id, label: c.code + ' - ' + c.name }))} placeholder="Selecionar" />
-                </Field>
               </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-6 border-t border-border mb-4">
-            <Field label="Moeda secundária">
-              <Select value={secondaryCurrencyId} onChange={setSecondaryCurrencyId} options={currencies.filter((c) => c.id !== primaryCurrencyId).map((c) => ({ value: c.id, label: c.code + ' - ' + c.name }))} placeholder="Selecionar" />
-            </Field>
-            <Field label="Província">
-              <Select value={provinceId} onChange={handleProvinceChange} options={provincesForCountry.map((p) => ({ value: p.id, label: p.name }))} placeholder="Selecionar" />
-            </Field>
-            <Field label="Município">
-              <Select value={municipalityId} onChange={setMunicipalityId} options={municipalities.filter((m) => m.province_id === provinceId).map((m) => ({ value: m.id, label: m.name }))} placeholder={provinceId ? 'Selecionar' : 'Selecione uma província primeiro'} />
-            </Field>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-            <Field label="Cidade"><input value={city} onChange={(e) => setCity(e.target.value)} className={inputClass} /></Field>
-            <Field label="Endereço"><input value={address} onChange={(e) => setAddress(e.target.value)} className={inputClass} /></Field>
-            <Field label="Modo de emissão">
-              <Select value={issuanceMode} onChange={handleIssuanceModeChange} options={[{ value: 'MANUAL', label: 'Manual' }, { value: 'ELETRONICA', label: 'Eletrónica' }]} />
-            </Field>
-          </div>
+          <Section title="Morada e moeda" hint="Onde a empresa está e em que moeda trabalha - aparecem nos documentos.">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+              <Field label="Província">
+                <Select value={provinceId} onChange={handleProvinceChange} options={provincesForCountry.map((p) => ({ value: p.id, label: p.name }))} placeholder="Selecionar" />
+              </Field>
+              <Field label="Município">
+                <Select value={municipalityId} onChange={setMunicipalityId} options={municipalities.filter((m) => m.province_id === provinceId).map((m) => ({ value: m.id, label: m.name }))} placeholder={provinceId ? 'Selecionar' : 'Selecione uma província primeiro'} />
+              </Field>
+              <Field label="Cidade"><input value={city} onChange={(e) => setCity(e.target.value)} className={inputClass} /></Field>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <Field label="Endereço"><input value={address} onChange={(e) => setAddress(e.target.value)} className={inputClass} /></Field>
+              <Field label="Moeda principal">
+                <Select value={primaryCurrencyId} onChange={setPrimaryCurrencyId} options={currencies.filter((c) => c.id !== secondaryCurrencyId).map((c) => ({ value: c.id, label: c.code + ' - ' + c.name }))} placeholder="Selecionar" />
+              </Field>
+              <Field label="Moeda secundária">
+                <Select value={secondaryCurrencyId} onChange={setSecondaryCurrencyId} options={currencies.filter((c) => c.id !== primaryCurrencyId).map((c) => ({ value: c.id, label: c.code + ' - ' + c.name }))} placeholder="Selecionar" />
+              </Field>
+            </div>
+          </Section>
 
-          <div className="flex flex-col gap-4 pt-6 border-t border-border mt-6">
-            {issuanceMode === 'ELETRONICA' && <AgtCompanyPanel />}
+          <Section title="Faturação" hint="Como a empresa emite os seus documentos.">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4 items-end">
+              <Field label="Modo de emissão">
+                <Select value={issuanceMode} onChange={handleIssuanceModeChange} options={[{ value: 'MANUAL', label: 'Manual' }, { value: 'ELETRONICA', label: 'Eletrónica' }]} />
+              </Field>
+              {issuanceMode === 'ELETRONICA' && (company.issuance_mode === 'ELETRONICA' ? (
+                <button type="button" onClick={() => setActiveTab('agt')}
+                  className="sm:col-span-2 justify-self-start flex items-center gap-1.5 text-sm font-medium px-3.5 py-2.5 rounded-md border border-border hover:border-accent text-text-primary transition-colors cursor-pointer">
+                  <KeyRound size={15} className="text-accent" />
+                  Ligação à AGT (chave, testes, contingência)
+                  <ArrowRight size={14} />
+                </button>
+              ) : (
+                <p className="sm:col-span-2 text-[12px] text-text-muted pb-2.5">Guarde as alterações: a ligação à AGT configura-se depois no separador «Faturação Eletrónica».</p>
+              ))}
+            </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
               <label className="flex items-center gap-2.5 cursor-pointer select-none border border-border rounded-md px-3.5 py-3 hover:border-accent transition-colors">
                 <input type="checkbox" checked={usesInvoicing} onChange={(e) => handleUsesInvoicingChange(e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
@@ -919,22 +946,21 @@ export default function CompanySettings() {
                 <span className="text-sm text-text-primary">Sugere data do último documento</span>
               </label>
             </div>
-            <div className="mt-6">
-              <p className="text-[13px] font-medium text-text-primary mb-1">Controlos das unidades e embalagens</p>
-              <p className="text-[12px] text-text-muted mb-3">O que o sistema faz quando uma unidade ou embalagem de um produto parece incoerente.</p>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {[['sale_unit_check_above_base', 'Mais cara que a unidade base'], ['sale_unit_check_below_cost', 'Abaixo do preço de compra'], ['sale_unit_check_same_factor', 'Mesmo conteudo que outra unidade']].map(([field, label]) => (
-                  <div key={field}>
-                    <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">{label}</label>
-                    <Select value={saleUnitChecks[field]} onChange={(v) => setSaleUnitChecks((s) => ({ ...s, [field]: v }))} options={[{ value: 'off', label: 'Não verificar' }, { value: 'warn', label: 'Avisar e pedir confirmação' }, { value: 'block', label: 'Bloquear' }]} />
-                  </div>
-                ))}
-              </div>
+          </Section>
+
+          <Section title="Controlos das unidades e embalagens" hint="O que o sistema faz quando uma unidade ou embalagem de um produto parece incoerente.">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {[['sale_unit_check_above_base', 'Mais cara que a unidade base'], ['sale_unit_check_below_cost', 'Abaixo do preço de compra'], ['sale_unit_check_same_factor', 'Mesmo conteudo que outra unidade']].map(([field, label]) => (
+                <div key={field}>
+                  <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">{label}</label>
+                  <Select value={saleUnitChecks[field]} onChange={(v) => setSaleUnitChecks((s) => ({ ...s, [field]: v }))} options={[{ value: 'off', label: 'Não verificar' }, { value: 'warn', label: 'Avisar e pedir confirmação' }, { value: 'block', label: 'Bloquear' }]} />
+                </div>
+              ))}
             </div>
-            <div className="mt-6">
-              <p className="text-[13px] font-medium text-text-primary mb-1">Controlos de stock</p>
-              <p className="text-[12px] text-text-muted mb-3">Regras do stock ligadas aos períodos contabilísticos.</p>
-              <div className="flex flex-col gap-2.5 max-w-2xl">
+          </Section>
+
+          <Section title="Controlos de stock" hint="Regras do stock ligadas aos períodos contabilísticos.">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
               <label className="flex items-start gap-2.5 cursor-pointer select-none border border-border rounded-md px-3.5 py-3 hover:border-accent transition-colors">
                 <input type="checkbox" checked={stockPeriodClosing} onChange={(e) => setStockPeriodClosing(e.target.checked)} className="w-4 h-4 mt-0.5 accent-accent cursor-pointer" />
                 <span>
@@ -965,7 +991,7 @@ export default function CompanySettings() {
                 </span>
               </div>
               {pharmacyEnabled && (
-                <div className="flex flex-col gap-2.5 border border-border rounded-md px-3.5 py-3">
+                <div className="md:col-span-2 flex flex-col gap-2.5 border border-border rounded-md px-3.5 py-3">
                   <span>
                     <span className="text-sm text-text-primary block">Farmácia - receita médica</span>
                     <span className="text-[12px] text-text-muted block">Na venda de um medicamento sujeito a receita médica. A receita especial (psicotrópicos e estupefacientes) é sempre obrigatória, com o utente e o documento de identificação.</span>
@@ -982,14 +1008,12 @@ export default function CompanySettings() {
                   ))}
                 </div>
               )}
-              </div>
             </div>
-          </div>
+          </Section>
 
           {saved && <Notify success="Alterações guardadas com sucesso" />}
 
-          <div className="flex items-center justify-between gap-4 flex-wrap mt-6 pt-4 border-t border-border">
-            <p className="text-[11px] text-text-muted">PNG, JPG, WEBP - máx. 2MB</p>
+          <div className="flex items-center justify-end gap-4 flex-wrap mt-6 pt-4 border-t border-border">
             <button
               type="submit"
               disabled={saving || !email || !phone}
@@ -1155,6 +1179,12 @@ export default function CompanySettings() {
               </table>
             </div>
           )}
+        </div>
+      )}
+
+      {activeTab === 'agt' && company?.issuance_mode === 'ELETRONICA' && (
+        <div className="bg-bg-elevated border border-border rounded-lg p-6 sm:p-8">
+          <AgtCompanyPanel />
         </div>
       )}
 

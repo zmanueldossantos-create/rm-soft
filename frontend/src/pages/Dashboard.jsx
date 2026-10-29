@@ -179,7 +179,7 @@ export default function Dashboard() {
               {summary.agt.late > 0 && (
                 <div className="flex items-start gap-2.5 border border-danger/40 bg-danger/10 rounded-lg px-4 py-3 text-sm text-danger">
                   <AlertTriangle size={16} className="shrink-0 mt-0.5" />
-                  <span>{summary.agt.late} documento(s) ainda não validado(s) pela AGT há mais de {summary.agt.late_hours} h - a AGT penaliza a partir das 24 h. Verifique a ligação à internet e a Faturação Eletrónica em Definições da Empresa.</span>
+                  <span>{summary.agt.late} documento(s) ainda não validado(s) pela AGT há mais de {summary.agt.late_hours} h - a AGT penaliza a partir das 24 h. Verifique a ligação à internet e Definições da Empresa → Faturação Eletrónica.</span>
                 </div>
               )}
             </div>

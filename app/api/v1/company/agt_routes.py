@@ -66,6 +66,10 @@ async def switch_contingency(payload: ContingencyRequest, db: AsyncSession = Dep
     """The gestor's switch: contingência on (an outage he knows of) until he switches it off."""
     from app.services.agt_contingency import set_manual
     company = await _company(db, current_user)
+    mode = company.issuance_mode.value if hasattr(company.issuance_mode, "value") else company.issuance_mode
+    if payload.on and mode != "ELETRONICA":  # MANUAL: nothing is sent to the AGT as it is issued (the SAF-T declares it)
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail="A contingência só existe na Faturação Eletrónica.")
     await set_manual(db, company, payload.on)
     return await agt_settings_service.company_view(db, company)
 

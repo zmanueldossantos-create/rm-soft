@@ -115,6 +115,11 @@ async def test_the_gestor_switches_it_from_the_screen(db, agt):
             assert on["link"]["contingency"] and on["link"]["manual"] and on["link"]["since"]
             off = (await client.post("/api/v1/company/me/agt/contingency", headers=h, json={"on": False})).json()
             assert not off["link"]["contingency"]
+            company = await db.get(Company, agt["company"].id)
+            company.issuance_mode = "MANUAL"
+            await db.commit()
+            refused = await client.post("/api/v1/company/me/agt/contingency", headers=h, json={"on": True})
+            assert refused.status_code == 422 and "Faturação Eletrónica" in refused.json()["detail"]
     finally:
         app.dependency_overrides.pop(get_db, None)
 
