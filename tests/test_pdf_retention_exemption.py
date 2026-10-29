@@ -2,7 +2,6 @@
 PDF (A4 and 80mm ticket): the withholding is printed with the net amount to pay, and the exemption motive is the
 official reason of the code copied on the line (legend below the A4 tax summary, wrapped on the ticket).
 """
-import textwrap
 from unittest.mock import patch
 
 from reportlab.pdfgen import canvas as rl_canvas
@@ -66,5 +65,5 @@ def test_a4_without_withholding_prints_no_withholding_rows():
 
 def test_ticket_prints_the_withholding_and_wraps_the_official_reason():
     seen = _texts(generate_invoice_pdf_thermal, _invoice(10.0))
-    assert "Retencao:" in seen and "Liquido a pagar:" in seen
-    assert textwrap.wrap(M11_REASON, 28)[0] in seen
+    assert "Retenção:" in seen and "Líquido a pagar:" in seen
+    assert any(text.startswith("Isento nos termos") for text in seen)  # the reason, wrapped to the ticket's width

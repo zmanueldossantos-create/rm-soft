@@ -121,8 +121,11 @@ async def test_the_document_as_the_agt_receives_it(db, agt):
                       "customerCountry": "AO", "companyName": "Cliente Lda", "documentTotals": document["documentTotals"]}
     assert agt_signing.verify(document["jwsDocumentSignature"], PUBLIC)
     assert agt_document_service.qr_url("5000000000", number) == (
-        "https://quiosqueagt.minfin.gov.ao/facturacao-eletronica/consultar-fe?emissor=5000000000"
-        f"&document=FT%20FT{str(YEAR)[2:]}SEDEN/1")
+        f"https://portaldocontribuinte.minfin.gov.ao/consultar-fe?FT%20FT{str(YEAR)[2:]}SEDEN%2F1")
+    assert agt_document_service.qr_url(  # the AGT's specification's address, set in Configurações
+        "5000000000", number, "https://quiosqueagt.minfin.gov.ao/facturacao-eletronica/consultar-fe?emissor={nif}"
+        "&document={documento}") == ("https://quiosqueagt.minfin.gov.ao/facturacao-eletronica/consultar-fe?"
+                                     f"emissor=5000000000&document=FT%20FT{str(YEAR)[2:]}SEDEN%2F1")
     assert agt_document_service.tax_up(23.144) == 23.15 and agt_document_service.tax_up(5.9999999) == 6.0
 
 

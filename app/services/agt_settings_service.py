@@ -17,6 +17,7 @@ from app.models.agt_test_taxpayer import AgtTestTaxpayer
 from app.models.company import Company
 from app.models.platform_settings import PlatformSettings
 from app.services import agt_signing
+from app.services.agt_document_service import QR_URL_DEFAULT
 from app.services.platform_settings_service import get_or_create_platform_settings
 
 ENVIRONMENTS = {"HOMOLOGACAO": "https://sifphml.minfin.gov.ao", "PRODUCAO": "https://sifp.minfin.gov.ao"}
@@ -75,12 +76,14 @@ def platform_view(platform: PlatformSettings) -> dict:
         "software_signature": platform.agt_software_signature,
         "signature_status": signature_status(platform),
         "signed_detail": software_detail(platform),
+        "qr_url": platform.agt_qr_url,
+        "qr_url_default": QR_URL_DEFAULT,
     }
 
 
 async def save_platform(db: AsyncSession, environment: str, username: str | None, password: str | None,
                         product_id: str | None, signature_version: int | None, software_key: str | None,
-                        software_signature: str | None) -> dict:
+                        software_signature: str | None, qr_url: str | None = None) -> dict:
     """password / software_key: None keeps the one saved, "" removes it. software_signature: only used without the
     producer's key (a client's server) - with the key, the signature is always computed here."""
     if environment not in ENVIRONMENTS:
@@ -94,6 +97,11 @@ async def save_platform(db: AsyncSession, environment: str, username: str | None
         platform.agt_password_encrypted = encrypt_secret(password) if password else None
     platform.agt_product_id = (product_id or "").strip() or None
     platform.agt_signature_version = signature_version
+    if qr_url is not None:
+        text = qr_url.strip()
+        if text and (not text.startswith("https://") or "{documento}" not in text):
+            raise AgtSettingsError("Endereço do QR code inválido - deve começar por https:// e conter {documento}")
+        platform.agt_qr_url = text or None
     if software_key is not None:
         if software_key.strip():
             agt_signing.load_private_key(software_key)  # refused here when it cannot sign

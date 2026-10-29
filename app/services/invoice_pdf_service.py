@@ -49,7 +49,9 @@ async def render_invoice_pdf(db: AsyncSession, company_id: uuid.UUID, invoice_id
         customer_result = await db.execute(select(Customer).where(Customer.id == invoice.customer_id))
         customer_obj = customer_result.scalar_one_or_none()
         if customer_obj:
-            customer = {"name": customer_obj.name, "nif": customer_obj.nif, "address": customer_obj.address}
+            customer = {"name": customer_obj.name, "nif": customer_obj.nif, "address": customer_obj.address,
+                        "city": customer_obj.city, "phone_number": customer_obj.phone_number,
+                        "is_final_consumer": customer_obj.is_final_consumer}  # printed: NIF 999999999
 
     payment_method_name = None
     if invoice.payment_method_id:
@@ -96,6 +98,10 @@ async def render_invoice_pdf(db: AsyncSession, company_id: uuid.UUID, invoice_id
     # print_count comment on the Invoice model for the legal requirement behind this).
     invoice.print_count = (invoice.print_count or 0) + 1
     await db.commit()
+
+    # the program's validation number, printed «XXXX-Processado por programa validado n.º …»; the QR's address
+    from app.services.platform_settings_service import get_or_create_platform_settings
+    platform = await get_or_create_platform_settings(db)
 
 
     INVOICE_TYPE_CODE = {
@@ -161,7 +167,8 @@ async def render_invoice_pdf(db: AsyncSession, company_id: uuid.UUID, invoice_id
         "amount_in_words": amount_in_words,
         "atcud": invoice.atcud,
         "invoice_hash": invoice.invoice_hash,
-        "qr_code_data": await _qr_data(db, invoice),
+        "qr_code_data": await _qr_data(db, invoice, platform.agt_qr_url),
+        "software_validation_number": platform.software_validation_number,
         "qr_agt_logo": (invoice.issuance_mode.value if hasattr(invoice.issuance_mode, "value")
                         else invoice.issuance_mode) == "ELETRONICA",
         "reference_invoice": reference_invoice_dict,
@@ -234,7 +241,7 @@ async def render_invoice_pdf(db: AsyncSession, company_id: uuid.UUID, invoice_id
             "iselo_amount": float(l.iselo_amount or 0),
             "lots": _line_lots(l, doc_lots, guide_lots, lots_printed),
         })
-    company_dict = {"name": company.name, "nif": company.nif, "address": company.address, "phone_number": company.phone_number, "phone_number_2": company.phone_number_2, "email": company.email, "website": company.website, "logo_path": company.logo_path, "bank_accounts": bank_accounts_list}
+    company_dict = {"name": company.name, "nif": company.nif, "address": company.address, "city": company.city, "phone_number": company.phone_number, "phone_number_2": company.phone_number_2, "email": company.email, "website": company.website, "logo_path": company.logo_path, "bank_accounts": bank_accounts_list}
 
     if format == "a4":
         pdf_bytes = generate_invoice_pdf_a4(invoice_dict, lines_dict, company_dict, customer)
@@ -244,11 +251,12 @@ async def render_invoice_pdf(db: AsyncSession, company_id: uuid.UUID, invoice_id
     return pdf_bytes, f"{invoice.series}-{invoice.number}-{format}.pdf"
 
 
-async def _qr_data(db: AsyncSession, invoice: Invoice) -> str:
-    """Faturação Eletrónica: the AGT's page of the document (the QR the AGT asks for). Otherwise the stored payload."""
+async def _qr_data(db: AsyncSession, invoice: Invoice, template: str | None = None) -> str:
+    """Faturação Eletrónica: the AGT's page of the document (the address set in Configurações → Faturação Eletrónica).
+    Otherwise the stored payload."""
     mode = invoice.issuance_mode.value if hasattr(invoice.issuance_mode, "value") else invoice.issuance_mode
     if mode != "ELETRONICA":
         return invoice.qr_code_data
     from app.services.agt_document_service import document_no, qr_url, type_code
     company = await db.get(Company, invoice.company_id)
-    return qr_url(company.nif, document_no(await type_code(db, invoice), invoice))
+    return qr_url(company.nif, document_no(await type_code(db, invoice), invoice), template)

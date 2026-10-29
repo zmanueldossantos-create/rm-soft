@@ -4,14 +4,16 @@ See specification v6/v7, section 4.1: "Impression au format Ticket 80mm
 (thermique) et A4, tous deux au format legal AGT" - must include logo, QR
 code, ATCUD, NIF, and VAT breakdown.
 
-ATCUD/hash/QR are simulated (Decision 2, section 4.4) - printed documents
-carry a clear "NAO HOMOLOGADO" notice until the real AGT signature is live.
+What every document prints, as the AGT models (FACTURA.png, RECIBO.png) and the certified programs do: the customer
+with his NIF («999999999» for a final consumer) and contact, the tax summary by rate with the reason of an exemption,
+the bank accounts, the QR code and «XXXX-Processado por programa validado n.º …» - four characters of the document's
+hash and the program's validation number (until it is validated: «não validado (simulação)»). No ATCUD: a Portuguese
+code the AGT does not ask for.
 
 Visual identity matches the app's own bordeaux design system.
 """
 import io
 import os
-import textwrap
 
 from app.services.document_amounts import split_global_discount
 from datetime import date, datetime, timedelta, timezone
@@ -66,6 +68,59 @@ def fmt(value: float) -> str:
 
 
 LUANDA_TZ = timezone(timedelta(hours=1))  # Angola: UTC+1 all year
+
+ANONYMOUS_NIF = "999999999"  # a customer without a NIF (consumidor final), as sent to the AGT and in the SAF-T
+
+
+def hash_chars(document_hash: str | None) -> str:
+    """The four characters of the hash a document prints: the 1st, 11th, 21st and 31st (a simulated hash: of its hex
+    part)."""
+    text = (document_hash or "").removeprefix("SIMUL-")
+    if len(text) >= 31:
+        return text[0] + text[10] + text[20] + text[30]
+    return (text[:4] or "----").ljust(4, "-")
+
+
+def certification_text(document_hash: str | None, validation_number: str | None) -> str:
+    """«JP1W-Processado por programa validado n.º 131/AGT/2019»: the program's validation number as the AGT gave it
+    (Configurações → Identificação do software). Not yet validated: said so."""
+    number = (validation_number or "").strip()
+    if number in ("", "0"):
+        return f"{hash_chars(document_hash)}-Processado por programa não validado (simulação)"
+    return f"{hash_chars(document_hash)}-Processado por programa validado n.º {number}"
+
+
+def customer_nif(customer: dict | None) -> str:
+    """The NIF printed for the customer: his own, or 999999999 (a final consumer, or a customer without a NIF)."""
+    nif = ((customer or {}).get("nif") or "").strip()
+    if not nif or (customer or {}).get("is_final_consumer"):
+        return ANONYMOUS_NIF
+    return nif
+
+
+def _full_address(party: dict | None) -> str:
+    """The address with its city when the address does not already say it (Rua X - Luanda)."""
+    party = party or {}
+    address, city = (party.get("address") or "").strip(), (party.get("city") or "").strip()
+    if city and city.lower() not in address.lower():
+        return f"{address} - {city}" if address else city
+    return address
+
+
+def tax_summary(lines: list[dict], invoice: dict) -> list[dict]:
+    """The document's taxes by rate (and exemption code), after the global discount spread over the lines - as declared
+    to the AGT: [{rate, code, base, tax, reason}]."""
+    split = split_global_discount([(l["line_subtotal"], l["vat_rate_snapshot"]) for l in lines],
+                                  invoice.get("discount_global_percent") or 0, invoice["total"])
+    groups: dict = {}
+    for l, part in zip(lines, split["lines"]):
+        rate = l["vat_rate_snapshot"]
+        code = (l.get("exemption_code") or "ISE") if rate == 0 else None
+        grp = groups.setdefault((rate, code), {"rate": rate, "code": code, "base": 0.0, "tax": 0.0,
+                                               "reason": (l.get("exemption_reason") or "") if rate == 0 else ""})
+        grp["base"] += part["net"]
+        grp["tax"] += part["vat"]
+    return [groups[k] for k in sorted(groups, key=lambda k: (k[0], k[1] or ""))]
 
 
 def _date_pt(value) -> str:
@@ -179,21 +234,11 @@ def generate_invoice_pdf_thermal(invoice: dict, lines: list[dict], company: dict
     width = 80 * mm
     logo_path = _resolve_logo_path(company)
 
-    vat_groups = {}
     total_discount_amount = 0.0
-    # the incidence of each rate after the global discount (spread over the lines), as declared in the SAF-T
-    split = split_global_discount([(l["line_subtotal"], l["vat_rate_snapshot"]) for l in lines],
-                                  invoice.get("discount_global_percent") or 0, invoice["total"])
-    for l, part in zip(lines, split["lines"]):
-        gross = l["quantity"] * l["unit_price"]
-        line_discount_amount = gross * (l.get("discount_percent", 0) / 100)
-        total_discount_amount += line_discount_amount
-        rate = l["vat_rate_snapshot"]
-        grp = vat_groups.setdefault((rate, l.get("exemption_code") if rate == 0 else None), {"incidencia": 0.0, "montante": 0.0})
-
-        grp.setdefault("motivo", l.get("exemption_reason") or "")
-        grp["incidencia"] += part["net"]
-        grp["montante"] += part["vat"]
+    for l in lines:
+        total_discount_amount += l["quantity"] * l["unit_price"] * (l.get("discount_percent", 0) / 100)
+    # the incidence of each rate after the global discount (spread over the lines), as declared to the AGT
+    summary = tax_summary(lines, invoice)
 
     discount_global_pct = invoice.get("discount_global_percent", 0)
     gross_before_global = invoice["subtotal"] + invoice["vat_total"]
@@ -206,7 +251,7 @@ def generate_invoice_pdf_thermal(invoice: dict, lines: list[dict], company: dict
     # Generous overestimate on purpose - raw canvas drawing has no auto-flow, and product
     # names / "Motivo" text wrap onto extra lines unpredictably, so a tight height risks
     # clipping the QR code / footer at the bottom (see the "8 100,00" example that clipped).
-    height = (150 + len(lines) * 16 + len(vat_groups) * 8 + (12 if invoice.get("observations") else 0)
+    height = (150 + len(lines) * 16 + len(summary) * 11 + (12 if invoice.get("observations") else 0)
               + 6 * len(_reference_texts(invoice)) + 4 * sum(len(l.get("lots") or []) for l in lines)
               + (12 if invoice.get("prescription") else 0)) * mm + logo_extra
 
@@ -259,8 +304,8 @@ def generate_invoice_pdf_thermal(invoice: dict, lines: list[dict], company: dict
         center(name[mid:].strip(), size=10.5, bold=True)
     else:
         center(name, size=10.5, bold=True)
-    if company.get("address"):
-        center(company["address"], size=7.5, color=TEXT_MUTED)
+    if _full_address(company):
+        center(_full_address(company)[:48], size=7.5, color=TEXT_MUTED)
     center(f"Contribuinte: {company['nif']}", size=7.5, color=TEXT_MUTED)
     phone = company.get("phone_number") or ""
     if phone:
@@ -268,16 +313,15 @@ def generate_invoice_pdf_thermal(invoice: dict, lines: list[dict], company: dict
     y -= 1.5 * mm
 
     # --- Client block, left-aligned ---
-    if customer:
-        left(f"Cliente: {customer['name']}", size=7.5)
+    left(f"Cliente: {customer['name'] if customer else 'Consumidor Final'}"[:48], size=7.5)
+    y -= 3.2 * mm
+    if _full_address(customer):
+        left(f"Morada: {_full_address(customer)}"[:52], size=7.5)
         y -= 3.2 * mm
-        if customer.get("address"):
-            left(f"Morada: {customer['address']}", size=7.5)
-            y -= 3.2 * mm
-        left(f"NIF: {customer['nif']}", size=7.5)
-        y -= 3.2 * mm
-    else:
-        left("Cliente: Consumidor Final", size=7.5)
+    left(f"NIF: {customer_nif(customer)}", size=7.5)  # 999999999: a final consumer, as declared to the AGT
+    y -= 3.2 * mm
+    if customer and customer.get("phone_number"):
+        left(f"Contacto: {customer['phone_number']}", size=7.5)
         y -= 3.2 * mm
     # Observações (a hotel stay: guest, room and dates), wrapped to the ticket's width
     if invoice.get("observations"):
@@ -342,34 +386,33 @@ def generate_invoice_pdf_thermal(invoice: dict, lines: list[dict], company: dict
     two_col("Total Desconto:", fmt(total_discount_all), size=7.5)
     two_col("Total a creditar :" if invoice.get("invoice_type") == "NC" else "Total a pagar :", fmt(invoice["total"]), size=8.5, bold=True)
     if invoice.get("retention_total"):
-        two_col("Retencao:", fmt(invoice["retention_total"]), size=7.5)
-        two_col("Liquido a pagar:", fmt(invoice["total"] - invoice["retention_total"]), size=8, bold=True)
+        two_col("Retenção:", fmt(invoice["retention_total"]), size=7.5)
+        two_col("Líquido a pagar:", fmt(invoice["total"] - invoice["retention_total"]), size=8, bold=True)
     y -= 1 * mm
 
-    # --- Isencao / tax summary ---
-    if vat_groups:
-        left("Isenção" if all(k[0] == 0 for k in vat_groups) else "Resumo de impostos", size=7.5, bold=True)
+    # --- The taxes by rate (Taxa, Incidência, Imposto) and the reason of an exemption under its row ---
+    if summary:
+        left("Resumo de impostos", size=7.5, bold=True)
         y -= 3.2 * mm
         c.setFillColor(TEXT_MUTED)
         c.setFont("Helvetica-Bold", 6.5)
         c.drawString(margin, y, "Taxa")
-        c.drawString(margin + 12 * mm, y, "Incidência")
-        c.drawString(margin + 38 * mm, y, "Motivo")
+        c.drawRightString(margin + 40 * mm, y, "Incidência")
+        c.drawRightString(width - margin, y, "Imposto")
         y -= 3.5 * mm
-        for rate, code in sorted(vat_groups.keys(), key=lambda k: (k[0], k[1] or "")):
-            grp = vat_groups[(rate, code)]
-            # Official reason of the exemption motive, as recorded on the line when issued.
-            motivo = grp.get("motivo", "") if rate == 0 else "IVA"
+        for grp in summary:
             c.setFillColor(TEXT_PRIMARY)
             c.setFont("Helvetica", 6.5)
-            c.drawString(margin, y, f"{rate:.0f}%")
-            c.drawString(margin + 12 * mm, y, fmt(grp["incidencia"]))
-            wrapped = textwrap.wrap(motivo, 28) or [""]
-            c.drawString(margin + 38 * mm, y, wrapped[0])
+            c.drawString(margin, y, f"{grp['rate']:.0f}%" + (f"  {grp['code']}" if grp["code"] else ""))
+            c.drawRightString(margin + 40 * mm, y, fmt(grp["base"]))
+            c.drawRightString(width - margin, y, fmt(grp["tax"]))
             y -= 3.2 * mm
-            for extra_line in wrapped[1:]:
-                c.drawString(margin + 38 * mm, y, extra_line)
-                y -= 3.2 * mm
+            if grp["code"] and grp["reason"]:  # the official reason of the exemption, as recorded when issued
+                c.setFillColor(TEXT_MUTED)
+                for text_line in _wrap_to_width(c, grp["reason"], "Helvetica", 6.2, width - 2 * margin - 2 * mm)[:3]:
+                    c.setFont("Helvetica", 6.2)
+                    c.drawString(margin + 2 * mm, y, text_line)
+                    y -= 3 * mm
 
     dashed_line()
 
@@ -383,8 +426,9 @@ def generate_invoice_pdf_thermal(invoice: dict, lines: list[dict], company: dict
         dashed_line()
 
     # --- Footer: validation line, QR code, thank-you ---
-    center("SIMUL - Processado por programa não homologado", size=6, color=TEXT_MUTED)
-    center("(simulação)", size=6, color=TEXT_MUTED)
+    for text_line in _wrap_to_width(c, certification_text(invoice.get("invoice_hash"), invoice.get("software_validation_number")),
+                                    "Helvetica", 6, width - 2 * margin):
+        center(text_line, size=6, color=TEXT_MUTED)
     y -= 1 * mm
 
     qr_buffer = _make_qr_image(invoice["qr_code_data"], invoice.get("qr_agt_logo", False))
@@ -466,7 +510,7 @@ def _draw_company_box(c, x, y, w, company, label="Contribuinte"):
     """Rounded-border box with the issuing company's info - matches the
     reference's left-hand identification box. The address wraps onto a
     second line instead of being cut off when it does not fit."""
-    addr = company.get("address") or "-"
+    addr = _full_address(company) or "-"
     phones = " / ".join([p for p in [company.get("phone_number"), company.get("phone_number_2")] if p]) or "-"
 
     addr_label = "Localização: "
@@ -515,18 +559,22 @@ def _draw_company_box(c, x, y, w, company, label="Contribuinte"):
     return box_h
 
 
-def _draw_party_block(c, right_x, y, name, nif, address):
+def _draw_party_block(c, right_x, y, name, nif, address, phone=None):
+    """The customer, on the right as on the AGT model: name, Nº de Contribuinte (999999999 for a final consumer),
+    address, contact."""
     ry = y
     c.setFillColor(TEXT_PRIMARY)
     c.setFont("Helvetica", 9.5)
     c.drawRightString(right_x, ry, name[:55])
     ry -= 4.6 * mm
     c.setFont("Helvetica", 8.5)
-    if nif:
-        c.drawRightString(right_x, ry, f"No de Contribuinte: {nif}")
-        ry -= 4.2 * mm
+    c.drawRightString(right_x, ry, f"Nº de Contribuinte: {nif}")
+    ry -= 4.2 * mm
     if address:
-        c.drawRightString(right_x, ry, address[:55])
+        c.drawRightString(right_x, ry, address[:60])
+        ry -= 4.2 * mm
+    if phone:
+        c.drawRightString(right_x, ry, f"Tel: {phone}")
         ry -= 4.2 * mm
     return y - ry
 
@@ -591,8 +639,9 @@ def generate_factura_style_a4(invoice, lines, company, customer):
     _draw_party_block(
         c, right_x, box_y - 12 * mm,
         customer["name"] if customer else "Consumidor Final",
-        customer.get("nif") if customer else None,
-        customer.get("address") if customer else None,
+        customer_nif(customer),
+        _full_address(customer),
+        customer.get("phone_number") if customer else None,
     )
 
     y = box_y - box_h - 8 * mm
@@ -645,7 +694,6 @@ def generate_factura_style_a4(invoice, lines, company, customer):
 
     row_h = 6.4 * mm
     c.setFont("Helvetica", 7.5)
-    vat_groups = {}
     total_iliquido = 0.0
     total_discount_amount = 0.0
     lot_h = 3.2 * mm  # one more text line under a line per lot it took (Lote L001 · Val. 31/12/2027)
@@ -663,11 +711,6 @@ def generate_factura_style_a4(invoice, lines, company, customer):
         total_iliquido += l["line_subtotal"]
         total_discount_amount += line_discount_amount
         rate = l["vat_rate_snapshot"]
-        grp = vat_groups.setdefault((rate, l.get("exemption_code") if rate == 0 else None), {"incidencia": 0.0, "montante": 0.0})
-
-        grp.setdefault("motivo", l.get("exemption_reason") or "")
-        grp["incidencia"] += l["line_subtotal"]
-        grp["montante"] += l["line_subtotal"] * (rate / 100)
 
         ty = y - row_h + 2.1 * mm
         c.setFillColor(TEXT_PRIMARY)
@@ -700,17 +743,6 @@ def generate_factura_style_a4(invoice, lines, company, customer):
     c.setLineWidth(0.6)
     c.rect(margin, y, page_width - 2 * margin, header_h + table_h, fill=0, stroke=1)
     y -= 6 * mm
-
-    # Legend: the official reason of each exemption code used on a 0%-VAT line - the table only
-    # has room for the code itself (e.g. "M11"), the full reason is spelled out here.
-    exemption_codes = sorted({code for (rate, code) in vat_groups if rate == 0 and code})
-    if exemption_codes:
-        c.setFillColor(TEXT_MUTED)
-        c.setFont("Helvetica", 6.5)
-        for code in exemption_codes:
-            c.drawString(margin, y, f"{code} - {next((g.get('motivo', '') for (r, c), g in vat_groups.items() if c == code), '')}"[:120])
-            y -= 3.4 * mm
-        y -= 2 * mm
 
     y -= 2 * mm
 
@@ -758,6 +790,44 @@ def generate_factura_style_a4(invoice, lines, company, customer):
         c.setStrokeColor(BORDER)
         c.rect(margin, y - rh, left_w, rh, fill=0, stroke=1)
         y -= rh + 2 * mm
+
+    # The taxes by rate, as declared to the AGT (after the global discount), and the reason of each exemption
+    summary = tax_summary(lines, invoice)
+    if summary:
+        if retention_total > 0:
+            y -= 4 * mm
+        c.setFillColor(TEXT_PRIMARY)
+        c.setFont("Helvetica-Bold", 8.5)
+        c.drawString(margin, y, "Resumo de impostos")
+        y -= 4.5 * mm
+        rh = 5 * mm
+        cols = [("Taxa", margin + 1 * mm, "l"), ("Código", margin + 16 * mm, "l"),
+                ("Incidência", margin + 58 * mm, "r"), ("Imposto", margin + left_w - 1 * mm, "r")]
+        c.setFillColor(TABLE_HEADER_BG)
+        c.rect(margin, y - rh, left_w, rh, fill=1, stroke=0)
+        c.setFillColor(TEXT_PRIMARY)
+        c.setFont("Helvetica-Bold", 7)
+        for label, x, align in cols:
+            (c.drawString if align == "l" else c.drawRightString)(x, y - rh + 1.6 * mm, label)
+        y -= rh
+        top_rows = y
+        c.setFont("Helvetica", 7.5)
+        for grp in summary:
+            values = [f"{grp['rate']:.0f}%", grp["code"] or "IVA", fmt(grp["base"]), fmt(grp["tax"])]
+            for (label, x, align), value in zip(cols, values):
+                (c.drawString if align == "l" else c.drawRightString)(x, y - rh + 1.6 * mm, value)
+            y -= rh
+        c.setStrokeColor(BORDER)
+        c.rect(margin, y, left_w, top_rows - y + rh, fill=0, stroke=1)
+        y -= 1.5 * mm
+        c.setFillColor(TEXT_MUTED)
+        c.setFont("Helvetica", 6.5)
+        for grp in summary:  # the official reason of an exemption (the table only has room for its code)
+            if grp["code"] and grp["reason"]:
+                for text_line in _wrap_to_width(c, f"{grp['code']} - {grp['reason']}", "Helvetica", 6.5, left_w)[:2]:
+                    y -= 3.2 * mm
+                    c.drawString(margin, y, text_line)
+        y -= 2 * mm
 
     doc_rows = [
         ("Total ilíquido", total_gross),
@@ -862,14 +932,12 @@ def generate_factura_style_a4(invoice, lines, company, customer):
     c.drawImage(ImageReader(qr_buffer), page_width - margin - qr_size, margin + 6 * mm, width=qr_size, height=qr_size)
 
     c.setFillColor(TEXT_MUTED)
-    c.setFont("Helvetica-Oblique", 6.5)
-    c.drawString(margin, margin + 3 * mm, "SIMUL - Processado por programa não homologado (simulação)")
-    if invoice.get("atcud"):
-        c.drawString(margin, margin, f"ATCUD: {invoice['atcud']}")
+    c.setFont("Helvetica-Oblique", 7)
+    c.drawString(margin, margin, certification_text(invoice.get("invoice_hash"), invoice.get("software_validation_number")))
 
     c.setFillColor(TEXT_MUTED)
     c.setFont("Helvetica", 7)
-    c.drawRightString(page_width - margin, margin, "Pág. 1/1")
+    c.drawRightString(page_width - margin - 26 * mm, margin, "Pág. 1/1")
 
     c.save()
     buffer.seek(0)
@@ -890,7 +958,7 @@ def generate_recibo_style_a4(invoice, company, customer):
     ty = top - 7 * mm
     c.setFillColor(TEXT_PRIMARY)
     c.setFont("Helvetica", 9.5)
-    c.drawString(margin, ty, f"Data de emissao: {invoice.get('business_date', '-')}")
+    c.drawString(margin, ty, f"Data de emissão: {_emission_text(invoice)}")
 
     logo_path = _resolve_logo_path(company)
     if logo_path:
@@ -906,13 +974,17 @@ def generate_recibo_style_a4(invoice, company, customer):
     c.setFont("Helvetica", 8.5)
     c.drawString(margin, y, company["name"])
     y -= 4 * mm
-    c.drawString(margin, y, f"No de Contribuinte: {company['nif']}")
+    c.drawString(margin, y, f"Nº de Contribuinte: {company['nif']}")
     y -= 4 * mm
     addr_line = company.get("address") or ""
     phones = " / ".join([p for p in [company.get("phone_number"), company.get("phone_number_2")] if p])
     tail = (" - Tel: " + phones) if phones else ""
     c.drawString(margin, y, f"{addr_line}{tail}"[:100])
-    y -= 8 * mm
+    y -= 4 * mm
+    if company.get("city"):
+        c.drawString(margin, y, f"{company['city']} - Angola")
+        y -= 4 * mm
+    y -= 4 * mm
 
     c.setFont("Helvetica-Bold", 9)
     c.drawString(margin, y, "Contribuinte: ")
@@ -921,27 +993,27 @@ def generate_recibo_style_a4(invoice, company, customer):
     c.drawString(margin + lbl_w, y, (customer["name"] if customer else "Consumidor Final")[:50])
     cust_y = y
     y -= 4.4 * mm
-    if customer and customer.get("address"):
+    # the customer as on the AGT model: Localização, Contacto, NIF (999999999 for a final consumer)
+    for label, value in (("Localização: ", _full_address(customer)),
+                         ("Contacto: ", (customer or {}).get("phone_number")),
+                         ("NIF: ", customer_nif(customer))):
+        if not value:
+            continue
         c.setFont("Helvetica-Bold", 8)
-        c.drawString(margin, y, "Localizacao: ")
-        lbl_w2 = c.stringWidth("Localizacao: ", "Helvetica-Bold", 8)
+        c.drawString(margin, y, label)
+        label_w = c.stringWidth(label, "Helvetica-Bold", 8)
         c.setFont("Helvetica", 8)
-        c.drawString(margin + lbl_w2, y, customer["address"][:60])
-        y -= 4.2 * mm
-    if customer and customer.get("nif"):
-        c.setFont("Helvetica-Bold", 8)
-        c.drawString(margin, y, "NIF: ")
-        lbl_w3 = c.stringWidth("NIF: ", "Helvetica-Bold", 8)
-        c.setFont("Helvetica", 8)
-        c.drawString(margin + lbl_w3, y, customer["nif"])
+        c.drawString(margin + label_w, y, str(value)[:70])
         y -= 4.2 * mm
 
     right_x = page_width - margin
     c.setFillColor(TEXT_PRIMARY)
     c.setFont("Helvetica-Bold", 9)
-    c.drawRightString(right_x, cust_y, "Documento de Cobranca")
+    c.drawRightString(right_x, cust_y, "Documento de Cobrança")
     c.setFont("Helvetica", 8)
-    c.drawRightString(right_x, cust_y - 4.2 * mm, f"Data emissao: {invoice.get('business_date', '-')}")
+    # the date of the document it collects (the receipt's own date is at the top)
+    ref_date = (invoice.get("reference_invoice") or {}).get("business_date") or invoice.get("business_date")
+    c.drawRightString(right_x, cust_y - 4.2 * mm, f"Data emissão: {_date_pt(ref_date)}")
 
     y -= 6 * mm
 
@@ -960,11 +1032,14 @@ def generate_recibo_style_a4(invoice, company, customer):
     c.setFillColor(TEXT_PRIMARY)
     c.setFont("Helvetica-Bold", 6.5)
     hy = y - 3.2 * mm
-    c.drawString(col_num + 1 * mm, hy, "No Factura ou documento")
+    c.drawString(col_num + 1 * mm, hy, "Nº Factura ou documento")
+    c.drawString(col_num + 1 * mm, hy - 2.8 * mm, "relevante")
     c.drawString(col_tipo + 1 * mm, hy, "Tipo de documento")
-    c.drawString(col_semimp + 1 * mm, hy, "Total sem imposto")
+    c.drawString(col_semimp + 1 * mm, hy, "Total sem imposto e")
+    c.drawString(col_semimp + 1 * mm, hy - 2.8 * mm, "desconto")
     c.drawCentredString(tax_block_x + tax_w / 2, y - 2.4 * mm, "Valor de imposto")
-    c.drawString(col_desc + 1 * mm, hy, "Descontos")
+    c.drawString(col_desc + 1 * mm, hy, "Valor de")
+    c.drawString(col_desc + 1 * mm, hy - 2.8 * mm, "descontos")
     c.drawRightString(col_total - 1 * mm, hy, "Total")
     c.setFont("Helvetica", 5.6)
     c.drawCentredString(tax_block_x + tax_w / 6, y - header_h + 1.2 * mm, "IEC")
@@ -979,13 +1054,14 @@ def generate_recibo_style_a4(invoice, company, customer):
         c.setFillColor(TEXT_PRIMARY)
         c.setFont("Helvetica", 7.5)
         c.drawString(col_num + 1 * mm, ty, f"{ref['invoice_type']} {ref['series']}/{ref['number']}")
-        c.drawString(col_tipo + 1 * mm, ty, ref['invoice_type'])
+        c.drawString(col_tipo + 1 * mm, ty, DOCUMENT_TYPE_LABELS_SENTENCE.get(ref['invoice_type'], ref['invoice_type']))
         c.drawString(col_semimp + 1 * mm, ty, fmt(ref["subtotal"]))
         c.setFont("Helvetica", 6.8)
         c.drawCentredString(tax_block_x + tax_w / 6, ty, "0,00")
         c.drawCentredString(tax_block_x + tax_w / 2, ty, fmt(ref["vat_total"]))
         c.drawCentredString(tax_block_x + 5 * tax_w / 6, ty, "0,00")
         c.setFont("Helvetica", 7.5)
+        c.drawString(col_desc + 1 * mm, ty, "0,00")
         c.drawRightString(col_total - 1 * mm, ty, fmt(invoice["total"]))
         y -= row_h
 
@@ -1006,7 +1082,7 @@ def generate_recibo_style_a4(invoice, company, customer):
     c.setFont("Helvetica-Bold", 8.5)
     c.drawString(margin, y, "Valores totais")
     y -= 5 * mm
-    curr_rows = [("Divisas", "-"), ("Taxa de Cambios", "-"), ("Valor em divisas", "-")]
+    curr_rows = [("Divisas", "-"), ("Taxa de Câmbios", "-"), ("Valor em divisas", "-")]
     rh = 5 * mm
     c.setStrokeColor(BORDER)
     c.setLineWidth(0.5)
@@ -1040,7 +1116,7 @@ def generate_recibo_style_a4(invoice, company, customer):
     c.drawImage(ImageReader(qr_buffer), qr_x, y - qr_size, width=qr_size, height=qr_size)
     y -= qr_size + 10 * mm
 
-    banner_text = "SIMUL - DOCUMENTO PROCESSADO POR PROGRAMA NÃO HOMOLOGADO"
+    banner_text = certification_text(invoice.get("invoice_hash"), invoice.get("software_validation_number"))
     banner_h = 10 * mm
     banner_w = page_width - 2 * margin
     banner_x = margin

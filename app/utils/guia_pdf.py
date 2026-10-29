@@ -11,7 +11,7 @@ from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
 
 from app.utils.cash_report_pdf import LUANDA, MARGIN, _Page, _draw_header, _section_title, _table, _when, kz
-from app.utils.pdf_generator import TEXT_MUTED
+from app.utils.pdf_generator import TEXT_MUTED, certification_text
 
 PARTY_LABEL = {"GR": "Cliente", "GT": "Armazém de destino", "GD": "Fornecedor"}
 
@@ -40,7 +40,6 @@ def generate_guia_pdf(data: dict, company: dict) -> bytes:
     ]
     if data.get("purchase_invoice"):
         details.append(("Fatura de compra", data["purchase_invoice"]))
-    details.append(("ATCUD", data["atcud"]))
     state = {"EMITIDA": "Original", "FATURADA": "Faturada", "ANULADA": "ANULADA"}[data["status"]]
     _draw_header(p, company, data["type_label"].upper(), [data["reference"], f"{_when(data['movement_date'])}  ·  {state}"], details)
 
@@ -70,8 +69,8 @@ def generate_guia_pdf(data: dict, company: dict) -> bytes:
 
     c.setFillColor(TEXT_MUTED)
     c.setFont("Helvetica", 7)
-    c.drawString(MARGIN, MARGIN, f"{data['document_hash'][6:10] if data['document_hash'].startswith('SIMUL-') else data['document_hash'][:4]}"
-                 f" - SIMUL - Processado por programa não homologado (simulação)  ·  impresso em {_when(datetime.now(LUANDA))}")
+    c.drawString(MARGIN, MARGIN, f"{certification_text(data['document_hash'], data.get('software_validation_number'))}"
+                 f"  ·  impresso em {_when(datetime.now(LUANDA))}")
     c.showPage()
     c.save()
     return buffer.getvalue()

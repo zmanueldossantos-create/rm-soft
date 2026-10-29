@@ -63,6 +63,8 @@ class PlatformSettings(Base):
     # identity once; the signature (always the same text for the same identity) is what a client's server keeps.
     agt_software_key_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
     agt_software_signature: Mapped[str | None] = mapped_column(Text, nullable=True)  # jwsSoftwareSignature
+    # the QR code's address on an electronic document ({documento}, {nif}) - None: agt_document_service.QR_URL_DEFAULT
+    agt_qr_url: Mapped[str | None] = mapped_column(String(300), nullable=True)
 
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

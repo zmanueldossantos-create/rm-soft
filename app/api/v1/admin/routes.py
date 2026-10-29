@@ -468,6 +468,7 @@ class AgtSettingsRequest(BaseModel):
     signature_version: int | None = None
     software_key: str | None = Field(default=None, max_length=10000)
     software_signature: str | None = Field(default=None, max_length=5000)
+    qr_url: str | None = Field(default=None, max_length=300)  # None keeps it, "" back to the default
 
 
 @router.get("/agt-settings")
@@ -484,7 +485,8 @@ async def put_agt_settings(payload: AgtSettingsRequest, db: AsyncSession = Depen
     from app.services.agt_signing import AgtKeyError
     try:
         return await save_platform(db, payload.environment, payload.username, payload.password, payload.product_id,
-                                   payload.signature_version, payload.software_key, payload.software_signature)
+                                   payload.signature_version, payload.software_key, payload.software_signature,
+                                   payload.qr_url)
     except (AgtSettingsError, AgtKeyError) as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
 

@@ -34,6 +34,7 @@ export async function updateAgtSettings(data) {
     signature_version: data.signatureVersion === '' || data.signatureVersion == null ? null : Number(data.signatureVersion),
     software_key: data.softwareKey,
     software_signature: data.softwareSignature,
+    qr_url: data.qrUrl == null ? null : data.qrUrl.trim(),  // '' back to the default
   })).data;
 }
 

@@ -120,6 +120,8 @@ async def get_guia_pdf(guia_id: uuid.UUID, db: AsyncSession = Depends(get_db),
     except tuple(ERRORS) as e:
         raise _http(e)
     company = (await db.execute(select(Company).where(Company.id == current_user.company_id))).scalar_one()
+    from app.services.platform_settings_service import get_or_create_platform_settings
+    data["software_validation_number"] = (await get_or_create_platform_settings(db)).software_validation_number
     pdf = generate_guia_pdf(data, _company_dict(company))
     return Response(content=pdf, media_type="application/pdf",
                     headers={"Content-Disposition": f'inline; filename="{data["reference"].replace("/", "-").replace(" ", "_")}.pdf"'})

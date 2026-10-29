@@ -409,7 +409,7 @@ const AGT_STATUS = {
 
 function AgtSettingsCard() {
   const [info, setInfo] = useState(null);
-  const [form, setForm] = useState({ environment: 'HOMOLOGACAO', username: '', password: '', productId: '', signatureVersion: '', softwareKey: '', softwareSignature: '' });
+  const [form, setForm] = useState({ environment: 'HOMOLOGACAO', username: '', password: '', productId: '', signatureVersion: '', softwareKey: '', softwareSignature: '', qrUrl: '' });
   const [busy, setBusy] = useState('');
   const [showPublic, setShowPublic] = useState(false);
   const [confirmNewPair, setConfirmNewPair] = useState(false);
@@ -419,6 +419,7 @@ function AgtSettingsCard() {
     setForm({
       environment: data.environment, username: data.username || '', password: '', productId: data.product_id || '',
       signatureVersion: data.signature_version ?? '', softwareKey: '', softwareSignature: data.has_software_key ? '' : (data.software_signature || ''),
+      qrUrl: data.qr_url || '',
     });
   }
 
@@ -518,6 +519,13 @@ function AgtSettingsCard() {
       <p className="text-[11px] text-text-muted mb-4">
         Versão e Nº de validação: os do cartão «Identificação do software» acima. Endereço: <span className="font-mono">{info.base_url}</span>
       </p>
+      <div className="mb-4">
+        <label className={label}>Endereço do QR code (documentos eletrónicos)</label>
+        <input value={form.qrUrl} onChange={(e) => update('qrUrl', e.target.value)} placeholder={info.qr_url_default} className={field + ' font-mono'} />
+        <p className="text-[11px] text-text-muted mt-1">
+          Vazio: o endereço por defeito. <span className="font-mono">{'{documento}'}</span> é o documento (FR FR26S1N/226), <span className="font-mono">{'{nif}'}</span> o NIF do emissor - mude-o se a AGT indicar outro endereço.
+        </p>
+      </div>
 
       <div className="border-t border-border pt-4 flex flex-col gap-3">
         {info.has_software_key ? (

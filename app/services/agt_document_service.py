@@ -35,7 +35,11 @@ from app.models.service import Service
 from app.services import agt_signing
 
 ANONYMOUS_NIF = "999999999"
-QR_URL = "https://quiosqueagt.minfin.gov.ao/facturacao-eletronica/consultar-fe"
+# The QR's address: {documento} the document (FR FR26S1N/226, encoded), {nif} the issuer's NIF. The default is the one
+# printed by the certified programs today (portal do contribuinte); the AGT's specification gave
+# https://quiosqueagt.minfin.gov.ao/facturacao-eletronica/consultar-fe?emissor={nif}&document={documento} - the
+# SUPER_ADMIN changes it in Configurações → Faturação Eletrónica, without a new version.
+QR_URL_DEFAULT = "https://portaldocontribuinte.minfin.gov.ao/consultar-fe?{documento}"
 SERVICE_OPERATION = {"HOTEL": "SHS", "RESTAURANTE": "SHS", "BAR": "SHS", "HOSPITAL": "SS", "ESCOLA": "SE"}
 TYPE_CODE = {"FACTURA": "FT", "FACTURA_RECIBO": "FR", "NOTA_CREDITO": "NC", "NOTA_DEBITO": "ND", "RECIBO": "RC",
              "PRO_FORMA": "FP", "ORCAMENTO": "OR"}
@@ -65,9 +69,11 @@ def document_no(code: str, invoice: Invoice) -> str:
     return f"{code} {invoice.series}/{invoice.number}"
 
 
-def qr_url(issuer_nif: str, number: str) -> str:
-    """The QR code printed on an electronic document: the AGT's page of the document (spaces as %20)."""
-    return f"{QR_URL}?emissor={quote(issuer_nif.strip(), safe='')}&document={quote(number, safe='/')}"
+def qr_url(issuer_nif: str, number: str, template: str | None = None) -> str:
+    """The QR code printed on an electronic document: the AGT's page of the document (FR FR26S1N/226 →
+    FR%20FR26S1N%2F226)."""
+    return (template or QR_URL_DEFAULT).replace("{nif}", quote(issuer_nif.strip(), safe="")).replace(
+        "{documento}", quote(number, safe=""))
 
 
 def _when(moment) -> str:
