@@ -544,9 +544,10 @@ export default function Products() {
       </div>
 
       <Modal open={modalOpen} onClose={closeModal} title={editingId ? 'Editar produto' : 'Novo produto'} maxWidthClass="max-w-5xl">
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4 h-[70vh] overflow-y-auto scrollbar-thin pr-1">
+        {/* One scroll (the modal's): on a small screen the tabs stay on top while the sheet scrolls under them */}
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4 min-h-[60vh]">
 
-          <div className="flex gap-1 border-b border-border -mt-1">
+          <div className="flex gap-1 border-b border-border -mt-5 pt-3 sticky -top-5 z-10 bg-bg-elevated">
             {[['geral', 'Geral'], ['unidades', 'Unidades e embalagens'], ['custo', 'Histórico do custo']].map(([key, label]) => (
               <button key={key} type="button" disabled={key !== 'geral' && !editingId} title={key !== 'geral' && !editingId ? 'Guarde o produto primeiro' : undefined} onClick={() => setProductTab(key)} className={'px-3.5 py-2 text-[13px] font-medium border-b-2 -mb-px transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ' + (productTab === key ? 'border-accent text-text-primary' : 'border-transparent text-text-muted hover:text-text-primary')}>
                 {label}
