@@ -13,7 +13,7 @@ import { listVatRates } from '../api/vat';
 import { withholdingTaxesApi, paymentTermsApi } from '../api/catalogs';
 import useDocumentRules, { DOC_CODE_BY_TYPE } from '../utils/documentRules';
 import { getMyCompanyBankAccounts } from '../api/company';
-import { createProFormaFromPos, getPosStock } from '../api/pos';
+import { createProFormaFromPos, getPosStock, getIssuableTypes } from '../api/pos';
 import { listPaymentMethodPreferences } from '../api/tesouraria';
 import { Wallet, Plus, Minus, Trash2, Loader2, Search, X, ShoppingCart, LogOut, CheckCircle2, FileSearch, ArrowLeftRight, Coins, Receipt, Printer, FileText, ChevronLeft, Snowflake, MonitorUp } from 'lucide-react';
 import { useCustomerDisplay } from '../utils/customerDisplay';
@@ -973,6 +973,17 @@ export default function Caixa() {
   const [prescription, setPrescription] = useState(null);
   const [prescriptionNeed, setPrescriptionNeed] = useState(null);
   function startConfirmation() {
+    // «Preço livre»: a price typed, and one under the cost confirmed on its line - said here, before the payment window
+    // (the server refuses it too)
+    for (const line of cart) {
+      if (line.priceLevel !== FREE) continue;
+      if (!(line.price > 0)) { setError(line.name + ': indique o preço livre'); return; }
+      const cost = lineCost(line);
+      if (cost !== null && line.price < cost && !line.belowCostOk) {
+        setError(line.name + ': preço abaixo do custo (' + formatKz(cost) + ') - marque «confirmo este preço» na linha');
+        return;
+      }
+    }
     setPayments([]);
     setCashGiven('');
     const need = selectedInvoiceType === 'PRO_FORMA' ? null : prescriptionNeedOf(cart, Object.fromEntries(products.map((p) => [p.id, p])));
@@ -988,8 +999,13 @@ export default function Caixa() {
   const billsLater = !paidOnIssue && selectedInvoiceType !== 'PRO_FORMA';
   const requiresPaymentTerm = ruleOf(selectedInvoiceType, 'requires_payment_term');
   const requiresCustomer = ruleOf(selectedInvoiceType, 'requires_customer');
+  // the types that can take a number now (a series exists or is made automatically) - null until known
+  const [issuableTypes, setIssuableTypes] = useState(null);
+  useEffect(() => { getIssuableTypes().then(setIssuableTypes).catch(() => {}); }, []);
   // offered = the catalog allows the type here AND the user may issue it (pro-forma: pos:proforma, a sale: pos:checkout)
+  // AND it has a series
   const visibleTypeOptions = posTypeOptions.filter((o) => {
+    if (issuableTypes && !issuableTypes.includes(o.value)) return false;
     if (o.value === 'PRO_FORMA') return can('pos:proforma');
     // a sale needs pos:checkout; a document billed later (a Fatura) also needs pos:checkout_ft
     return can('pos:checkout') && (ruleOf(o.value, 'paid_on_issue') || can('pos:checkout_ft'));

@@ -314,6 +314,25 @@ async def get_pos_documents(
 
 
 
+@router.get("/issuable-types")
+async def get_issuable_types(db: AsyncSession = Depends(get_db),
+                             current_user: User = Depends(require_permission("pos:view"))) -> list[str]:
+    """The document types (FACTURA_RECIBO, FACTURA...) that can take a number now - the Caixa offers only these, so a
+    sale is never refused at the end for a series that does not exist."""
+    from app.models.company import Company
+    from app.models.document_type import DocumentType
+    from app.services.agt_document_service import TYPE_CODE
+    from app.services.document_series_service import series_available
+    company = await db.get(Company, current_user.company_id)
+    by_code = {row.code: row for row in (await db.execute(select(DocumentType))).scalars().all()}
+    out = []
+    for kind, code in TYPE_CODE.items():
+        doc_type = by_code.get(code)
+        if doc_type is not None and await series_available(db, company, doc_type):
+            out.append(kind)
+    return out
+
+
 @router.get("/stock")
 async def get_stock_of_point_of_sale(
     pos_id: uuid.UUID,

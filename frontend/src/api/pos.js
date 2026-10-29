@@ -110,3 +110,9 @@ export async function fetchClosingReportPdfBlob(sessionId) {
   const res = await apiClient.get('/pos/sessions/' + sessionId + '/closing-report', { responseType: 'blob' });
   return URL.createObjectURL(res.data);
 }
+
+// The document types that can take a number now (a series exists, or is made automatically) - the Caixa offers only these
+export async function getIssuableTypes() {
+  const res = await apiClient.get('/pos/issuable-types');
+  return res.data;
+}

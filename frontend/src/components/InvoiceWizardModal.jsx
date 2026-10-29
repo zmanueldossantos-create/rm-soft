@@ -340,10 +340,15 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
     // Same rule and message as the server (_sale_unit_for_line): a decimal quantity only in a fractional unit.
     // An empty, zero or unreadable quantity ("1," in a number field) is an error too, then the whole-unit rule.
     const quantityInvalid = !!item && !(qty > 0);
-    const quantityError = quantityInvalid ? item.name + ': quantidade invalida'
+    const qtyError = quantityInvalid ? item.name + ': quantidade invalida'
       : (item && line.item_type === 'product' && !unitFractional && Math.abs(qty - Math.round(qty)) > 1e-9
         ? item.name + ': a quantidade deve ser inteira (' + (unitLabel || 'unidade') + ')' : '');
-    const quantityHint = quantityInvalid ? 'Quantidade invalida' : 'Quantidade inteira';
+    // «Preço livre»: a price, and one under the cost confirmed - said before the document is issued (the server refuses too)
+    const priceError = !free || !item ? ''
+      : !(unitPrice > 0) ? item.name + ': indique o preço livre'
+        : belowCost && !line.below_cost_ok ? item.name + ': preço abaixo do custo (' + formatMoney(cost) + ') - marque «confirmo este preço»' : '';
+    const quantityError = qtyError || priceError;  // what keeps the line unusable (no next tab, no emission)
+    const quantityHint = !qtyError ? '' : quantityInvalid ? 'Quantidade invalida' : 'Quantidade inteira';
     return { item, priceSource, free, cost, belowCost, unitPrice, vatRate, unitLabel, unitFractional, quantityError, quantityHint, gross, discountAmount, subtotal, vatAmount, total, retentionAmount };
   }
 

@@ -317,6 +317,7 @@ export default function CompanySettings() {
         await createActivity(activityForm.moduleId, activityForm.name);
       }
       setActivityModalOpen(false);
+      toast.success(editingActivityId ? 'Atividade atualizada' : 'Atividade criada');
       await loadActivities();
     } catch (err) {
       setActivityFormError(extractErrorMessage(err, 'Erro ao guardar atividade'));
@@ -329,6 +330,7 @@ export default function CompanySettings() {
     setActivityTogglingId(activityId);
     try {
       await toggleActivityStatus(activityId);
+      toast.success('Estado da atividade atualizado');
       await loadActivities();
     } catch (err) {
       setError(extractErrorMessage(err, 'Erro ao atualizar estado da atividade'));
@@ -369,6 +371,7 @@ export default function CompanySettings() {
     setAssocError('');
     try {
       await assignUserToCashPoint(assocSelection, assocPos.id);
+      toast.success('Utilizador associado à caixa');
       setAssocSelection('');
       await loadAssociations();
     } catch (err) {
@@ -385,6 +388,7 @@ export default function CompanySettings() {
     setAssocError('');
     try {
       await unassignUserFromCashPoint(holderId);
+      toast.success('Utilizador desassociado da caixa');
       await loadAssociations();
     } catch (err) {
       setAssocError(extractErrorMessage(err, 'Erro ao desassociar caixa'));
@@ -430,6 +434,7 @@ export default function CompanySettings() {
         await createPointOfSale(posForm.activityId, posForm.name, posForm.billetageEnabled, { print_after_sale: posForm.printAfterSale, print_ticket: posForm.printTicket, print_a4: posForm.printA4, accept_closing_difference: posForm.acceptClosingDifference, print_closing_report: posForm.printClosingReport, allow_price_levels: posForm.allowPriceLevels, allow_free_price: posForm.allowFreePrice });
       }
       setPosModalOpen(false);
+      toast.success(editingPosId ? 'Ponto de venda atualizado' : 'Ponto de venda criado');
       await loadPointsOfSale(posForm.activityId);
     } catch (err) {
       setPosFormError(extractErrorMessage(err, 'Erro ao guardar ponto de venda'));
@@ -442,6 +447,7 @@ export default function CompanySettings() {
     setPosTogglingId(posId);
     try {
       await togglePosStatus(posId);
+      toast.success('Estado do ponto de venda atualizado');
       await loadPointsOfSale(activityId);
     } catch (err) {
       setError(extractErrorMessage(err, 'Erro ao atualizar estado do ponto de venda'));
@@ -480,6 +486,7 @@ export default function CompanySettings() {
     setSeriesTogglingId(id);
     try {
       await toggleDocumentSeriesStatus(id);
+      toast.success('Estado da série atualizado');
       await refreshSeriesList();
     } catch (err) {
       setError(extractErrorMessage(err, 'Erro ao atualizar estado'));
@@ -544,6 +551,7 @@ export default function CompanySettings() {
         });
       }
       setSeriesFormOpen(false);
+      toast.success(editingSeriesId ? 'Série atualizada' : 'Série criada');
       await refreshSeriesList();
     } catch (err) {
       setSeriesFormError(extractErrorMessage(err, 'Erro ao criar série'));
@@ -649,6 +657,7 @@ export default function CompanySettings() {
     try {
       const updated = await removeMyCompanyLogo();
       setCompany(updated);
+      toast.success('Logotipo removido');
     } catch (err) {
       setUploadError(extractErrorMessage(err, 'Erro ao remover logotipo'));
     } finally {
@@ -664,6 +673,7 @@ export default function CompanySettings() {
     try {
       const updated = await uploadMyCompanyLogo(file);
       setCompany(updated);
+      toast.success('Logotipo atualizado');
     } catch (err) {
       setUploadError(extractErrorMessage(err, 'Erro ao carregar logotipo'));
     } finally {
@@ -697,6 +707,7 @@ export default function CompanySettings() {
         await createEstablishment(establishmentForm);
       }
       setEstablishmentModalOpen(false);
+      toast.success(editingEstablishmentId ? 'Estabelecimento atualizado' : 'Estabelecimento criado');
       await loadEstablishments();
     } catch (err) {
       setEstablishmentFormError(extractErrorMessage(err, 'Erro ao guardar estabelecimento'));
@@ -709,6 +720,7 @@ export default function CompanySettings() {
     setEstablishmentTogglingId(id);
     try {
       await toggleEstablishmentStatus(id);
+      toast.success('Estado do estabelecimento atualizado');
       await loadEstablishments();
     } catch (err) {
       setError(extractErrorMessage(err, 'Erro ao atualizar estado'));
@@ -743,6 +755,7 @@ export default function CompanySettings() {
         await addMyCompanyBankAccount(payload);
       }
       setBankModalOpen(false);
+      toast.success(editingBankId ? 'Conta bancária atualizada' : 'Conta bancária adicionada');
       await loadBankAccounts();
     } catch (err) {
       setBankFormError(extractErrorMessage(err, 'Erro ao guardar conta bancária'));
@@ -755,6 +768,7 @@ export default function CompanySettings() {
     setBankTogglingId(id);
     try {
       await toggleMyCompanyBankAccountStatus(id);
+      toast.success('Estado da conta bancária atualizado');
       await loadBankAccounts();
     } catch (err) {
       setError(extractErrorMessage(err, 'Erro ao atualizar estado'));

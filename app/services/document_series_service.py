@@ -317,7 +317,7 @@ async def get_or_create_current_series(db: AsyncSession, company: Company, docum
             await db.commit()
             await db.refresh(series)
             return series
-        raise SeriesNotFoundError("Nenhuma serie configurada para este tipo de documento neste ano - configure-a em Configurações")
+        raise SeriesNotFoundError(_missing_series(company, doc_type, year))
 
     establishment_id = None
     if company.issuance_mode == "ELETRONICA":
@@ -379,10 +379,49 @@ async def get_or_create_current_series(db: AsyncSession, company: Company, docum
             # constraint includes issuance_mode, so this should be rare, but surface a clear
             # message instead of letting the raw IntegrityError-derived error leak as a 500.
             raise SeriesNotFoundError(
-                "Não foi possível criar automaticamente a serie para este modo - configure-a manualmente em Configurações"
+                "Não foi possível criar automaticamente a série para este modo - crie-a em Definições da Empresa → "
+                "Séries de Facturação"
             )
 
-    raise SeriesNotFoundError("Nenhuma serie configurada para este tipo de documento neste ano - configure-a em Configurações")
+    raise SeriesNotFoundError(_missing_series(company, doc_type, year))
+
+
+def _missing_series(company: Company, doc_type: DocumentType | None, year: int) -> str:
+    """The message of a document without a series: which document, which year, and where to get its series."""
+    code = doc_type.code if doc_type is not None else "este documento"
+    if company.issuance_mode == "ELETRONICA" and doc_type is not None and doc_type.sent_to_agt:
+        return (f"Não há série {code} para {year} (Faturação Eletrónica) - peça-a à AGT em Definições da Empresa → "
+                "Séries de Facturação")
+    return (f"Não há série {code} para {year} - crie-a em Definições da Empresa → Séries de Facturação "
+            "(ou ative «Série automática por ano»)")
+
+
+async def series_available(db: AsyncSession, company: Company, doc_type: DocumentType) -> bool:
+    """Whether a document of this type can take a number now, without creating anything: the same rules as
+    get_or_create_current_series (a series made automatically counts as available)."""
+    year = _current_year()
+    if not doc_type.sent_to_agt:
+        if company.issuance_mode == "ELETRONICA" or company.auto_series_year:
+            return True
+        return (await db.execute(select(DocumentSeries.id).where(
+            DocumentSeries.company_id == company.id, DocumentSeries.document_type_id == doc_type.id,
+            DocumentSeries.year == year, DocumentSeries.is_active == True).limit(1))).first() is not None  # noqa: E712
+    query = select(DocumentSeries.id).where(
+        DocumentSeries.company_id == company.id, DocumentSeries.document_type_id == doc_type.id,
+        DocumentSeries.year == year, DocumentSeries.issuance_mode == company.issuance_mode,
+        DocumentSeries.is_active == True)  # noqa: E712
+    if company.issuance_mode == "ELETRONICA":
+        establishments = (await db.execute(select(Establishment.id).where(
+            Establishment.company_id == company.id, Establishment.is_active == True))).scalars().all()  # noqa: E712
+        if len(establishments) != 1:
+            return False
+        query = query.where(DocumentSeries.establishment_id == establishments[0],
+                            (DocumentSeries.agt_status.is_(None)) | (DocumentSeries.agt_status != "F"),
+                            (DocumentSeries.contingency_indicator.is_(None))
+                            | (DocumentSeries.contingency_indicator == ContingencyIndicator.NORMAL))
+    elif company.auto_series_year:
+        return True
+    return (await db.execute(query.limit(1))).first() is not None
 
 
 async def get_next_number(db: AsyncSession, series: DocumentSeries) -> int:
