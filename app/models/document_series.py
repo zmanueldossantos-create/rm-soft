@@ -4,7 +4,7 @@ See decision on Video 4/8: always one row per document type - in MANUAL
 mode all of a year's rows simply share the same series_code (either the
 year itself, if "auto_series_year" is on, or a value the GESTOR typed
 freely), while in ELETRONICA mode each row gets its own AGT-issued code
-via a simulated "Solicitar Serie AGT" action, tied to an Establishment.
+requested from the AGT (solicitarSerie), tied to an Establishment, normal (N) or contingência (C).
 
 InvoiceNo format (SAF-T XSD requires the space): "{DocType} {series_code}/{number}",
 e.g. manual "FT 2026/1", electronic "FT FT7826S4635N/1".
@@ -13,7 +13,7 @@ import enum
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import String, Integer, Boolean, Date, DateTime, Enum, ForeignKey, UniqueConstraint, func
+from sqlalchemy import String, Integer, Boolean, Date, DateTime, Enum, ForeignKey, Index, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import UUID
 
@@ -28,10 +28,13 @@ class ContingencyIndicator(str, enum.Enum):
 class DocumentSeries(Base):
     __tablename__ = "document_series"
     __table_args__ = (
-        # issuance_mode is part of the uniqueness key: a company may legitimately hold two
-        # rows for the same (doctype, year) - one MANUAL, one ELETRONICA - e.g. right after
-        # switching modes, without the old row blocking creation of the new one.
-        UniqueConstraint("company_id", "document_type_id", "year", "issuance_mode", name="uq_series_company_doctype_year_mode"),
+        # One series per (company, doctype, year, mode, establishment, N/C): issuance_mode so that a MANUAL row and an
+        # ELETRONICA row can coexist after a mode switch; the establishment and the contingency indicator because the
+        # AGT gives a series per establishment, and a normal (N) and a contingência (C) one side by side. A missing
+        # establishment / indicator counts as one value (COALESCE), so a MANUAL company still has one row per type.
+        Index("uq_series_scope", "company_id", "document_type_id", "year", "issuance_mode",
+              text("coalesce(establishment_id, '00000000-0000-0000-0000-000000000000'::uuid)"),
+              text("coalesce(contingency_indicator, 'NORMAL'::contingencyindicator)"), unique=True),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -55,6 +58,12 @@ class DocumentSeries(Base):
     is_tesouraria: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_compras: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     current_number: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # Faturação Eletrónica: what the AGT says of this series (solicitarSerie / listarSeries) - None for a series that
+    # is not the AGT's (MANUAL mode, non-fiscal working documents)
+    agt_status: Mapped[str | None] = mapped_column(String(1), nullable=True)  # A aberta, U em utilização, F fechada
+    series_start_ts: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # C: emission period
+    series_end_ts: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    agt_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

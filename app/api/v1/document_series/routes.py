@@ -22,7 +22,10 @@ from app.services.document_series_service import (
     SeriesNotFoundError,
     ElectronicTypeNotEligibleError,
     TodosNotAllowedInElectronicError,
+    SeriesYearNotAllowedError,
 )
+from app.services import agt_client
+from app.services.agt_series_service import AgtSeriesError, sync_series
 
 router = APIRouter(prefix="/api/v1/document-series", tags=["document-series"])
 
@@ -66,6 +69,34 @@ async def post_series(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     except TodosNotAllowedInElectronicError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    except SeriesYearNotAllowedError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    except agt_client.AgtUnavailable as e:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                            detail="A AGT não respondeu - a série não foi criada, tente de novo dentro de momentos")
+    except (agt_client.AgtConfigError, agt_client.AgtRefused, AgtSeriesError) as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.post("/sync-agt")
+async def sync_with_agt(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("document_series:manage")),
+):
+    """«Sincronizar com a AGT»: listarSeries - the AGT's status, range and period of each series, and the series the
+    AGT knows that this server does not."""
+    company = await db.get(Company, current_user.company_id)
+    if company.issuance_mode != "ELETRONICA":
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail="Só em modo de emissão Eletrónica")
+    try:
+        result = await sync_series(db, company)
+    except agt_client.AgtUnavailable as e:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e))
+    except (agt_client.AgtConfigError, agt_client.AgtRefused, AgtSeriesError) as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    return {**result, "series": [DocumentSeriesResponse.model_validate(s) for s in
+                                 await list_series(db, current_user.company_id)]}
 
 
 @router.patch("/{series_id}/toggle-status", response_model=DocumentSeriesResponse)
@@ -88,7 +119,7 @@ async def patch_series(
     current_user: User = Depends(require_permission("document_series:manage")),
 ):
     try:
-        return await update_series(db, current_user.company_id, series_id, payload.description, payload.contingency_indicator, payload.is_predefined)
+        return await update_series(db, current_user.company_id, series_id, payload.description, payload.is_predefined)
     except SeriesNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 

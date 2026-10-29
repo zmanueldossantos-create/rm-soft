@@ -20,7 +20,6 @@ class DocumentSeriesCreateRequest(BaseModel):
 
 class DocumentSeriesUpdateRequest(BaseModel):
     description: str | None = None
-    contingency_indicator: str | None = None
     is_predefined: bool | None = None
 
 
@@ -43,6 +42,10 @@ class DocumentSeriesResponse(BaseModel):
     is_compras: bool
     current_number: int
     is_active: bool
+    agt_status: str | None = None  # A aberta, U em utilização, F fechada (the AGT's series only)
+    series_start_ts: datetime | None = None
+    series_end_ts: datetime | None = None
+    agt_synced_at: datetime | None = None
     created_at: datetime
 
     class Config:

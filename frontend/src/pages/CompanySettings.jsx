@@ -1,13 +1,13 @@
 import { API_ORIGIN } from '../api/config';
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Building2, Loader2, Save, Lock, Image, Upload, Store, Plus, Pencil, Landmark, X, Check, Trash2, FileStack, Sparkles, ChevronDown, CreditCard, Link2, Unlink, Users, Bot, Mail, LifeBuoy, DatabaseBackup, FileKey2, BellRing, MonitorUp, Plug } from 'lucide-react';
+import { Building2, Loader2, Save, Lock, Image, Upload, Store, Plus, Pencil, Landmark, X, Check, Trash2, FileStack, Sparkles, ChevronDown, CreditCard, Link2, Unlink, Users, Bot, Mail, LifeBuoy, DatabaseBackup, FileKey2, BellRing, MonitorUp, Plug, RefreshCw } from 'lucide-react';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
 import { getMySupportSessions, getMyCompany, updateMyCompanyContact, uploadMyCompanyLogo, removeMyCompanyLogo, getMyCompanyBankAccounts, addMyCompanyBankAccount, updateMyCompanyBankAccount, toggleMyCompanyBankAccountStatus } from '../api/company';
 import { listEstablishments, createEstablishment, updateEstablishment, toggleEstablishmentStatus } from '../api/establishments';
 import { countriesApi, provincesApi, municipalitiesApi, currenciesApi, banksApi, documentTypesApi } from '../api/catalogs';
-import { listDocumentSeries, createDocumentSeries, updateDocumentSeries, toggleDocumentSeriesStatus, getAllowedSeriesYears } from '../api/documentSeries';
+import { listDocumentSeries, createDocumentSeries, updateDocumentSeries, toggleDocumentSeriesStatus, getAllowedSeriesYears, syncDocumentSeriesWithAgt } from '../api/documentSeries';
 import { listActivities, createActivity, updateActivity, toggleActivityStatus, listPointsOfSale, createPointOfSale, updatePointOfSale, togglePosStatus } from '../api/activity';
 import apiClient from '../api/client';
 import { extractErrorMessage } from '../utils/errors';
@@ -29,6 +29,7 @@ import SupportSessionsList from '../components/SupportSessionsList';
 import { listUsers } from '../api/users';
 import { listCashPointAssociations, assignUserToCashPoint, unassignUserFromCashPoint } from '../api/tesouraria';
 import { Notify, useToastState } from '../components/Toaster';
+import { toast } from '../store/toastStore';
 import AgtCompanyPanel from '../components/AgtCompanyPanel';
 
 
@@ -476,6 +477,22 @@ export default function CompanySettings() {
     }
   }
 
+  const [seriesSyncing, setSeriesSyncing] = useState(false);
+  async function handleSyncSeries() {
+    setSeriesSyncing(true);
+    try {
+      const result = await syncDocumentSeriesWithAgt();
+      setSeriesList(result.series);
+      const parts = [result.updated + ' atualizada(s)', result.added + ' importada(s)'];
+      if (result.unknown.length) parts.push('desconhecida(s): ' + result.unknown.join(', '));
+      toast.success('Séries sincronizadas com a AGT - ' + parts.join(' · '));
+    } catch (err) {
+      toast.error(extractErrorMessage(err, 'Erro ao sincronizar com a AGT'));
+    } finally {
+      setSeriesSyncing(false);
+    }
+  }
+
   function openCreateSeriesForm() {
     setEditingSeriesId(null);
     setSeriesForm(emptySeriesForm);
@@ -498,7 +515,6 @@ export default function CompanySettings() {
       if (editingSeriesId) {
         await updateDocumentSeries(editingSeriesId, {
           description: seriesForm.description || null,
-          contingency_indicator: seriesForm.contingencyIndicator || null,
           is_predefined: seriesForm.isPredefined,
         });
       } else {
@@ -1199,9 +1215,16 @@ export default function CompanySettings() {
               <FileStack size={12} />
               Séries de Facturação
             </p>
-            <button onClick={openCreateSeriesForm} className="flex items-center gap-2 bg-accent hover:bg-accent-hover text-white font-semibold text-sm px-4 py-2.5 rounded-md transition-colors cursor-pointer">
-              <Plus size={16} />Nova série
-            </button>
+            <div className="flex items-center gap-2">
+              {issuanceMode === 'ELETRONICA' && (
+                <button onClick={handleSyncSeries} disabled={seriesSyncing} className="flex items-center gap-2 border border-border hover:border-accent disabled:opacity-50 text-text-primary font-semibold text-sm px-4 py-2.5 rounded-md transition-colors cursor-pointer">
+                  {seriesSyncing ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}Sincronizar com a AGT
+                </button>
+              )}
+              <button onClick={openCreateSeriesForm} className="flex items-center gap-2 bg-accent hover:bg-accent-hover text-white font-semibold text-sm px-4 py-2.5 rounded-md transition-colors cursor-pointer">
+                <Plus size={16} />{issuanceMode === 'ELETRONICA' ? 'Pedir série à AGT' : 'Nova série'}
+              </button>
+            </div>
           </div>
           <p className="text-[12px] text-text-muted mb-4">
             Modo actual: <span className="font-semibold text-text-primary">{issuanceMode === 'ELETRONICA' ? 'Eletrónica' : 'Manual'}</span>
@@ -1224,6 +1247,7 @@ export default function CompanySettings() {
                     <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-4 py-3">Números</th>
                     <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-4 py-3">Válido</th>
                     <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-4 py-3">Próximo Nº</th>
+                    <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-4 py-3">AGT</th>
                     <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-4 py-3">Predefinida</th>
                     <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-4 py-3">Estado</th>
                     <th className="text-right text-[11px] uppercase tracking-wide text-text-muted font-medium px-4 py-3">Ações</th>
@@ -1241,12 +1265,20 @@ export default function CompanySettings() {
                       <tr key={s.id} className="border-b border-border last:border-0">
                         <td className={'px-4 py-3 text-[12px] font-medium ' + areaColor}>{areaLabel}</td>
                         <td className="px-4 py-3 font-mono text-text-muted">{docType ? docType.code : '?'}</td>
-                        <td className="px-4 py-3 font-mono text-text-primary">{s.series_code}</td>
+                        <td className="px-4 py-3 font-mono text-text-primary whitespace-nowrap">
+                          {s.series_code}
+                          {s.contingency_indicator === 'CONTINGENCIA' && <span className="ml-2 font-sans text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-500" title="Série de contingência: usada quando a AGT não está acessível">Contingência</span>}
+                        </td>
                         <td className="px-4 py-3 font-mono text-text-muted">{s.year}</td>
                         <td className="px-4 py-3 text-text-muted">{s.issuance_mode === 'ELETRONICA' ? 'Eletrónica' : 'Manual'}</td>
                         <td className="px-4 py-3 font-mono text-text-muted text-[12px]">{s.number_start}-{s.number_end}</td>
-                        <td className="px-4 py-3 font-mono text-text-muted text-[12px]">{s.date_start} a {s.date_end}</td>
+                        <td className="px-4 py-3 font-mono text-text-muted text-[12px]">
+                          {s.series_start_ts ? new Date(s.series_start_ts).toLocaleString('pt-PT') + ' a ' + (s.series_end_ts ? new Date(s.series_end_ts).toLocaleString('pt-PT') : '...') : s.date_start + ' a ' + s.date_end}
+                        </td>
                         <td className="px-4 py-3 font-mono text-text-primary">{s.current_number + 1}</td>
+                        <td className="px-4 py-3 text-[12px] whitespace-nowrap">
+                          {s.agt_status ? <span className={s.agt_status === 'F' ? 'text-danger' : 'text-success'}>{{ A: 'Aberta', U: 'Em utilização', F: 'Fechada' }[s.agt_status] || s.agt_status}</span> : <span className="text-text-muted">-</span>}
+                        </td>
                         <td className="px-4 py-3 text-[12px] text-text-muted">{s.is_predefined ? 'Sim' : 'Não'}</td>
                         <td className="px-4 py-3">
                           <ToggleSwitch checked={s.is_active} disabled={seriesTogglingId === s.id} onChange={() => handleToggleSeries(s.id)} />
@@ -1318,7 +1350,9 @@ export default function CompanySettings() {
             // are never submitted to AGT regardless of the company's issuance mode, so they always need to be
             // selectable here (they still need their own sequential series). See DocumentType.is_fiscal /
             // electronic_eligible field docstrings for the SAF-T SalesInvoices vs WorkingDocuments distinction.
-            const eligibleTypes = issuanceMode === 'ELETRONICA' ? documentTypes.filter((d) => d.electronic_eligible || !d.is_fiscal) : documentTypes;
+            // ELETRONICA: only the types sent to the AGT - a working document (pro-forma, guias...) keeps its series, made
+            // automatically at its first document
+            const eligibleTypes = issuanceMode === 'ELETRONICA' ? documentTypes.filter((d) => d.electronic_eligible && d.sent_to_agt) : documentTypes;
             const typeOptions = [
               ...(issuanceMode === 'MANUAL' ? [{ value: '__TODOS__', label: 'Todos' }] : []),
               ...eligibleTypes.map((d) => ({ value: d.id, label: d.code + ' - ' + d.name })),
@@ -1378,11 +1412,13 @@ export default function CompanySettings() {
                     )}
                   </>
                 )}
-                {issuanceMode === 'ELETRONICA' && (
+                {issuanceMode === 'ELETRONICA' && !editingSeriesId && (
                   <div>
                     <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Indicador</label>
-                    <Select value={seriesForm.contingencyIndicator} onChange={(v) => setSeriesForm((p) => ({ ...p, contingencyIndicator: v }))} options={[{ value: 'NORMAL', label: 'Normal' }, { value: 'CONTINGENCIA', label: 'Contingência' }]} />
-                    {!editingSeriesId && <p className="text-[11px] text-text-muted mt-1">O código de série será solicitado à AGT automaticamente.</p>}
+                    <Select value={seriesForm.contingencyIndicator} onChange={(v) => setSeriesForm((p) => ({ ...p, contingencyIndicator: v }))} options={[{ value: 'NORMAL', label: 'Normal (N)' }, { value: 'CONTINGENCIA', label: 'Contingência (C) - usada quando a AGT não está acessível' }]} />
+                    <p className="text-[11px] text-text-muted mt-1">
+                      O código da série é pedido à AGT agora (é preciso ligação à internet). Peça também a série de contingência, enquanto há ligação. Os documentos não enviados à AGT (pró-forma, guias...) têm a sua série criada automaticamente.
+                    </p>
                   </div>
                 )}
                 <div>

@@ -14,14 +14,15 @@ space required). See Video 4/8 and the Kiami reference-system walkthrough:
 - ELETRONICA mode: no "Todos" - a specific, AGT-electronic-eligible
   document type must be chosen; the 3 area toggles are then auto-derived
   from that type's own area (read-only, single flag on) rather than
-  freely chosen.
+  freely chosen. A type sent to the AGT gets its code FROM the AGT
+  (solicitarSerie - app.services.agt_series_service), per establishment,
+  normal (N) or contingência (C); a working document never sent to the
+  AGT (pro-forma, guias...) gets a local "{TIPO}{ANO}" code.
 - Area flags (is_facturacao/is_tesouraria/is_compras) are always
   auto-derived from the doc type's own `area` for a specific-type series;
   they are only meaningfully user-chosen when picking "Todos" in MANUAL
   mode, where they decide which document types get included.
 """
-import random
-import string
 import uuid
 from datetime import date
 
@@ -96,18 +97,6 @@ async def get_series_or_raise(db: AsyncSession, company_id: uuid.UUID, series_id
     return series
 
 
-def simulate_agt_series_code(document_type_code: str) -> str:
-    """
-    Simulates the AGT-issued series code format observed in the reference
-    system (e.g. "FT7826S4635N") - the real request is not yet wired to a
-    live AGT endpoint, so this generates a structurally similar code for
-    Phase 1 testing.
-    """
-    part1 = "".join(random.choices(string.digits, k=4))
-    part2 = "".join(random.choices(string.digits, k=4))
-    return f"{document_type_code}{part1}S{part2}N"
-
-
 def _area_flags_for(doc_type: DocumentType) -> tuple[bool, bool, bool]:
     """Auto-derives the (Facturacao, Tesouraria, Compras) toggle values from a document type's own area."""
     return (
@@ -117,40 +106,40 @@ def _area_flags_for(doc_type: DocumentType) -> tuple[bool, bool, bool]:
     )
 
 
-async def _create_one_series(
-    db: AsyncSession, company: Company, doc_type: DocumentType, year: int,
-    establishment_id: uuid.UUID | None, series_code: str | None, description: str | None,
-    contingency_indicator: str | None, is_predefined: bool,
-) -> DocumentSeries:
-    existing = await db.execute(select(DocumentSeries).where(
+def same_scope(company: Company, doc_type: DocumentType, year: int, establishment_id: uuid.UUID | None,
+               contingency_indicator: str | None):
+    """The rows a new series would collide with (see the unique index uq_series_scope). A working document never sent
+    to the AGT (pro-forma, guias...) keeps ONE series per year whatever the mode: a second one would repeat its
+    numbers («FP FP2026/1» twice)."""
+    if not doc_type.sent_to_agt:
+        return select(DocumentSeries).where(DocumentSeries.company_id == company.id,
+                                            DocumentSeries.document_type_id == doc_type.id, DocumentSeries.year == year)
+    contingency = contingency_indicator or "NORMAL"
+    query = select(DocumentSeries).where(
         DocumentSeries.company_id == company.id,
         DocumentSeries.document_type_id == doc_type.id,
         DocumentSeries.year == year,
         DocumentSeries.issuance_mode == company.issuance_mode,
-    ))
-    if existing.scalar_one_or_none() is not None:
-        raise SeriesAlreadyExistsError(f"Já existe uma serie para {doc_type.code} neste ano neste modo")
+        DocumentSeries.establishment_id.is_(None) if establishment_id is None
+        else DocumentSeries.establishment_id == establishment_id,
+    )
+    if contingency == "CONTINGENCIA":
+        return query.where(DocumentSeries.contingency_indicator == ContingencyIndicator.CONTINGENCIA)
+    return query.where((DocumentSeries.contingency_indicator.is_(None))
+                       | (DocumentSeries.contingency_indicator == ContingencyIndicator.NORMAL))
 
-    if company.issuance_mode == "ELETRONICA":
-        final_series_code = simulate_agt_series_code(doc_type.code)
-    elif company.auto_series_year:
-        # SAF-T XSD rule: the series identifier must stay unique per document type,
-        # so the bare year alone is not enough here.
-        final_series_code = f"{doc_type.code}{year}"
-    else:
-        if not series_code:
-            raise ManualSeriesCodeRequiredError("Código de serie obrigatório quando a serie automática por ano esta desativada")
-        final_series_code = series_code
 
+def new_series_row(company: Company, doc_type: DocumentType, year: int, establishment_id: uuid.UUID | None,
+                   series_code: str, description: str | None, contingency_indicator: str | None,
+                   is_predefined: bool) -> DocumentSeries:
     is_fact, is_tes, is_comp = _area_flags_for(doc_type)
-
-    series = DocumentSeries(
+    return DocumentSeries(
         company_id=company.id,
         establishment_id=establishment_id,
         document_type_id=doc_type.id,
         year=year,
         issuance_mode=company.issuance_mode,
-        series_code=final_series_code,
+        series_code=series_code,
         description=description,
         date_start=date(year, 1, 1),
         date_end=date(year, 12, 31),
@@ -159,7 +148,37 @@ async def _create_one_series(
         is_facturacao=is_fact,
         is_tesouraria=is_tes,
         is_compras=is_comp,
+        number_start=1,
+        number_end=999999999,
+        current_number=0,
     )
+
+
+async def _create_one_series(
+    db: AsyncSession, company: Company, doc_type: DocumentType, year: int,
+    establishment_id: uuid.UUID | None, series_code: str | None, description: str | None,
+    contingency_indicator: str | None, is_predefined: bool,
+) -> DocumentSeries:
+    """A series made here (MANUAL mode, or a working document never sent to the AGT) - the AGT's own series are
+    requested in app.services.agt_series_service."""
+    if company.issuance_mode == "ELETRONICA":
+        contingency_indicator = contingency_indicator or "NORMAL"
+    if (await db.execute(same_scope(company, doc_type, year, establishment_id, contingency_indicator))).scalars().first():
+        raise SeriesAlreadyExistsError(f"Já existe uma serie para {doc_type.code} neste ano neste modo")
+
+    if company.issuance_mode == "ELETRONICA" or company.auto_series_year:
+        # SAF-T XSD rule: the series identifier must stay unique per document type,
+        # so the bare year alone is not enough here.
+        final_series_code = f"{doc_type.code}{year}"
+        if company.issuance_mode == "ELETRONICA" and contingency_indicator == "CONTINGENCIA":
+            final_series_code += "C"
+    else:
+        if not series_code:
+            raise ManualSeriesCodeRequiredError("Código de serie obrigatório quando a serie automática por ano esta desativada")
+        final_series_code = series_code
+
+    series = new_series_row(company, doc_type, year, establishment_id, final_series_code, description,
+                            contingency_indicator, is_predefined)
     db.add(series)
     return series
 
@@ -236,6 +255,16 @@ async def create_series(
     # matching frontend fix in CompanySettings.jsx's eligibleTypes filter.
     if company.issuance_mode == "ELETRONICA" and not doc_type.electronic_eligible and doc_type.is_fiscal:
         raise ElectronicTypeNotEligibleError(f"{doc_type.code} não está disponível para facturação eletrónica")
+    if company.issuance_mode == "ELETRONICA" and not doc_type.sent_to_agt:
+        # its series goes on across the mode switch, or is made at its first document (get_or_create_current_series)
+        raise ElectronicTypeNotEligibleError(f"{doc_type.code} não é enviado à AGT: a sua série é criada automaticamente "
+                                             "no primeiro documento (ou continua a da emissão manual)")
+
+    if company.issuance_mode == "ELETRONICA" and doc_type.sent_to_agt:
+        # the AGT gives the code: solicitarSerie for this establishment, N or C
+        from app.services.agt_series_service import request_series
+        return [await request_series(db, company, doc_type, year, establishment_id,
+                                     (contingency_indicator or "NORMAL") == "CONTINGENCIA", description, is_predefined)]
 
     series = await _create_one_series(
         db, company, doc_type, year, establishment_id, series_code, description,
@@ -246,7 +275,8 @@ async def create_series(
     return [series]
 
 
-async def get_or_create_current_series(db: AsyncSession, company: Company, document_type_id: uuid.UUID) -> DocumentSeries:
+async def get_or_create_current_series(db: AsyncSession, company: Company, document_type_id: uuid.UUID,
+                                       contingency: bool | None = None) -> DocumentSeries:
     """
     Used by invoice creation - returns this year's series for the given
     document type, auto-creating it only when the company is in MANUAL
@@ -265,8 +295,29 @@ async def get_or_create_current_series(db: AsyncSession, company: Company, docum
     covering several activities like bar/hotel/resto under the same fiscal
     point) it is resolved automatically; with 0 or 2+ establishments the
     caller must be told explicitly rather than silently picking the wrong one.
+
+    Contingência (ELETRONICA, a type sent to the AGT): while the AGT cannot be reached the document takes the
+    establishment's C series (within its emission period when the AGT gave one), else the N series. contingency None:
+    the installation's current state (app.services.agt_contingency).
     """
     year = _current_year()
+
+    doc_type = await db.get(DocumentType, document_type_id)
+    if doc_type is not None and not doc_type.sent_to_agt:
+        # a working document never sent to the AGT: ONE series a year whatever the mode (it goes on after a switch to
+        # ELETRONICA - a new one would repeat its numbers), made at its first document when there is none
+        series = (await db.execute(select(DocumentSeries).where(
+            DocumentSeries.company_id == company.id, DocumentSeries.document_type_id == document_type_id,
+            DocumentSeries.year == year, DocumentSeries.is_active == True)  # noqa: E712
+            .order_by(DocumentSeries.current_number.desc(), DocumentSeries.created_at))).scalars().first()
+        if series is not None:
+            return series
+        if company.issuance_mode == "ELETRONICA" or company.auto_series_year:
+            series = await _create_one_series(db, company, doc_type, year, None, None, None, None, True)
+            await db.commit()
+            await db.refresh(series)
+            return series
+        raise SeriesNotFoundError("Nenhuma serie configurada para este tipo de documento neste ano - configure-a em Configurações")
 
     establishment_id = None
     if company.issuance_mode == "ELETRONICA":
@@ -294,8 +345,29 @@ async def get_or_create_current_series(db: AsyncSession, company: Company, docum
     if establishment_id is not None:
         query = query.where(DocumentSeries.establishment_id == establishment_id)
 
+    if company.issuance_mode == "ELETRONICA":
+        query = query.where((DocumentSeries.agt_status.is_(None)) | (DocumentSeries.agt_status != "F"))  # not closed
+        if doc_type is not None and doc_type.sent_to_agt:
+            if contingency is None:
+                from app.services.agt_contingency import in_contingency
+                contingency = await in_contingency(db, company.id)
+            if contingency:
+                from datetime import datetime, timezone
+                now = datetime.now(timezone.utc)
+                rows = (await db.execute(query.where(
+                    DocumentSeries.contingency_indicator == ContingencyIndicator.CONTINGENCIA))).scalars().all()
+                usable = [r for r in rows if (r.series_start_ts is None or r.series_start_ts <= now)
+                          and (r.series_end_ts is None or now <= r.series_end_ts)]
+                if usable:
+                    return usable[0]
+                raise SeriesNotFoundError(
+                    "AGT inacessível e sem série de contingência válida para este tipo de documento - peça uma série "
+                    "de contingência (C) à AGT em Definições da Empresa → Séries, enquanto houver ligação")
+        query = query.where((DocumentSeries.contingency_indicator.is_(None))
+                            | (DocumentSeries.contingency_indicator == ContingencyIndicator.NORMAL))
+
     result = await db.execute(query)
-    series = result.scalar_one_or_none()
+    series = result.scalars().first()
     if series is not None:
         return series
 
@@ -319,6 +391,9 @@ async def get_next_number(db: AsyncSession, series: DocumentSeries) -> int:
     Uses flush (not commit) so this stays inside the caller's own transaction: if invoice
     creation later rolls back (e.g. insufficient stock), the number is never actually
     consumed - a committed gap in the sequence would violate SAF-T continuity."""
+    if series.current_number + 1 > series.number_end:
+        raise SeriesNotFoundError(f"Série {series.series_code} esgotada (último número autorizado: {series.number_end}) "
+                                  "- peça uma nova série à AGT")
     series.current_number += 1
     await db.flush()
     return series.current_number
@@ -326,15 +401,13 @@ async def get_next_number(db: AsyncSession, series: DocumentSeries) -> int:
 
 async def update_series(
     db: AsyncSession, company_id: uuid.UUID, series_id: uuid.UUID,
-    description: str | None = None, contingency_indicator: str | None = None,
-    is_predefined: bool | None = None,
+    description: str | None = None, is_predefined: bool | None = None,
 ) -> DocumentSeries:
-    """Only description, the contingency indicator, and is_predefined are editable after creation -
+    """Only description and is_predefined are editable after creation (the N/C indicator is the AGT's) -
     everything else (year, document type, series_code, number range, dates, area flags) stays fixed
     once issued, since already-emitted invoices reference the series exactly as it was."""
     series = await get_series_or_raise(db, company_id, series_id)
     series.description = description
-    series.contingency_indicator = ContingencyIndicator(contingency_indicator) if contingency_indicator else None
     if is_predefined is not None:
         series.is_predefined = is_predefined
     await db.commit()

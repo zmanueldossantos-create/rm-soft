@@ -26,3 +26,10 @@ export async function getAllowedSeriesYears() {
   const res = await apiClient.get('/document-series/allowed-years');
   return res.data;
 }
+
+// «Sincronizar com a AGT» (Faturação Eletrónica): the AGT's status, range and period of each series, and the series
+// the AGT knows that this server does not - {updated, added, unknown, series}
+export async function syncDocumentSeriesWithAgt() {
+  const res = await apiClient.post('/document-series/sync-agt');
+  return res.data;
+}
