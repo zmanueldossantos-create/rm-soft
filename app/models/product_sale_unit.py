@@ -23,7 +23,9 @@ class ProductSaleUnit(Base):
     product_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("products.id"), nullable=False, index=True)
     unit_of_measure_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("unit_of_measure_catalog.id"), nullable=False)
     factor: Mapped[float] = mapped_column(Numeric(14, 4), nullable=False)  # base units contained in one sale unit
-    price: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    price: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)  # «Preço 1»
+    price_2: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)  # «Preço 2» - None: not offered
+    price_3: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)  # «Preço 3»
     barcode: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

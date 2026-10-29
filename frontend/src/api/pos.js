@@ -54,6 +54,7 @@ export async function checkout(posId, customerId, lines, payments, invoiceType =
     lines: lines.map((l) => ({
       product_id: l.productId || null,
       sale_unit_id: l.saleUnitId || null,
+      price_level: l.productId ? (l.priceLevel || 1) : 1,  // Preço 1 / 2 / 3 - the server reads the price itself
       service_id: l.serviceId || null,
       quantity: l.quantity,
       discount_percent: l.discountPercent || 0,
@@ -73,6 +74,7 @@ export async function createProFormaFromPos(posId, customerId, lines, discountGl
     lines: lines.map((l) => ({
       product_id: l.productId || null,
       sale_unit_id: l.saleUnitId || null,
+      price_level: l.productId ? (l.priceLevel || 1) : 1,  // Preço 1 / 2 / 3 - the server reads the price itself
       service_id: l.serviceId || null,
       quantity: l.quantity,
       discount_percent: l.discountPercent || 0,

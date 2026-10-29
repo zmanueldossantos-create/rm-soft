@@ -81,6 +81,7 @@ PERMISSION_CATALOG: list[tuple[str, str, str, list[str]]] = [
     ("invoices:proforma_convert", "Converter pro-forma ou orçamento em fatura", "Faturação", ["CAIXA"]),
     ("invoices:quote", "Emitir orçamentos", "Faturação", []),
     ("invoices:resubmit", "Reenviar fatura (submissão AGT)", "Faturação", ["CAIXA"]),
+    ("invoices:price_levels", "Escolher o Preço 2 ou o Preço 3 de um produto na venda (Caixa e Nova fatura)", "Faturação", []),
     ("open_accounts:view", "Ver contas abertas e respetivas linhas", "Contas Abertas", ["CAIXA", "ATENDENTE"]),
     ("open_accounts:open", "Abrir contas", "Contas Abertas", ["CAIXA", "ATENDENTE"]),
     ("open_accounts:edit_lines", "Adicionar, alterar e remover linhas de conta", "Contas Abertas", ["CAIXA", "ATENDENTE"]),

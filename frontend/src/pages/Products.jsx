@@ -53,7 +53,7 @@ const STATUS_COLOR = {
 };
 
 const emptyForm = {
-  code: '', name: '', barcode: '', vat_id: '', price: '', purchasePrice: '',
+  code: '', name: '', barcode: '', vat_id: '', price: '', price2: '', price3: '', purchasePrice: '',
   minStockThreshold: '0',
   unitOfMeasureId: '', categoryId: '', brand: '',
   managedByBatch: false, managedByStock: true, managedByExpiry: false,
@@ -195,6 +195,8 @@ export default function Products() {
       barcode: product.barcode || '',
       vat_id: product.vat_id,
       price: String(product.price),
+      price2: product.price_2 != null ? String(product.price_2) : '',  // Preço 2 / Preço 3: empty = not offered
+      price3: product.price_3 != null ? String(product.price_3) : '',
       purchasePrice: product.purchase_price != null ? String(product.purchase_price) : '', averageCost: product.average_cost ?? null, // CMP, read only
       minStockThreshold: String(product.min_stock_threshold),
       unitOfMeasureId: product.unit_of_measure_id || '',
@@ -326,6 +328,8 @@ export default function Products() {
       barcode: form.barcode || null,
       vat_id: form.vat_id,
       price: parseFloat(form.price),
+      price_2: form.price2 !== '' ? parseFloat(form.price2) : null,
+      price_3: form.price3 !== '' ? parseFloat(form.price3) : null,
       purchase_price: form.purchasePrice !== '' ? parseFloat(form.purchasePrice) : null,
       min_stock_threshold: parseFloat(form.minStockThreshold || '0'),
       product_type: 'BEM',
@@ -503,7 +507,14 @@ export default function Products() {
                       </div>
                       {p.is_medicine && <p className="text-[12px] font-normal text-text-muted mt-0.5">{medicineSummary(p)}</p>}
                     </td>
-                    <td className="px-6 py-4 font-mono text-text-primary">{p.price.toFixed(2)} Kz</td>
+                    <td className="px-6 py-4 font-mono text-text-primary whitespace-nowrap">
+                      {formatKz(p.price)} Kz
+                      {(p.price_2 != null || p.price_3 != null) && (
+                        <p className="text-[11px] text-text-muted mt-0.5">
+                          {[p.price_2 != null && 'P2 ' + formatKz(p.price_2), p.price_3 != null && 'P3 ' + formatKz(p.price_3)].filter(Boolean).join(' · ')}
+                        </p>
+                      )}
+                    </td>
                     <td className="px-6 py-4 font-mono text-text-primary">{p.purchase_price != null ? formatKz(p.purchase_price) : '-'}</td>
                     <td className="px-6 py-4 font-mono text-text-primary">{p.average_cost != null ? formatKz(p.average_cost) : '-'}</td>
                     <td className="px-6 py-4 font-mono text-text-muted">{vatById[p.vat_id] ? vatById[p.vat_id].rate + '%' : '-'}</td>
@@ -564,7 +575,8 @@ export default function Products() {
             </div>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {/* the sheet's fields, four per line */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-start">
             <Field label="Código *">
               <input value={form.code} onChange={(e) => updateField('code', e.target.value)} required className={inputClass} />
             </Field>
@@ -574,9 +586,6 @@ export default function Products() {
             <Field label="Marca">
               <input value={form.brand} onChange={(e) => updateField('brand', e.target.value)} className={inputClass} />
             </Field>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Field label="Categoria">
               <div className="flex items-center gap-1.5">
                 <div className="flex-1">
@@ -612,11 +621,14 @@ export default function Products() {
             <Field label="Unidade base *">
               <Select value={form.unitOfMeasureId} onChange={(v) => updateField('unitOfMeasureId', v)} options={units.map((u) => ({ value: u.id, label: u.code + ' - ' + u.name }))} placeholder="Selecionar" />
             </Field>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <Field label="Preço de venda (Kz) *">
+            <Field label="Preço 1 (Kz) *">
               <input type="number" step="0.01" min="0" value={form.price} onChange={(e) => updateField('price', e.target.value)} required className={inputClass} />
+            </Field>
+            <Field label="Preço 2 (Kz)">
+              <input type="number" step="0.01" min="0" value={form.price2} onChange={(e) => updateField('price2', e.target.value)} placeholder="Opcional" className={inputClass} />
+            </Field>
+            <Field label="Preço 3 (Kz)">
+              <input type="number" step="0.01" min="0" value={form.price3} onChange={(e) => updateField('price3', e.target.value)} placeholder="Opcional" className={inputClass} />
             </Field>
             <Field label="Preço de compra (Kz)">
               <input type="number" step="0.01" min="0" value={form.purchasePrice} onChange={(e) => updateField('purchasePrice', e.target.value)} className={inputClass} />
@@ -626,9 +638,6 @@ export default function Products() {
                 {form.averageCost != null ? formatKz(form.averageCost) + ' Kz' : 'Sem custo conhecido'}
               </div>
             </Field>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
             <Field label="IVA *">
               <Select value={form.vat_id} onChange={(v) => updateField('vat_id', v)} options={vatRates.filter((v) => v.is_active !== false || v.id === form.vat_id).map((v) => ({ value: v.id, label: v.name + ' (' + v.rate + '%)' }))} placeholder="Selecionar IVA" />
             </Field>

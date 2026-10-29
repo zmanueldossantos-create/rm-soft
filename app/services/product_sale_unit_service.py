@@ -135,14 +135,15 @@ async def list_sale_units(db: AsyncSession, company_id: uuid.UUID, product_id: u
 async def create_sale_unit(
     db: AsyncSession, company_id: uuid.UUID, product_id: uuid.UUID, unit_of_measure_id: uuid.UUID, factor: float,
     price: float, barcode: str | None = None, confirm: bool = False,
+    price_2: float | None = None, price_3: float | None = None,
 ) -> ProductSaleUnit:
     product = await _product(db, company_id, product_id)
     if product.is_raw_material:
-        price = 0.0  # a raw material is never sold: its packages carry no price
+        price, price_2, price_3 = 0.0, None, None  # a raw material is never sold: its packages carry no price
     await _check(db, company_id, product, unit_of_measure_id, factor, barcode, price=price, confirm=confirm)
     unit = ProductSaleUnit(
         company_id=company_id, product_id=product.id, unit_of_measure_id=unit_of_measure_id,
-        factor=factor, price=price, barcode=barcode,
+        factor=factor, price=price, price_2=price_2, price_3=price_3, barcode=barcode,
     )
     db.add(unit)
     await db.commit()
@@ -164,15 +165,17 @@ async def _sale_unit(db: AsyncSession, company_id: uuid.UUID, product_id: uuid.U
 async def update_sale_unit(
     db: AsyncSession, company_id: uuid.UUID, product_id: uuid.UUID, unit_id: uuid.UUID, unit_of_measure_id: uuid.UUID,
     factor: float, price: float, barcode: str | None = None, confirm: bool = False,
+    price_2: float | None = None, price_3: float | None = None,
 ) -> ProductSaleUnit:
     product = await _product(db, company_id, product_id)
     unit = await _sale_unit(db, company_id, product_id, unit_id)
     if product.is_raw_material:
-        price = 0.0  # a raw material is never sold: its packages carry no price
+        price, price_2, price_3 = 0.0, None, None  # a raw material is never sold: its packages carry no price
     await _check(db, company_id, product, unit_of_measure_id, factor, barcode, exclude_id=unit.id, price=price, confirm=confirm)
     unit.unit_of_measure_id = unit_of_measure_id
     unit.factor = factor
     unit.price = price
+    unit.price_2, unit.price_3 = price_2, price_3
     unit.barcode = barcode
     await db.commit()
     await db.refresh(unit)
@@ -189,11 +192,14 @@ async def toggle_sale_unit(db: AsyncSession, company_id: uuid.UUID, product_id: 
 
 async def resolve_line_unit(
     db: AsyncSession, company_id: uuid.UUID, product: Product, sale_unit_id, quantity: float | None = None,
+    price_level: int = 1,
 ) -> tuple[float, float, uuid.UUID | None, str | None]:
     """
     THE unit conversion of a line, for selling and receiving alike: price, factor (base units in one unit), sale unit id
     and unit code. The product's base unit (factor 1) unless one of ITS active sale units is given. A decimal quantity is
     only allowed in a fractional unit (KG, L). Stock always moves quantity x factor.
+    price_level: the «Preço 1» (default), «Preço 2» or «Preço 3» of the product / its sale unit - refused when that
+    price is not set.
     """
     if sale_unit_id:
         sale_unit = (await db.execute(
@@ -205,8 +211,15 @@ async def resolve_line_unit(
         if sale_unit is None:
             raise SaleUnitInvalidError(f"Unidade ou embalagem inválida ou inativa para {product.name}")
         unit_id, price, factor, line_sale_unit_id = sale_unit.unit_of_measure_id, float(sale_unit.price), float(sale_unit.factor), sale_unit.id
+        priced = sale_unit
     else:
         unit_id, price, factor, line_sale_unit_id = product.unit_of_measure_id, float(product.price), 1.0, None
+        priced = product
+    if price_level in (2, 3):
+        other = getattr(priced, f"price_{price_level}", None)
+        if other is None:
+            raise SaleUnitInvalidError(f"{product.name} não tem Preço {price_level}")
+        price = float(other)
     unit = (await db.execute(
         select(UnitOfMeasureCatalog).where(UnitOfMeasureCatalog.id == unit_id)
     )).scalar_one_or_none() if unit_id else None

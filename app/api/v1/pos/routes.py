@@ -35,7 +35,7 @@ from app.services.cash_session_service import (
 )
 from app.services.pos_service import checkout, liquidate_pending_invoice, create_pro_forma_from_pos, NoOpenSessionError
 from app.services.invoice_service import ReferenceInvoiceTypeNotEligibleError
-from app.api.v1.issuable import ensure_issuable, ensure_may_bill_later
+from app.api.v1.issuable import ensure_issuable, ensure_may_bill_later, ensure_price_levels
 from app.services.pos_documents_service import list_pos_documents
 from app.services.point_of_sale_service import PosNotFoundError
 from app.services.invoice_service import (
@@ -201,6 +201,7 @@ async def post_checkout(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("pos:checkout")),
 ):
+    await ensure_price_levels(db, current_user, payload.lines)
     try:
         await ensure_issuable(db, payload.invoice_type, "pos")
         await ensure_may_bill_later(db, current_user, payload.invoice_type)
@@ -251,6 +252,7 @@ async def post_create_pro_forma(
     current_user: User = Depends(require_permission("pos:proforma")),
 ):
     """Generates a Pro-forma (FP) from the Caixa screen - no payment, see pos_service.create_pro_forma_from_pos."""
+    await ensure_price_levels(db, current_user, payload.lines)
     try:
         return await create_pro_forma_from_pos(
             db, current_user.company_id, pos_id, current_user, payload.customer_id,

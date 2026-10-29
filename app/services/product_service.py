@@ -117,8 +117,11 @@ async def create_product(
     dosage: str | None = None,
     dispensing_regime: str | None = None,
     cold_storage: bool = False,
+    price_2: float | None = None,
+    price_3: float | None = None,
 ) -> Product:
-    """Creates a product within the caller's company."""
+    """Creates a product within the caller's company. price_2 / price_3: the «Preço 2» / «Preço 3» the seller may
+    choose (None: not offered) - never on a raw material, which is not sold."""
     await _check_all_fields_available(db, company_id, code, name, barcode)
     await ensure_owned(db, company_id, ProductCategory, category_id, "Categoria não encontrada")
     from app.services.pharmacy_service import medicine_fields
@@ -146,6 +149,8 @@ async def create_product(
         barcode=barcode,
         vat_id=vat_id,
         price=price,
+        price_2=None if is_raw_material else price_2,
+        price_3=None if is_raw_material else price_3,
         min_stock_threshold=min_stock_threshold,
         product_type=product_type,
         unit_of_measure_id=unit_of_measure_id,
@@ -206,6 +211,8 @@ async def list_products(db: AsyncSession, company_id: uuid.UUID) -> list[Product
             by_product.setdefault(sale_unit.product_id, []).append({
                 "id": sale_unit.id, "unit_of_measure_code": code, "factor": float(sale_unit.factor),
                 "price": float(sale_unit.price), "barcode": sale_unit.barcode,
+                "price_2": float(sale_unit.price_2) if sale_unit.price_2 is not None else None,
+                "price_3": float(sale_unit.price_3) if sale_unit.price_3 is not None else None,
                 "is_fractional": sale_unit.unit_of_measure_id in fractional_ids,
             })
     for a in products:
@@ -324,6 +331,8 @@ async def update_product(
     dosage: str | None = None,
     dispensing_regime: str | None = None,
     cold_storage: bool = False,
+    price_2: float | None = None,
+    price_3: float | None = None,
 ) -> Product:
     """Updates a product's editable fields, scoped to the caller's company."""
     product = await get_product_or_raise(db, company_id, product_id)
@@ -353,6 +362,8 @@ async def update_product(
     product.vat_id = vat_id
     old_price = float(product.price or 0)
     product.price = price
+    product.price_2 = None if is_raw_material else price_2
+    product.price_3 = None if is_raw_material else price_3
     product.min_stock_threshold = min_stock_threshold
     product.product_type = product_type
     await ensure_base_unit_can_change(db, product, unit_of_measure_id)

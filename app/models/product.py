@@ -65,7 +65,10 @@ class Product(Base):
     brand: Mapped[str | None] = mapped_column(String(100), nullable=True)  # marca
     image_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     barcode: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
-    price: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)  # preco de venda
+    price: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)  # preco de venda - «Preço 1», the default
+    # «Preço 2» / «Preço 3»: other prices the seller may choose (permission invoices:price_levels); None = not offered
+    price_2: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
+    price_3: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
     purchase_price: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)  # preco de compra
     # Weighted average cost (CMP) per base unit, computed by the system from priced reception lines - never typed in;
     # None = cost unknown. The purchase price above stays a reference typed on the product sheet.

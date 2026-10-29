@@ -1,4 +1,5 @@
 import { formatKz } from '../utils/format';
+import { PRICE_LEVEL_PERMISSION, priceOf, levelsOf, levelOptions } from '../utils/priceLevels';
 import { guessLegalPersonType, isPessoaColetiva, LEGAL_PERSON_OPTIONS } from '../utils/customerType';
 import { API_ORIGIN } from '../api/config';
 import DateInput from '../components/DateInput';
@@ -67,6 +68,7 @@ function addDays(dateStr, days) {
 
 export default function Caixa() {
   const can = useCan();
+  const canChoosePrice = can(PRICE_LEVEL_PERMISSION);  // Preço 2 / Preço 3 on a cart line
   const currentUser = useAuthStore((state) => state.user);
   // can() trusts GESTOR by default while permissions is still null (avoids a menu flash) - but
   // loadInitial must know the REAL answer before deciding whether to call listProducts.
@@ -784,6 +786,8 @@ export default function Caixa() {
         withholdingTaxId: isService ? item.withholding_tax_id : null,
         unit: saleUnit ? saleUnit.unit_of_measure_code : (item.unit_of_measure_code || 'Un'),
         saleUnitId: saleUnit ? saleUnit.id : null,
+        priceLevel: 1,  // Preço 1 by default - Preço 2 / 3 chosen on the line (permission)
+        basePrices: isService ? null : { price: item.price, price_2: item.price_2, price_3: item.price_3 },
         baseUnit: item.unit_of_measure_code || 'Un',
         basePrice: item.price,
         saleUnits: isService ? [] : (item.sale_units || []),
@@ -803,17 +807,38 @@ export default function Caixa() {
     if (newKey === key) return;
     const next = cart.some((l) => l.key === newKey)
       ? cart.filter((l) => l.key !== key).map((l) => (l.key === newKey ? { ...l, quantity: l.quantity + line.quantity } : l))
-      : cart.map((l) => (l.key === key ? {
-        ...l, key: newKey, saleUnitId: saleUnit ? saleUnit.id : null,
-        price: saleUnit ? saleUnit.price : l.basePrice, unit: saleUnit ? saleUnit.unit_of_measure_code : l.baseUnit,
-        fractional: saleUnit ? !!saleUnit.is_fractional : !!l.baseFractional,
-      } : l));
+      : cart.map((l) => {
+        if (l.key !== key) return l;
+        // the price level chosen follows the unit when that unit has it, otherwise back to Preço 1
+        const source = saleUnit || l.basePrices;
+        const level = priceOf(source, l.priceLevel || 1) !== null ? (l.priceLevel || 1) : 1;
+        return {
+          ...l, key: newKey, saleUnitId: saleUnit ? saleUnit.id : null, priceLevel: level,
+          price: priceOf(source, level) ?? (saleUnit ? saleUnit.price : l.basePrice),
+          unit: saleUnit ? saleUnit.unit_of_measure_code : l.baseUnit,
+          fractional: saleUnit ? !!saleUnit.is_fractional : !!l.baseFractional,
+        };
+      });
     const refusal = cartStockRefusal(next, line.productId);
     if (refusal) {
       setError(refusal);
       return;
     }
     setCart(next);
+  }
+
+  // The price source of a cart line: its sale unit, or the product itself (its base unit).
+  function priceSource(line) {
+    return (line.saleUnitId ? (line.saleUnits || []).find((u) => u.id === line.saleUnitId) : null) || line.basePrices;
+  }
+
+  // Preço 1 / 2 / 3 of a cart line (the server reads the same price on the product when the sale is made).
+  function changeCartLevel(key, level) {
+    setCart((prev) => prev.map((l) => {
+      if (l.key !== key) return l;
+      const price = priceOf(priceSource(l), level);
+      return price === null ? l : { ...l, priceLevel: level, price };
+    }));
   }
 
   // THE barcode scan: a product's own barcode adds its base unit, the barcode of one of its units or packages adds
@@ -1684,6 +1709,7 @@ export default function Caixa() {
                                     <Trash2 size={12} />
                                   </button>
                                 </div>
+
                               </td>
                               <td className="px-1 py-2 align-top">
                                 <div className="flex items-center justify-center gap-1">
@@ -1708,6 +1734,16 @@ export default function Caixa() {
                               <td className="px-2 py-2 align-top text-right font-mono text-text-muted whitespace-nowrap">{formatKz(line.price)}</td>
                               <td className="px-2.5 py-2 align-top text-right font-mono text-text-primary font-medium whitespace-nowrap">{formatKz(lineTotal)}</td>
                             </tr>
+                            {line.productId && canChoosePrice && levelsOf(priceSource(line)).length > 1 && (
+                              <tr>
+                                <td colSpan={4} className="px-2.5 pb-2">
+                                  {/* Preço 1 / 2 / 3: the seller sees what each price is worth */}
+                                  <div className="w-[210px]">
+                                    <Select compact value={String(line.priceLevel || 1)} onChange={(v) => changeCartLevel(line.key, Number(v))} options={levelOptions(priceSource(line))} />
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
                             {expandedDiscountKey === line.key && (
                               <tr className="border-t border-border/50">
                                 <td colSpan={4} className="px-2.5 pb-2 pt-1">

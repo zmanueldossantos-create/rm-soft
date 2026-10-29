@@ -8,7 +8,7 @@ import { useToastState } from './Toaster';
 
 const inputClass = 'w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors';
 const labelClass = 'text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block';
-const EMPTY = { unit_of_measure_id: '', factor: '', price: '', barcode: '' };
+const EMPTY = { unit_of_measure_id: '', factor: '', price: '', price2: '', price3: '', barcode: '' };
 const money = (v) => formatKz(v || 0);
 
 // The other units a product is sold in (a pallet of 30 eggs, a box of 3 blisters). The product itself stays the base
@@ -50,7 +50,11 @@ export default function ProductSaleUnits({ productId, baseUnitId, units, noPrice
 
   function startEdit(row) {
     setEditingId(row.id);
-    setForm({ unit_of_measure_id: row.unit_of_measure_id, factor: String(row.factor), price: String(row.price), barcode: row.barcode || '' });
+    setForm({
+      unit_of_measure_id: row.unit_of_measure_id, factor: String(row.factor), price: String(row.price),
+      price2: row.price_2 != null ? String(row.price_2) : '', price3: row.price_3 != null ? String(row.price_3) : '',
+      barcode: row.barcode || '',
+    });
     setError('');
   }
 
@@ -71,6 +75,9 @@ export default function ProductSaleUnits({ productId, baseUnitId, units, noPrice
       unit_of_measure_id: form.unit_of_measure_id,
       factor: parseFloat(form.factor),
       price: noPrice ? 0 : parseFloat(form.price),
+      // Preço 2 / Preço 3 of this unit: empty = not offered at the sale
+      price_2: noPrice || form.price2 === '' ? null : parseFloat(form.price2),
+      price_3: noPrice || form.price3 === '' ? null : parseFloat(form.price3),
       barcode: form.barcode.trim() || null,
       confirm,
     };
@@ -126,7 +133,9 @@ export default function ProductSaleUnits({ productId, baseUnitId, units, noPrice
               <tr className="text-[10.5px] uppercase tracking-wide text-text-muted">
                 <th className="text-left font-medium px-3 py-2">Unidade</th>
                 <th className="text-right font-medium px-3 py-2">Contem</th>
-                {!noPrice && <th className="text-right font-medium px-3 py-2">Preço</th>}
+                {!noPrice && <th className="text-right font-medium px-3 py-2">Preço 1</th>}
+                {!noPrice && <th className="text-right font-medium px-3 py-2">Preço 2</th>}
+                {!noPrice && <th className="text-right font-medium px-3 py-2">Preço 3</th>}
                 {!noPrice && <th className="text-right font-medium px-3 py-2">Preço por {baseCode}</th>}
                 <th className="text-left font-medium px-3 py-2">Código de barras</th>
                 <th className="text-left font-medium px-3 py-2">Estado</th>
@@ -139,6 +148,8 @@ export default function ProductSaleUnits({ productId, baseUnitId, units, noPrice
                   <td className="px-3 py-2 font-mono text-text-primary">{row.unit_of_measure_code}</td>
                   <td className="px-3 py-2 text-right font-mono">{Number(row.factor)} {baseCode}</td>
                   {!noPrice && <td className="px-3 py-2 text-right font-mono text-text-primary">{money(row.price)}</td>}
+                  {!noPrice && <td className="px-3 py-2 text-right font-mono text-text-primary">{row.price_2 != null ? money(row.price_2) : '-'}</td>}
+                  {!noPrice && <td className="px-3 py-2 text-right font-mono text-text-primary">{row.price_3 != null ? money(row.price_3) : '-'}</td>}
                   {!noPrice && <td className="px-3 py-2 text-right font-mono text-text-muted">{money(Number(row.price) / Number(row.factor))}</td>}
                   <td className="px-3 py-2 font-mono text-text-muted">{row.barcode || '-'}</td>
                   <td className="px-3 py-2">{row.is_active ? 'Activo' : 'Inactivo'}</td>
@@ -155,7 +166,7 @@ export default function ProductSaleUnits({ productId, baseUnitId, units, noPrice
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-[1.4fr_0.8fr_0.9fr_1.2fr_auto] gap-2 items-end">
+      <div className={'grid grid-cols-1 gap-2 items-end ' + (noPrice ? 'sm:grid-cols-[1.4fr_0.8fr_1.2fr_auto]' : 'sm:grid-cols-[1.3fr_0.7fr_0.8fr_0.8fr_0.8fr_1.1fr_auto]')}>
         <div>
           <label className={labelClass}>Unidade</label>
           <Select value={form.unit_of_measure_id} onChange={(v) => { const u = units.find((x) => x.id === v); update('unit_of_measure_id', v); if (u?.fixed_factor) update('factor', String(Number(u.fixed_factor))); }} options={unitOptions} placeholder="Selecionar" />
@@ -166,8 +177,20 @@ export default function ProductSaleUnits({ productId, baseUnitId, units, noPrice
         </div>
         {!noPrice && (
         <div>
-          <label className={labelClass}>Preco (Kz)</label>
+          <label className={labelClass}>Preço 1 (Kz)</label>
           <input type="number" step="0.01" min="0" value={form.price} onChange={(e) => update('price', e.target.value)} onKeyDown={onEnter} className={inputClass + ' font-mono'} />
+        </div>
+        )}
+        {!noPrice && (
+        <div>
+          <label className={labelClass}>Preço 2</label>
+          <input type="number" step="0.01" min="0" value={form.price2} onChange={(e) => update('price2', e.target.value)} onKeyDown={onEnter} placeholder="Opcional" className={inputClass + ' font-mono'} />
+        </div>
+        )}
+        {!noPrice && (
+        <div>
+          <label className={labelClass}>Preço 3</label>
+          <input type="number" step="0.01" min="0" value={form.price3} onChange={(e) => update('price3', e.target.value)} onKeyDown={onEnter} placeholder="Opcional" className={inputClass + ' font-mono'} />
         </div>
         )}
         <div>

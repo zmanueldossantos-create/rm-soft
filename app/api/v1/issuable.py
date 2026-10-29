@@ -28,3 +28,13 @@ async def ensure_may_bill_later(db: AsyncSession, user, invoice_type) -> None:
         return
     if not await has_permission(db, user.company_id, user.role.value, "pos:checkout_ft"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Não tem permissão para faturar (FT) na caixa")
+
+
+async def ensure_price_levels(db: AsyncSession, user, lines) -> None:
+    """A line sold at «Preço 2» or «Preço 3» needs the permission invoices:price_levels (the GESTOR always has it); the
+    «Preço 1» - the default - needs nothing more. The price itself is always read on the product by the server."""
+    if not any((getattr(line, "price_level", 1) or 1) > 1 for line in lines or []):
+        return
+    if not await has_permission(db, user.company_id, user.role.value, "invoices:price_levels"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail="Não tem permissão para escolher o Preço 2 ou o Preço 3")

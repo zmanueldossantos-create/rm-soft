@@ -64,6 +64,8 @@ async def create_new_product(
             barcode=payload.barcode,
             vat_id=payload.vat_id,
             price=payload.price,
+            price_2=payload.price_2,
+            price_3=payload.price_3,
             min_stock_threshold=payload.min_stock_threshold,
             product_type=payload.product_type,
             unit_of_measure_id=payload.unit_of_measure_id,
@@ -124,6 +126,8 @@ async def edit_product(
             barcode=payload.barcode,
             vat_id=payload.vat_id,
             price=payload.price,
+            price_2=payload.price_2,
+            price_3=payload.price_3,
             min_stock_threshold=payload.min_stock_threshold,
             product_type=payload.product_type,
             unit_of_measure_id=payload.unit_of_measure_id,
@@ -306,7 +310,8 @@ async def post_sale_unit(
     current_user: User = Depends(require_permission("products:manage")),
 ):
     try:
-        return await create_sale_unit(db, current_user.company_id, product_id, payload.unit_of_measure_id, payload.factor, payload.price, payload.barcode, payload.confirm)
+        return await create_sale_unit(db, current_user.company_id, product_id, payload.unit_of_measure_id, payload.factor, payload.price, payload.barcode, payload.confirm,
+                                       price_2=payload.price_2, price_3=payload.price_3)
     except (SaleUnitNotFoundError, SaleUnitInvalidError, SaleUnitNeedsConfirmationError) as e:
         _sale_unit_error(e)
 
@@ -320,7 +325,8 @@ async def patch_sale_unit(
     current_user: User = Depends(require_permission("products:manage")),
 ):
     try:
-        return await update_sale_unit(db, current_user.company_id, product_id, unit_id, payload.unit_of_measure_id, payload.factor, payload.price, payload.barcode, payload.confirm)
+        return await update_sale_unit(db, current_user.company_id, product_id, unit_id, payload.unit_of_measure_id, payload.factor, payload.price, payload.barcode, payload.confirm,
+                                       price_2=payload.price_2, price_3=payload.price_3)
     except (SaleUnitNotFoundError, SaleUnitInvalidError, SaleUnitNeedsConfirmationError) as e:
         _sale_unit_error(e)
 

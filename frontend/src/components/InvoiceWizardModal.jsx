@@ -19,6 +19,8 @@ import PrescriptionModal, { prescriptionNeedOf } from './PrescriptionModal';
 
 import { dueDateFor, isProntoTerm } from '../utils/paymentTerms';
 import { useAuthStore } from '../store/authStore';
+import { useCan } from '../utils/permissions';
+import { PRICE_LEVEL_PERMISSION, priceOf, levelsOf, levelOptions } from '../utils/priceLevels';
 import { isPessoaColetiva } from '../utils/customerType';
 import { useToastState } from './Toaster';
 
@@ -71,11 +73,13 @@ function addDays(dateStr, days) {
   return d.toISOString().slice(0, 10);
 }
 
-const emptyLine = { item_type: 'product', product_id: '', service_id: '', quantity: '1', discount_percent: '0', sale_unit_id: '' };
+const emptyLine = { item_type: 'product', product_id: '', service_id: '', quantity: '1', discount_percent: '0', sale_unit_id: '', price_level: '1' };
 
 const STEP_LABELS = ['Tipo de documento', 'Cliente e datas', 'Produtos e serviços', 'Pagamento', 'Revisão'];
 
 export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'create', referenceInvoiceId = null, stacked = false }) {
+  const can = useCan();
+  const canChoosePrice = can(PRICE_LEVEL_PERMISSION);  // Preço 2 / Preço 3 on a line
   const [activities, setActivities] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [products, setProducts] = useState([]);
@@ -307,7 +311,10 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
     const item = getLineItem(line);
     // Sold in one of the product's sale units (a box of 30): its own price and unit code.
     const saleUnit = line.item_type === 'product' && line.sale_unit_id ? (item?.sale_units || []).find((u) => u.id === line.sale_unit_id) : null;
-    const unitPrice = saleUnit ? Number(saleUnit.price) : (item ? Number(item.price || 0) : 0);
+    // its Preço 1 (default), 2 or 3 - the server reads the same price on the product when the document is issued
+    const level = line.item_type === 'product' ? Number(line.price_level || 1) : 1;
+    const priceSource = saleUnit || item;
+    const unitPrice = item ? (priceOf(priceSource, level) ?? Number(priceSource?.price || 0)) : 0;
     const vatRate = item ? Number(vatById[item.vat_id]?.rate || 0) : 0;
     const unitLabel = saleUnit ? saleUnit.unit_of_measure_code
       : (item?.unit_of_measure_id ? (unitById[item.unit_of_measure_id]?.code || item.unit_of_measure_code || '') : '');
@@ -400,7 +407,17 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
 
   function updateLine(index, field, value) {
     // Another article: the unit chosen for the previous one no longer applies.
-    setLines((prev) => prev.map((l, i) => (i === index ? { ...l, [field]: value, ...(field === 'product_id' ? { sale_unit_id: '' } : {}) } : l)));
+    // Another unit: the price level stays when that unit has it, otherwise Preço 1.
+    setLines((prev) => prev.map((l, i) => {
+      if (i !== index) return l;
+      const next = { ...l, [field]: value, ...(field === 'product_id' ? { sale_unit_id: '', price_level: '1' } : {}) };
+      if (field === 'sale_unit_id') {
+        const product = productById[l.product_id];
+        const source = value ? (product?.sale_units || []).find((u) => u.id === value) : product;
+        if (priceOf(source, Number(l.price_level || 1)) === null) next.price_level = '1';
+      }
+      return next;
+    }));
   }
 
   function updateLineType(index, itemType) {
@@ -525,6 +542,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
         lines: lines.map((l) => ({
           product_id: l.item_type === 'service' ? null : l.product_id,
           sale_unit_id: l.item_type === 'service' ? null : (l.sale_unit_id || null),
+        price_level: l.item_type === 'service' ? 1 : Number(l.price_level || 1),
           service_id: l.item_type === 'service' ? l.service_id : null,
           quantity: parseFloat(l.quantity),
           discount_percent: parseFloat(l.discount_percent) || 0,
@@ -560,6 +578,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
       const commonLines = lines.map((l) => ({
         product_id: l.item_type === 'service' ? null : l.product_id,
         sale_unit_id: l.item_type === 'service' ? null : (l.sale_unit_id || null),
+        price_level: l.item_type === 'service' ? 1 : Number(l.price_level || 1),
         service_id: l.item_type === 'service' ? l.service_id : null,
         quantity: parseFloat(l.quantity),
         discount_percent: parseFloat(l.discount_percent) || 0,
@@ -1053,7 +1072,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                                 {line.item_type === 'service' ? (
                                   <Select value={line.service_id} onChange={(v) => updateLine(idx, 'service_id', v)} options={services.map((s) => ({ value: s.id, label: s.code + ' - ' + s.name }))} placeholder="Selecionar serviço" />
                                 ) : (
-                                  <div className="flex items-center gap-1.5"><div className="flex-1 min-w-0"><Select value={line.product_id} onChange={(v) => updateLine(idx, 'product_id', v)} options={products.map((pr) => ({ value: pr.id, label: pr.code + ' - ' + pr.name + (pr.is_medicine ? ' (' + medicineSummary(pr) + ')' : '') }))} placeholder="Selecionar produto" /></div>{(productById[line.product_id]?.sale_units || []).length > 0 && (<div className="w-28 shrink-0"><Select value={line.sale_unit_id || 'base'} onChange={(v) => updateLine(idx, 'sale_unit_id', v === 'base' ? '' : v)} options={[{ value: 'base', label: productById[line.product_id]?.unit_of_measure_code || 'Unidade base' }, ...productById[line.product_id].sale_units.map((u) => ({ value: u.id, label: u.unit_of_measure_code + ' (' + u.factor + ')' }))]} /></div>)}</div>
+                                  <div className="flex items-center gap-1.5"><div className="flex-1 min-w-0"><Select value={line.product_id} onChange={(v) => updateLine(idx, 'product_id', v)} options={products.map((pr) => ({ value: pr.id, label: pr.code + ' - ' + pr.name + (pr.is_medicine ? ' (' + medicineSummary(pr) + ')' : '') }))} placeholder="Selecionar produto" /></div>{(productById[line.product_id]?.sale_units || []).length > 0 && (<div className="w-28 shrink-0"><Select value={line.sale_unit_id || 'base'} onChange={(v) => updateLine(idx, 'sale_unit_id', v === 'base' ? '' : v)} options={[{ value: 'base', label: productById[line.product_id]?.unit_of_measure_code || 'Unidade base' }, ...productById[line.product_id].sale_units.map((u) => ({ value: u.id, label: u.unit_of_measure_code + ' (' + u.factor + ')' }))]} /></div>)}{canChoosePrice && levelsOf(c.item ? ((line.sale_unit_id && (c.item.sale_units || []).find((u) => u.id === line.sale_unit_id)) || c.item) : null).length > 1 && (<div className="w-48 shrink-0"><Select value={String(line.price_level || 1)} onChange={(v) => updateLine(idx, 'price_level', v)} options={levelOptions((line.sale_unit_id && (c.item.sale_units || []).find((u) => u.id === line.sale_unit_id)) || c.item)} /></div>)}</div>
                                 )}
                               </td>
                               <td className="py-2 px-2">

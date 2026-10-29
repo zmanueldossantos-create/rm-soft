@@ -31,6 +31,8 @@ class ProductCreateRequest(BaseModel):
     barcode: str | None = None
     vat_id: uuid.UUID | None = None
     price: float
+    price_2: float | None = None  # «Preço 2» / «Preço 3»: empty = not offered at the sale
+    price_3: float | None = None
     min_stock_threshold: float = 0
     product_type: str = "BEM"
     unit_of_measure_id: uuid.UUID | None = None
@@ -72,6 +74,13 @@ class ProductCreateRequest(BaseModel):
         if v < 0:
             raise ValueError("Preço não pode ser negativo")
         return v
+
+    @field_validator("price_2", "price_3")
+    @classmethod
+    def validate_other_prices(cls, v: float | None) -> float | None:
+        if v is not None and v < 0:
+            raise ValueError("Preço não pode ser negativo")
+        return None if v is None else round(v, 2)
 
     @field_validator("purchase_price")
     @classmethod
@@ -95,6 +104,8 @@ class ProductUpdateRequest(BaseModel):
     barcode: str | None = None
     vat_id: uuid.UUID | None = None
     price: float
+    price_2: float | None = None  # «Preço 2» / «Preço 3»: empty = not offered at the sale
+    price_3: float | None = None
     min_stock_threshold: float = 0
     product_type: str = "BEM"
     unit_of_measure_id: uuid.UUID | None = None
@@ -136,6 +147,13 @@ class ProductUpdateRequest(BaseModel):
         if v < 0:
             raise ValueError("Preço não pode ser negativo")
         return v
+
+    @field_validator("price_2", "price_3")
+    @classmethod
+    def validate_other_prices(cls, v: float | None) -> float | None:
+        if v is not None and v < 0:
+            raise ValueError("Preço não pode ser negativo")
+        return None if v is None else round(v, 2)
 
     @field_validator("purchase_price")
     @classmethod
@@ -161,11 +179,13 @@ class ProductResponse(BaseModel):
     barcode: str | None
     vat_id: uuid.UUID | None = None
     price: float
+    price_2: float | None = None
+    price_3: float | None = None
     min_stock_threshold: float
     product_type: str
     unit_of_measure_id: uuid.UUID | None
     unit_of_measure_code: str | None = None  # attached by the list: the unit's code (UN, CX...)
-    sale_units: list[dict] = []  # attached by the list: active sale units (id, code, factor, price, barcode, is_fractional)
+    sale_units: list[dict] = []  # attached by the list: active sale units (id, code, factor, price, price_2, price_3, barcode, is_fractional)
     unit_is_fractional: bool = False  # attached by the list: the base unit takes decimal quantities
     batch_yield: float
 

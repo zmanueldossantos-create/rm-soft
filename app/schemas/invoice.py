@@ -5,7 +5,7 @@ See specification v6/v7, section 4.
 import uuid
 from datetime import date, datetime
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 
 class InvoiceLineCreateRequest(BaseModel):
@@ -14,6 +14,7 @@ class InvoiceLineCreateRequest(BaseModel):
     quantity: float
     discount_percent: float = 0
     sale_unit_id: uuid.UUID | None = None  # sold in one of the product's sale units; empty = its base unit
+    price_level: int = Field(default=1, ge=1, le=3)  # Preço 1 (default), 2 or 3 of the product / sale unit
 
     @field_validator("quantity")
     @classmethod
@@ -83,6 +84,7 @@ class InvoiceLineResponse(BaseModel):
     sale_unit_id: uuid.UUID | None = None
     unit_code_snapshot: str | None = None
     unit_factor: float = 1
+    price_level: int = 1
     discount_percent: float
     vat_rate_snapshot: float
     line_subtotal: float

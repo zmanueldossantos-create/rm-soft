@@ -35,6 +35,8 @@ class InvoiceLine(Base):
     # Snapshots: a later change of the product's units never alters an issued document.
     sale_unit_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("product_sale_units.id"), nullable=True)
     unit_code_snapshot: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    # the product's price the line was sold at: 1 («Preço 1», the default), 2 or 3 - unit_price holds its value
+    price_level: Mapped[int] = mapped_column(Integer, default=1, server_default="1", nullable=False)
     unit_factor: Mapped[float] = mapped_column(Numeric(14, 4), nullable=False, default=1, server_default="1")
     unit_price: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
     # A line invoiced from a guia de remessa: the GR it comes from (SAF-T OrderReferences) - its goods already left
