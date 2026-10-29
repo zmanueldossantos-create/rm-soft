@@ -133,11 +133,25 @@ def _fit_text(c, text: str, font: str, size: float, width: float) -> str:
     return text + "..."
 
 
-def _make_qr_image(data: str):
-    qr = qrcode.QRCode(box_size=3, border=1)
+AGT_LOGO = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", "agt_logo.png")
+AGT_LOGO_SIDE = 0.28  # of the QR's width: ~8% of its surface (the AGT: under 20%), well within what M corrects
+
+
+def _make_qr_image(data: str, agt_logo: bool = False):
+    # the AGT's specification: QR Model 2, version 4 (33x33), error correction M, byte mode, UTF-8 - and on an
+    # electronic document the AGT's logo in the middle
+    qr = qrcode.QRCode(version=4, error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=3, border=1)
     qr.add_data(data)
     qr.make(fit=True)
-    img = qr.make_image(fill_color="#1A1F1D", back_color="white")
+    img = qr.make_image(fill_color="#1A1F1D", back_color="white").get_image().convert("RGB")
+    if agt_logo and os.path.exists(AGT_LOGO):
+        from PIL import Image
+        side = int(img.size[0] * AGT_LOGO_SIDE)
+        logo = Image.open(AGT_LOGO).convert("RGB")
+        logo.thumbnail((side, side), Image.LANCZOS)
+        pad = Image.new("RGB", (logo.size[0] + 4, logo.size[1] + 4), "white")
+        pad.paste(logo, (2, 2))
+        img.paste(pad, ((img.size[0] - pad.size[0]) // 2, (img.size[1] - pad.size[1]) // 2))
     buffer = io.BytesIO()
     img.save(buffer, format="PNG")
     buffer.seek(0)
@@ -373,7 +387,7 @@ def generate_invoice_pdf_thermal(invoice: dict, lines: list[dict], company: dict
     center("(simulação)", size=6, color=TEXT_MUTED)
     y -= 1 * mm
 
-    qr_buffer = _make_qr_image(invoice["qr_code_data"])
+    qr_buffer = _make_qr_image(invoice["qr_code_data"], invoice.get("qr_agt_logo", False))
     qr_size = 16 * mm
     c.drawImage(ImageReader(qr_buffer), center_x - qr_size / 2, y - qr_size, width=qr_size, height=qr_size)
     y -= qr_size + 3 * mm
@@ -843,7 +857,7 @@ def generate_factura_style_a4(invoice, lines, company, customer):
             c.drawString(margin + 16 * mm, y, f"{b['account_number']}  IBAN: {b['iban']}")
             y -= 3.8 * mm
 
-    qr_buffer = _make_qr_image(invoice["qr_code_data"])
+    qr_buffer = _make_qr_image(invoice["qr_code_data"], invoice.get("qr_agt_logo", False))
     qr_size = 22 * mm
     c.drawImage(ImageReader(qr_buffer), page_width - margin - qr_size, margin + 6 * mm, width=qr_size, height=qr_size)
 
@@ -1020,7 +1034,7 @@ def generate_recibo_style_a4(invoice, company, customer):
 
     y = min(y, ry) - 10 * mm
 
-    qr_buffer = _make_qr_image(invoice["qr_code_data"])
+    qr_buffer = _make_qr_image(invoice["qr_code_data"], invoice.get("qr_agt_logo", False))
     qr_size = 26 * mm
     qr_x = page_width / 2 - qr_size / 2
     c.drawImage(ImageReader(qr_buffer), qr_x, y - qr_size, width=qr_size, height=qr_size)

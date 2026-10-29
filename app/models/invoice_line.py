@@ -21,6 +21,9 @@ class InvoiceLine(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     invoice_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("invoices.id"), nullable=False, index=True)
+    # 1, 2, 3... in the order typed - the lines of one document are created together, their order is this number
+    # (the AGT refuses a document whose lineNumber repeats or skips: E12)
+    line_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # Exactly one of product_id / service_id is set - a line sells either a physical
     # good (Product) or a Service (see Phase C decision to keep them as separate tables).
     product_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("products.id"), nullable=True)

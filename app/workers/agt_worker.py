@@ -1,77 +1,44 @@
 """
-AGT submission worker.
-See specification v6/v7, section 4.2: each invoice is submitted to a "Mock
-AGT" server within 30 seconds via an asynchronous Celery task, triggered
-immediately after invoice creation. Status flow: PENDENTE -> POR_ENVIAR -> ENVIADA/ERRO.
-
-No real AGT endpoint exists yet (homologation pending, Decision 2, section
-4.4) - this simulates the round trip locally with a realistic delay, and a
-small simulated failure rate so retry/error handling can be tested for
-real, not just assumed to work.
-
-Retry policy: automatic retry up to 3 times with exponential backoff
-(5s, 10s, 20s). After all retries are exhausted, the invoice is marked
-ERRO and can be manually re-sent from the app (see resubmit_invoice_to_agt
-route in invoices/routes.py - the "Reenviar" button).
+The AGT queue run by Celery (AGT_QUEUE=celery - Docker, SaaS): one step of a document's way to the AGT
+(app.services.agt_service.process: send, then read its validation), then the task schedules itself again when the
+document's next step is due (Invoice.agt_next_attempt_at). The database keeps the queue: a step lost with a stopped
+worker is found again by queue_for_agt («Reenviar») or by the next document's task (it runs every step due).
 """
 import asyncio
 import uuid
-
-from celery.exceptions import MaxRetriesExceededError
-from sqlalchemy import select
+from datetime import datetime, timezone
 
 from app.workers.celery_app import celery_app
 from app.core.database import AsyncSessionLocal, engine
-from app.models.invoice import Invoice, InvoiceStatus
-from app.services.agt_service import AgtSendError, send_document
-
-SimulatedAgtError = AgtSendError  # the name the retry policy below always used
+from app.models.invoice import Invoice
 
 
-async def _mark_status(invoice_id: str, status: InvoiceStatus) -> None:
-    async with AsyncSessionLocal() as db:
-        result = await db.execute(select(Invoice).where(Invoice.id == uuid.UUID(invoice_id)))
-        invoice = result.scalar_one_or_none()
-        if invoice is None:
-            return
-        invoice.status = status
-        await db.commit()
-
-
-async def _submit_invoice_async(invoice_id: str) -> None:
+async def _step(invoice_id: str) -> float | None:
+    """Runs what is due (this document first); returns in how many seconds this document's next step is due."""
+    from app.services.agt_queue import send_due
+    from app.services.agt_service import process
     try:
-        await _mark_status(invoice_id, InvoiceStatus.POR_ENVIAR)
-        await send_document(invoice_id)
-        await _mark_status(invoice_id, InvoiceStatus.ENVIADA)
+        async with AsyncSessionLocal() as db:
+            invoice = await db.get(Invoice, uuid.UUID(invoice_id))
+            if invoice is None:
+                return None
+            await process(db, invoice)
+            await db.commit()
+            await send_due(db)  # the others due meanwhile
+            await db.refresh(invoice)
+            if invoice.agt_next_attempt_at is None:
+                return None
+            return max((invoice.agt_next_attempt_at - datetime.now(timezone.utc)).total_seconds(), 1)
     finally:
-        # Celery (--pool=solo) calls asyncio.run() once per task, creating
-        # and destroying a fresh event loop each time. The shared engine's
-        # connection pool (designed for FastAPI's single persistent loop)
-        # otherwise leaves a connection bound to this now-dying loop, which
-        # crashes the NEXT task with "Event loop is closed". Disposing here,
-        # inside the still-live loop, prevents that stale handoff.
+        # Celery (--pool=solo) runs asyncio.run() once per task: the shared engine's pool must not keep a connection
+        # bound to this loop, about to close ("Event loop is closed" in the next task).
         await engine.dispose()
 
-@celery_app.task(
-    bind=True,
-    name="agt.submit_invoice",
-    autoretry_for=(SimulatedAgtError,),
-    retry_backoff=5,      # 5s, 10s, 20s
-    retry_backoff_max=60,
-    max_retries=3,
-)
-def submit_invoice_to_agt(self, invoice_id: str) -> str:
-    """
-    Celery entry point (sync) - Celery does not natively run async functions,
-    so this bridges into the async DB session via asyncio.run(). Retries
-    automatically on simulated failure; marks ERRO once retries are exhausted.
-    """
-    try:
-        asyncio.run(_submit_invoice_async(invoice_id))
-        return f"Invoice {invoice_id} submitted"
-    except SimulatedAgtError as e:
-        try:
-            raise self.retry(exc=e)
-        except MaxRetriesExceededError:
-            asyncio.run(_mark_status(invoice_id, InvoiceStatus.ERRO))
-            return f"Invoice {invoice_id} failed after retries - marked ERRO"
+
+@celery_app.task(name="agt.submit_invoice")
+def submit_invoice_to_agt(invoice_id: str) -> str:
+    delay = asyncio.run(_step(invoice_id))
+    if delay is not None:
+        submit_invoice_to_agt.apply_async(args=[invoice_id], countdown=delay)
+        return f"Invoice {invoice_id}: next step in {int(delay)} s"
+    return f"Invoice {invoice_id}: done"

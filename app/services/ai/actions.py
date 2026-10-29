@@ -159,7 +159,7 @@ async def _preview(db: AsyncSession, company_id: uuid.UUID, payload: dict) -> di
     try:
         invoice = await _issue(preview_db, company_id, payload, commit=False)
         lines = (await preview_db.execute(select(InvoiceLine).where(InvoiceLine.invoice_id == invoice.id)
-                                  .order_by(InvoiceLine.created_at))).scalars().all()
+                                  .order_by(InvoiceLine.line_number, InvoiceLine.created_at, InvoiceLine.id))).scalars().all()
         preview = {
             "linhas": [{"artigo": l.product_name_snapshot, "quantidade": float(l.quantity), "preco": _money(l.unit_price),
                         "iva_pct": float(l.vat_rate_snapshot), "total": _money(l.line_total)} for l in lines],

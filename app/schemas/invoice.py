@@ -126,6 +126,12 @@ class InvoiceResponse(BaseModel):
     retention_total: float
     document_reference: str | None
     issuance_mode: str
+    # Faturação Eletrónica: the AGT's receipt, its refusal reasons (ERRO) and what blocks the sending for now
+    agt_request_id: str | None = None
+    agt_errors: list | None = None
+    agt_last_error: str | None = None
+    agt_sent_at: datetime | None = None
+    agt_validated_at: datetime | None = None
     item_count: int = 0
     customer_name: str | None = None
     created_by_name: str | None = None  # attached: who issued it

@@ -98,6 +98,7 @@ $PyiArgs = @(
   "--exclude-module", "pkg_resources",
   "--add-data", "$(Join-Path $Raiz 'alembic');alembic",
   "--add-data", "$(Join-Path $Raiz 'alembic.ini');.",
+  "--add-data", "$(Join-Path $Raiz 'app\assets');app\assets",  # the AGT's logo, in the QR of an electronic document
   (Join-Path $Inst "rmsoft_servidor.py")
 )
 Push-Location $Raiz

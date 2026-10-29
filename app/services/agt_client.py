@@ -208,6 +208,15 @@ async def listar_series(ctx: AgtContext, **filters) -> dict:
     return await call(ctx, "listarSeries", body)
 
 
+async def registar_factura(ctx: AgtContext, documents: list[dict]) -> dict:
+    """Up to 30 documents (each with its own jwsDocumentSignature): the AGT answers a requestID at once, the validation
+    comes later (obterEstado)."""
+    body = {"schemaVersion": SCHEMA_VERSION, "submissionUUID": str(uuid.uuid4()), "taxRegistrationNumber": ctx.nif,
+            "submissionTimeStamp": timestamp(), "softwareInfo": ctx.software_info,
+            "numberOfEntries": len(documents), "documents": documents}
+    return await call(ctx, "registarFactura", body)
+
+
 async def obter_estado(ctx: AgtContext, request_id: str) -> dict:
     """The validation of the documents sent with registarFactura (resultCode, documentStatusList)."""
     body = envelope(ctx, {"taxRegistrationNumber": ctx.nif, "requestID": request_id})

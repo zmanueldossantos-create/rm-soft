@@ -427,6 +427,7 @@ async def create_invoice(
         retention_total += line_retention
 
         line_objects.append(InvoiceLine(
+            line_number=len(line_objects) + 1,
             product_id=line_product_id,
             service_id=line_service_id,
             product_name_snapshot=item_name,
@@ -820,7 +821,7 @@ async def get_credit_note_info(db: AsyncSession, company_id: uuid.UUID, invoice_
     # proposes more than create_credit_note accepts.
     ref_lines = list((await db.execute(
         select(InvoiceLine).where(InvoiceLine.invoice_id == reference_invoice.id)
-        .order_by(InvoiceLine.created_at, InvoiceLine.id)
+        .order_by(InvoiceLine.line_number, InvoiceLine.created_at, InvoiceLine.id)
     )).scalars().all())
     pool = await _remaining_to_credit_by_key(db, ref_lines, previous_notes)
     remaining_by_line: dict[str, float] = {}
@@ -924,7 +925,7 @@ async def create_credit_note(
             f"({reference_invoice.business_date.strftime('%d/%m/%Y')})"
         )
 
-    ref_lines_result = await db.execute(select(InvoiceLine).where(InvoiceLine.invoice_id == reference_invoice.id))
+    ref_lines_result = await db.execute(select(InvoiceLine).where(InvoiceLine.invoice_id == reference_invoice.id).order_by(InvoiceLine.line_number, InvoiceLine.created_at, InvoiceLine.id))
     ref_lines_by_id = {str(l.id): l for l in ref_lines_result.scalars().all()}
 
     # Caps are cumulative: what earlier credit notes on this invoice already credited counts against the original.
@@ -979,6 +980,7 @@ async def create_credit_note(
         retention_total += line_retention
 
         line_objects.append(InvoiceLine(
+            line_number=len(line_objects) + 1,
             product_id=ref_line.product_id,
             service_id=ref_line.service_id,
             product_name_snapshot=ref_line.product_name_snapshot,
@@ -1359,6 +1361,7 @@ async def create_debit_note(
         retention_total += line_retention
 
         line_objects.append(InvoiceLine(
+            line_number=len(line_objects) + 1,
             product_id=line_product_id,
             service_id=line_service_id,
             product_name_snapshot=item_name,
@@ -1760,6 +1763,7 @@ async def create_pro_forma(
         pro_forma_retention += line_retention
 
         line_objects.append(InvoiceLine(
+            line_number=len(line_objects) + 1,
             product_id=line_product_id,
             service_id=line_service_id,
             product_name_snapshot=item_name,
@@ -1902,7 +1906,7 @@ async def convert_pro_forma_to_invoice(
         raise QuoteExpiredError(f"O orçamento {source_code} {pro_forma.series}/{pro_forma.number} expirou em "
                                 f"{pro_forma.valid_until.strftime('%d/%m/%Y')} - emita um novo orçamento")
 
-    lines_result = await db.execute(select(InvoiceLine).where(InvoiceLine.invoice_id == pro_forma.id))
+    lines_result = await db.execute(select(InvoiceLine).where(InvoiceLine.invoice_id == pro_forma.id).order_by(InvoiceLine.line_number, InvoiceLine.created_at, InvoiceLine.id))
     pf_lines = lines_result.scalars().all()
     lines_input = [
         {
@@ -2060,6 +2064,6 @@ async def get_invoice_with_lines(db: AsyncSession, company_id: uuid.UUID, invoic
     if invoice is None:
         raise InvoiceNotFoundError("Fatura não encontrada")
 
-    lines_result = await db.execute(select(InvoiceLine).where(InvoiceLine.invoice_id == invoice_id))
+    lines_result = await db.execute(select(InvoiceLine).where(InvoiceLine.invoice_id == invoice_id).order_by(InvoiceLine.line_number, InvoiceLine.created_at, InvoiceLine.id))
     lines = list(lines_result.scalars().all())
     return invoice, lines

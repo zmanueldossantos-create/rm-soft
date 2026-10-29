@@ -139,7 +139,9 @@ não fiscal). Mesmas séries, numeração, IVA, stock e períodos que nos ecrãs
 eletrónico). <b>Numerário não</b>: só é recebido na caixa.</li>
 <li><code>document_reference</code>: o n.º da encomenda no site - impresso no documento e pesquisável.</li>
 <li>Faturação Eletrónica: uma FT/FR segue logo para a AGT; <code>agt.status</code> passa de <code>PENDENTE</code> a
-<code>ENVIADA</code> (ou <code>ERRO</code>, a empresa reenvia). Consulte <code>GET /documents/{id}</code> ou siga com
+<code>ENVIADA</code> (recebida pela AGT) e depois a <code>VALIDADA</code> (<code>VALIDADA_P</code>: validada com
+penalização, enviada com mais de 24 h) - ou <code>ERRO</code> se a AGT a recusar (a empresa emite um documento
+corrigido). Sem internet o documento espera em <code>PENDENTE</code> e segue sozinho quando a ligação volta. Consulte <code>GET /documents/{id}</code> ou siga com
 <code>updated_since</code>. Empresa em modo manual, ou documento não fiscal (FP): <code>agt</code> é
 <code>null</code>.</li>
 <li>O PDF (o mesmo do RM SOFT, com QR code): <code>GET /documents/{id}/pdf</code> (<code>?format=a4</code> ou

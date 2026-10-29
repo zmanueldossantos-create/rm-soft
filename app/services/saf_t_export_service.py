@@ -245,7 +245,7 @@ async def export_saf_t_for_period(db: AsyncSession, company_id: uuid.UUID, year:
     invoices_data = []
     for inv in invoices:
         receipt_extra = await _receipt_extras(db, inv) if inv.invoice_type.value == "RECIBO" else {}
-        lines_result = await db.execute(select(InvoiceLine).where(InvoiceLine.invoice_id == inv.id).order_by(InvoiceLine.created_at, InvoiceLine.id))
+        lines_result = await db.execute(select(InvoiceLine).where(InvoiceLine.invoice_id == inv.id).order_by(InvoiceLine.line_number, InvoiceLine.created_at, InvoiceLine.id))
         lines = lines_result.scalars().all()
 
         invoices_data.append({

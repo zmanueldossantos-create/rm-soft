@@ -1,12 +1,15 @@
 """
-The AGT queue: every fiscal document is sent to the AGT right after it is issued (section 4.2), retried on failure.
+The AGT queue: every document issued in Faturação Eletrónica is sent to the AGT right after it is issued, then its
+validation is read (app.services.agt_service - one step at a time, the document's agt_next_attempt_at saying when the
+next one is due). The database IS the queue: nothing is lost when the server stops, a document still due goes when it
+starts again.
 
-Two ways, chosen by AGT_QUEUE (app.core.config):
-  celery - Celery + Redis (Docker, SaaS): queue_for_agt fires the task (app/workers/agt_worker.py).
-  base   - the database IS the queue (Windows installation, no Redis): queue_for_agt marks the document due
-           (agt_next_attempt_at); agt_queue_loop, started with the server, sends what is due, one document after
-           another, retrying after 5 s, 10 s, 20 s - then ERRO (the «Reenviar» button queues it again). Nothing is lost
-           when the PC stops: a document still due is sent when the server starts again.
+Two ways to run the steps, chosen by AGT_QUEUE (app.core.config):
+  celery - Celery + Redis (Docker, SaaS): queue_for_agt fires the task (app/workers/agt_worker.py), which runs a step
+           and schedules itself again when another one is due;
+  base   - the server's own loop (Windows installation, no Redis): agt_queue_loop runs what is due every 5 seconds (at
+           once after a new document).
+A network failure never makes a document ERRO: only the AGT refusing it does («I», or its data refused).
 """
 import asyncio
 import logging
@@ -19,8 +22,6 @@ from app.core.config import get_settings
 from app.models.invoice import Invoice, InvoiceStatus
 
 log = logging.getLogger(__name__)
-MAX_RETRIES = 3            # as the Celery task: 3 retries after the first attempt
-RETRY_BASE_SECONDS = 5     # 5 s, 10 s, 20 s
 POLL_SECONDS = 5
 _wake = asyncio.Event()    # a new document: the loop looks at once instead of waiting its 5 seconds
 
@@ -41,43 +42,39 @@ async def queue_for_agt(db: AsyncSession, invoice: Invoice) -> None:
     was issued in Faturação Eletrónica (sent_to_agt)."""
     if not sent_to_agt(invoice):
         return
-    if not _database_queue():
-        from app.workers.agt_worker import submit_invoice_to_agt
-        submit_invoice_to_agt.delay(str(invoice.id))
-        return
     invoice.agt_next_attempt_at = datetime.now(timezone.utc)
     invoice.agt_attempts = 0
     await db.commit()
     await db.refresh(invoice)  # the caller returns it: loaded again, never read lazily after the commit
+    if not _database_queue():
+        from app.workers.agt_worker import submit_invoice_to_agt
+        submit_invoice_to_agt.delay(str(invoice.id))
+        return
     _wake.set()
 
 
-async def send_due(db: AsyncSession, sender=None, now: datetime | None = None) -> int:
-    """Sends every document due now, one after another; returns how many were tried. sender: the AGT call
-    (app.services.agt_service.send_document - replaced in the tests)."""
-    from app.services.agt_service import AgtSendError, send_document
-    sender = sender or send_document
+async def send_due(db: AsyncSession, step=None, now: datetime | None = None) -> int:
+    """Runs the step of every document due now, oldest first (the numbering's order); returns how many. step: the AGT
+    step (app.services.agt_service.process - replaced in the tests)."""
+    from app.services.agt_service import process
+    step = step or process
     now = now or datetime.now(timezone.utc)
-    ids = (await db.execute(select(Invoice.id).where(Invoice.agt_next_attempt_at.is_not(None),
-                                                     Invoice.agt_next_attempt_at <= now,
-                                                     Invoice.issuance_mode == "ELETRONICA")
-                            .order_by(Invoice.agt_next_attempt_at).limit(50))).scalars().all()
+    ids = (await db.execute(select(Invoice.id).where(
+        Invoice.agt_next_attempt_at.is_not(None), Invoice.agt_next_attempt_at <= now,
+        Invoice.issuance_mode == "ELETRONICA",
+        Invoice.status.in_((InvoiceStatus.PENDENTE, InvoiceStatus.POR_ENVIAR, InvoiceStatus.ENVIADA)))
+        .order_by(Invoice.created_at, Invoice.number).limit(50))).scalars().all()
     for invoice_id in ids:
         invoice = await db.get(Invoice, invoice_id)
-        invoice.status = InvoiceStatus.POR_ENVIAR
-        await db.commit()
         try:
-            await sender(str(invoice_id))
-        except AgtSendError as e:
-            invoice.agt_attempts += 1
-            if invoice.agt_attempts > MAX_RETRIES:
-                invoice.status, invoice.agt_next_attempt_at = InvoiceStatus.ERRO, None
-                log.warning("AGT: %s em ERRO após %s tentativas (%s)", invoice_id, invoice.agt_attempts, e)
-            else:
-                delay = RETRY_BASE_SECONDS * 2 ** (invoice.agt_attempts - 1)
-                invoice.agt_next_attempt_at = datetime.now(timezone.utc) + timedelta(seconds=delay)
-        else:
-            invoice.status, invoice.agt_next_attempt_at = InvoiceStatus.ENVIADA, None
+            await step(db, invoice)
+        except Exception:  # noqa: BLE001 - one document never stops the others
+            log.exception("AGT: step failed for %s", invoice_id)
+            await db.rollback()
+            invoice = await db.get(Invoice, invoice_id)
+            if invoice.status == InvoiceStatus.POR_ENVIAR:
+                invoice.status = InvoiceStatus.PENDENTE
+            invoice.agt_next_attempt_at = datetime.now(timezone.utc) + timedelta(minutes=10)
         await db.commit()
     return len(ids)
 

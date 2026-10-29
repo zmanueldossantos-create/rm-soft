@@ -372,7 +372,7 @@ async def _sale_detail(db: AsyncSession, invoice) -> str:
     from app.models.payment import Payment
     from app.models.payment_method_catalog import PaymentMethodCatalog
     lines = (await db.execute(
-        select(InvoiceLine).where(InvoiceLine.invoice_id == invoice.id).order_by(InvoiceLine.created_at, InvoiceLine.id)
+        select(InvoiceLine).where(InvoiceLine.invoice_id == invoice.id).order_by(InvoiceLine.line_number, InvoiceLine.created_at, InvoiceLine.id)
     )).scalars().all()
     rows = []
     for line in lines[:MAX_SALE_LINES]:

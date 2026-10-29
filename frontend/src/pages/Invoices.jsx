@@ -24,9 +24,28 @@ import { useToastState } from '../components/Toaster';
 const STATUS_STYLE = {
   PENDENTE: 'bg-text-muted/10 text-text-muted',
   POR_ENVIAR: 'bg-accent/10 text-accent',
-  ENVIADA: 'bg-success/10 text-success',
+  ENVIADA: 'bg-accent/10 text-accent',
+  VALIDADA: 'bg-success/10 text-success',
+  VALIDADA_P: 'bg-amber-500/15 text-amber-500',
   ERRO: 'bg-danger/10 text-danger',
 };
+
+// Faturação Eletrónica: the document's way to the AGT (app.services.agt_service)
+const AGT_LABEL = {
+  PENDENTE: 'Por enviar', POR_ENVIAR: 'A enviar', ENVIADA: 'Enviada', VALIDADA: 'Validada', VALIDADA_P: 'Validada (penaliz.)', ERRO: 'Recusada',
+};
+const AGT_HINT = {
+  PENDENTE: 'À espera de envio para a AGT - segue sozinho (sem internet: quando a ligação voltar)',
+  POR_ENVIAR: 'A ser enviado para a AGT',
+  ENVIADA: 'Recebido pela AGT - a aguardar a validação',
+  VALIDADA: 'Validado pela AGT',
+  VALIDADA_P: 'Validado pela AGT com penalização: enviado com mais de 24 h de atraso',
+  ERRO: 'Recusado pela AGT - veja os motivos; corrija com uma nota de crédito e um novo documento',
+};
+
+function ptDateTime(iso) {
+  return iso ? new Date(iso).toLocaleString('pt-PT') : '-';
+}
 
 const INVOICE_TYPE_CODE = {
   FACTURA: 'FT',
@@ -611,15 +630,17 @@ export default function Invoices() {
                           </span>
                         ) : (
                           <div className="flex items-center gap-2">
-                            <span className={'text-[11px] font-semibold uppercase tracking-wide px-2.5 py-1 rounded ' + (STATUS_STYLE[inv.status] || '')}>
-                              {inv.status}
-                            </span>
-                            {(inv.status === 'ERRO' || inv.status === 'PENDENTE') && (
+                            <button type="button" onClick={() => openDetailModal(inv.id)}
+                              title={(AGT_HINT[inv.status] || '') + (inv.agt_last_error ? ' - ' + inv.agt_last_error : '')}
+                              className={'text-[11px] font-semibold uppercase tracking-wide px-2.5 py-1 rounded cursor-pointer ' + (STATUS_STYLE[inv.status] || '')}>
+                              {AGT_LABEL[inv.status] || inv.status}{inv.status === 'PENDENTE' && inv.agt_last_error ? ' !' : ''}
+                            </button>
+                            {(inv.status === 'PENDENTE' || (inv.status === 'ERRO' && !(inv.agt_errors || []).length)) && (
                               <button
                                 type="button"
                                 onClick={() => handleResubmit(inv.id)}
                                 disabled={resubmittingId === inv.id || !can('invoices:resubmit')}
-                                title="Reenviar para a AGT"
+                                title="Enviar agora para a AGT"
                                 className="inline-flex items-center justify-center w-6 h-6 rounded text-text-muted hover:text-accent disabled:opacity-50 transition-colors cursor-pointer"
                               >
                                 {resubmittingId === inv.id ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
@@ -778,13 +799,34 @@ export default function Invoices() {
               <div className="flex items-center gap-2">
                 {/* a working document never shows an AGT state: «Não fiscal», «Faturado» or «Expirado» */}
                 <span className={'text-[11px] font-semibold uppercase tracking-wide px-2.5 py-1 rounded ' + (workingDocumentState(detailInvoice)?.className || STATUS_STYLE[detailInvoice.status] || '')}>
-                  {workingDocumentState(detailInvoice)?.label || detailInvoice.status}
+                  {workingDocumentState(detailInvoice)?.label || (detailInvoice.issuance_mode === 'ELETRONICA' ? (AGT_LABEL[detailInvoice.status] || detailInvoice.status) : 'Manual')}
                 </span>
                 <span className="text-[11px] font-semibold uppercase tracking-wide px-2.5 py-1 rounded bg-bg-inset text-text-muted">
                   {detailInvoice.document_status}
                 </span>
               </div>
             </div>
+
+            {detailInvoice.issuance_mode === 'ELETRONICA' && !workingDocumentState(detailInvoice) && (
+              <div className={'border rounded-md px-3.5 py-3 text-[12px] flex flex-col gap-1.5 ' + (detailInvoice.status === 'ERRO' ? 'border-danger/40 bg-danger/5' : 'border-border bg-bg-inset')}>
+                <p className="text-[11px] uppercase tracking-wide text-text-muted">AGT - Faturação Eletrónica</p>
+                <p className="text-text-primary">{AGT_HINT[detailInvoice.status] || detailInvoice.status}</p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-text-muted">
+                  <span>Pedido AGT: <span className="font-mono text-text-primary">{detailInvoice.agt_request_id || '-'}</span></span>
+                  <span>Enviado: <span className="text-text-primary">{ptDateTime(detailInvoice.agt_sent_at)}</span></span>
+                  <span>Validado: <span className="text-text-primary">{ptDateTime(detailInvoice.agt_validated_at)}</span></span>
+                </div>
+                {(detailInvoice.agt_errors || []).length > 0 ? (
+                  <ul className="list-disc pl-5 text-danger">
+                    {detailInvoice.agt_errors.map((e, i) => (
+                      <li key={i}><span className="font-mono">{e.idError || e.errorCode}</span> {e.descriptionError || e.errorDescription}</li>
+                    ))}
+                  </ul>
+                ) : detailInvoice.agt_last_error ? (
+                  <p className="text-amber-500">{detailInvoice.agt_last_error}</p>
+                ) : null}
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>

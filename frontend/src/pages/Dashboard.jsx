@@ -64,8 +64,10 @@ function formatQty(value) {
 const STATUS_STYLE = {
   PENDENTE: { icon: Clock, color: 'text-text-muted', bg: 'bg-text-muted/10', label: 'Pendente' },
   POR_ENVIAR: { icon: Send, color: 'text-accent', bg: 'bg-accent/10', label: 'Por enviar' },
-  ENVIADA: { icon: CheckCircle2, color: 'text-success', bg: 'bg-success/10', label: 'Enviada' },
-  ERRO: { icon: XCircle, color: 'text-danger', bg: 'bg-danger/10', label: 'Erro' },
+  ENVIADA: { icon: Send, color: 'text-accent', bg: 'bg-accent/10', label: 'Enviada' },
+  VALIDADA: { icon: CheckCircle2, color: 'text-success', bg: 'bg-success/10', label: 'Validada' },
+  VALIDADA_P: { icon: CheckCircle2, color: 'text-amber-500', bg: 'bg-amber-500/10', label: 'Validada (penalização)' },
+  ERRO: { icon: XCircle, color: 'text-danger', bg: 'bg-danger/10', label: 'Recusada' },
 };
 
 export default function Dashboard() {

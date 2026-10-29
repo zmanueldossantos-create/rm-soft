@@ -10,17 +10,30 @@ from datetime import date, datetime
 import phonenumbers
 from typing import Literal
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 
 EMAIL_PATTERN = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 
 
+# A pessoa singular's NIF is often the number of their Bilhete de Identidade: 9 digits, 2 letters, 3 digits
+# (000415195LA035 - the AGT's own invoice model). A pessoa coletiva's NIF has digits only.
+BI_NIF = re.compile(r"^\d{9}[A-Z]{2}\d{3}$")
+
+
 def _validate_nif(v: str) -> str:
+    v = (v or "").strip().upper().replace(" ", "")
+    if BI_NIF.fullmatch(v):
+        return v
     if not v.isdigit():
-        raise ValueError("NIF inválido - deve conter apenas digitos")
+        raise ValueError("NIF inválido - só dígitos (empresa) ou o n.º do BI (pessoa singular: 9 dígitos, 2 letras, 3 dígitos)")
     if len(v) < 9:
         raise ValueError("NIF inválido - deve ter pelo menos 9 digitos")
     return v
+
+
+def _check_nif_for_person_type(nif: str, legal_person_type: str) -> None:
+    if BI_NIF.fullmatch(nif or "") and legal_person_type != "FISICA":
+        raise ValueError("Um NIF com letras (n.º do BI) é de uma pessoa singular - escolha o tipo «Pessoa singular»")
 
 
 def _validate_phone(v: str) -> str:
@@ -121,6 +134,11 @@ class CompanyCreateRequest(BaseModel):
     def validate_nif(cls, v: str) -> str:
         return _validate_nif(v)
 
+    @model_validator(mode="after")
+    def nif_matches_person_type(self):
+        _check_nif_for_person_type(self.nif, self.legal_person_type)
+        return self
+
     @field_validator("email")
     @classmethod
     def validate_email(cls, v: str) -> str:
@@ -191,6 +209,11 @@ class CompanyUpdateRequest(BaseModel):
     @classmethod
     def validate_nif(cls, v: str) -> str:
         return _validate_nif(v)
+
+    @model_validator(mode="after")
+    def nif_matches_person_type(self):
+        _check_nif_for_person_type(self.nif, self.legal_person_type)
+        return self
 
     @field_validator("email")
     @classmethod

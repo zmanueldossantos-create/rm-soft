@@ -30,8 +30,10 @@ ISSUABLE = {"FT": "FACTURA", "FR": "FACTURA_RECIBO", "FP": "PRO_FORMA"}
 CODES = {"FACTURA": "FT", "FACTURA_RECIBO": "FR", "NOTA_CREDITO": "NC", "NOTA_DEBITO": "ND", "RECIBO": "RC",
          "PRO_FORMA": "FP", "ORCAMENTO": "OR"}
 FISCAL = {"FACTURA", "FACTURA_RECIBO", "NOTA_CREDITO", "NOTA_DEBITO", "RECIBO"}  # sent to the AGT
-AGT_STATES = {"PENDENTE": "À espera de envio", "POR_ENVIAR": "A enviar", "ENVIADA": "Aceite pela AGT",
-              "ERRO": "Erro no envio - a empresa reenvia"}
+AGT_STATES = {"PENDENTE": "À espera de envio", "POR_ENVIAR": "A enviar",
+              "ENVIADA": "Recebido pela AGT - a aguardar a validação", "VALIDADA": "Validado pela AGT",
+              "VALIDADA_P": "Validado pela AGT, com penalização (enviado com mais de 24 h)",
+              "ERRO": "Recusado pela AGT - a empresa emite um documento corrigido"}
 
 
 # -------------------------------------------------------------------------------------------------------- activities
@@ -152,7 +154,7 @@ async def document_view(db: AsyncSession, invoice: Invoice, with_lines: bool = T
     }
     if with_lines:
         lines = (await db.execute(select(InvoiceLine).where(InvoiceLine.invoice_id == invoice.id)
-                                  .order_by(InvoiceLine.created_at, InvoiceLine.id))).scalars().all()
+                                  .order_by(InvoiceLine.line_number, InvoiceLine.created_at, InvoiceLine.id))).scalars().all()
         view["lines"] = [{
             "product_id": str(l.product_id) if l.product_id else None,
             "service_id": str(l.service_id) if l.service_id else None,

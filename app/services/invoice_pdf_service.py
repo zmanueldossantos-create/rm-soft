@@ -161,7 +161,9 @@ async def render_invoice_pdf(db: AsyncSession, company_id: uuid.UUID, invoice_id
         "amount_in_words": amount_in_words,
         "atcud": invoice.atcud,
         "invoice_hash": invoice.invoice_hash,
-        "qr_code_data": invoice.qr_code_data,
+        "qr_code_data": await _qr_data(db, invoice),
+        "qr_agt_logo": (invoice.issuance_mode.value if hasattr(invoice.issuance_mode, "value")
+                        else invoice.issuance_mode) == "ELETRONICA",
         "reference_invoice": reference_invoice_dict,
         "created_at": invoice.created_at,  # the time of recording: "Data de emissao: 08/10/2026 - 15h45"
         "payments": payments_list,
@@ -240,3 +242,13 @@ async def render_invoice_pdf(db: AsyncSession, company_id: uuid.UUID, invoice_id
         pdf_bytes = generate_invoice_pdf_thermal(invoice_dict, lines_dict, company_dict, customer)
 
     return pdf_bytes, f"{invoice.series}-{invoice.number}-{format}.pdf"
+
+
+async def _qr_data(db: AsyncSession, invoice: Invoice) -> str:
+    """Faturação Eletrónica: the AGT's page of the document (the QR the AGT asks for). Otherwise the stored payload."""
+    mode = invoice.issuance_mode.value if hasattr(invoice.issuance_mode, "value") else invoice.issuance_mode
+    if mode != "ELETRONICA":
+        return invoice.qr_code_data
+    from app.services.agt_document_service import document_no, qr_url, type_code
+    company = await db.get(Company, invoice.company_id)
+    return qr_url(company.nif, document_no(await type_code(db, invoice), invoice))

@@ -16,7 +16,7 @@ from datetime import date, datetime
 
 from sqlalchemy import String, Numeric, Integer, Date, DateTime, ForeignKey, Enum, func, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 from app.core.database import Base
 
@@ -32,9 +32,15 @@ class InvoiceType(str, enum.Enum):
 
 
 class InvoiceStatus(str, enum.Enum):
+    """The document's way to the AGT (Faturação Eletrónica - app.services.agt_service): PENDENTE to be sent (also while
+    the AGT cannot be reached, or the set-up blocks the sending: agt_last_error says why), POR_ENVIAR being sent,
+    ENVIADA registered by the AGT (requestID) and waiting for its validation, VALIDADA valid (V), VALIDADA_P valid
+    with a penalty (P - sent more than 24 h late), ERRO refused by the AGT (I - agt_errors: the AGT's reasons)."""
     PENDENTE = "PENDENTE"
     POR_ENVIAR = "POR_ENVIAR"
     ENVIADA = "ENVIADA"
+    VALIDADA = "VALIDADA"
+    VALIDADA_P = "VALIDADA_P"
     ERRO = "ERRO"
 
 
@@ -92,6 +98,13 @@ class Invoice(Base):
     # how many attempts failed so far
     agt_next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
     agt_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    # Faturação Eletrónica: the AGT's receipt of the sending (registarFactura), its refusal reasons (I), what blocks the
+    # sending for now (no access, software not certified...) and when it was sent / validated
+    agt_request_id: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    agt_errors: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    agt_last_error: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    agt_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    agt_validated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Fiscal lifecycle - separate from the AGT submission `status` above. See Video 5:
     # a Nota de Credito referencing this invoice moves it to RECTIFICADO/RECTIFICADO_PARCIAL/ANULADO.
     document_status: Mapped[DocumentLifecycleStatus] = mapped_column(Enum(DocumentLifecycleStatus), nullable=False, default=DocumentLifecycleStatus.EMITIDO)

@@ -434,10 +434,9 @@ async def resubmit_invoice(
     current_user: User = Depends(require_permission("invoices:resubmit")),
 ):
     """
-    Manually re-queues an invoice for AGT submission - the "Reenviar"
-    button, for invoices stuck in ERRO (or PENDENTE if the worker missed
-    the original task, e.g. after a restart). See retry policy in
-    agt_worker.py.
+    «Enviar agora»: the document's next step to the AGT now (sent, or its validation read) - for a document waiting
+    (no internet, the set-up blocking it) or an old ERRO of a failed sending. A document the AGT refused (agt_errors)
+    is not sent again: same number refused (E46). See app.services.agt_service.
     """
     result = await db.execute(
         select(Invoice).where(Invoice.id == invoice_id, Invoice.company_id == current_user.company_id)
@@ -450,9 +449,17 @@ async def resubmit_invoice(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                             detail="Documento emitido em modo manual: não é enviado à AGT (é comunicado pelo SAF-T)")
 
-    invoice.status = InvoiceStatus.PENDENTE
+    if invoice.status in (InvoiceStatus.VALIDADA, InvoiceStatus.VALIDADA_P):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Documento já validado pela AGT")
+    if invoice.status == InvoiceStatus.ERRO and invoice.agt_errors:
+        # the AGT refused THIS document: the same number is never accepted again (E46) - it is corrected by a new one
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail="A AGT recusou este documento - não pode ser reenviado com o mesmo número: "
+                                   "anule-o com uma nota de crédito e emita um novo documento corrigido")
+    if invoice.status in (InvoiceStatus.ERRO, InvoiceStatus.POR_ENVIAR):
+        invoice.status = InvoiceStatus.PENDENTE
     await db.commit()
     await db.refresh(invoice)
 
-    await queue_for_agt(db, invoice)
+    await queue_for_agt(db, invoice)  # sent (or its validation read) now
     return invoice

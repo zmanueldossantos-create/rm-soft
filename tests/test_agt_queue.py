@@ -1,7 +1,7 @@
 """
-The AGT queue kept in the database (AGT_QUEUE=base, the Windows installation without Redis): a fiscal document is
-queued when issued, sent by the server's loop, retried after 5 s, 10 s, 20 s, then ERRO; «Reenviar» queues it again.
-With AGT_QUEUE=celery nothing changes: the Celery task is fired.
+The AGT queue kept in the database: a document issued in Faturação Eletrónica is queued when issued (agt_next_attempt_at)
+and its steps run by the server's loop (AGT_QUEUE=base) or by the Celery task (AGT_QUEUE=celery, fired at once); a step
+that fails unexpectedly does not stop the others. The steps themselves: tests/test_agt_documents.py.
 """
 from datetime import datetime, timedelta, timezone
 
@@ -10,7 +10,6 @@ import pytest
 from app.core.config import get_settings
 from app.models.invoice import InvoiceStatus
 from app.services import agt_queue
-from app.services.agt_service import AgtSendError
 from app.services.invoice_service import create_invoice
 from app.workers.agt_worker import submit_invoice_to_agt
 
@@ -36,7 +35,7 @@ async def test_celery_mode_fires_the_task(db, company_with_essentials, monkeypat
     monkeypatch.setattr(agt_queue, "sent_to_agt", lambda invoice: True)  # as issued in Faturação Eletrónica
     monkeypatch.setattr(get_settings(), "AGT_QUEUE", "celery")  # whatever this PC's .env says
     invoice = await _invoice(db, company_with_essentials)
-    assert sent == [str(invoice.id)] and invoice.agt_next_attempt_at is None
+    assert sent == [str(invoice.id)] and invoice.agt_next_attempt_at is not None  # the queue is the database
 
 
 async def test_a_manual_document_is_never_sent(db, company_with_essentials, monkeypatch):
@@ -54,7 +53,7 @@ async def test_a_manual_document_is_never_sent(db, company_with_essentials, monk
         invoice = await create_invoice(db, ctx["company"].id, ctx["activity"].id, customer_id=None,
                                        invoice_type="FACTURA", lines_input=lines)
         assert invoice.issuance_mode == "MANUAL" and invoice.agt_next_attempt_at is None
-    assert await agt_queue.send_due(db, sender=lambda _: pytest.fail("not sent"), now=datetime.now(timezone.utc)) == 0
+    assert await agt_queue.send_due(db, step=lambda *_: pytest.fail("not sent"), now=datetime.now(timezone.utc)) == 0
 
     await seed_permission_catalog(db)
     await seed_default_role_permissions(db, ctx["company"].id)
@@ -73,37 +72,29 @@ async def test_a_manual_document_is_never_sent(db, company_with_essentials, monk
         app.dependency_overrides.pop(get_db, None)
 
 
-async def test_database_mode_sends_retries_then_erro(db, company_with_essentials, monkeypatch, mark_electronic):
+async def test_database_mode_runs_the_due_steps(db, company_with_essentials, monkeypatch, mark_electronic):
     monkeypatch.setattr(get_settings(), "AGT_QUEUE", "base")
     monkeypatch.setattr(submit_invoice_to_agt, "delay", lambda invoice_id: pytest.fail("Celery must not be used"))
-    invoice = await _invoice(db, company_with_essentials)
-    invoice_id = invoice.id
+    ctx = company_with_essentials
+    lines = [{"service_id": await _service(db, ctx), "quantity": 1}]
+    first, second = [await create_invoice(db, ctx["company"].id, ctx["activity"].id, customer_id=None,
+                                          invoice_type="FACTURA", lines_input=lines) for _ in range(2)]
     await mark_electronic()  # issued in Faturação Eletrónica: queued
-    await db.refresh(invoice)
-    await agt_queue.queue_for_agt(db, invoice)
-    assert invoice.agt_next_attempt_at is not None and invoice.status == InvoiceStatus.PENDENTE
-
-    async def ok(_):
-        return None
-
-    async def down(_):
-        raise AgtSendError("sem rede")
-
-    assert await agt_queue.send_due(db, sender=down) == 1
-    await db.refresh(invoice)
-    assert invoice.status == InvoiceStatus.POR_ENVIAR and invoice.agt_attempts == 1
-    first_retry = invoice.agt_next_attempt_at
-    assert await agt_queue.send_due(db, sender=down) == 0  # not due yet (5 s later)
-    for expected_attempts in (2, 3, 4):
-        assert await agt_queue.send_due(db, sender=down, now=datetime.now(timezone.utc) + timedelta(minutes=5)) == 1
+    for invoice in (first, second):
         await db.refresh(invoice)
-        assert invoice.agt_attempts == expected_attempts
-    assert invoice.status == InvoiceStatus.ERRO and invoice.agt_next_attempt_at is None
-    assert first_retry is not None
+        await agt_queue.queue_for_agt(db, invoice)
+    steps = []
 
-    # «Reenviar»: queued again, then sent
-    await agt_queue.queue_for_agt(db, invoice)
-    assert await agt_queue.send_due(db, sender=ok) == 1
-    await db.refresh(invoice)
-    assert invoice.id == invoice_id and invoice.status == InvoiceStatus.ENVIADA and invoice.agt_next_attempt_at is None
-    assert await agt_queue.send_due(db, sender=ok) == 0
+    async def step(session, invoice):
+        steps.append(invoice.number)
+        if invoice.id == first.id:
+            raise RuntimeError("unexpected")  # one document failing never stops the others
+        invoice.status, invoice.agt_next_attempt_at = InvoiceStatus.ENVIADA, None
+
+    assert await agt_queue.send_due(db, step=step) == 2
+    assert steps == [first.number, second.number]  # oldest first
+    await db.refresh(first)
+    await db.refresh(second)
+    assert second.status == InvoiceStatus.ENVIADA and second.agt_next_attempt_at is None
+    assert first.agt_next_attempt_at > datetime.now(timezone.utc) + timedelta(minutes=9)  # tried again later
+    assert await agt_queue.send_due(db, step=step) == 0
