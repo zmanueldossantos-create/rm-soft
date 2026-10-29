@@ -66,7 +66,7 @@ class Product(Base):
     image_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     barcode: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
     price: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)  # preco de venda - «Preço 1», the default
-    # «Preço 2» / «Preço 3»: other prices the seller may choose (permission invoices:price_levels); None = not offered
+    # «Preço 2» / «Preço 3»: other prices the seller may choose (allowed per till, see PointOfSale.allow_price_levels); None = not offered
     price_2: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
     price_3: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
     purchase_price: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)  # preco de compra

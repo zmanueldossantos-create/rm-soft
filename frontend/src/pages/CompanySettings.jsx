@@ -184,7 +184,7 @@ export default function CompanySettings() {
   const [posLoadingActivityId, setPosLoadingActivityId] = useState(null);
   const [posModalOpen, setPosModalOpen] = useState(false);
   const [editingPosId, setEditingPosId] = useState(null);
-  const [posForm, setPosForm] = useState({ activityId: '', name: '', billetageEnabled: false, acceptClosingDifference: true, printClosingReport: false, printAfterSale: false, printTicket: true, printA4: false });
+  const [posForm, setPosForm] = useState({ activityId: '', name: '', billetageEnabled: false, acceptClosingDifference: true, printClosingReport: false, printAfterSale: false, printTicket: true, printA4: false, allowPriceLevels: false, allowFreePrice: false });
   const [posSaving, setPosSaving] = useState(false);
   const [posFormError, setPosFormError] = useToastState('error');
   const [assocByPos, setAssocByPos] = useState({});
@@ -407,14 +407,14 @@ export default function CompanySettings() {
 
   function openCreatePos(activityId) {
     setEditingPosId(null);
-    setPosForm({ activityId, name: '', billetageEnabled: false, acceptClosingDifference: true, printClosingReport: false, isDefault: false, printAfterSale: false, printTicket: true, printA4: false });
+    setPosForm({ activityId, name: '', billetageEnabled: false, acceptClosingDifference: true, printClosingReport: false, isDefault: false, printAfterSale: false, printTicket: true, printA4: false, allowPriceLevels: false, allowFreePrice: false });
     setPosFormError('');
     setPosModalOpen(true);
   }
 
   function openEditPos(pos) {
     setEditingPosId(pos.id);
-    setPosForm({ activityId: pos.activity_id, name: pos.name, billetageEnabled: pos.billetage_enabled || false, acceptClosingDifference: pos.accept_closing_difference !== false, printClosingReport: !!pos.print_closing_report, printAfterSale: !!pos.print_after_sale, printTicket: pos.print_ticket !== false, printA4: !!pos.print_a4, isDefault: !!pos.is_default });
+    setPosForm({ activityId: pos.activity_id, name: pos.name, billetageEnabled: pos.billetage_enabled || false, acceptClosingDifference: pos.accept_closing_difference !== false, printClosingReport: !!pos.print_closing_report, printAfterSale: !!pos.print_after_sale, printTicket: pos.print_ticket !== false, printA4: !!pos.print_a4, isDefault: !!pos.is_default, allowPriceLevels: !!pos.allow_price_levels, allowFreePrice: !!pos.allow_free_price });
     setPosFormError('');
     setPosModalOpen(true);
   }
@@ -425,9 +425,9 @@ export default function CompanySettings() {
     setPosSaving(true);
     try {
       if (editingPosId) {
-        await updatePointOfSale(editingPosId, posForm.name, posForm.billetageEnabled, { print_after_sale: posForm.printAfterSale, print_ticket: posForm.printTicket, print_a4: posForm.printA4, accept_closing_difference: posForm.acceptClosingDifference, print_closing_report: posForm.printClosingReport });
+        await updatePointOfSale(editingPosId, posForm.name, posForm.billetageEnabled, { print_after_sale: posForm.printAfterSale, print_ticket: posForm.printTicket, print_a4: posForm.printA4, accept_closing_difference: posForm.acceptClosingDifference, print_closing_report: posForm.printClosingReport, allow_price_levels: posForm.allowPriceLevels, allow_free_price: posForm.allowFreePrice });
       } else {
-        await createPointOfSale(posForm.activityId, posForm.name, posForm.billetageEnabled, { print_after_sale: posForm.printAfterSale, print_ticket: posForm.printTicket, print_a4: posForm.printA4, accept_closing_difference: posForm.acceptClosingDifference, print_closing_report: posForm.printClosingReport });
+        await createPointOfSale(posForm.activityId, posForm.name, posForm.billetageEnabled, { print_after_sale: posForm.printAfterSale, print_ticket: posForm.printTicket, print_a4: posForm.printA4, accept_closing_difference: posForm.acceptClosingDifference, print_closing_report: posForm.printClosingReport, allow_price_levels: posForm.allowPriceLevels, allow_free_price: posForm.allowFreePrice });
       }
       setPosModalOpen(false);
       await loadPointsOfSale(posForm.activityId);
@@ -1542,6 +1542,15 @@ export default function CompanySettings() {
               className="w-4 h-4 accent-accent cursor-pointer"
             />
             Exigir billetagem no fecho de caixa
+          </label>
+          {/* the prices the cashier of this till may use (the gestor always may) */}
+          <label className="flex items-center gap-2.5 text-[13px] text-text-primary cursor-pointer">
+            <input type="checkbox" checked={posForm.allowPriceLevels} onChange={(e) => setPosForm((p) => ({ ...p, allowPriceLevels: e.target.checked }))} className="w-4 h-4 accent-accent cursor-pointer" />
+            Permitir escolher o Preço 2 / Preço 3
+          </label>
+          <label className="flex items-center gap-2.5 text-[13px] text-text-primary cursor-pointer">
+            <input type="checkbox" checked={posForm.allowFreePrice} onChange={(e) => setPosForm((p) => ({ ...p, allowFreePrice: e.target.checked }))} className="w-4 h-4 accent-accent cursor-pointer" />
+            Permitir alterar o preço (preço livre)
           </label>
             {/* closing: accept a difference (always with a reason) or refuse it; propose the A4 closing report */}
             <label className="flex items-center gap-2 text-[13px] text-text-secondary cursor-pointer">

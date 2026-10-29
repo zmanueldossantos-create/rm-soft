@@ -1,5 +1,5 @@
 import { formatKz } from '../utils/format';
-import { PRICE_LEVEL_PERMISSION, priceOf, levelsOf, levelOptions } from '../utils/priceLevels';
+import { FREE, priceOf, levelOptions, hasPriceChoice, unitCost } from '../utils/priceLevels';
 import { guessLegalPersonType, isPessoaColetiva, LEGAL_PERSON_OPTIONS } from '../utils/customerType';
 import { API_ORIGIN } from '../api/config';
 import DateInput from '../components/DateInput';
@@ -68,7 +68,6 @@ function addDays(dateStr, days) {
 
 export default function Caixa() {
   const can = useCan();
-  const canChoosePrice = can(PRICE_LEVEL_PERMISSION);  // Preço 2 / Preço 3 on a cart line
   const currentUser = useAuthStore((state) => state.user);
   // can() trusts GESTOR by default while permissions is still null (avoids a menu flash) - but
   // loadInitial must know the REAL answer before deciding whether to call listProducts.
@@ -85,6 +84,11 @@ export default function Caixa() {
   const [myAssociation, setMyAssociation] = useState(null);
   const [associationChecked, setAssociationChecked] = useState(false);
   const [selectedPosId, setSelectedPosId] = useState('');
+  // The prices this till lets its cashier use (set by the gestor on the till, like the billetage); the gestor always may.
+  const tillPrices = {
+    levels: isGestor || !!allActivePos.find((p) => p.id === selectedPosId)?.allow_price_levels,
+    free: isGestor || !!allActivePos.find((p) => p.id === selectedPosId)?.allow_free_price,
+  };
 
   const [categories, setCategories] = useState([]);
   const [services, setServices] = useState([]);
@@ -788,6 +792,7 @@ export default function Caixa() {
         saleUnitId: saleUnit ? saleUnit.id : null,
         priceLevel: 1,  // Preço 1 by default - Preço 2 / 3 chosen on the line (permission)
         basePrices: isService ? null : { price: item.price, price_2: item.price_2, price_3: item.price_3 },
+        cost: isService ? null : { average_cost: item.average_cost, purchase_price: item.purchase_price },  // a free price's floor
         baseUnit: item.unit_of_measure_code || 'Un',
         basePrice: item.price,
         saleUnits: isService ? [] : (item.sale_units || []),
@@ -811,9 +816,9 @@ export default function Caixa() {
         if (l.key !== key) return l;
         // the price level chosen follows the unit when that unit has it, otherwise back to Preço 1
         const source = saleUnit || l.basePrices;
-        const level = priceOf(source, l.priceLevel || 1) !== null ? (l.priceLevel || 1) : 1;
+        const level = l.priceLevel !== FREE && priceOf(source, l.priceLevel || 1) !== null ? (l.priceLevel || 1) : 1;
         return {
-          ...l, key: newKey, saleUnitId: saleUnit ? saleUnit.id : null, priceLevel: level,
+          ...l, key: newKey, saleUnitId: saleUnit ? saleUnit.id : null, priceLevel: level, freePrice: '', belowCostOk: false,
           price: priceOf(source, level) ?? (saleUnit ? saleUnit.price : l.basePrice),
           unit: saleUnit ? saleUnit.unit_of_measure_code : l.baseUnit,
           fractional: saleUnit ? !!saleUnit.is_fractional : !!l.baseFractional,
@@ -833,12 +838,29 @@ export default function Caixa() {
   }
 
   // Preço 1 / 2 / 3 of a cart line (the server reads the same price on the product when the sale is made).
-  function changeCartLevel(key, level) {
+  function changeCartLevel(key, value) {
     setCart((prev) => prev.map((l) => {
       if (l.key !== key) return l;
+      if (value === FREE) return { ...l, priceLevel: FREE, freePrice: String(l.price), belowCostOk: false };  // typed next
+      const level = Number(value);
       const price = priceOf(priceSource(l), level);
-      return price === null ? l : { ...l, priceLevel: level, price };
+      return price === null ? l : { ...l, priceLevel: level, price, freePrice: '', belowCostOk: false };
     }));
+  }
+
+  // «Preço livre»: the price typed (Kz, without VAT) - the server refuses 0, and a price under the cost unconfirmed.
+  function changeCartFreePrice(key, text) {
+    setCart((prev) => prev.map((l) => {
+      if (l.key !== key) return l;
+      const value = parseFloat(String(text).replace(',', '.'));
+      return { ...l, freePrice: text, price: value > 0 ? value : 0, belowCostOk: false };
+    }));
+  }
+
+  // The cost of the unit sold on a cart line (null: not known).
+  function lineCost(line) {
+    const factor = line.saleUnitId ? Number((line.saleUnits || []).find((u) => u.id === line.saleUnitId)?.factor || 1) : 1;
+    return unitCost(line.cost, factor);
   }
 
   // THE barcode scan: a product's own barcode adds its base unit, the barcode of one of its units or packages adds
@@ -1734,13 +1756,26 @@ export default function Caixa() {
                               <td className="px-2 py-2 align-top text-right font-mono text-text-muted whitespace-nowrap">{formatKz(line.price)}</td>
                               <td className="px-2.5 py-2 align-top text-right font-mono text-text-primary font-medium whitespace-nowrap">{formatKz(lineTotal)}</td>
                             </tr>
-                            {line.productId && canChoosePrice && levelsOf(priceSource(line)).length > 1 && (
+                            {line.productId && hasPriceChoice(priceSource(line), tillPrices) && (
                               <tr>
                                 <td colSpan={4} className="px-2.5 pb-2">
-                                  {/* Preço 1 / 2 / 3: the seller sees what each price is worth */}
-                                  <div className="w-[210px]">
-                                    <Select compact value={String(line.priceLevel || 1)} onChange={(v) => changeCartLevel(line.key, Number(v))} options={levelOptions(priceSource(line))} />
+                                  {/* Preço 1 / 2 / 3: the seller sees what each price is worth; «Preço livre»: typed */}
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <div className="w-[210px]">
+                                      <Select compact value={String(line.priceLevel || 1)} onChange={(v) => changeCartLevel(line.key, v)} options={levelOptions(priceSource(line), tillPrices)} />
+                                    </div>
+                                    {line.priceLevel === FREE && (
+                                      <input type="text" inputMode="decimal" value={line.freePrice} onChange={(e) => changeCartFreePrice(line.key, e.target.value)}
+                                        placeholder="Preço (Kz, sem IVA)" autoFocus
+                                        className="w-32 bg-bg-inset border border-border rounded px-2 py-1 text-right font-mono text-[12px] text-text-primary outline-none focus:border-accent" />
+                                    )}
                                   </div>
+                                  {line.priceLevel === FREE && lineCost(line) !== null && line.price > 0 && line.price < lineCost(line) && (
+                                    <label className="flex items-center gap-1.5 mt-1.5 text-[11px] text-amber-500 [.light_&]:text-amber-700 cursor-pointer">
+                                      <input type="checkbox" checked={!!line.belowCostOk} onChange={(e) => setCart((prev) => prev.map((l) => (l.key === line.key ? { ...l, belowCostOk: e.target.checked } : l)))} className="accent-amber-500" />
+                                      Abaixo do custo ({formatKz(lineCost(line))}) - confirmo este preço
+                                    </label>
+                                  )}
                                 </td>
                               </tr>
                             )}

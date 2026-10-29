@@ -100,6 +100,32 @@ class EmptyInvoiceError(Exception):
     pass
 
 
+class LinePriceError(EmptyInvoiceError):
+    """A free price refused: 0, or under the cost without the seller's confirmation (422, like an empty invoice)."""
+
+
+def _free_price(product, line_input: dict, catalog_price: float, factor: float) -> tuple[float, int, float | None]:
+    """(unit price, price level, catalogue price) of a product line. A free price typed on the line (allowed on the
+    till, or by the gestor - see app.api.v1.issuable.ensure_line_prices) replaces the catalogue price: never 0, never
+    under the cost (average cost, else the purchase price, of the unit sold) unless the seller confirmed it
+    (below_cost_ok). The line keeps the catalogue price it replaced - price level 0, «Preço livre»."""
+    level = int(line_input.get("price_level") if line_input.get("price_level") is not None else 1)
+    free = line_input.get("free_price")
+    if free is None:
+        return catalog_price, level, None
+    free = round(float(free), 2)
+    if free <= 0:
+        raise LinePriceError(f"{product.name}: o preço livre tem de ser maior que zero")
+    unit_cost = product.average_cost if product.average_cost is not None else product.purchase_price
+    if unit_cost is not None and not line_input.get("below_cost_ok"):
+        cost = round(float(unit_cost) * float(factor or 1), 2)
+        if free < cost:
+            kz = lambda v: f"{v:,.2f}".replace(",", " ").replace(".", ",")  # noqa: E731 - 2 400,00
+            raise LinePriceError(f"{product.name}: o preço {kz(free)} está abaixo do custo ({kz(cost)}) - "
+                                 "confirme o preço abaixo do custo")
+    return free, 0, round(float(catalog_price), 2)
+
+
 class StockUnavailableError(Exception):
     """Raised when a line item cannot be fulfilled due to insufficient stock."""
     pass
@@ -401,8 +427,9 @@ async def create_invoice(
             tax_code = vat.tax_category if vat else "ISE"
             unit_price, line_unit_factor, line_sale_unit_id, line_unit_code = await _sale_unit_for_line(
                 db, company_id, product, line_input.get("sale_unit_id"), quantity=float(line_input["quantity"]),
-                price_level=int(line_input.get("price_level") or 1),
+                price_level=1 if line_input.get("free_price") is not None else int(line_input.get("price_level") or 1),
             )
+            unit_price, line_price_level, line_catalog_price = _free_price(product, line_input, unit_price, line_unit_factor)
             if line_unit_code is None:  # sold in its base unit
                 line_unit_code = await _base_unit_code(db, product)
             line_input["_unit_factor"] = line_unit_factor  # stock moves quantity x factor (base units)
@@ -450,7 +477,8 @@ async def create_invoice(
 
             exemption_reason_snapshot=line_exemption_reason,
             sale_unit_id=line_sale_unit_id,
-            price_level=int(line_input.get("price_level") or 1) if line_product_id else 1,
+            price_level=line_price_level if line_product_id else 1,
+            catalog_unit_price=line_catalog_price if line_product_id else None,
             unit_code_snapshot=line_unit_code,
             unit_factor=line_unit_factor,
             goods_movement_id=line_input.get("goods_movement_id"),
@@ -1004,7 +1032,8 @@ async def create_credit_note(
 
             exemption_reason_snapshot=ref_line.exemption_reason_snapshot,
             sale_unit_id=ref_line.sale_unit_id,
-            price_level=ref_line.price_level or 1,
+            price_level=ref_line.price_level if ref_line.price_level is not None else 1,
+            catalog_unit_price=ref_line.catalog_unit_price,
             unit_code_snapshot=ref_line.unit_code_snapshot,
             unit_factor=ref_line.unit_factor,
         ))
@@ -1343,8 +1372,9 @@ async def create_debit_note(
             tax_code = vat.tax_category if vat else "ISE"
             unit_price, line_unit_factor, line_sale_unit_id, line_unit_code = await _sale_unit_for_line(
                 db, company_id, product, line_input.get("sale_unit_id"), quantity=float(line_input["quantity"]),
-                price_level=int(line_input.get("price_level") or 1),
+                price_level=1 if line_input.get("free_price") is not None else int(line_input.get("price_level") or 1),
             )
+            unit_price, line_price_level, line_catalog_price = _free_price(product, line_input, unit_price, line_unit_factor)
             if line_unit_code is None:  # sold in its base unit
                 line_unit_code = await _base_unit_code(db, product)
             line_input["_unit_factor"] = line_unit_factor  # stock moves quantity x factor (base units)
@@ -1387,7 +1417,8 @@ async def create_debit_note(
 
             exemption_reason_snapshot=line_exemption_reason,
             sale_unit_id=line_sale_unit_id,
-            price_level=int(line_input.get("price_level") or 1) if line_product_id else 1,
+            price_level=line_price_level if line_product_id else 1,
+            catalog_unit_price=line_catalog_price if line_product_id else None,
             unit_code_snapshot=line_unit_code,
             unit_factor=line_unit_factor,
         ))
@@ -1746,8 +1777,9 @@ async def create_pro_forma(
             tax_code = vat.tax_category if vat else "ISE"
             unit_price, line_unit_factor, line_sale_unit_id, line_unit_code = await _sale_unit_for_line(
                 db, company_id, product, line_input.get("sale_unit_id"), quantity=float(line_input["quantity"]),
-                price_level=int(line_input.get("price_level") or 1),
+                price_level=1 if line_input.get("free_price") is not None else int(line_input.get("price_level") or 1),
             )
+            unit_price, line_price_level, line_catalog_price = _free_price(product, line_input, unit_price, line_unit_factor)
             if line_unit_code is None:  # sold in its base unit
                 line_unit_code = await _base_unit_code(db, product)
             line_input["_unit_factor"] = line_unit_factor  # stock moves quantity x factor (base units)
@@ -1791,7 +1823,8 @@ async def create_pro_forma(
 
             exemption_reason_snapshot=line_exemption_reason,
             sale_unit_id=line_sale_unit_id,
-            price_level=int(line_input.get("price_level") or 1) if line_product_id else 1,
+            price_level=line_price_level if line_product_id else 1,
+            catalog_unit_price=line_catalog_price if line_product_id else None,
             unit_code_snapshot=line_unit_code,
             unit_factor=line_unit_factor,
         ))
@@ -1920,7 +1953,7 @@ async def convert_pro_forma_to_invoice(
         {
             "product_id": line.product_id,
             "sale_unit_id": line.sale_unit_id,  # the converted invoice keeps the unit sold
-            "price_level": line.price_level or 1,  # and the price chosen
+            "price_level": line.price_level if line.price_level is not None else 1,  # and the price chosen
             "service_id": line.service_id,
             "quantity": float(line.quantity),
             "discount_percent": float(line.discount_percent or 0),

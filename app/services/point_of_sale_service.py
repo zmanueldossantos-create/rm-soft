@@ -64,6 +64,7 @@ async def create_point_of_sale(
     billetage_enabled: bool = False,
     print_after_sale: bool = False, print_ticket: bool = True, print_a4: bool = False,
     accept_closing_difference: bool = True, print_closing_report: bool = False,
+    allow_price_levels: bool = False, allow_free_price: bool = False,
 ) -> PointOfSale:
     """Creates a POS under an Activity - the Activity must belong to the caller's company.
     is_default=True is only ever set internally by activity_service.create_activity, never
@@ -77,7 +78,8 @@ async def create_point_of_sale(
 
     pos = PointOfSale(company_id=company_id, activity_id=activity_id, name=name, is_default=is_default, billetage_enabled=billetage_enabled,
                       print_after_sale=print_after_sale, print_ticket=print_ticket, print_a4=print_a4,
-                      accept_closing_difference=accept_closing_difference, print_closing_report=print_closing_report)
+                      accept_closing_difference=accept_closing_difference, print_closing_report=print_closing_report,
+                      allow_price_levels=allow_price_levels, allow_free_price=allow_free_price)
     db.add(pos)
     await db.commit()
     await db.refresh(pos)
@@ -96,6 +98,7 @@ async def update_point_of_sale(
     db: AsyncSession, company_id: uuid.UUID, pos_id: uuid.UUID, name: str, billetage_enabled: bool = False,
     print_after_sale: bool = False, print_ticket: bool = True, print_a4: bool = False,
     accept_closing_difference: bool = True, print_closing_report: bool = False,
+    allow_price_levels: bool = False, allow_free_price: bool = False,
 ) -> PointOfSale:
     pos = await get_pos_or_raise(db, company_id, pos_id)
     # Renaming the Activity's default POS is blocked (see error below), but
@@ -110,6 +113,7 @@ async def update_point_of_sale(
     _check_printing(print_after_sale, print_ticket, print_a4)
     pos.print_after_sale, pos.print_ticket, pos.print_a4 = print_after_sale, print_ticket, print_a4
     pos.accept_closing_difference, pos.print_closing_report = accept_closing_difference, print_closing_report
+    pos.allow_price_levels, pos.allow_free_price = allow_price_levels, allow_free_price
     await db.commit()
     await db.refresh(pos)
     return pos

@@ -35,7 +35,7 @@ from app.services.cash_session_service import (
 )
 from app.services.pos_service import checkout, liquidate_pending_invoice, create_pro_forma_from_pos, NoOpenSessionError
 from app.services.invoice_service import ReferenceInvoiceTypeNotEligibleError
-from app.api.v1.issuable import ensure_issuable, ensure_may_bill_later, ensure_price_levels
+from app.api.v1.issuable import ensure_issuable, ensure_may_bill_later, ensure_line_prices
 from app.services.pos_documents_service import list_pos_documents
 from app.services.point_of_sale_service import PosNotFoundError
 from app.services.invoice_service import (
@@ -201,7 +201,7 @@ async def post_checkout(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("pos:checkout")),
 ):
-    await ensure_price_levels(db, current_user, payload.lines)
+    await ensure_line_prices(db, current_user, payload.lines, pos_id)
     try:
         await ensure_issuable(db, payload.invoice_type, "pos")
         await ensure_may_bill_later(db, current_user, payload.invoice_type)
@@ -218,8 +218,9 @@ async def post_checkout(
             prescription=payload.prescription.model_dump() if payload.prescription else None,
             insurance=payload.insurance.model_dump() if payload.insurance else None,
         )
-        from app.services.notification_service import notify_sale  # Notificações: «Venda»
+        from app.services.notification_service import notify_price_changed, notify_sale  # Notificações: «Venda»
         await notify_sale(db, current_user, invoice, pos_id)
+        await notify_price_changed(db, current_user, invoice, pos_id)  # «Preço alterado»: a free price
         await db.commit()
         return invoice
     except NoOpenSessionError as e:
@@ -252,7 +253,7 @@ async def post_create_pro_forma(
     current_user: User = Depends(require_permission("pos:proforma")),
 ):
     """Generates a Pro-forma (FP) from the Caixa screen - no payment, see pos_service.create_pro_forma_from_pos."""
-    await ensure_price_levels(db, current_user, payload.lines)
+    await ensure_line_prices(db, current_user, payload.lines, pos_id)
     try:
         return await create_pro_forma_from_pos(
             db, current_user.company_id, pos_id, current_user, payload.customer_id,
@@ -265,6 +266,10 @@ async def post_create_pro_forma(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except PeriodClosedError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except EmptyInvoiceError as e:  # a free price refused, among others
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    except ProductNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except SeriesNotConfiguredError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
 

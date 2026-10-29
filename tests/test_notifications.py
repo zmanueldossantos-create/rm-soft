@@ -136,7 +136,7 @@ async def test_the_screen(db, company_with_essentials):
             h = {"Authorization": "Bearer " + create_access_token(subject=str(ctx["gestor"].id), company_id=str(company_id),
                                                                   role="GESTOR")}
             view = (await client.get("/api/v1/company/me/notifications", headers=h)).json()
-            assert view["allowed"] and [e["code"] for e in view["events"]] == ["VENDA", "CAIXA_FECHADA"]
+            assert view["allowed"] and [e["code"] for e in view["events"]] == ["VENDA", "PRECO_ALTERADO", "CAIXA_FECHADA"]
             assert view["channels"] == {"EMAIL": False, "TELEGRAM": False, "WHATSAPP": False}
             made = await client.post("/api/v1/company/me/notifications/recipients", headers=h,
                                      json={"name": "Dono", "channel": "EMAIL", "address": "dono@empresa.ao", "events": ["VENDA"]})

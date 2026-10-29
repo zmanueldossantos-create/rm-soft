@@ -15,6 +15,10 @@ class InvoiceLineCreateRequest(BaseModel):
     discount_percent: float = 0
     sale_unit_id: uuid.UUID | None = None  # sold in one of the product's sale units; empty = its base unit
     price_level: int = Field(default=1, ge=1, le=3)  # Preço 1 (default), 2 or 3 of the product / sale unit
+    # a free price (Kz, without VAT) instead of the catalogue one - allowed on the till or by the gestor; below_cost_ok:
+    # the seller confirmed a price under the cost
+    free_price: float | None = Field(default=None, gt=0)
+    below_cost_ok: bool = False
 
     @field_validator("quantity")
     @classmethod
@@ -85,6 +89,7 @@ class InvoiceLineResponse(BaseModel):
     unit_code_snapshot: str | None = None
     unit_factor: float = 1
     price_level: int = 1
+    catalog_unit_price: float | None = None  # a free price: the catalogue price it replaced
     discount_percent: float
     vat_rate_snapshot: float
     line_subtotal: float

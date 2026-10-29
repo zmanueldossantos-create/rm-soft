@@ -10,6 +10,8 @@ class PosCreateRequest(BaseModel):
     activity_id: uuid.UUID
     name: str
     billetage_enabled: bool = False
+    allow_price_levels: bool = False  # the cashier may choose «Preço 2 / Preço 3»
+    allow_free_price: bool = False  # the cashier may type a free price
 
     print_after_sale: bool = False
     print_ticket: bool = True
@@ -21,6 +23,8 @@ class PosCreateRequest(BaseModel):
 class PosUpdateRequest(BaseModel):
     name: str
     billetage_enabled: bool = False
+    allow_price_levels: bool = False  # the cashier may choose «Preço 2 / Preço 3»
+    allow_free_price: bool = False  # the cashier may type a free price
 
     print_after_sale: bool = False
     print_ticket: bool = True
@@ -36,6 +40,8 @@ class PointOfSaleResponse(BaseModel):
     name: str
     is_active: bool
     billetage_enabled: bool
+    allow_price_levels: bool = False
+    allow_free_price: bool = False
 
     print_after_sale: bool
     print_ticket: bool

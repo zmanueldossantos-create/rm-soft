@@ -28,6 +28,11 @@ class PointOfSale(Base):
     # Denomination breakdown (billetagem) on open/close - toggle per cash point,
     # same field also exists on CashOffice (see cash_office.py).
     billetage_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # The prices the cashier of this till may use, set by the gestor like the billetage (the gestor himself always
+    # may): «Preço 2 / Preço 3» of the products, and a free price typed on the line (traced, never under the cost
+    # without confirmation, never 0 - see invoice_service._free_price).
+    allow_price_levels: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    allow_free_price: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
 
     # Printing after a sale at this till: off = nothing printed automatically (as before); on = the ticket, the A4,
     # or - both chosen - the cashier picks one. Set per till: two tills of one activity may differ.

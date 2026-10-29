@@ -411,6 +411,24 @@ async def notify_sale(db: AsyncSession, user, invoice, pos_id) -> None:
 
 
 @_safe
+async def notify_price_changed(db: AsyncSession, user, invoice, pos_id=None) -> None:
+    """PRECO_ALTERADO: a document sold at a free price (lines of price level 0) - each article with its catalogue
+    price and the price applied."""
+    from app.models.invoice_line import InvoiceLine
+    from app.models.point_of_sale import PointOfSale
+    rows = (await db.execute(select(InvoiceLine).where(InvoiceLine.invoice_id == invoice.id, InvoiceLine.price_level == 0)
+                             .order_by(InvoiceLine.line_number))).scalars().all()
+    if not rows:
+        return
+    pos = await db.get(PointOfSale, pos_id) if pos_id else None
+    detail = "\n".join(f"{l.product_name_snapshot}: {money(l.unit_price)} (catálogo {money(l.catalog_unit_price or 0)})"
+                       for l in rows)
+    await notify(db, invoice.company_id, "PRECO_ALTERADO",
+                 f"Preço alterado em {_document(invoice)}\n{detail}\n"
+                 f"Caixa: {pos.name if pos else '-'} · Vendedor: {user.full_name}", actor=user)
+
+
+@_safe
 async def notify_table_opened(db: AsyncSession, account) -> None:
     from app.models.activity import Activity
     user = await _user(db, account.opened_by_user_id)

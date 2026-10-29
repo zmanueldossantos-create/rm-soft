@@ -49,7 +49,7 @@ from app.services.invoice_service import (
     PaymentAmountMismatchError,
 )
 
-from app.api.v1.issuable import ensure_issuable, ensure_price_levels
+from app.api.v1.issuable import ensure_issuable, ensure_line_prices
 
 router = APIRouter(prefix="/api/v1/invoices", tags=["invoices"])
 
@@ -62,7 +62,7 @@ async def create_new_invoice(
     current_user: User = Depends(require_permission("invoices:issue")),
 ):
     """Creates an invoice with its lines, blocked if the fiscal period is closed."""
-    await ensure_price_levels(db, current_user, payload.lines)
+    await ensure_line_prices(db, current_user, payload.lines)
     await ensure_issuable(db, payload.invoice_type, "invoices")
     try:
         invoice = await create_invoice(
@@ -163,7 +163,7 @@ async def create_new_debit_note(
     current_user: User = Depends(require_permission("invoices:debit_note")),
 ):
     """Creates a Nota de Debito referencing an already-issued Factura/Factura-Recibo - see Video 5."""
-    await ensure_price_levels(db, current_user, payload.lines)
+    await ensure_line_prices(db, current_user, payload.lines)
     session = await get_open_session_for_user(db, current_user.company_id, current_user.id)
     try:
         debit_note = await create_debit_note(
@@ -247,7 +247,7 @@ async def create_new_pro_forma(
     current_user: User = Depends(require_permission("invoices:proforma")),
 ):
     """Creates a Fatura Pro-forma (FP) - a non-fiscal quote, never submitted to AGT."""
-    await ensure_price_levels(db, current_user, payload.lines)
+    await ensure_line_prices(db, current_user, payload.lines)
     await ensure_issuable(db, "PRO_FORMA", "invoices")
     try:
         pro_forma = await create_pro_forma(
@@ -280,7 +280,7 @@ async def create_new_orcamento(
     current_user: User = Depends(require_permission("invoices:quote")),
 ):
     """Creates an Orçamento (OR) - a quote to a customer, valid until a date; non-fiscal, never submitted to AGT."""
-    await ensure_price_levels(db, current_user, payload.lines)
+    await ensure_line_prices(db, current_user, payload.lines)
     await ensure_issuable(db, "ORCAMENTO", "invoices")
     try:
         quote = await create_pro_forma(

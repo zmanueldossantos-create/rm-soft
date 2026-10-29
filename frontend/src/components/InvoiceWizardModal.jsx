@@ -19,8 +19,7 @@ import PrescriptionModal, { prescriptionNeedOf } from './PrescriptionModal';
 
 import { dueDateFor, isProntoTerm } from '../utils/paymentTerms';
 import { useAuthStore } from '../store/authStore';
-import { useCan } from '../utils/permissions';
-import { PRICE_LEVEL_PERMISSION, priceOf, levelsOf, levelOptions } from '../utils/priceLevels';
+import { FREE, priceOf, levelOptions, hasPriceChoice, unitCost } from '../utils/priceLevels';
 import { isPessoaColetiva } from '../utils/customerType';
 import { useToastState } from './Toaster';
 
@@ -73,13 +72,14 @@ function addDays(dateStr, days) {
   return d.toISOString().slice(0, 10);
 }
 
-const emptyLine = { item_type: 'product', product_id: '', service_id: '', quantity: '1', discount_percent: '0', sale_unit_id: '', price_level: '1' };
+const emptyLine = { item_type: 'product', product_id: '', service_id: '', quantity: '1', discount_percent: '0', sale_unit_id: '', price_level: '1', free_price: '', below_cost_ok: false };
 
 const STEP_LABELS = ['Tipo de documento', 'Cliente e datas', 'Produtos e serviços', 'Pagamento', 'Revisão'];
 
 export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'create', referenceInvoiceId = null, stacked = false }) {
-  const can = useCan();
-  const canChoosePrice = can(PRICE_LEVEL_PERMISSION);  // Preço 2 / Preço 3 on a line
+  // Preço 2 / Preço 3 and the free price: in the Faturas (no till), the gestor only
+  const isGestor = useAuthStore((state) => state.user?.role) === 'GESTOR';
+  const priceRights = { levels: isGestor, free: isGestor };
   const [activities, setActivities] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [products, setProducts] = useState([]);
@@ -312,9 +312,13 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
     // Sold in one of the product's sale units (a box of 30): its own price and unit code.
     const saleUnit = line.item_type === 'product' && line.sale_unit_id ? (item?.sale_units || []).find((u) => u.id === line.sale_unit_id) : null;
     // its Preço 1 (default), 2 or 3 - the server reads the same price on the product when the document is issued
-    const level = line.item_type === 'product' ? Number(line.price_level || 1) : 1;
+    const free = line.item_type === 'product' && line.price_level === FREE;  // «Preço livre»: typed on the line
+    const level = line.item_type === 'product' && !free ? Number(line.price_level || 1) : 1;
     const priceSource = saleUnit || item;
-    const unitPrice = item ? (priceOf(priceSource, level) ?? Number(priceSource?.price || 0)) : 0;
+    const unitPrice = !item ? 0 : free ? (parseFloat(String(line.free_price).replace(',', '.')) || 0)
+      : (priceOf(priceSource, level) ?? Number(priceSource?.price || 0));
+    const cost = free && item ? unitCost(item, saleUnit ? saleUnit.factor : 1) : null;
+    const belowCost = cost !== null && unitPrice > 0 && unitPrice < cost;  // needs the seller's confirmation
     const vatRate = item ? Number(vatById[item.vat_id]?.rate || 0) : 0;
     const unitLabel = saleUnit ? saleUnit.unit_of_measure_code
       : (item?.unit_of_measure_id ? (unitById[item.unit_of_measure_id]?.code || item.unit_of_measure_code || '') : '');
@@ -340,7 +344,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
       : (item && line.item_type === 'product' && !unitFractional && Math.abs(qty - Math.round(qty)) > 1e-9
         ? item.name + ': a quantidade deve ser inteira (' + (unitLabel || 'unidade') + ')' : '');
     const quantityHint = quantityInvalid ? 'Quantidade invalida' : 'Quantidade inteira';
-    return { item, unitPrice, vatRate, unitLabel, unitFractional, quantityError, quantityHint, gross, discountAmount, subtotal, vatAmount, total, retentionAmount };
+    return { item, priceSource, free, cost, belowCost, unitPrice, vatRate, unitLabel, unitFractional, quantityError, quantityHint, gross, discountAmount, subtotal, vatAmount, total, retentionAmount };
   }
 
   const paidOnIssue = !!documentTypes.find((d) => d.code === INVOICE_TYPE_CODE[invoiceType])?.paid_on_issue;
@@ -410,11 +414,16 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
     // Another unit: the price level stays when that unit has it, otherwise Preço 1.
     setLines((prev) => prev.map((l, i) => {
       if (i !== index) return l;
-      const next = { ...l, [field]: value, ...(field === 'product_id' ? { sale_unit_id: '', price_level: '1' } : {}) };
+      const next = { ...l, [field]: value, ...(field === 'product_id' ? { sale_unit_id: '', price_level: '1', free_price: '', below_cost_ok: false } : {}) };
+      if (field === 'price_level' && value === FREE) next.free_price = String(computeLine(l).unitPrice);  // typed from here
+      if (field === 'free_price') next.below_cost_ok = false;
       if (field === 'sale_unit_id') {
         const product = productById[l.product_id];
         const source = value ? (product?.sale_units || []).find((u) => u.id === value) : product;
-        if (priceOf(source, Number(l.price_level || 1)) === null) next.price_level = '1';
+        if (l.price_level === FREE || priceOf(source, Number(l.price_level || 1)) === null) {
+          next.price_level = '1';
+          next.free_price = '';
+        }
       }
       return next;
     }));
@@ -542,7 +551,9 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
         lines: lines.map((l) => ({
           product_id: l.item_type === 'service' ? null : l.product_id,
           sale_unit_id: l.item_type === 'service' ? null : (l.sale_unit_id || null),
-        price_level: l.item_type === 'service' ? 1 : Number(l.price_level || 1),
+        price_level: l.item_type === 'service' || l.price_level === FREE ? 1 : Number(l.price_level || 1),
+        free_price: l.item_type !== 'service' && l.price_level === FREE ? (parseFloat(String(l.free_price).replace(',', '.')) || 0) : null,
+        below_cost_ok: !!l.below_cost_ok,
           service_id: l.item_type === 'service' ? l.service_id : null,
           quantity: parseFloat(l.quantity),
           discount_percent: parseFloat(l.discount_percent) || 0,
@@ -578,7 +589,9 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
       const commonLines = lines.map((l) => ({
         product_id: l.item_type === 'service' ? null : l.product_id,
         sale_unit_id: l.item_type === 'service' ? null : (l.sale_unit_id || null),
-        price_level: l.item_type === 'service' ? 1 : Number(l.price_level || 1),
+        price_level: l.item_type === 'service' || l.price_level === FREE ? 1 : Number(l.price_level || 1),
+        free_price: l.item_type !== 'service' && l.price_level === FREE ? (parseFloat(String(l.free_price).replace(',', '.')) || 0) : null,
+        below_cost_ok: !!l.below_cost_ok,
         service_id: l.item_type === 'service' ? l.service_id : null,
         quantity: parseFloat(l.quantity),
         discount_percent: parseFloat(l.discount_percent) || 0,
@@ -1072,7 +1085,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                                 {line.item_type === 'service' ? (
                                   <Select value={line.service_id} onChange={(v) => updateLine(idx, 'service_id', v)} options={services.map((s) => ({ value: s.id, label: s.code + ' - ' + s.name }))} placeholder="Selecionar serviço" />
                                 ) : (
-                                  <div className="flex items-center gap-1.5"><div className="flex-1 min-w-0"><Select value={line.product_id} onChange={(v) => updateLine(idx, 'product_id', v)} options={products.map((pr) => ({ value: pr.id, label: pr.code + ' - ' + pr.name + (pr.is_medicine ? ' (' + medicineSummary(pr) + ')' : '') }))} placeholder="Selecionar produto" /></div>{(productById[line.product_id]?.sale_units || []).length > 0 && (<div className="w-28 shrink-0"><Select value={line.sale_unit_id || 'base'} onChange={(v) => updateLine(idx, 'sale_unit_id', v === 'base' ? '' : v)} options={[{ value: 'base', label: productById[line.product_id]?.unit_of_measure_code || 'Unidade base' }, ...productById[line.product_id].sale_units.map((u) => ({ value: u.id, label: u.unit_of_measure_code + ' (' + u.factor + ')' }))]} /></div>)}{canChoosePrice && levelsOf(c.item ? ((line.sale_unit_id && (c.item.sale_units || []).find((u) => u.id === line.sale_unit_id)) || c.item) : null).length > 1 && (<div className="w-48 shrink-0"><Select value={String(line.price_level || 1)} onChange={(v) => updateLine(idx, 'price_level', v)} options={levelOptions((line.sale_unit_id && (c.item.sale_units || []).find((u) => u.id === line.sale_unit_id)) || c.item)} /></div>)}</div>
+                                  <><div className="flex items-center gap-1.5"><div className="flex-1 min-w-0"><Select value={line.product_id} onChange={(v) => updateLine(idx, 'product_id', v)} options={products.map((pr) => ({ value: pr.id, label: pr.code + ' - ' + pr.name + (pr.is_medicine ? ' (' + medicineSummary(pr) + ')' : '') }))} placeholder="Selecionar produto" /></div>{(productById[line.product_id]?.sale_units || []).length > 0 && (<div className="w-28 shrink-0"><Select value={line.sale_unit_id || 'base'} onChange={(v) => updateLine(idx, 'sale_unit_id', v === 'base' ? '' : v)} options={[{ value: 'base', label: productById[line.product_id]?.unit_of_measure_code || 'Unidade base' }, ...productById[line.product_id].sale_units.map((u) => ({ value: u.id, label: u.unit_of_measure_code + ' (' + u.factor + ')' }))]} /></div>)}{hasPriceChoice(c.priceSource, priceRights) && (<div className="w-56 shrink-0"><Select value={String(line.price_level || 1)} onChange={(v) => updateLine(idx, 'price_level', v)} options={levelOptions(c.priceSource, priceRights)} /></div>)}{c.free && (<input type="text" inputMode="decimal" value={line.free_price} onChange={(e) => updateLine(idx, 'free_price', e.target.value)} placeholder="Preço sem IVA" className="w-28 shrink-0 bg-bg-inset border border-border rounded-md px-2.5 py-2.5 text-sm text-right font-mono text-text-primary outline-none focus:border-accent" />)}</div>{c.belowCost && (<label className="flex items-center gap-1.5 mt-1.5 text-[11px] text-amber-500 [.light_&]:text-amber-700 cursor-pointer"><input type="checkbox" checked={!!line.below_cost_ok} onChange={(e) => updateLine(idx, 'below_cost_ok', e.target.checked)} className="accent-amber-500" />Abaixo do custo ({formatMoney(c.cost)}) - confirmo este preço</label>)}</>
                                 )}
                               </td>
                               <td className="py-2 px-2">

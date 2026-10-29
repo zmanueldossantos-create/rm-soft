@@ -29,6 +29,8 @@ EVENTS: dict[str, Event] = {e.code: e for e in (
     Event("MESA_ABERTA", "Mesa aberta", "Uma conta de mesa aberta: a mesa, quem a abriu", "OPEN_ACCOUNTS"),
     Event("MESA_FECHADA", "Mesa fechada", "Uma conta de mesa fechada: a mesa, o total, o documento", "OPEN_ACCOUNTS"),
     Event("VENDA", "Venda", "Cada venda (ou só acima do montante mínimo escolhido): o documento, o total, a caixa"),
+    Event("PRECO_ALTERADO", "Preço alterado", "Uma venda com um preço livre (diferente do catálogo): o artigo, o "
+          "preço do catálogo e o aplicado, a caixa, quem vendeu"),
     Event("CAIXA_FECHADA", "Caixa fechada", "O fecho de uma caixa: esperado, contado e a diferença"),
     Event("STOCK_BAIXO", "Stock baixo", "Um produto abaixo do seu stock mínimo", "STOCK", by_others=False),
     Event("AGT_CONTINGENCIA", "AGT: contingência", "A AGT deixou de responder (entrada em contingência) ou voltou "

@@ -30,11 +30,26 @@ async def ensure_may_bill_later(db: AsyncSession, user, invoice_type) -> None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Não tem permissão para faturar (FT) na caixa")
 
 
-async def ensure_price_levels(db: AsyncSession, user, lines) -> None:
-    """A line sold at «Preço 2» or «Preço 3» needs the permission invoices:price_levels (the GESTOR always has it); the
-    «Preço 1» - the default - needs nothing more. The price itself is always read on the product by the server."""
-    if not any((getattr(line, "price_level", 1) or 1) > 1 for line in lines or []):
+async def ensure_line_prices(db: AsyncSession, user, lines, pos_id=None) -> None:
+    """«Preço 2 / Preço 3» and the free price of a line: the gestor always may; at the Caixa, the cashier only on a
+    till that allows it (set by the gestor on the till, like the billetage - not a profile permission, whatever the
+    plan); in the Faturas (no till) only the gestor. The prices themselves are always read / checked by the server."""
+    levels = any((getattr(line, "price_level", 1) or 1) > 1 for line in lines or [])
+    free = any(getattr(line, "free_price", None) is not None for line in lines or [])
+    if not (levels or free):
         return
-    if not await has_permission(db, user.company_id, user.role.value, "invoices:price_levels"):
+    role = user.role.value if hasattr(user.role, "value") else str(user.role)
+    if role == "GESTOR":
+        return
+    if pos_id is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
-                            detail="Não tem permissão para escolher o Preço 2 ou o Preço 3")
+                            detail="Só o gestor pode escolher o Preço 2 / Preço 3 ou um preço livre na fatura")
+    from app.models.point_of_sale import PointOfSale
+    pos = await db.get(PointOfSale, pos_id)
+    if pos is None or pos.company_id != user.company_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ponto de venda não encontrado")
+    if levels and not pos.allow_price_levels:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail="Esta caixa não permite escolher o Preço 2 ou o Preço 3")
+    if free and not pos.allow_free_price:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Esta caixa não permite alterar o preço")
