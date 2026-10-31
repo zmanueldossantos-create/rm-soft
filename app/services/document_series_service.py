@@ -113,7 +113,8 @@ def same_scope(company: Company, doc_type: DocumentType, year: int, establishmen
     numbers («FP FP2026/1» twice)."""
     if not doc_type.sent_to_agt:
         return select(DocumentSeries).where(DocumentSeries.company_id == company.id,
-                                            DocumentSeries.document_type_id == doc_type.id, DocumentSeries.year == year)
+                                            DocumentSeries.document_type_id == doc_type.id, DocumentSeries.year == year,
+                                            DocumentSeries.issuance_mode != TRAINING)
     contingency = contingency_indicator or "NORMAL"
     query = select(DocumentSeries).where(
         DocumentSeries.company_id == company.id,
@@ -303,12 +304,15 @@ async def get_or_create_current_series(db: AsyncSession, company: Company, docum
     year = _current_year()
 
     doc_type = await db.get(DocumentType, document_type_id)
+    if company.training_mode and doc_type is not None:
+        return await _training_series(db, company, doc_type, year)
     if doc_type is not None and not doc_type.sent_to_agt:
         # a working document never sent to the AGT: ONE series a year whatever the mode (it goes on after a switch to
         # ELETRONICA - a new one would repeat its numbers), made at its first document when there is none
         series = (await db.execute(select(DocumentSeries).where(
             DocumentSeries.company_id == company.id, DocumentSeries.document_type_id == document_type_id,
-            DocumentSeries.year == year, DocumentSeries.is_active == True)  # noqa: E712
+            DocumentSeries.year == year, DocumentSeries.is_active == True,  # noqa: E712
+            DocumentSeries.issuance_mode != TRAINING)
             .order_by(DocumentSeries.current_number.desc(), DocumentSeries.created_at))).scalars().first()
         if series is not None:
             return series
@@ -386,6 +390,34 @@ async def get_or_create_current_series(db: AsyncSession, company: Company, docum
     raise SeriesNotFoundError(_missing_series(company, doc_type, year))
 
 
+TRAINING = "FORMACAO"  # the issuance mode of the documents of the Modo formação (Company.training_mode)
+
+
+def document_mode(company: Company) -> str:
+    """The issuance mode a new document of this company carries: FORMACAO in Modo formação, its own mode otherwise."""
+    if company.training_mode:
+        return TRAINING
+    mode = company.issuance_mode
+    return mode.value if hasattr(mode, "value") else mode
+
+
+async def _training_series(db: AsyncSession, company: Company, doc_type: DocumentType, year: int) -> DocumentSeries:
+    """Modo formação: the type's own training series of the year (FR2026F), made at its first document - the real
+    numbering is never touched, it goes on where it stood when the company leaves the Modo formação."""
+    series = (await db.execute(select(DocumentSeries).where(
+        DocumentSeries.company_id == company.id, DocumentSeries.document_type_id == doc_type.id,
+        DocumentSeries.year == year, DocumentSeries.issuance_mode == TRAINING)
+        .order_by(DocumentSeries.created_at))).scalars().first()
+    if series is not None:
+        return series
+    series = new_series_row(company, doc_type, year, None, f"{doc_type.code}{year}F", "Modo formação", None, True)
+    series.issuance_mode = TRAINING
+    db.add(series)
+    await db.commit()
+    await db.refresh(series)
+    return series
+
+
 def _missing_series(company: Company, doc_type: DocumentType | None, year: int) -> str:
     """The message of a document without a series: which document, which year, and where to get its series."""
     code = doc_type.code if doc_type is not None else "este documento"
@@ -400,12 +432,15 @@ async def series_available(db: AsyncSession, company: Company, doc_type: Documen
     """Whether a document of this type can take a number now, without creating anything: the same rules as
     get_or_create_current_series (a series made automatically counts as available)."""
     year = _current_year()
+    if company.training_mode:
+        return True  # Modo formação: its own series, made at the first document
     if not doc_type.sent_to_agt:
         if company.issuance_mode == "ELETRONICA" or company.auto_series_year:
             return True
         return (await db.execute(select(DocumentSeries.id).where(
             DocumentSeries.company_id == company.id, DocumentSeries.document_type_id == doc_type.id,
-            DocumentSeries.year == year, DocumentSeries.is_active == True).limit(1))).first() is not None  # noqa: E712
+            DocumentSeries.year == year, DocumentSeries.is_active == True,  # noqa: E712
+            DocumentSeries.issuance_mode != TRAINING).limit(1))).first() is not None
     query = select(DocumentSeries.id).where(
         DocumentSeries.company_id == company.id, DocumentSeries.document_type_id == doc_type.id,
         DocumentSeries.year == year, DocumentSeries.issuance_mode == company.issuance_mode,

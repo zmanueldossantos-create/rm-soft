@@ -15,7 +15,7 @@ import enum
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, Enum, ForeignKey, Integer, Numeric, String, func
+from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Integer, Numeric, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -56,6 +56,7 @@ class GoodsMovement(Base):
     gross_total: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
     atcud: Mapped[str] = mapped_column(String(50), nullable=False)
     document_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    is_training: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)  # Modo formação
 
     status: Mapped[GoodsMovementStatus] = mapped_column(Enum(GoodsMovementStatus), nullable=False, default=GoodsMovementStatus.EMITIDA)
     invoice_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("invoices.id"), nullable=True)  # a GR invoiced

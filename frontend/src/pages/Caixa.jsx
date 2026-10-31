@@ -2929,7 +2929,12 @@ export default function Caixa() {
                   <tbody>
                     {recentInvoices.map((inv) => (
                       <tr key={inv.id} className="border-b border-border last:border-0 hover:bg-bg-inset">
-                        <td className="px-2.5 py-2 font-mono text-text-primary whitespace-nowrap">{DOC_CODE_BY_TYPE[inv.invoice_type] || inv.invoice_type} {inv.series}/{inv.number}</td>
+                        <td className="px-2.5 py-2 font-mono text-text-primary whitespace-nowrap">
+                          {DOC_CODE_BY_TYPE[inv.invoice_type] || inv.invoice_type} {inv.series}/{inv.number}
+                          {inv.issuance_mode === 'FORMACAO' && (
+                            <span className="ml-2 font-sans text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-500 [.light_&]:text-violet-700" title="Modo formação: sem valor fiscal">Formação</span>
+                          )}
+                        </td>
                         <td className="px-2.5 py-2 text-text-muted whitespace-nowrap">{new Date(inv.business_date).toLocaleDateString('pt-PT')}</td>
                         <td className="px-2.5 py-2 text-right font-mono text-text-muted whitespace-nowrap">{formatKz(Number(inv.total) - Number(inv.vat_total))} Kz</td>
                         <td className="px-2.5 py-2 text-right font-mono text-text-muted whitespace-nowrap">{formatKz(inv.vat_total)} Kz</td>

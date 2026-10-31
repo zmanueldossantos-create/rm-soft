@@ -212,6 +212,7 @@ async def build(db, today: date) -> dict:
         plan_id=plan.id if plan else None, billing="ANUAL", contract_start=today - timedelta(days=HISTORY_DAYS + 5),
     )
     cid = company.id
+    company.training_mode = True  # a demonstration: its documents are printed «sem valor fiscal», never sent to the AGT
     logo = Path("uploads") / "logos"
     logo.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(IMAGES / "logo.png", logo / f"{cid}.png")

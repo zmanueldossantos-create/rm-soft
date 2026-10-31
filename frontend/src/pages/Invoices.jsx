@@ -609,6 +609,9 @@ export default function Invoices() {
                         <div className="flex items-center gap-2">
                           <FileText size={13} className="text-accent shrink-0" />
                           {docCode} {inv.series}/{inv.number}
+                          {inv.issuance_mode === 'FORMACAO' && (
+                            <span className="font-sans text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-500 [.light_&]:text-violet-700" title="Modo formação: sem valor fiscal">Formação</span>
+                          )}
                         </div>
                       </td>
                       <td className="px-4 py-3 font-mono text-text-muted whitespace-nowrap">{inv.number}</td>
@@ -622,6 +625,11 @@ export default function Invoices() {
                         {workingDocumentState(inv) ? (
                           <span className={'text-[11px] font-semibold uppercase tracking-wide px-2.5 py-1 rounded ' + workingDocumentState(inv).className}>
                             {workingDocumentState(inv).label}
+                          </span>
+                        ) : inv.issuance_mode === 'FORMACAO' ? (
+                          <span className="text-[11px] font-semibold uppercase tracking-wide px-2.5 py-1 rounded bg-violet-500/15 text-violet-500 [.light_&]:text-violet-700"
+                                title="Modo formação: documento sem valor fiscal - não é enviado à AGT nem declarado no SAF-T">
+                            Formação
                           </span>
                         ) : inv.issuance_mode !== 'ELETRONICA' ? (
                           <span className="text-[11px] font-semibold uppercase tracking-wide px-2.5 py-1 rounded bg-bg-inset text-text-muted"
@@ -666,7 +674,7 @@ export default function Invoices() {
                       <td className="px-4 py-3 font-mono text-accent text-right whitespace-nowrap font-medium">{formatMoney(aPagar)}</td>
                       <td className="px-4 py-3 font-mono text-accent text-right whitespace-nowrap">{formatMoney(aPagar)}</td>
                       <td className="px-4 py-3 font-mono text-text-muted text-right whitespace-nowrap">{formatMoney(inv.retention_total)}</td>
-                      <td className="px-4 py-3 text-text-muted whitespace-nowrap">{inv.issuance_mode === 'ELETRONICA' ? 'Eletrônica' : 'Manual'}</td>
+                      <td className="px-4 py-3 text-text-muted whitespace-nowrap">{inv.issuance_mode === 'ELETRONICA' ? 'Eletrônica' : inv.issuance_mode === 'FORMACAO' ? 'Formação' : 'Manual'}</td>
                       <td className="px-4 py-3 text-text-muted whitespace-nowrap">-</td>
                       <td className="px-4 py-3 text-text-muted whitespace-nowrap">{inv.item_count ?? '-'}</td>
                       <td className="px-4 py-3 text-text-muted whitespace-nowrap">AOA</td>
@@ -799,7 +807,7 @@ export default function Invoices() {
               <div className="flex items-center gap-2">
                 {/* a working document never shows an AGT state: «Não fiscal», «Faturado» or «Expirado» */}
                 <span className={'text-[11px] font-semibold uppercase tracking-wide px-2.5 py-1 rounded ' + (workingDocumentState(detailInvoice)?.className || STATUS_STYLE[detailInvoice.status] || '')}>
-                  {workingDocumentState(detailInvoice)?.label || (detailInvoice.issuance_mode === 'ELETRONICA' ? (AGT_LABEL[detailInvoice.status] || detailInvoice.status) : 'Manual')}
+                  {workingDocumentState(detailInvoice)?.label || (detailInvoice.issuance_mode === 'ELETRONICA' ? (AGT_LABEL[detailInvoice.status] || detailInvoice.status) : detailInvoice.issuance_mode === 'FORMACAO' ? 'Formação - sem valor fiscal' : 'Manual')}
                 </span>
                 <span className="text-[11px] font-semibold uppercase tracking-wide px-2.5 py-1 rounded bg-bg-inset text-text-muted">
                   {detailInvoice.document_status}

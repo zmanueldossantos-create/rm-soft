@@ -388,6 +388,10 @@ async def edit_company(
             fiscal_regime_id=payload.fiscal_regime_id,
             subdomain=payload.subdomain,
         )
+        if payload.training_mode is not None and payload.training_mode != company.training_mode:
+            company.training_mode = payload.training_mode  # Modo formação: the documents to come, not the issued ones
+            await db.commit()
+            await db.refresh(company)
     except CompanyAlreadyExistsError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except CompanyNotFoundError as e:

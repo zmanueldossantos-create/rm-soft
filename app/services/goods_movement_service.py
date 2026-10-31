@@ -247,6 +247,7 @@ async def create_goods_movement(
         atcud=_simulate_atcud(company_id, series_row.series_code, number),
         document_hash=_simulate_hash(company_id, series_row.series_code, number, gross, today),
         status=GoodsMovementStatus.EMITIDA, created_by_user_id=user_id,
+        is_training=bool(company.training_mode),  # Modo formação: printed «sem valor fiscal», out of the SAF-T
     )
     db.add(movement)
     await db.flush()
@@ -381,7 +382,7 @@ def _summary(m: GoodsMovement, names: dict) -> dict:
         "reference": reference(m), "status": m.status.value, "movement_date": m.movement_date, "start_time": m.start_time,
         "party": party, "origin_warehouse": names["warehouses"].get(m.origin_warehouse_id),
         "net_total": float(m.net_total), "vat_total": float(m.vat_total), "gross_total": float(m.gross_total),
-        "vehicle_plate": m.vehicle_plate,
+        "vehicle_plate": m.vehicle_plate, "is_training": bool(m.is_training),
     }
 
 

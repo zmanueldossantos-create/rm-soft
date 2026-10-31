@@ -11,7 +11,7 @@ from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
 
 from app.utils.cash_report_pdf import LUANDA, MARGIN, _Page, _draw_header, _section_title, _table, _when, kz
-from app.utils.pdf_generator import TEXT_MUTED, certification_text
+from app.utils.pdf_generator import TEXT_MUTED, certification_text, watermark_every_page
 
 PARTY_LABEL = {"GR": "Cliente", "GT": "Armazém de destino", "GD": "Fornecedor"}
 
@@ -24,6 +24,8 @@ def _qty(value: float) -> str:
 def generate_guia_pdf(data: dict, company: dict) -> bytes:
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
+    if data.get("is_training"):  # Modo formação: «FORMAÇÃO / DEMONSTRAÇÃO - SEM VALOR FISCAL» on every page
+        watermark_every_page(c, *A4)
     c.setTitle(f"{data['type_label']} {data['reference']}")
     p = _Page(c)
     party = data["party"] or "-"

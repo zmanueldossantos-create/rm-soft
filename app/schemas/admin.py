@@ -199,6 +199,7 @@ class CompanyUpdateRequest(BaseModel):
     suggests_last_document_date: bool = False
     issuance_mode: str = "MANUAL"
     fiscal_regime_id: uuid.UUID | None = None
+    training_mode: bool | None = None  # Modo formação (SUPER_ADMIN) - None: unchanged
 
     @field_validator("name")
     @classmethod
@@ -264,6 +265,7 @@ class CompanyResponse(BaseModel):
     allows_future_sale_date: bool
     suggests_last_document_date: bool
     issuance_mode: str
+    training_mode: bool = False  # Modo formação: documents without fiscal value
 
     class Config:
         from_attributes = True

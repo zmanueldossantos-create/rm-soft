@@ -1314,7 +1314,7 @@ export default function CompanySettings() {
                           {s.contingency_indicator === 'CONTINGENCIA' && <span className="ml-2 font-sans text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-500" title="Série de contingência: usada quando a AGT não está acessível">Contingência</span>}
                         </td>
                         <td className="px-4 py-3 font-mono text-text-muted">{s.year}</td>
-                        <td className="px-4 py-3 text-text-muted">{s.issuance_mode === 'ELETRONICA' ? 'Eletrónica' : 'Manual'}</td>
+                        <td className="px-4 py-3 text-text-muted">{s.issuance_mode === 'ELETRONICA' ? 'Eletrónica' : s.issuance_mode === 'FORMACAO' ? 'Formação' : 'Manual'}</td>
                         <td className="px-4 py-3 font-mono text-text-muted text-[12px]">{s.number_start}-{s.number_end}</td>
                         <td className="px-4 py-3 font-mono text-text-muted text-[12px]">
                           {s.series_start_ts ? new Date(s.series_start_ts).toLocaleString('pt-PT') + ' a ' + (s.series_end_ts ? new Date(s.series_end_ts).toLocaleString('pt-PT') : '...') : s.date_start + ' a ' + s.date_end}

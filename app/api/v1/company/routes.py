@@ -307,7 +307,10 @@ async def read_my_subscription(db: AsyncSession = Depends(get_db), current_user:
     only state too: the reason a sale is refused)."""
     if current_user.company_id is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sem empresa")
-    return await subscription(db, current_user.company_id)
+    data = dict(await subscription(db, current_user.company_id))
+    company = await db.get(Company, current_user.company_id)
+    data["training_mode"] = bool(company is not None and company.training_mode)  # the «Modo formação» banner
+    return data
 
 
 # ---------- The licence of this server (a client's local installation)

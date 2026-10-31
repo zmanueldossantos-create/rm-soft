@@ -149,7 +149,8 @@ async def _movements_for_saft(db: AsyncSession, company_id: uuid.UUID, start_dat
     from app.models.supplier import Supplier
     movements = (await db.execute(select(GoodsMovement).where(
         GoodsMovement.company_id == company_id, GoodsMovement.movement_date >= start_date,
-        GoodsMovement.movement_date <= end_date))).scalars().all()
+        GoodsMovement.movement_date <= end_date,
+        GoodsMovement.is_training.is_(False)))).scalars().all()  # Modo formação: no fiscal value
     if not movements:
         return [], []
     lines = (await db.execute(select(GoodsMovementLine).where(
@@ -228,6 +229,7 @@ async def export_saf_t_for_period(db: AsyncSession, company_id: uuid.UUID, year:
             Invoice.company_id == company_id,
             Invoice.business_date >= start_date,
             Invoice.business_date <= end_date,
+            Invoice.issuance_mode != "FORMACAO",  # Modo formação: no fiscal value, never declared
         ).order_by(Invoice.invoice_type, Invoice.series, Invoice.number)  # the generator sorts each section too
     )
     invoices = invoices_result.scalars().all()

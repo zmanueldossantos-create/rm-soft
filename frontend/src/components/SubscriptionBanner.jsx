@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AlertTriangle, Info, Lock } from 'lucide-react';
+import { AlertTriangle, GraduationCap, Info, Lock } from 'lucide-react';
 import apiClient from '../api/client';
 
 // The company's contract, at the top of every screen when there is something to say:
@@ -25,6 +25,21 @@ export default function SubscriptionBanner({ role }) {
   }, [role]);
 
   if (!sub) return null;
+  return (
+    <>
+      {sub.training_mode && ( // Modo formação: every user, all the time
+        <Bar tone="info" icon={GraduationCap}>
+          <b>Modo formação / demonstração</b> - os documentos emitidos não têm valor fiscal: não são enviados à AGT nem
+          declarados no SAF-T, e são impressos com a marca «Formação / Demonstração - sem valor fiscal».
+        </Bar>
+      )}
+      <ContractBar sub={sub} role={role} />
+    </>
+  );
+}
+
+// The contract's own message (see above), or nothing.
+function ContractBar({ sub, role }) {
   const gestor = role === 'GESTOR';
 
   if (sub.license_problem) { // a client's server without a valid licence

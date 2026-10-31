@@ -92,6 +92,11 @@ class Company(Base):
     # Fiscal issuance mode - electronic mode requires the AGT-issued private
     # key and turns OFF auto_series_year (series are solicited from AGT instead).
     issuance_mode: Mapped[InvoiceIssuanceMode] = mapped_column(Enum(InvoiceIssuanceMode), nullable=False, default=InvoiceIssuanceMode.MANUAL)
+    # Modo formação / demonstração: every document is issued in mode FORMACAO - its own series (FR2026F...), never
+    # sent to the AGT (validated at once by the simulation when the company is in Faturação Eletrónica), left out of
+    # the SAF-T and the VAT, printed «FORMAÇÃO / DEMONSTRAÇÃO - SEM VALOR FISCAL». Set by the SUPER_ADMIN; on by itself
+    # for the demo company and a TESTE contract (off with a paid contract).
+    training_mode: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
     agt_private_key_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)  # the AGT's key of this taxpayer (secret_box)
     # Homologação only: the AGT test NIF this company sends as (app.models.agt_test_taxpayer) - ignored in Produção
     agt_test_nif: Mapped[str | None] = mapped_column(String(20), nullable=True)

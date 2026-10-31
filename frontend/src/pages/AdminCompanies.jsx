@@ -63,6 +63,7 @@ const emptyForm = {
   fiscalRegimeId: '',
   usesInvoicing: true, autoSeriesYear: true, allowsFutureSaleDate: false, suggestsLastDocumentDate: false,
   issuanceMode: 'MANUAL',
+  trainingMode: false,
   moduleIds: [],
   gestorName: '', gestorPhone: '', gestorPassword: '',
   baseParts: [],
@@ -378,6 +379,7 @@ export default function AdminCompanies() {
       allowsFutureSaleDate: company.allows_future_sale_date,
       suggestsLastDocumentDate: company.suggests_last_document_date,
       issuanceMode: company.issuance_mode || 'MANUAL',
+      trainingMode: !!company.training_mode,
       moduleIds: [],
       gestorName: '', gestorPhone: '', gestorPassword: '',
     });
@@ -586,6 +588,7 @@ export default function AdminCompanies() {
       allows_future_sale_date: form.allowsFutureSaleDate,
       suggests_last_document_date: form.suggestsLastDocumentDate,
       issuance_mode: form.issuanceMode,
+      training_mode: form.trainingMode,
       fiscal_regime_id: form.fiscalRegimeId || null,
     };
   }
@@ -943,6 +946,15 @@ export default function AdminCompanies() {
                   </Field>
                 </div>
               </div>
+
+              {/* Modo formação: the documents to come have no fiscal value (on by itself with a TESTE contract) */}
+              {editingId && (<label className={'flex items-start gap-2.5 cursor-pointer select-none border rounded-md px-3.5 py-3 transition-colors ' + (form.trainingMode ? 'border-accent bg-accent/5' : 'border-border hover:border-accent')}>
+                <input type="checkbox" checked={form.trainingMode} onChange={(e) => updateField('trainingMode', e.target.checked)} className="w-4 h-4 mt-0.5 accent-accent cursor-pointer" />
+                <span>
+                  <span className="text-sm text-text-primary block">Modo formação / demonstração</span>
+                  <span className="text-[12px] text-text-muted block">Os documentos emitidos a partir de agora usam séries próprias (FR2026F...), não são enviados à AGT nem declarados no SAF-T e saem com a marca «sem valor fiscal». Ligado sozinho com um contrato TESTE e desligado com um contrato pago.</span>
+                </span>
+              </label>)}
 
               {form.issuanceMode === 'ELETRONICA' && (
                 <p className="text-[12px] text-text-muted">A chave privada do contribuinte (portal da AGT) é colada pela empresa em Definições da Empresa → Faturação Eletrónica - guardada cifrada.</p>

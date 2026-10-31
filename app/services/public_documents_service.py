@@ -149,6 +149,7 @@ async def document_view(db: AsyncSession, invoice: Invoice, with_lines: bool = T
         "converted_to_invoice_id": str(invoice.converted_to_invoice_id) if invoice.converted_to_invoice_id else None,
         "agt": {"status": invoice.status.value, "label": AGT_STATES.get(invoice.status.value, invoice.status.value),
                 "atcud": invoice.atcud} if fiscal else None,
+        "training": invoice.issuance_mode == "FORMACAO",  # Modo formação: no fiscal value
         "pdf": f"/api/public/v1/documents/{invoice.id}/pdf",
         "created_at": invoice.created_at, "updated_at": invoice.updated_at,
     }

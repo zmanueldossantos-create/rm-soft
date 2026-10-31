@@ -172,6 +172,11 @@ async def set_contract(db: AsyncSession, company_id: uuid.UUID, data: dict, user
         await db.flush()  # one current contract per company (partial unique index)
     db.add(contract)
     await _switch_off_lost_options(db, company_id, plan.options)
+    # Modo formação: on with a TESTE contract (its documents have no fiscal value), off with a paid one
+    from app.models.company import Company
+    company = await db.get(Company, company_id)
+    if company is not None:
+        company.training_mode = billing == "TESTE"
     if commit:
         await db.commit()
         await db.refresh(contract)

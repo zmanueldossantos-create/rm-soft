@@ -81,6 +81,7 @@ async def _sales_lines(db: AsyncSession, company_id: uuid.UUID, start: date, end
     invoices = {i.id: i for i in (await db.execute(select(Invoice).where(
         Invoice.company_id == company_id, Invoice.business_date >= start, Invoice.business_date <= end,
         Invoice.invoice_type.in_(list(SALES_SIGN)),
+        Invoice.issuance_mode != "FORMACAO",  # Modo formação: no fiscal value
     ))).scalars().all()}
     if not invoices:
         return []

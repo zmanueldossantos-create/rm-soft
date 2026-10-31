@@ -169,6 +169,7 @@ async def render_invoice_pdf(db: AsyncSession, company_id: uuid.UUID, invoice_id
         "invoice_hash": invoice.invoice_hash,
         "qr_code_data": await _qr_data(db, invoice, platform.agt_qr_url),
         "software_validation_number": platform.software_validation_number,
+        "training": invoice.issuance_mode == "FORMACAO",  # Modo formação: the watermark «sem valor fiscal»
         "qr_agt_logo": (invoice.issuance_mode.value if hasattr(invoice.issuance_mode, "value")
                         else invoice.issuance_mode) == "ELETRONICA",
         "reference_invoice": reference_invoice_dict,

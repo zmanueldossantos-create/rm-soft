@@ -72,6 +72,33 @@ LUANDA_TZ = timezone(timedelta(hours=1))  # Angola: UTC+1 all year
 ANONYMOUS_NIF = "999999999"  # a customer without a NIF (consumidor final), as sent to the AGT and in the SAF-T
 
 
+TRAINING_TEXT = "FORMAÇÃO / DEMONSTRAÇÃO - SEM VALOR FISCAL"  # Modo formação (Company.training_mode)
+
+
+def training_watermark(c, page_width: float, page_height: float) -> None:
+    """The A4 watermark of a document of the Modo formação: across the page, light enough to read through."""
+    c.saveState()
+    c.setFillColor(HexColor("#9A9A9A"))
+    c.setFillAlpha(0.28)
+    c.translate(page_width / 2, page_height / 2)
+    c.rotate(42)
+    c.setFont("Helvetica-Bold", 34)
+    c.drawCentredString(0, 6 * mm, "FORMAÇÃO / DEMONSTRAÇÃO")
+    c.setFont("Helvetica-Bold", 26)
+    c.drawCentredString(0, -8 * mm, "SEM VALOR FISCAL")
+    c.restoreState()
+
+
+def watermark_every_page(c, page_width: float, page_height: float) -> None:
+    """Every page of this canvas gets the training watermark, drawn over it when the page is closed."""
+    show_page = c.showPage
+
+    def show() -> None:
+        training_watermark(c, page_width, page_height)
+        show_page()
+    c.showPage = show
+
+
 def hash_chars(document_hash: str | None) -> str:
     """The four characters of the hash a document prints: the 1st, 11th, 21st and 31st (a simulated hash: of its hex
     part)."""
@@ -253,7 +280,7 @@ def generate_invoice_pdf_thermal(invoice: dict, lines: list[dict], company: dict
     # clipping the QR code / footer at the bottom (see the "8 100,00" example that clipped).
     height = (150 + len(lines) * 16 + len(summary) * 11 + (12 if invoice.get("observations") else 0)
               + 6 * len(_reference_texts(invoice)) + 4 * sum(len(l.get("lots") or []) for l in lines)
-              + (12 if invoice.get("prescription") else 0)) * mm + logo_extra
+              + (12 if invoice.get("prescription") else 0) + (24 if invoice.get("training") else 0)) * mm + logo_extra
 
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=(width, height))
@@ -311,6 +338,22 @@ def generate_invoice_pdf_thermal(invoice: dict, lines: list[dict], company: dict
     if phone:
         center(f"Telefone: {phone}", size=7.5, color=TEXT_MUTED)
     y -= 1.5 * mm
+
+    def training_box():
+        """Modo formação: the document is boxed «FORMAÇÃO / DEMONSTRAÇÃO - SEM VALOR FISCAL», top and bottom."""
+        nonlocal y
+        box_h = 9 * mm
+        c.setStrokeColor(TEXT_PRIMARY)
+        c.setLineWidth(1)
+        c.rect(margin, y - box_h + 3 * mm, width - 2 * margin, box_h, fill=0, stroke=1)
+        c.setFillColor(TEXT_PRIMARY)
+        c.setFont("Helvetica-Bold", 7.5)
+        c.drawCentredString(center_x, y - 0.6 * mm, "FORMAÇÃO / DEMONSTRAÇÃO")
+        c.drawCentredString(center_x, y - 4 * mm, "SEM VALOR FISCAL")
+        y -= box_h + 1.5 * mm
+
+    if invoice.get("training"):
+        training_box()
 
     # --- Client block, left-aligned ---
     left(f"Cliente: {customer['name'] if customer else 'Consumidor Final'}"[:48], size=7.5)
@@ -437,6 +480,9 @@ def generate_invoice_pdf_thermal(invoice: dict, lines: list[dict], company: dict
     y -= qr_size + 3 * mm
 
     center("Obrigado pela preferência", size=8, bold=True)
+    if invoice.get("training"):
+        y -= 1 * mm
+        training_box()
 
     c.save()
     buffer.seek(0)
@@ -939,6 +985,8 @@ def generate_factura_style_a4(invoice, lines, company, customer):
     c.setFont("Helvetica", 7)
     c.drawRightString(page_width - margin - 26 * mm, margin, "Pág. 1/1")
 
+    if invoice.get("training"):  # Modo formação
+        training_watermark(c, page_width, page_height)
     c.save()
     buffer.seek(0)
     return buffer.read()
@@ -1131,6 +1179,8 @@ def generate_recibo_style_a4(invoice, company, customer):
     c.setFont("Helvetica", 7)
     c.drawString(margin, margin, "Pág. 1/1")
 
+    if invoice.get("training"):  # Modo formação
+        training_watermark(c, page_width, page_height)
     c.save()
     buffer.seek(0)
     return buffer.read()

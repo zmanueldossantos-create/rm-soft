@@ -55,7 +55,9 @@ from app.models.document_type import DocumentType
 from app.services.fiscal_period_service import ensure_period_open, PeriodClosedError
 from app.services.stock_service import deduct_stock_for_sale, InsufficientStockError, return_stock_for_credit_note
 from app.models.stock_movement import MovementType, StockMovement
-from app.services.document_series_service import get_or_create_current_series, get_next_number, SeriesNotFoundError
+from app.services.document_series_service import (
+    document_mode, get_or_create_current_series, get_next_number, SeriesNotFoundError,
+)
 from app.services.agt_queue import queue_for_agt
 
 # Maps the (legacy) InvoiceType enum to the platform DocumentType catalog code -
@@ -102,6 +104,15 @@ class EmptyInvoiceError(Exception):
 
 class LinePriceError(EmptyInvoiceError):
     """A free price refused: 0, or under the cost without the seller's confirmation (422, like an empty invoice)."""
+
+
+def _initial_status(company: Company) -> InvoiceStatus:
+    """A new document: PENDENTE (on its way to the AGT in Faturação Eletrónica). In Modo formação it is never sent:
+    in Faturação Eletrónica the simulation validates it at once, so the trainee sees the whole way."""
+    mode = company.issuance_mode.value if hasattr(company.issuance_mode, "value") else company.issuance_mode
+    if company.training_mode and mode == "ELETRONICA":
+        return InvoiceStatus.VALIDADA
+    return InvoiceStatus.PENDENTE
 
 
 def _free_price(product, line_input: dict, catalog_price: float, factor: float) -> tuple[float, int, float | None]:
@@ -585,14 +596,14 @@ async def create_invoice(
         document_reference=document_reference,
         discount_global_percent=discount_global_percent,
         retention_total=retention_total,
-        issuance_mode=company.issuance_mode,
+        issuance_mode=document_mode(company),  # FORMACAO in Modo formação
         series=series,
         number=next_number,
         business_date=business_date,
         subtotal=subtotal_total,
         vat_total=vat_total,
         total=grand_total,
-        status=InvoiceStatus.PENDENTE,
+        status=_initial_status(company),
         atcud=atcud,
         invoice_hash=invoice_hash,
         qr_code_data=qr_code_data,
@@ -1179,14 +1190,14 @@ async def create_credit_note(
         subtotal=subtotal_total,
         vat_total=vat_total,
         total=grand_total,
-        status=InvoiceStatus.PENDENTE,
+        status=_initial_status(company),
         document_status=DocumentLifecycleStatus.EMITIDO,
         reference_invoice_id=reference_invoice.id,
         document_reference=f"{INVOICE_TYPE_TO_DOC_CODE.get(reference_invoice.invoice_type.value, '')} {reference_invoice.series}/{reference_invoice.number}",
         credit_note_reason=CreditNoteReason(credit_note_reason),
         credit_note_cause=credit_note_cause,
         retention_total=retention_total,
-        issuance_mode=company.issuance_mode,
+        issuance_mode=document_mode(company),  # FORMACAO in Modo formação
         atcud=atcud,
         invoice_hash=invoice_hash,
         qr_code_data=qr_code_data,
@@ -1447,13 +1458,13 @@ async def create_debit_note(
         subtotal=subtotal_total,
         vat_total=vat_total,
         total=grand_total,
-        status=InvoiceStatus.PENDENTE,
+        status=_initial_status(company),
         document_status=DocumentLifecycleStatus.EMITIDO,
         reference_invoice_id=reference_invoice.id,
         document_reference=document_reference,
         observations=observations,
         retention_total=retention_total,
-        issuance_mode=company.issuance_mode,
+        issuance_mode=document_mode(company),  # FORMACAO in Modo formação
         atcud=atcud,
         invoice_hash=invoice_hash,
         qr_code_data=qr_code_data,
@@ -1617,14 +1628,14 @@ async def create_receipt(
         retention_total=receipt_retention,
         cash_session_id=cash_session_id,
         bank_account_id=bank_account_id,
-        status=InvoiceStatus.PENDENTE,
+        status=_initial_status(company),
         document_status=DocumentLifecycleStatus.EMITIDO,
         reference_invoice_id=reference_invoice.id,
         document_reference=document_reference,
         observations=observations,
         amount_received=amount,
         payment_date=business_date,
-        issuance_mode=company.issuance_mode,
+        issuance_mode=document_mode(company),  # FORMACAO in Modo formação
         atcud=atcud,
         invoice_hash=invoice_hash,
         qr_code_data=qr_code_data,
@@ -1858,11 +1869,11 @@ async def create_pro_forma(
         total=grand_total,
         retention_total=pro_forma_retention,
         discount_global_percent=discount_global_percent,
-        status=InvoiceStatus.PENDENTE,
+        status=_initial_status(company),
         document_status=DocumentLifecycleStatus.EMITIDO,
         document_reference=document_reference,
         observations=observations,
-        issuance_mode=company.issuance_mode,
+        issuance_mode=document_mode(company),  # FORMACAO in Modo formação
         atcud=atcud,
         invoice_hash=invoice_hash,
         qr_code_data=qr_code_data,
