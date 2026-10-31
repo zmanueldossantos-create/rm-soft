@@ -280,7 +280,7 @@ def generate_invoice_pdf_thermal(invoice: dict, lines: list[dict], company: dict
     # clipping the QR code / footer at the bottom (see the "8 100,00" example that clipped).
     height = (150 + len(lines) * 16 + len(summary) * 11 + (12 if invoice.get("observations") else 0)
               + 6 * len(_reference_texts(invoice)) + 4 * sum(len(l.get("lots") or []) for l in lines)
-              + (12 if invoice.get("prescription") else 0) + (24 if invoice.get("training") else 0)) * mm + logo_extra
+              + (12 if invoice.get("prescription") else 0) + (5 if invoice.get("training") else 0)) * mm  # training: 2 boxes (+24), no QR (-19) + logo_extra
 
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=(width, height))
@@ -474,10 +474,11 @@ def generate_invoice_pdf_thermal(invoice: dict, lines: list[dict], company: dict
         center(text_line, size=6, color=TEXT_MUTED)
     y -= 1 * mm
 
-    qr_buffer = _make_qr_image(invoice["qr_code_data"], invoice.get("qr_agt_logo", False))
-    qr_size = 16 * mm
-    c.drawImage(ImageReader(qr_buffer), center_x - qr_size / 2, y - qr_size, width=qr_size, height=qr_size)
-    y -= qr_size + 3 * mm
+    if not invoice.get("training"):  # Modo formação: no AGT QR - the AGT never knows the document
+        qr_buffer = _make_qr_image(invoice["qr_code_data"], invoice.get("qr_agt_logo", False))
+        qr_size = 16 * mm
+        c.drawImage(ImageReader(qr_buffer), center_x - qr_size / 2, y - qr_size, width=qr_size, height=qr_size)
+        y -= qr_size + 3 * mm
 
     center("Obrigado pela preferência", size=8, bold=True)
     if invoice.get("training"):
@@ -973,9 +974,10 @@ def generate_factura_style_a4(invoice, lines, company, customer):
             c.drawString(margin + 16 * mm, y, f"{b['account_number']}  IBAN: {b['iban']}")
             y -= 3.8 * mm
 
-    qr_buffer = _make_qr_image(invoice["qr_code_data"], invoice.get("qr_agt_logo", False))
-    qr_size = 22 * mm
-    c.drawImage(ImageReader(qr_buffer), page_width - margin - qr_size, margin + 6 * mm, width=qr_size, height=qr_size)
+    if not invoice.get("training"):  # Modo formação: no AGT QR
+        qr_buffer = _make_qr_image(invoice["qr_code_data"], invoice.get("qr_agt_logo", False))
+        qr_size = 22 * mm
+        c.drawImage(ImageReader(qr_buffer), page_width - margin - qr_size, margin + 6 * mm, width=qr_size, height=qr_size)
 
     c.setFillColor(TEXT_MUTED)
     c.setFont("Helvetica-Oblique", 7)
@@ -1158,11 +1160,12 @@ def generate_recibo_style_a4(invoice, company, customer):
 
     y = min(y, ry) - 10 * mm
 
-    qr_buffer = _make_qr_image(invoice["qr_code_data"], invoice.get("qr_agt_logo", False))
-    qr_size = 26 * mm
-    qr_x = page_width / 2 - qr_size / 2
-    c.drawImage(ImageReader(qr_buffer), qr_x, y - qr_size, width=qr_size, height=qr_size)
-    y -= qr_size + 10 * mm
+    if not invoice.get("training"):  # Modo formação: no AGT QR
+        qr_buffer = _make_qr_image(invoice["qr_code_data"], invoice.get("qr_agt_logo", False))
+        qr_size = 26 * mm
+        qr_x = page_width / 2 - qr_size / 2
+        c.drawImage(ImageReader(qr_buffer), qr_x, y - qr_size, width=qr_size, height=qr_size)
+        y -= qr_size + 10 * mm
 
     banner_text = certification_text(invoice.get("invoice_hash"), invoice.get("software_validation_number"))
     banner_h = 10 * mm

@@ -84,3 +84,26 @@ def test_the_watermark():
                 generate_invoice_pdf_thermal(invoice, [line], company, None)):
         text = "".join(p.extract_text() for p in pypdf.PdfReader(io.BytesIO(pdf)).pages)
         assert "SEM VALOR FISCAL" in text and "FORMAÇÃO / DEMONSTRAÇÃO" in text
+
+
+def _images(pdf: bytes) -> int:
+    pypdf = pytest.importorskip("pypdf")
+    return sum(len(page.images) for page in pypdf.PdfReader(io.BytesIO(pdf)).pages)
+
+
+def test_no_agt_qr_on_a_training_document():
+    """The AGT's QR leads to its portal: a training document is never there, so it gets no QR (the company has no logo
+    here, so the QR is the only image of the page)."""
+    line = {"quantity": 1.0, "unit_price": 1000.0, "discount_percent": 0, "line_subtotal": 1000.0, "vat_rate_snapshot": 14.0,
+            "exemption_code": None, "exemption_reason": None, "service_line": True, "code": "SRV", "product_name_snapshot": "Aula",
+            "unit_code": "UN", "iec_amount": 0, "iselo_amount": 0, "line_total": 1140.0}
+    company = {"name": "Escola Teste", "nif": "5000999001", "address": "Rua X", "phone_number": "+244923000000",
+               "logo_path": None, "bank_accounts": []}
+    for training in (False, True):
+        invoice = {"invoice_type": "FT", "series": f"FT{YEAR}F", "number": 1, "business_date": f"{YEAR}-10-30", "print_count": 1,
+                   "retention_total": 0, "subtotal": 1000.0, "vat_total": 140.0, "total": 1140.0, "discount_global_percent": 0,
+                   "amount_in_words": None, "observations": None, "qr_code_data": "x", "payments": [], "payment_method_name": None,
+                   "training": training}
+        for pdf in (generate_factura_style_a4(invoice, [line], company, None),
+                    generate_invoice_pdf_thermal(invoice, [line], company, None)):
+            assert _images(pdf) == (0 if training else 1)

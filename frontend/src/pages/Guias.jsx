@@ -298,7 +298,12 @@ export default function Guias() {
                       )}
                     </td>
                   )}
-                  <td className="px-3 py-2.5 font-mono text-text-primary whitespace-nowrap">{g.reference}</td>
+                  <td className="px-3 py-2.5 font-mono text-text-primary whitespace-nowrap">
+                    {g.reference}
+                    {g.is_training && (
+                      <span className="ml-2 font-sans text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-500 [.light_&]:text-violet-700" title="Modo formação: sem valor fiscal">Formação</span>
+                    )}
+                  </td>
                   <td className="px-3 py-2.5 text-text-muted">{g.type_label}</td>
                   <td className="px-3 py-2.5 font-mono text-[12px] text-text-muted whitespace-nowrap">{when(g.start_time)}</td>
                   <td className="px-3 py-2.5 text-text-primary">{g.party}</td>
@@ -452,7 +457,7 @@ export default function Guias() {
         )}
       </Modal>
 
-      <Modal open={!!detail} onClose={() => setDetail(null)} title={detail ? detail.type_label + ' ' + detail.reference : ''} maxWidthClass="max-w-5xl">
+      <Modal open={!!detail} onClose={() => setDetail(null)} title={detail ? detail.type_label + ' ' + detail.reference + (detail.is_training ? ' · Formação (sem valor fiscal)' : '') : ''} maxWidthClass="max-w-5xl">
         {detail && (
           <div className="flex flex-col gap-4">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-[13px]">
