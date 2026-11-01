@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Mail, Loader2, Save, Check, Send } from 'lucide-react';
+import { Mail, Loader2, Save, Check, Send, Trash2 } from 'lucide-react';
+import Modal from './Modal';
 import Select from './Select';
-import { getEmailSettings, updateEmailSettings, testEmailSettings } from '../api/ai';
+import { getEmailSettings, updateEmailSettings, testEmailSettings, removeEmailSettings } from '../api/ai';
 import { extractErrorMessage } from '../utils/errors';
 import { useToastState } from './Toaster';
 import { toast } from '../store/toastStore';
@@ -20,6 +21,8 @@ export default function EmailSettingsTab({ canManage }) {
   const [testTo, setTestTo] = useState('');
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useToastState('success');
+  const [removeOpen, setRemoveOpen] = useState(false);
+  const [removing, setRemoving] = useState(false);
 
   function load(data) {
     setInfo(data);
@@ -58,6 +61,19 @@ export default function EmailSettingsTab({ canManage }) {
       setError(extractErrorMessage(err, 'Erro ao guardar'));
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleRemove() {
+    setRemoving(true);
+    try {
+      load(await removeEmailSettings());
+      setRemoveOpen(false);
+      toast.success('Configuração do email removida - o endereço fica livre');
+    } catch (err) {
+      setError(extractErrorMessage(err, 'Erro ao remover'));
+    } finally {
+      setRemoving(false);
     }
   }
 
@@ -130,6 +146,12 @@ export default function EmailSettingsTab({ canManage }) {
             {saving ? <Loader2 size={14} className="animate-spin" /> : saved ? <Check size={14} /> : <Save size={14} />}
             {saved ? 'Guardado' : 'Guardar'}
           </button>
+          {info.configured && (
+            <button type="button" onClick={() => setRemoveOpen(true)}
+              className="flex items-center gap-1.5 border border-border hover:border-danger hover:text-danger text-text-muted text-sm font-medium px-4 py-2.5 rounded-md transition-colors cursor-pointer">
+              <Trash2 size={14} />Remover
+            </button>
+          )}
           <div className="flex items-end gap-2 ml-auto">
             <div>
               <label className={labelClass}>Enviar um teste para</label>
@@ -143,6 +165,22 @@ export default function EmailSettingsTab({ canManage }) {
           </div>
         </div>
       )}
+
+      <Modal open={removeOpen} onClose={() => !removing && setRemoveOpen(false)} title="Remover o email da empresa">
+        <div className="flex flex-col gap-4">
+          <p className="text-sm text-text-primary">
+            O servidor, a palavra-passe e o endereço <span className="font-mono">{info.from_email}</span> são apagados. Nenhum documento será enviado por email até nova configuração, e o endereço fica livre para outra empresa.
+          </p>
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={() => setRemoveOpen(false)} disabled={removing}
+              className="text-[13px] px-3.5 py-2 rounded-md border border-border text-text-primary hover:border-accent cursor-pointer disabled:opacity-50">Cancelar</button>
+            <button type="button" onClick={handleRemove} disabled={removing}
+              className="flex items-center gap-1.5 text-[13px] font-medium px-3.5 py-2 rounded-md bg-danger text-white hover:opacity-90 cursor-pointer disabled:opacity-50">
+              {removing ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />} Remover
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

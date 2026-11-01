@@ -23,7 +23,7 @@ from app.schemas.ai_settings import (
 from app.services.ai.channels import CHANNELS, ChannelError, create_link_code, list_links, unlink
 from app.services.platform_settings_service import get_or_create_platform_settings
 from app.services.ai.actions import ActionError, decide_action
-from app.services.email_service import EmailError, get_email_settings, send_test_email, update_email_settings
+from app.services.email_service import EmailError, get_email_settings, remove_email_settings, send_test_email, update_email_settings
 from app.services.ai.assistant_service import (
     AssistantError, ConversationNotFoundError, ask, assistant_status, list_conversations, list_messages,
 )
@@ -127,6 +127,13 @@ async def write_email_settings(payload: EmailSettingsRequest, db: AsyncSession =
                                            payload.from_name, payload.is_active)
     except EmailError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.delete("/company/me/email-settings", response_model=EmailSettingsResponse)
+async def delete_email_settings(db: AsyncSession = Depends(get_db),
+                                current_user: User = Depends(require_permission("company:manage"))):
+    """Removes the company's email account: the address is free for another company."""
+    return await remove_email_settings(db, current_user.company_id)
 
 
 @router.post("/company/me/email-settings/test")

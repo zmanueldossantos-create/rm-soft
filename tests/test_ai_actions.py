@@ -148,6 +148,14 @@ async def test_the_company_email_and_sending_a_document(db, company_with_essenti
     with pytest.raises(EmailError, match="já é usado por outra empresa"):
         await update_email_settings(db, other["company"].id, "smtp.gmail.com", 587, "STARTTLS", "x", "p",
                                     "FARMACIA@gmail.com", None)
+    # removed by its company: the address is free for the other one
+    from app.services.email_service import remove_email_settings
+    assert not (await remove_email_settings(db, company_id))["configured"]
+    assert (await update_email_settings(db, other["company"].id, "smtp.gmail.com", 587, "STARTTLS", "x", "p",
+                                        "farmacia@gmail.com", None))["configured"]
+    await remove_email_settings(db, other["company"].id)  # given back: the first company takes it again
+    await update_email_settings(db, company_id, "smtp.gmail.com", 465, "SSL", "farmacia@gmail.com", "app-password-1234",
+                                "farmacia@gmail.com", "Farmácia Teste")
 
     # the assistant sends a Fatura it issued: prepared, then confirmed
     action_ctx = _ctx(ctx, confirm=False)

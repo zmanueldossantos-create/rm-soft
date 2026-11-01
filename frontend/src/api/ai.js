@@ -81,6 +81,11 @@ export async function updateEmailSettings(settings) {
   return res.data;
 }
 
+export async function removeEmailSettings() {
+  const res = await apiClient.delete('/company/me/email-settings');
+  return res.data;
+}
+
 export async function testEmailSettings(to) {
   const res = await apiClient.post('/company/me/email-settings/test', { to }, { timeout: 60000 });
   return res.data;

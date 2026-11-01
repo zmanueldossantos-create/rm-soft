@@ -48,6 +48,16 @@ async def get_email_settings(db: AsyncSession, company_id: uuid.UUID) -> dict:
     return _view(await _settings(db, company_id))
 
 
+async def remove_email_settings(db: AsyncSession, company_id: uuid.UUID) -> dict:
+    """Removes the company's email account (server, password, address): nothing is sent by email any more, and the
+    address is free for another company."""
+    row = await _settings(db, company_id)
+    if row is not None:
+        await db.delete(row)
+        await db.commit()
+    return _view(None)
+
+
 async def update_email_settings(db: AsyncSession, company_id: uuid.UUID, smtp_host: str, smtp_port: int, security: str,
                                 username: str | None, password: str | None, from_email: str, from_name: str | None,
                                 is_active: bool = True) -> dict:
