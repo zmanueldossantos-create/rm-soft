@@ -1,0 +1,73 @@
+{
+  "_nota": "Base de formação da Mel da Rocha - módulo Hotel (dia 5, depois de ativar o módulo Hotel). Ficam por fazer à frente dos proprietários: tipo Suite, Diária Suite e quarto 107.",
+  "hotel": {
+    "atividade": "Hotel",
+    "tipos_quarto": [
+      {
+        "nome": "Quarto Standard",
+        "entrada": "14:00",
+        "saida": "12:00",
+        "diaria": {
+          "codigo": "DIA-STD",
+          "nome": "Diária Quarto Standard",
+          "preco": 25000
+        },
+        "quartos": [
+          {
+            "nome": "101",
+            "capacidade": 2
+          },
+          {
+            "nome": "102",
+            "capacidade": 2
+          },
+          {
+            "nome": "103",
+            "capacidade": 2
+          },
+          {
+            "nome": "104",
+            "capacidade": 2
+          }
+        ]
+      },
+      {
+        "nome": "Quarto Superior",
+        "entrada": "14:00",
+        "saida": "12:00",
+        "diaria": {
+          "codigo": "DIA-SUP",
+          "nome": "Diária Quarto Superior",
+          "preco": 35000
+        },
+        "quartos": [
+          {
+            "nome": "105",
+            "capacidade": 2
+          },
+          {
+            "nome": "106",
+            "capacidade": 2
+          }
+        ]
+      }
+    ],
+    "servicos": [
+      {
+        "codigo": "HOT-PEQ",
+        "nome": "Pequeno-almoço",
+        "preco": 3500
+      },
+      {
+        "codigo": "HOT-LAV",
+        "nome": "Lavandaria (peça)",
+        "preco": 1000
+      },
+      {
+        "codigo": "HOT-LCO",
+        "nome": "Late check-out",
+        "preco": 10000
+      }
+    ]
+  }
+}
