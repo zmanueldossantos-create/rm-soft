@@ -275,7 +275,7 @@ async def _over_limits(db: AsyncSession, company_id: uuid.UUID, limits: dict) ->
 def _limit_message(plan: str, code: str, limit: int) -> str:
     lim = LIMITS[code]
     noun = lim.noun_one if limit == 1 else lim.noun_many
-    return (f"O plano {plan} permite {limit} {noun}. Para mais, contacte a RM SOFT "
+    return (f"O plano {plan} permite {limit} {noun}. Para mais, contacte o suporte "
             f"(mudança de plano ou acréscimo no contrato).")
 
 
@@ -314,7 +314,7 @@ async def require_option(db: AsyncSession, company_id: uuid.UUID, option: str) -
     rights = await entitlements(db, company_id)
     if rights is not None and option not in rights["options"]:
         raise PlanLimitError(f"«{OPTIONS[option].label}» não está incluído no plano {rights['plan']}. "
-                             f"Para o ter, contacte a RM SOFT (mudança de plano).")
+                             f"Para o ter, contacte o suporte (mudança de plano).")
 
 
 async def company_options_or_none(db: AsyncSession, company_id: uuid.UUID) -> set[str] | None:
@@ -394,10 +394,10 @@ async def statuses_by_company(db: AsyncSession) -> dict[uuid.UUID, dict]:
 
 
 READ_ONLY_MESSAGE = ("O contrato desta empresa terminou: o sistema está só de leitura (consultar, exportar o SAF-T e "
-                     "descarregar as cópias continua possível). Para voltar a vender, contacte a RM SOFT.")
+                     "descarregar as cópias continua possível). Para voltar a vender, contacte o suporte.")
 LICENSE_READ_ONLY_MESSAGE = ("Esta instalação não tem licença válida: o sistema está só de leitura (consultar, exportar o "
                              "SAF-T e descarregar as cópias continua possível). Importe a licença em Definições da "
-                             "Empresa → Licença, ou contacte a RM SOFT.")
+                             "Empresa → Licença, ou contacte o suporte.")
 
 
 def read_only_message() -> str:

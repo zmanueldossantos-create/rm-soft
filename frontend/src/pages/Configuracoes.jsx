@@ -1,6 +1,6 @@
 import DateInput from '../components/DateInput';
 import { useState, useEffect } from 'react';
-import { Settings, Globe, DollarSign, MapPin, Building2, Landmark, CreditCard, Calendar, Percent, Plus, Pencil, Loader2, X, FileText, Ruler, ShieldMinus, LayoutGrid, ShieldCheck, Save, Check, ArrowLeftRight, PiggyBank, Bot, Zap, FileCheck2, KeyRound, Copy } from 'lucide-react';
+import { Settings, Globe, DollarSign, MapPin, Building2, Landmark, CreditCard, Calendar, Percent, Plus, Pencil, Loader2, X, FileText, Ruler, ShieldMinus, LayoutGrid, ShieldCheck, Save, Check, ArrowLeftRight, PiggyBank, Bot, Zap, FileCheck2, KeyRound, Copy, Palette, Upload, Trash2 } from 'lucide-react';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
 import {
@@ -27,7 +27,9 @@ const modulesApi = {
 };
 
 import { extractErrorMessage } from '../utils/errors';
-import { getPlatformSettings, updatePlatformSettings, getSiteSettings, updateSiteSettings } from '../api/admin';
+import { getPlatformSettings, updatePlatformSettings, getSiteSettings, updateSiteSettings, getBrandSettings, updateBrandSettings, uploadBrandLogo, removeBrandLogo } from '../api/admin';
+import { useBrandStore } from '../store/brandStore';
+import { API_ORIGIN } from '../api/config';
 import { getAgtSettings, updateAgtSettings, generateAgtSoftwareKey, getAgtTestTaxpayers, importAgtTestTaxpayers, deleteAgtTestTaxpayer } from '../api/agt';
 import { getPlatformAi, updatePlatformAi, testPlatformAi, setTelegramBot, getWhatsAppSettings, updateWhatsAppSettings } from '../api/ai';
 import { useToastState } from '../components/Toaster';
@@ -663,6 +665,146 @@ function AgtTestNifsRow() {
   );
 }
 
+// «Marca do software»: the name and logo the users of this installation see (menu, login, tab, footer). A client may
+// have the software under its own name - decided by contract; the AGT producer's identity above never changes with it.
+function BrandSettingsCard() {
+  const applyBrand = useBrandStore((s) => s.apply);
+  const [brand, setBrand] = useState(null);
+  const [form, setForm] = useState({ name: '', header: 'NOME', showVendor: true });
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [, setError] = useToastState('error');
+
+  // keepForm: after a logo change, what is typed and not saved yet stays in the form
+  function take(data, keepForm = false) {
+    setBrand(data);
+    if (keepForm) {
+      if (!data.logo_path) setForm((f) => ({ ...f, header: 'NOME' }));
+    } else {
+      setForm({ name: data.custom ? data.name : '', header: data.header_choice || 'NOME', showVendor: data.show_vendor });
+    }
+    applyBrand(data);
+  }
+
+  useEffect(() => {
+    getBrandSettings().then(take).catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      take(await updateBrandSettings(form.name.trim(), form.header, form.showVendor));
+      toast.success('Marca do software guardada');
+    } catch (err) {
+      setError(extractErrorMessage(err, 'Erro ao guardar'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleLogo(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setUploading(true);
+    try {
+      take(await uploadBrandLogo(file), true);
+      toast.success('Logótipo carregado');
+    } catch (err) {
+      setError(extractErrorMessage(err, 'Erro ao carregar o logótipo'));
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function handleRemoveLogo() {
+    setUploading(true);
+    try {
+      take(await removeBrandLogo(), true);
+      toast.success('Logótipo removido - o menu mostra o nome');
+    } catch (err) {
+      setError(extractErrorMessage(err, 'Erro ao remover o logótipo'));
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  if (!brand) return null;
+  const inputClass = 'w-full bg-bg-inset border border-border rounded-md px-3 py-2 text-sm text-text-primary outline-none focus:border-accent transition-colors';
+  const radio = (value, label) => (
+    <label className="flex items-center gap-2 cursor-pointer select-none text-[13px] text-text-primary">
+      <input type="radio" checked={form.header === value} disabled={value === 'LOGO' && !brand.logo_path}
+        onChange={() => setForm((f) => ({ ...f, header: value }))} className="accent-accent" />
+      {label}
+    </label>
+  );
+
+  return (
+    <div className="bg-bg-elevated border border-border rounded-lg px-5 py-4 mb-6">
+      <div className="flex items-center gap-2.5 mb-4">
+        <div className="w-9 h-9 rounded-md bg-accent/10 flex items-center justify-center shrink-0">
+          <Palette size={17} className="text-accent" />
+        </div>
+        <div>
+          <p className="text-[11px] uppercase tracking-wide text-text-muted">Marca do software</p>
+          <p className="text-[11px] text-text-muted/70">O nome e o logótipo que os utilizadores desta instalação veem: menu, ecrã de entrada, separador do navegador, rodapé</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+        <div className="flex flex-col gap-3">
+          <div>
+            <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1 block">Nome do software</label>
+            <input value={form.name} maxLength={60} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              placeholder="RM SOFT" className={inputClass} />
+            <p className="text-[11px] text-text-muted mt-1">Vazio: RM SOFT</p>
+          </div>
+          <div>
+            <span className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">No menu, mostrar</span>
+            <div className="flex items-center gap-5">
+              {radio('NOME', 'O nome')}
+              {radio('LOGO', 'O logótipo')}
+            </div>
+          </div>
+          <label className="flex items-center gap-2 cursor-pointer select-none text-[13px] text-text-primary">
+            <input type="checkbox" checked={form.showVendor} onChange={(e) => setForm((f) => ({ ...f, showVendor: e.target.checked }))} className="accent-accent" />
+            Mostrar «Desenvolvido por RM SOFT» no rodapé (só com outro nome)
+          </label>
+        </div>
+
+        <div>
+          <span className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1 block">Logótipo</span>
+          <div className="flex items-center gap-3">
+            <div className="w-40 h-16 rounded-md border border-border bg-bg-inset flex items-center justify-center overflow-hidden">
+              {brand.logo_path
+                ? <img src={API_ORIGIN + brand.logo_path} alt="" className="max-w-full max-h-full object-contain" />
+                : <span className="text-[11px] text-text-muted">Sem logótipo</span>}
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className={'flex items-center gap-1.5 text-[13px] px-3 py-1.5 rounded-md border border-border text-text-primary hover:border-accent cursor-pointer transition-colors' + (uploading ? ' opacity-50 pointer-events-none' : '')}>
+                {uploading ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />} Carregar
+                <input type="file" accept=".png,.jpg,.jpeg,.webp" onChange={handleLogo} className="hidden" />
+              </label>
+              {brand.logo_path && (
+                <button type="button" onClick={handleRemoveLogo} disabled={uploading}
+                  className="flex items-center gap-1.5 text-[13px] px-3 py-1.5 rounded-md border border-border text-danger hover:border-danger cursor-pointer transition-colors disabled:opacity-50">
+                  <Trash2 size={13} /> Remover
+                </button>
+              )}
+            </div>
+          </div>
+          <p className="text-[11px] text-text-muted mt-1">PNG, JPG ou WEBP, máximo 1 MB - também é o ícone do separador</p>
+        </div>
+      </div>
+
+      <button onClick={handleSave} disabled={saving}
+        className="flex items-center gap-1.5 bg-accent hover:bg-accent-hover disabled:opacity-50 text-white text-sm font-medium px-3.5 py-2 rounded-md transition-colors cursor-pointer">
+        {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Guardar
+      </button>
+    </div>
+  );
+}
+
 // «Site público» (rmsystem.co.ao): the WhatsApp number and the email its «Contacto» buttons open.
 function SiteSettingsCard() {
   const [values, setValues] = useState({ whatsapp: '', email: '' });
@@ -1239,12 +1381,13 @@ export default function Configuracoes({ section = 'sistema' }) {
       <p className="text-text-muted text-sm mb-6">
         {section === 'catalogos'
           ? 'Catálogos base da plataforma - usados em toda a configuração de empresas, produtos e faturação'
-          : 'Identificação do software, Faturação Eletrónica (AGT), site público e assistente - para todas as empresas'}
+          : 'Identificação e marca do software, Faturação Eletrónica (AGT), site público e assistente - para todas as empresas'}
       </p>
 
       {section === 'sistema' && (
         <>
           <PlatformSettingsCard />
+          <BrandSettingsCard />
           <AgtSettingsCard />
           <SiteSettingsCard />
           <AiSettingsCard />

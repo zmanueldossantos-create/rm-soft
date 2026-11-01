@@ -58,7 +58,7 @@ function ContractBar({ sub, role }) {
     return (
       <Bar tone="danger" icon={Lock}>
         <b>Contrato terminado - o sistema está só de leitura.</b> Pode consultar, exportar o SAF-T e descarregar as cópias;
-        vender e alterar ficam bloqueados até à renovação. Contacte a RM SOFT.
+        vender e alterar ficam bloqueados até à renovação. Contacte o suporte.
       </Bar>
     );
   }
@@ -67,7 +67,7 @@ function ContractBar({ sub, role }) {
     return (
       <Bar tone="danger" icon={AlertTriangle}>
         <b>O contrato ({sub.plan}) terminou a {dateText(sub.end_date)}.</b> Tudo continua a funcionar até {dateText(sub.grace_until)}
-        {' '}({sub.days_left === 0 ? 'último dia' : 'mais ' + days(sub.days_left)}); depois, o sistema fica só de leitura. Para renovar, contacte a RM SOFT.
+        {' '}({sub.days_left === 0 ? 'último dia' : 'mais ' + days(sub.days_left)}); depois, o sistema fica só de leitura. Para renovar, contacte o suporte.
       </Bar>
     );
   }
@@ -75,7 +75,7 @@ function ContractBar({ sub, role }) {
     return (
       <Bar tone="warning" icon={AlertTriangle}>
         <b>{sub.billing === 'TESTE' ? 'O teste gratuito' : 'O contrato'} ({sub.plan}) termina {sub.days_left === 0 ? 'hoje' : 'a ' + dateText(sub.end_date) + ' - faltam ' + days(sub.days_left)}.</b>
-        {' '}Para continuar sem interrupção, contacte a RM SOFT.
+        {' '}Para continuar sem interrupção, contacte o suporte.
       </Bar>
     );
   }
@@ -83,7 +83,7 @@ function ContractBar({ sub, role }) {
     return (
       <Bar tone="info" icon={Info}>
         A manutenção da licença terminou a {dateText(sub.maintenance_until)}: o sistema continua a funcionar, mas sem novas
-        atualizações (incluindo as alterações fiscais da AGT). Para a renovar, contacte a RM SOFT.
+        atualizações (incluindo as alterações fiscais da AGT). Para a renovar, contacte o suporte.
       </Bar>
     );
   }

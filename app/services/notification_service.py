@@ -135,7 +135,7 @@ async def _clean(db: AsyncSession, company_id: uuid.UUID, data: dict, current: N
     if channel == "WHATSAPP":
         raise NotificationError("As notificações por WhatsApp chegam em breve - use o Email ou o Telegram")
     if channel == "TELEGRAM" and current is None and await bot_link_base(db) is None:
-        raise NotificationError("O bot Telegram não está configurado neste servidor - contacte a RM SOFT")
+        raise NotificationError("O bot Telegram não está configurado neste servidor - contacte o suporte")
     address = None
     if channel == "EMAIL":
         address = (data.get("address") or "").strip()

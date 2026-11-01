@@ -19,7 +19,7 @@ function Row({ item, readOnly, onGo }) {
         </p>
         <p className="text-[12px] text-text-muted truncate">
           {item.detail}
-          {!item.done && item.owner && !readOnly && ' - definido pela RM SOFT, contacte o suporte'}
+          {!item.done && item.owner && !readOnly && ' - definido pelo suporte, contacte-o'}
         </p>
       </div>
       {!readOnly && !item.done && item.link && (

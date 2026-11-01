@@ -126,5 +126,6 @@ async def send_email(db: AsyncSession, company_id: uuid.UUID, to: str, subject: 
 
 
 async def send_test_email(db: AsyncSession, company_id: uuid.UUID, to: str) -> None:
-    await send_email(db, company_id, to, "RM SOFT - teste de email",
+    from app.services.brand_service import brand_name
+    await send_email(db, company_id, to, f"{await brand_name(db)} - teste de email",
                      "Este email confirma que o envio a partir da conta da empresa está a funcionar.")

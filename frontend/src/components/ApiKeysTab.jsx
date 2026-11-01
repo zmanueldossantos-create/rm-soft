@@ -77,7 +77,7 @@ export default function ApiKeysTab({ onAllowed }) {
 
   if (!data) return <div className="flex items-center justify-center py-16 text-text-muted text-sm"><Loader2 size={18} className="animate-spin mr-2" />A carregar...</div>;
   if (!data.allowed) {
-    return <div className="bg-bg-elevated border border-border rounded-lg p-6 text-sm text-text-muted">A Integração API não está incluída no seu plano. Para a ter, contacte a RM SOFT.</div>;
+    return <div className="bg-bg-elevated border border-border rounded-lg p-6 text-sm text-text-muted">A Integração API não está incluída no seu plano. Para a ter, contacte o suporte.</div>;
   }
   const scopeLabel = Object.fromEntries(data.scopes.map((s) => [s.code, s.label.split(':')[0]]));
 

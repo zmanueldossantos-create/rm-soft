@@ -1,4 +1,6 @@
+import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { useBrandStore } from './store/brandStore';
 import Login from './pages/Login';
 import Suporte from './pages/Suporte';
 import Dashboard from './pages/Dashboard';
@@ -69,6 +71,8 @@ function GestorRoute({ children }) {
 }
 
 export default function App() {
+  const loadBrand = useBrandStore((s) => s.load);
+  useEffect(() => { loadBrand(); }, [loadBrand]);
   return (
     <BrowserRouter>
       <Toaster />

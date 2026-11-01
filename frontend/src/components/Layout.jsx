@@ -6,6 +6,8 @@ import { Building2, LogOut, LayoutDashboard, Sun, Moon, Package, Users, Calendar
 import { useAuthStore } from '../store/authStore';
 import apiClient from '../api/client';
 import { useThemeStore } from '../store/themeStore';
+import { useBrandStore } from '../store/brandStore';
+import { API_ORIGIN } from '../api/config';
 import { getCurrentPeriod } from '../api/fiscal';
 import { getPharmacyContext } from '../api/pharmacy';
 import { useCan, useLoadPermissions } from '../utils/permissions';
@@ -124,6 +126,7 @@ function NavGroup({ icon: Icon, label, items, isActive }) {
 }
 
 export default function Layout() {
+  const brand = useBrandStore();
   const navScrollRef = useRef(null);
 
   function handleNavWheel(e) {
@@ -321,9 +324,13 @@ export default function Layout() {
   return (
     <div className="min-h-screen bg-bg-primary">
       <nav className="fixed top-0 inset-x-0 z-50 h-14 bg-bg-elevated border-b border-border px-4 sm:px-7 flex items-center gap-3">
-        <span className="font-display font-extrabold text-xl sm:text-2xl tracking-wide text-accent shrink-0">
-          RM SOFT
-        </span>
+        {brand.header === 'LOGO' ? (
+          <img src={API_ORIGIN + brand.logo_path} alt={brand.name} title={brand.name} className="h-9 max-w-[160px] object-contain shrink-0" />
+        ) : (
+          <span className="font-display font-extrabold text-xl sm:text-2xl tracking-wide text-accent shrink-0 truncate max-w-[220px]">
+            {brand.name}
+          </span>
+        )}
 
         <div className="relative flex-1 min-w-0 h-full">
           {/* the menu centred: a row as wide as its items, in the middle of the scroll area (mx-auto) - when it is

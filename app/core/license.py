@@ -116,7 +116,7 @@ def read_license(text: str) -> dict:
     """The licence's content once its signature is checked - LicenseError otherwise."""
     public = _public_key()
     if public is None:
-        raise LicenseError("Esta versão não tem a chave pública das licenças - contacte a RM SOFT")
+        raise LicenseError("Esta versão não tem a chave pública das licenças - contacte o suporte")
     text = "".join((text or "").split())  # pasted from an email: line breaks and spaces do not matter
     if not text.startswith(PREFIX) or text.count(".") != 2:
         raise LicenseError("Este ficheiro não é uma licença RM SOFT")

@@ -3,6 +3,7 @@ import { WORKING_TYPES, isExpired, workingDocumentState } from '../utils/documen
 import { API_BASE_URL } from '../api/config';
 import { useCan } from '../utils/permissions';
 import { useAuthStore } from '../store/authStore';
+import { useBrandStore } from '../store/brandStore';
 import { createPortal } from 'react-dom';
 import { Receipt, Plus, Loader2, Search, Trash2, FileText, Printer, Eye, X as XIcon, RefreshCw, RotateCcw, FilePlus, MoreVertical, ChevronLeft, ChevronRight } from 'lucide-react';
 import Modal from '../components/Modal';
@@ -130,6 +131,7 @@ function round2(v) {
 }
 
 export default function Invoices() {
+  const brandName = useBrandStore((s) => s.name);
   const can = useCan();
   // can() trusts GESTOR by default while permissions is still null (avoids a menu flash) - but the initial
   // load must know the REAL answer before deciding whether to call listProducts (Servicos has no products:view).
@@ -684,8 +686,8 @@ export default function Invoices() {
                         <div className="flex justify-end">
                           <RowActionMenu items={[
                             { label: 'Ver detalhe', icon: <Eye size={14} />, onClick: () => openDetailModal(inv.id) },
-                            { label: 'Ticket 80mm', icon: <Receipt size={14} />, onClick: () => openPdfViewer(inv.id, 'thermal', 'RM SOFT - ' + inv.series + '-' + inv.number + ' (Ticket)') },
-                            { label: 'A4', icon: <Printer size={14} />, onClick: () => openPdfViewer(inv.id, 'a4', 'RM SOFT - ' + inv.series + '-' + inv.number + ' (A4)') },
+                            { label: 'Ticket 80mm', icon: <Receipt size={14} />, onClick: () => openPdfViewer(inv.id, 'thermal', brandName + ' - ' + inv.series + '-' + inv.number + ' (Ticket)') },
+                            { label: 'A4', icon: <Printer size={14} />, onClick: () => openPdfViewer(inv.id, 'a4', brandName + ' - ' + inv.series + '-' + inv.number + ' (A4)') },
                             ...((ruleOf(inv.invoice_type, 'accepts_credit_note') || ruleOf(inv.invoice_type, 'accepts_debit_note')) && inv.document_status !== 'ANULADO' ? [
                               ...(ruleOf(inv.invoice_type, 'accepts_credit_note') && inv.document_status !== 'RECTIFICADO' ? [{ perm: 'invoices:credit_note', label: 'Emitir Nota de Crédito', icon: <RotateCcw size={14} />, onClick: () => openNcModalFromRow(inv.id) }] : []),
                               ...(ruleOf(inv.invoice_type, 'accepts_debit_note') ? [{ perm: 'invoices:debit_note', label: 'Emitir Nota de Débito', icon: <FilePlus size={14} />, onClick: () => openNdModalFromRow(inv.id) }] : []),
@@ -913,14 +915,14 @@ export default function Invoices() {
             <div className="flex justify-end gap-2 pt-2">
               <button
                 type="button"
-                onClick={() => openPdfViewer(detailInvoice.id, 'thermal', 'RM SOFT - ' + detailInvoice.series + '-' + detailInvoice.number + ' (Ticket)')}
+                onClick={() => openPdfViewer(detailInvoice.id, 'thermal', brandName + ' - ' + detailInvoice.series + '-' + detailInvoice.number + ' (Ticket)')}
                 className="flex items-center gap-1.5 border border-border hover:border-accent text-text-primary text-sm px-3.5 py-2 rounded-md transition-colors cursor-pointer"
               >
                 <Receipt size={14} /> Ticket
               </button>
               <button
                 type="button"
-                onClick={() => openPdfViewer(detailInvoice.id, 'a4', 'RM SOFT - ' + detailInvoice.series + '-' + detailInvoice.number + ' (A4)')}
+                onClick={() => openPdfViewer(detailInvoice.id, 'a4', brandName + ' - ' + detailInvoice.series + '-' + detailInvoice.number + ' (A4)')}
                 className="flex items-center gap-1.5 border border-border hover:border-accent text-text-primary text-sm px-3.5 py-2 rounded-md transition-colors cursor-pointer"
               >
                 <Printer size={14} /> A4

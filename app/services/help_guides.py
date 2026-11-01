@@ -193,7 +193,7 @@ PLATFORM_MODULES = [
             S(text="Entregue ao gestor o endereço da empresa (ex.: farmacia-da-luz.rmsystem.co.ao), o telefone e a "
                    "palavra-passe. Ao entrar, ele vê a lista «Configuração inicial» no Painel."),
             S(text="Acompanhe-o: Empresas → lápis → separador «Configuração inicial» mostra o que falta, lido dos dados reais. "
-                   "Os passos marcados «RM SOFT» (registo comercial, regime fiscal) são seus.", link="/admin/companies"),
+                   "Os passos marcados «Suporte» (registo comercial, regime fiscal) são seus.", link="/admin/companies"),
             S(text="Se a empresa contratou o assistente, ative-o no separador Assistente IA (com o limite de mensagens).", link="/admin/companies"),
         ],
         "errors": [
@@ -235,7 +235,7 @@ PAGES = [
             "venda (Empresa → Atividades → Associar utilizador).",
             "Para enviar faturas por email, configure o separador Email da empresa.",
         ],
-        "errors": [("O registo comercial ou o regime fiscal não estão marcados", "São definidos pela RM SOFT: contacte o suporte.")],
+        "errors": [("O registo comercial ou o regime fiscal não estão marcados", "São definidos pelo suporte: contacte-o.")],
     },
     {
         "id": "caixa", "path": "/caixa", "title": "Caixa", "module": "caixa-tesouraria", "perms": ["pos:view"],
@@ -492,7 +492,7 @@ PAGES = [
             "Escolha o ano fiscal e o mês.",
             "Clique em «Exportar ficheiro SAF-T» e guarde o ficheiro XML.",
         ],
-        "errors": [("Falta o n.º de registo comercial", "É exigido no ficheiro: definido pela RM SOFT, contacte o suporte.")],
+        "errors": [("Falta o n.º de registo comercial", "É exigido no ficheiro: definido pelo suporte, contacte-o.")],
     },
     {
         "id": "recursos", "path": "/recursos", "title": "Recursos", "module": "reservas", "perms": ["resources:manage"],
@@ -609,9 +609,9 @@ PAGES = [
             "Email: o servidor de envio (SMTP) da empresa, para enviar as faturas aos clientes.",
             "Cópias de segurança: escolha «Automática» (1 a 3 horas por dia) ou «Só manual», e «Fazer cópia agora» a "
             "qualquer momento. Cada cópia guarda todos os dados da empresa e pode ser descarregada; guardam-se as dos "
-            "últimos 7 dias e uma por semana durante 4 semanas. A reposição de uma cópia é feita pela RM SOFT.",
+            "últimos 7 dias e uma por semana durante 4 semanas. A reposição de uma cópia é feita pelo suporte.",
         ],
-        "errors": [("O NIF ou o nome não se alteram", "A identidade fiscal é definida pela RM SOFT: contacte o suporte.")],
+        "errors": [("O NIF ou o nome não se alteram", "A identidade fiscal é definida pelo suporte: contacte-o.")],
     },
 ]
 

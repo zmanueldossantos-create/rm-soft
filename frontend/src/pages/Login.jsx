@@ -4,11 +4,13 @@ import { Phone, Lock, Eye, EyeOff, LogIn, Mail, Building2 } from 'lucide-react';
 import apiClient from '../api/client';
 import { API_ORIGIN } from '../api/config';
 import { useAuthStore } from '../store/authStore';
+import { useBrandStore } from '../store/brandStore';
 import { extractErrorMessage } from '../utils/errors';
 import { homeFor } from '../utils/roleHome';
 import { useToastState } from '../components/Toaster';
 
 export default function Login() {
+  const brand = useBrandStore();
   const [phoneSuffix, setPhoneSuffix] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -71,16 +73,16 @@ export default function Login() {
         <div className="relative bg-bg-elevated rounded-lg overflow-hidden shadow-2xl ticket-edge">
           <div className="px-10 pt-9 pb-8">
             <p className="font-mono text-[11px] tracking-[0.14em] uppercase text-accent mb-2">
-              RM SOFT · Painel de gestão
+              {brand.name} · Painel de gestão
             </p>
             <div className="flex items-center gap-3 mb-1.5">
-              {tenant?.logo_path ? (
-                <img src={API_ORIGIN + tenant.logo_path} alt="" className="w-11 h-11 rounded-md object-contain bg-white/90 p-1" />
+              {tenant?.logo_path || brand.logo_path ? (
+                <img src={API_ORIGIN + (tenant?.logo_path || brand.logo_path)} alt="" className="w-11 h-11 rounded-md object-contain bg-white/90 p-1" />
               ) : tenant?.kind === 'company' ? (
                 <div className="w-11 h-11 rounded-md bg-accent/10 flex items-center justify-center"><Building2 size={20} className="text-accent" /></div>
               ) : null}
               <h1 className="font-display font-bold text-[26px] tracking-tight text-text-primary">
-                {tenant?.name || 'RM SOFT'}
+                {tenant?.name || brand.name}
               </h1>
             </div>
             <p className="text-text-muted text-sm mb-8">
@@ -91,7 +93,7 @@ export default function Login() {
               <div className="bg-amber-500/10 border-l-2 border-amber-500 text-amber-500 [.light_&]:text-amber-700 px-3.5 py-3 text-[13px] rounded-r">
                 {tenant.kind === 'none'
                   ? `Este endereço não corresponde a nenhuma empresa. Abra o endereço da sua empresa (ex.: nome-da-empresa.${tenant.base_domain}).`
-                  : 'Esta empresa está suspensa - contacte a RM SOFT.'}
+                  : 'Esta empresa está suspensa - contacte o suporte.'}
               </div>
             )}
 
@@ -151,7 +153,7 @@ export default function Login() {
               </button>
             </form>}
 
-            <fieldset className="mt-6 border border-border rounded-md px-4 pb-3 pt-2 bg-bg-inset/50">
+            {supplierName && (!brand.custom || brand.vendor) && <fieldset className="mt-6 border border-border rounded-md px-4 pb-3 pt-2 bg-bg-inset/50">
               <legend className="font-mono text-[10px] uppercase tracking-wide text-text-muted px-1.5">
                 Fornecedor
               </legend>
@@ -173,7 +175,7 @@ export default function Login() {
                   {supplierPhone}
                 </span>
               </div>
-            </fieldset>
+            </fieldset>}
           </div>
         </div>
       </div>

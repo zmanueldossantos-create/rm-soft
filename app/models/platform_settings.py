@@ -8,7 +8,7 @@ SUPER_ADMIN, regardless of Mode A (local) or Mode B (SaaS) deployment.
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, String, Text, func
+from sqlalchemy import Boolean, DateTime, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import UUID
 
@@ -65,6 +65,14 @@ class PlatformSettings(Base):
     agt_software_signature: Mapped[str | None] = mapped_column(Text, nullable=True)  # jwsSoftwareSignature
     # the QR code's address on an electronic document ({documento}, {nif}) - None: agt_document_service.QR_URL_DEFAULT
     agt_qr_url: Mapped[str | None] = mapped_column(String(300), nullable=True)
+
+    # Marca do software (SUPER_ADMIN): the name and logo the users of this installation see (menu, login, tab, footer)
+    # - a client may have the software under its own name. None: RM SOFT. The producer's identity for the AGT and the
+    # SAF-T (vendor_tax_id, product_id...) is separate and never changes with it.
+    brand_name: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    brand_logo_path: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    brand_header: Mapped[str] = mapped_column(String(10), default="NOME", server_default="NOME", nullable=False)  # NOME | LOGO
+    brand_show_vendor: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
 
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

@@ -17,6 +17,7 @@ from app.models.user import User
 from app.schemas.admin import CompanyCreateRequest, CompanyUpdateRequest, CompanyResponse
 from app.schemas.platform_settings import PlatformSettingsResponse, PlatformSettingsUpdateRequest, SiteSettings
 from app.services.platform_settings_service import get_or_create_platform_settings, update_platform_settings
+from app.services import brand_service
 from app.schemas.fiscal_regime import FiscalRegimeCreateRequest, FiscalRegimeUpdateRequest, FiscalRegimeResponse
 from app.services.fiscal_regime_service import (
     list_fiscal_regimes,
@@ -551,6 +552,41 @@ async def put_site_settings(payload: SiteSettings, db: AsyncSession = Depends(ge
     await db.commit()
     await db.refresh(platform)
     return platform
+
+
+class BrandRequest(BaseModel):
+    name: str | None = None
+    header: str = "NOME"
+    show_vendor: bool = True
+
+
+@router.get("/brand")
+async def get_brand_settings(db: AsyncSession = Depends(get_db), current_user: User = Depends(require_role("SUPER_ADMIN"))):
+    """Marca do software: the name and logo the users of this installation see."""
+    return await brand_service.get_brand(db)
+
+
+@router.put("/brand")
+async def put_brand_settings(payload: BrandRequest, db: AsyncSession = Depends(get_db),
+                             current_user: User = Depends(require_role("SUPER_ADMIN"))):
+    try:
+        return await brand_service.update_brand(db, payload.name, payload.header, payload.show_vendor)
+    except brand_service.BrandError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.post("/brand/logo")
+async def upload_brand_logo(file: UploadFile = File(...), db: AsyncSession = Depends(get_db),
+                            current_user: User = Depends(require_role("SUPER_ADMIN"))):
+    try:
+        return await brand_service.set_logo(db, file.filename, await file.read())
+    except brand_service.BrandError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.delete("/brand/logo")
+async def delete_brand_logo(db: AsyncSession = Depends(get_db), current_user: User = Depends(require_role("SUPER_ADMIN"))):
+    return await brand_service.remove_logo(db)
 
 
 @router.get("/fiscal-regimes", response_model=list[FiscalRegimeResponse])

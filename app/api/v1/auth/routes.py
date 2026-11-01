@@ -33,6 +33,7 @@ from app.services.auth_service import (
 from app.api.deps import get_current_user, require_role
 from app.models.user import User
 from app.services.support_service import SupportError, end_support, redeem_code, refreshed_access
+from app.services.brand_service import get_brand
 from app.services.tenant_service import domain_allowed, host_claim, request_host, resolve_tenant, tenant_claim
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
@@ -54,7 +55,7 @@ async def _login_scope(db: AsyncSession, request: Request):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail="Endereço desconhecido - verifique o endereço da sua empresa")
     if not tenant.company.is_active:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Esta empresa está suspensa - contacte a RM SOFT")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Esta empresa está suspensa - contacte o suporte")
     return tenant.company.id, tenant_claim(tenant)
 
 
@@ -65,6 +66,12 @@ async def domain_check(domain: str = "", db: AsyncSession = Depends(get_db)):
     if not await domain_allowed(db, domain):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Endereço desconhecido")
     return {"ok": True}
+
+
+@router.get("/branding")
+async def get_branding(db: AsyncSession = Depends(get_db)):
+    """Public (the login screen shows it): the software's name and logo on this installation - Marca do software."""
+    return await get_brand(db)
 
 
 @router.get("/tenant")
@@ -122,7 +129,7 @@ async def refresh(payload: RefreshRequest, request: Request, db: AsyncSession = 
     if get_settings().is_saas and data.get("company_id") not in (None, "None"):
         company = await db.get(Company, uuid.UUID(data["company_id"]))
         if company is None or not company.is_active:  # a suspended company: its sessions end at the next refresh
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Esta empresa está suspensa - contacte a RM SOFT")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Esta empresa está suspensa - contacte o suporte")
     new_access_token = create_access_token(subject=data["sub"], company_id=data["company_id"], role=data.get("role", ""),
                                            tenant=data.get("tnt"))
     return TokenPair(access_token=new_access_token, refresh_token=payload.refresh_token)

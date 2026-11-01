@@ -168,3 +168,22 @@ export async function getReferenceOffer(moduleIds) {
   const res = await apiClient.get('/admin/reference-catalog/offer?' + params.toString());
   return res.data;
 }
+
+// Marca do software: the name and logo the users of this installation see
+export async function getBrandSettings() {
+  return (await apiClient.get('/admin/brand')).data;
+}
+
+export async function updateBrandSettings(name, header, showVendor) {
+  return (await apiClient.put('/admin/brand', { name: name || null, header, show_vendor: showVendor })).data;
+}
+
+export async function uploadBrandLogo(file) {
+  const form = new FormData();
+  form.append('file', file);
+  return (await apiClient.post('/admin/brand/logo', form, MULTIPART)).data;
+}
+
+export async function removeBrandLogo() {
+  return (await apiClient.delete('/admin/brand/logo')).data;
+}

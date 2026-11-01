@@ -10,6 +10,7 @@ import { getMyCompanySetup } from '../api/company';
 import { extractErrorMessage } from '../utils/errors';
 import SetupChecklist from './SetupChecklist';
 import { useToastState } from './Toaster';
+import { useBrandStore } from '../store/brandStore';
 
 const fold = (text) => text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
@@ -115,6 +116,7 @@ function SetupSection() {
 }
 
 export default function HelpPanel({ open, onClose }) {
+  const brandName = useBrandStore((s) => s.name);
   const location = useLocation();
   const navigate = useNavigate();
   const can = useCan();
@@ -146,7 +148,7 @@ export default function HelpPanel({ open, onClose }) {
         <div className="w-9 h-9 rounded-md bg-accent/10 flex items-center justify-center"><HelpCircle size={18} className="text-accent" /></div>
         <div className="flex-1">
           <p className="font-display font-semibold text-text-primary">Ajuda</p>
-          <p className="text-[12px] text-text-muted">Guias de utilização do RM SOFT</p>
+          <p className="text-[12px] text-text-muted">Guias de utilização do {brandName}</p>
         </div>
         <button type="button" onClick={onClose} aria-label="Fechar ajuda" className="w-9 h-9 flex items-center justify-center border border-border rounded-md text-text-muted hover:text-text-primary hover:border-accent transition-colors cursor-pointer">
           <X size={16} />
@@ -168,7 +170,7 @@ export default function HelpPanel({ open, onClose }) {
         {guides && results && (
           <>
             <p className={sectionTitle}>{results.length} guia(s) encontrado(s)</p>
-            {results.length === 0 && <p className="text-sm text-text-muted">Nenhum guia fala disso ainda. Pode perguntar ao suporte RM SOFT.</p>}
+            {results.length === 0 && <p className="text-sm text-text-muted">Nenhum guia fala disso ainda. Pode perguntar ao suporte.</p>}
             {results.map((g) => <GuideLink key={g.id} guide={g} onOpen={openGuide} />)}
           </>
         )}

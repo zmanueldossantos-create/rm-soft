@@ -24,7 +24,7 @@ from app.models.service import Service
 from app.models.user import User, UserRole
 from app.models.user_cash_point_access import UserCashPointAccess
 
-PLATFORM = "RM SOFT"  # owner of the items the gestor cannot change himself
+PLATFORM = "Suporte"  # owner of the items the gestor cannot change himself (neutral: the software may carry a client's brand)
 
 
 async def _count(db: AsyncSession, model, *conditions) -> int:

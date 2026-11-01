@@ -93,7 +93,7 @@ export default function NotificationsTab({ canManage, onAllowed }) {
 
   if (!data) return <div className="flex items-center justify-center py-16 text-text-muted text-sm"><Loader2 size={18} className="animate-spin mr-2" />A carregar...</div>;
   if (!data.allowed) {
-    return <div className="bg-bg-elevated border border-border rounded-lg p-6 text-sm text-text-muted">As notificações automáticas não estão incluídas no seu plano. Para as ter, contacte a RM SOFT.</div>;
+    return <div className="bg-bg-elevated border border-border rounded-lg p-6 text-sm text-text-muted">As notificações automáticas não estão incluídas no seu plano. Para as ter, contacte o suporte.</div>;
   }
   const eventLabel = Object.fromEntries(data.events.map((e) => [e.code, e.label]));
   const showSaleMin = data.events.some((e) => e.code === 'VENDA');
@@ -147,7 +147,7 @@ export default function NotificationsTab({ canManage, onAllowed }) {
           )}
         </div>
         {!data.channels.EMAIL && <p className="text-[13px] text-amber-500 [.light_&]:text-amber-700 mb-2">Email: configure primeiro o email da empresa (separador Email).</p>}
-        {!data.channels.TELEGRAM && <p className="text-[13px] text-amber-500 [.light_&]:text-amber-700 mb-2">Telegram: o bot ainda não está configurado neste servidor - contacte a RM SOFT.</p>}
+        {!data.channels.TELEGRAM && <p className="text-[13px] text-amber-500 [.light_&]:text-amber-700 mb-2">Telegram: o bot ainda não está configurado neste servidor - contacte o suporte.</p>}
         {data.recipients.length === 0 ? (
           <div className="border border-dashed border-border rounded-md py-10 text-center text-sm text-text-muted">Ainda nenhum destinatário. Adicione o seu email ou o seu Telegram.</div>
         ) : (
