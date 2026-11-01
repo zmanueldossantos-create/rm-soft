@@ -517,7 +517,9 @@ export default function AdminCompanies() {
   }
 
   function addBankRow() {
-    setBankRows((prev) => [...prev, { ...emptyBankRow }]);
+    // the currency comes filled with the company's main one (AOA): the small selector is the field people forget
+    const defaultCurrency = form.primaryCurrencyId || currencies.find((c) => c.code === 'AOA')?.id || '';
+    setBankRows((prev) => [...prev, { ...emptyBankRow, currencyId: defaultCurrency }]);
   }
 
   function updateBankRow(index, field, value) {
@@ -593,9 +595,30 @@ export default function AdminCompanies() {
     };
   }
 
+  // A bank account row partly filled is never dropped in silence: the save stops and says what is missing.
+  // A row with only the pre-filled currency counts as empty. In edit mode a new row is added with its own ✓ button.
+  function bankRowsProblem() {
+    for (const [idx, row] of bankRows.entries()) {
+      const typed = row.bankId || row.accountNumber.trim() || row.iban.trim();
+      if (!typed) continue;
+      const missing = [
+        !row.bankId && 'o banco', !row.accountNumber.trim() && 'o n.º de conta', !row.iban.trim() && 'o IBAN', !row.currencyId && 'a moeda',
+      ].filter(Boolean);
+      if (missing.length) return `Conta bancária ${idx + 1}: falta ${missing.join(', ')}`;
+      if (editingId) return `Conta bancária ${idx + 1}: clique em ✓ para a adicionar, ou apague o que escreveu`;
+    }
+    return null;
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
     setFormError('');
+    const bankProblem = bankRowsProblem();
+    if (bankProblem) {
+      setFormError(bankProblem);
+      setActiveTab('bancarias');
+      return;
+    }
     setSaving(true);
 
     try {
@@ -610,7 +633,7 @@ export default function AdminCompanies() {
         }
       } else {
         const fullGestorPhone = form.gestorPhone.startsWith('+') ? form.gestorPhone : '+244' + form.gestorPhone.replace(/\s/g, '');
-        const validBankRows = bankRows.filter((r) => r.bankId && r.accountNumber && r.iban && r.currencyId);
+        const validBankRows = bankRows.filter((r) => r.bankId && r.accountNumber.trim() && r.iban.trim() && r.currencyId);  // checked above: the others are empty
         const created = await createCompany({
           ...buildPayload(),
           base_token: base && !base.problems.length ? base.token : null,
@@ -1302,7 +1325,7 @@ export default function AdminCompanies() {
                         className="flex-1 min-w-0 bg-transparent border-none px-2 py-2.5 text-sm text-text-primary font-mono outline-none"
                       />
                     </div>
-                    <div className="w-16 shrink-0">
+                    <div className="w-24 shrink-0">
                       <Select value={row.currencyId} onChange={(v) => updateBankRow(idx, 'currencyId', v)} options={currencies.map((c) => ({ value: c.id, label: c.code }))} placeholder="Moeda" />
                     </div>
                     <button
