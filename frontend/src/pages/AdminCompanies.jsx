@@ -61,7 +61,7 @@ const emptyForm = {
   commercialRegistrationNumber: '',
   primaryCurrencyId: '', secondaryCurrencyId: '',
   fiscalRegimeId: '',
-  usesInvoicing: true, autoSeriesYear: true, allowsFutureSaleDate: false, suggestsLastDocumentDate: false,
+  usesInvoicing: true, autoSeriesYear: true, allowsFutureSaleDate: false,
   issuanceMode: 'MANUAL',
   trainingMode: false,
   moduleIds: [],
@@ -382,7 +382,6 @@ export default function AdminCompanies() {
       usesInvoicing: company.uses_invoicing,
       autoSeriesYear: company.auto_series_year,
       allowsFutureSaleDate: company.allows_future_sale_date,
-      suggestsLastDocumentDate: company.suggests_last_document_date,
       issuanceMode: company.issuance_mode || 'MANUAL',
       trainingMode: !!company.training_mode,
       moduleIds: [],
@@ -527,7 +526,6 @@ export default function AdminCompanies() {
       usesInvoicing: checked,
       autoSeriesYear: checked ? prev.autoSeriesYear : false,
       allowsFutureSaleDate: checked ? prev.allowsFutureSaleDate : false,
-      suggestsLastDocumentDate: checked ? prev.suggestsLastDocumentDate : false,
     }));
   }
 
@@ -608,7 +606,6 @@ export default function AdminCompanies() {
       uses_invoicing: form.usesInvoicing,
       auto_series_year: form.autoSeriesYear,
       allows_future_sale_date: form.allowsFutureSaleDate,
-      suggests_last_document_date: form.suggestsLastDocumentDate,
       issuance_mode: form.issuanceMode,
       training_mode: form.trainingMode,
       fiscal_regime_id: form.fiscalRegimeId || null,
@@ -1003,7 +1000,7 @@ export default function AdminCompanies() {
                 <p className="text-[12px] text-text-muted">A chave privada do contribuinte (portal da AGT) é colada pela empresa em Definições da Empresa → Faturação Eletrónica - guardada cifrada.</p>
               )}
 
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4" id="usesInvoicingRow">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4" id="usesInvoicingRow">
                 <label className="flex items-center gap-2.5 cursor-pointer select-none border border-border rounded-md px-3.5 py-3 hover:border-accent transition-colors">
                   <input type="checkbox" checked={form.usesInvoicing} onChange={(e) => handleUsesInvoicingChange(e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
                   <span className="text-sm text-text-primary">Usa Facturação</span>
@@ -1017,10 +1014,6 @@ export default function AdminCompanies() {
                     <label className="flex items-center gap-2.5 cursor-pointer select-none border border-border rounded-md px-3.5 py-3 hover:border-accent transition-colors">
                       <input type="checkbox" checked={form.allowsFutureSaleDate} onChange={(e) => updateField('allowsFutureSaleDate', e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
                       <span className="text-sm text-text-primary">Permite venda com data futura</span>
-                    </label>
-                    <label className="flex items-center gap-2.5 cursor-pointer select-none border border-border rounded-md px-3.5 py-3 hover:border-accent transition-colors">
-                      <input type="checkbox" checked={form.suggestsLastDocumentDate} onChange={(e) => updateField('suggestsLastDocumentDate', e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
-                      <span className="text-sm text-text-primary">Sugere data do último documento</span>
                     </label>
                   </>
                 )}

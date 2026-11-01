@@ -111,7 +111,6 @@ class CompanyCreateRequest(BaseModel):
     uses_invoicing: bool = True
     auto_series_year: bool = True
     allows_future_sale_date: bool = False
-    suggests_last_document_date: bool = False
     issuance_mode: str = "MANUAL"
     bank_accounts: list[BankAccountInput] = []
     # «Base»: a company's backup file, uploaded first (/admin/company-base/inspect), whose catalog is copied
@@ -196,7 +195,6 @@ class CompanyUpdateRequest(BaseModel):
     uses_invoicing: bool = True
     auto_series_year: bool = True
     allows_future_sale_date: bool = False
-    suggests_last_document_date: bool = False
     issuance_mode: str = "MANUAL"
     fiscal_regime_id: uuid.UUID | None = None
     training_mode: bool | None = None  # Modo formação (SUPER_ADMIN) - None: unchanged
@@ -263,7 +261,6 @@ class CompanyResponse(BaseModel):
     uses_invoicing: bool
     auto_series_year: bool
     allows_future_sale_date: bool
-    suggests_last_document_date: bool
     issuance_mode: str
     training_mode: bool = False  # Modo formação: documents without fiscal value
 

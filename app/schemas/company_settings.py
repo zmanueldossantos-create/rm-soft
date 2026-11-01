@@ -54,7 +54,6 @@ class CompanyContactUpdateRequest(BaseModel):
     uses_invoicing: bool = True
     auto_series_year: bool = True
     allows_future_sale_date: bool = False
-    suggests_last_document_date: bool = False
     # Sale unit consistency checks ('off' / 'warn' / 'block'): only changed when sent.
     sale_unit_check_above_base: str | None = None
     sale_unit_check_below_cost: str | None = None
@@ -106,7 +105,6 @@ class CompanyContactResponse(BaseModel):
     uses_invoicing: bool
     auto_series_year: bool
     allows_future_sale_date: bool
-    suggests_last_document_date: bool
     sale_unit_check_above_base: str = "warn"
     sale_unit_check_below_cost: str = "warn"
     sale_unit_check_same_factor: str = "warn"

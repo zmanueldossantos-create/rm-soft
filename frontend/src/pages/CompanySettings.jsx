@@ -156,7 +156,6 @@ export default function CompanySettings() {
   const [prescriptionPolicy, setPrescriptionPolicy] = useState('OBRIGATORIA');
   useEffect(() => { getPharmacyContext().then((c) => setPharmacyEnabled(!!c.enabled)).catch(() => setPharmacyEnabled(false)); }, []);
   const [saleUnitChecks, setSaleUnitChecks] = useState({ sale_unit_check_above_base: 'warn', sale_unit_check_below_cost: 'warn', sale_unit_check_same_factor: 'warn' });
-  const [suggestsLastDocumentDate, setSuggestsLastDocumentDate] = useState(false);
   const [issuanceMode, setIssuanceMode] = useState('MANUAL');
 
   const [countries, setCountries] = useState([]);
@@ -254,7 +253,6 @@ export default function CompanySettings() {
         sale_unit_check_below_cost: data.sale_unit_check_below_cost || 'warn',
         sale_unit_check_same_factor: data.sale_unit_check_same_factor || 'warn',
       });
-      setSuggestsLastDocumentDate(data.suggests_last_document_date);
       setStockPeriodClosing(!!data.stock_period_closing);
       setStockCheckAtPeriodEnd(!!data.stock_check_at_period_end);
       setInventoryBeforeClose(!!data.inventory_before_close);
@@ -613,7 +611,7 @@ export default function CompanySettings() {
         city: city || null, province_id: provinceId || null, municipality_id: municipalityId || null,
         primary_currency_id: primaryCurrencyId || null, secondary_currency_id: secondaryCurrencyId || null,
         uses_invoicing: usesInvoicing, auto_series_year: autoSeriesYear,
-        allows_future_sale_date: allowsFutureSaleDate, suggests_last_document_date: suggestsLastDocumentDate,
+        allows_future_sale_date: allowsFutureSaleDate,
         ...saleUnitChecks,
         stock_period_closing: stockPeriodClosing,
         stock_check_at_period_end: stockCheckAtPeriodEnd,
@@ -637,7 +635,6 @@ export default function CompanySettings() {
     if (!checked) {
       setAutoSeriesYear(false);
       setAllowsFutureSaleDate(false);
-      setSuggestsLastDocumentDate(false);
     }
   }
 
@@ -942,7 +939,7 @@ export default function CompanySettings() {
                 <p className="sm:col-span-2 text-[12px] text-text-muted pb-2.5">Guarde as alterações: a ligação à AGT configura-se depois no separador «Faturação Eletrónica».</p>
               ))}
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
               <label className="flex items-center gap-2.5 cursor-pointer select-none border border-border rounded-md px-3.5 py-3 hover:border-accent transition-colors">
                 <input type="checkbox" checked={usesInvoicing} onChange={(e) => handleUsesInvoicingChange(e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
                 <span className="text-sm text-text-primary">Usa Facturação</span>
@@ -954,10 +951,6 @@ export default function CompanySettings() {
               <label className="flex items-center gap-2.5 cursor-pointer select-none border border-border rounded-md px-3.5 py-3 hover:border-accent transition-colors">
                 <input type="checkbox" checked={allowsFutureSaleDate} disabled={!usesInvoicing} onChange={(e) => setAllowsFutureSaleDate(e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer disabled:opacity-50" />
                 <span className="text-sm text-text-primary">Permite venda com data futura</span>
-              </label>
-              <label className="flex items-center gap-2.5 cursor-pointer select-none border border-border rounded-md px-3.5 py-3 hover:border-accent transition-colors">
-                <input type="checkbox" checked={suggestsLastDocumentDate} disabled={!usesInvoicing} onChange={(e) => setSuggestsLastDocumentDate(e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer disabled:opacity-50" />
-                <span className="text-sm text-text-primary">Sugere data do último documento</span>
               </label>
             </div>
           </Section>

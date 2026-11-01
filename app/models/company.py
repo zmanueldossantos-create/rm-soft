@@ -67,7 +67,6 @@ class Company(Base):
     uses_invoicing: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     auto_series_year: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     allows_future_sale_date: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    suggests_last_document_date: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     # Sale unit consistency checks, each 'off' / 'warn' (confirm explicitly) / 'block' - see product_sale_unit_service.
     sale_unit_check_above_base: Mapped[str] = mapped_column(String(5), default="warn", server_default="warn", nullable=False)
     sale_unit_check_below_cost: Mapped[str] = mapped_column(String(5), default="warn", server_default="warn", nullable=False)

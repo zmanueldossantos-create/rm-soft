@@ -158,7 +158,6 @@ async def create_company(
     uses_invoicing: bool = True,
     auto_series_year: bool = True,
     allows_future_sale_date: bool = False,
-    suggests_last_document_date: bool = False,
     issuance_mode: str = "MANUAL",
     bank_accounts: list[dict] | None = None,
     subdomain: str | None = None,
@@ -212,7 +211,6 @@ async def create_company(
         uses_invoicing=uses_invoicing,
         auto_series_year=auto_series_year if uses_invoicing else False,
         allows_future_sale_date=allows_future_sale_date if uses_invoicing else False,
-        suggests_last_document_date=suggests_last_document_date if uses_invoicing else False,
         issuance_mode=InvoiceIssuanceMode(issuance_mode),
         subdomain=subdomain,
     )
@@ -347,7 +345,6 @@ async def update_company(
     uses_invoicing: bool = True,
     auto_series_year: bool = True,
     allows_future_sale_date: bool = False,
-    suggests_last_document_date: bool = False,
     issuance_mode: str = "MANUAL",
     fiscal_regime_id: uuid.UUID | None = None,
     subdomain: str | None = None,
@@ -392,7 +389,6 @@ async def update_company(
     company.uses_invoicing = uses_invoicing
     company.auto_series_year = auto_series_year if uses_invoicing else False
     company.allows_future_sale_date = allows_future_sale_date if uses_invoicing else False
-    company.suggests_last_document_date = suggests_last_document_date if uses_invoicing else False
     company.issuance_mode = InvoiceIssuanceMode(issuance_mode)
     if fiscal_regime_id is not None and fiscal_regime_id != company.fiscal_regime_id:
         company.fiscal_regime_id = fiscal_regime_id
