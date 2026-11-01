@@ -59,6 +59,7 @@ from app.services.company_service import (
     create_company,
     update_company,
     delete_company,
+    CompanyDeleteRefusedError,
     toggle_company_status,
     CompanyAlreadyExistsError,
     CompanyNotFoundError,
@@ -418,6 +419,8 @@ async def remove_company(
         await delete_company(db, company_id)
     except CompanyNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except CompanyDeleteRefusedError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
 
 
 @router.patch("/companies/{company_id}/toggle-status", response_model=CompanyResponse)

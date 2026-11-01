@@ -138,7 +138,7 @@ def test_every_api_route_is_protected():
     public = {"/api/v1/auth/login", "/api/v1/auth/refresh", "/api/v1/channels/telegram/webhook",
               "/api/v1/channels/whatsapp/webhook",
               # before the login: whose login screen an address is, and (for the HTTPS proxy) whether it exists
-              "/api/v1/auth/tenant", "/api/v1/auth/domain-check",
+              "/api/v1/auth/tenant", "/api/v1/auth/branding", "/api/v1/auth/domain-check",
               # the company's address opening a support access: its one-time code is the proof
               "/api/v1/auth/support/redeem",
               # the public site (rmsystem.co.ao, PUBLIC_SITE only): the plans and contacts anyone may read

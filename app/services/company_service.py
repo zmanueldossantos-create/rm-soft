@@ -413,20 +413,63 @@ async def update_company(
     return company
 
 
+class CompanyDeleteRefusedError(Exception):
+    """The company cannot be deleted: it has issued real documents (PT-PT message)."""
+
+
 async def delete_company(db: AsyncSession, company_id: uuid.UUID) -> None:
     """
-    Permanently deletes a company and its dependent data (VAT rates, users, bank accounts).
-    Destructive action - the frontend must confirm with the SUPER_ADMIN before calling this.
-    """
-    company = await get_company_or_raise(db, company_id)
+    Apagar empresa (SUPER_ADMIN): deletes a company and EVERYTHING it owns - its rows in every table (contract, modules,
+    activities, tills, catalog, stock, documents of Modo formação, settings, users...), the lines under them, and its
+    files (logo, article pictures). For a company created by mistake, for tests or for a training that starts again.
 
-    await db.execute(RolePermission.__table__.delete().where(RolePermission.company_id == company_id))
-    await db.execute(CompanyPermissionSeed.__table__.delete().where(CompanyPermissionSeed.company_id == company_id))
-    await db.execute(CompanyBankAccount.__table__.delete().where(CompanyBankAccount.company_id == company_id))
-    await db.execute(VAT.__table__.delete().where(VAT.company_id == company_id))
-    await db.execute(User.__table__.delete().where(User.company_id == company_id))
-    await db.delete(company)
+    Refused when the company has issued a real document (a sales document or a guia outside the Modo formação): an
+    issued document is kept by law - such a company is deactivated, never deleted.
+    """
+    from pathlib import Path
+
+    from sqlalchemy import delete as sql_delete
+
+    import app.models  # noqa: F401  (every table registered on Base.metadata)
+    from app.core.database import Base
+    from app.models.goods_movement import GoodsMovement
+    from app.models.invoice import Invoice
+    from app.models.product import Product
+
+    company = await get_company_or_raise(db, company_id)
+    real_invoice = (await db.execute(select(Invoice.id).where(
+        Invoice.company_id == company_id, Invoice.issuance_mode != "FORMACAO").limit(1))).first()
+    real_guia = (await db.execute(select(GoodsMovement.id).where(
+        GoodsMovement.company_id == company_id, GoodsMovement.is_training.is_(False)).limit(1))).first()
+    if real_invoice is not None or real_guia is not None:
+        raise CompanyDeleteRefusedError(
+            "Esta empresa já emitiu documentos reais (fora do Modo formação): por lei são conservados - "
+            "desative a empresa em vez de a apagar")
+
+    images = (await db.execute(select(Product.image_path).where(Product.company_id == company_id))).scalars().all()
+    tables = Base.metadata.sorted_tables  # a row comes after the rows it points to: deleted in reverse order
+    owned = [tb for tb in tables if "company_id" in tb.c and tb.name != "companies"]
+    owned_names = {tb.name for tb in owned}
+    # the lines first (no company_id: found through their parent row), then the company's own rows, last ones first
+    for table in reversed(tables):
+        if table.name == "companies" or table.name in owned_names:
+            continue
+        for column in table.c:
+            for fk in column.foreign_keys:
+                parent = fk.column.table
+                if parent.name in owned_names:
+                    ids = select(parent.c.id).where(parent.c.company_id == company_id)
+                    await db.execute(sql_delete(table).where(column.in_(ids)))
+                elif parent.name == "companies":
+                    await db.execute(sql_delete(table).where(column == company_id))
+    for table in reversed(owned):
+        await db.execute(sql_delete(table).where(table.c.company_id == company_id))
+    logo = company.logo_path
+    await db.execute(sql_delete(Company.__table__).where(Company.__table__.c.id == company_id))
     await db.commit()
+    for path in [*images, logo]:
+        if path:
+            Path(path.split("?")[0].lstrip("/")).unlink(missing_ok=True)
 
 
 async def toggle_company_status(db: AsyncSession, company_id: uuid.UUID) -> Company:

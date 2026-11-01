@@ -1,12 +1,12 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Building2, Plus, Loader2, Search, Mail, Phone, Pencil, UserCog, Check, X, KeyRound, Landmark, LifeBuoy, Download, Upload, FileArchive, DatabaseBackup } from 'lucide-react';
+import { Building2, Plus, Loader2, Search, Mail, Phone, Pencil, UserCog, Check, X, KeyRound, Landmark, LifeBuoy, Download, Upload, FileArchive, DatabaseBackup, Trash2 } from 'lucide-react';
 import Modal from '../components/Modal';
 import apiClient from '../api/client';
 import Select from '../components/Select';
 import {
   listCompanies, createCompany, updateCompany, toggleCompanyStatus,
   getCompanyGestor,
-  listBankAccounts, addBankAccount, updateBankAccount, toggleBankAccountStatus, getCompanyRegimeHistory, getCompanySetup, startSupport, listSupportSessions, downloadCompanyBackup, inspectCompanyBase, getReferenceOffer } from '../api/admin';
+  listBankAccounts, addBankAccount, updateBankAccount, toggleBankAccountStatus, getCompanyRegimeHistory, getCompanySetup, startSupport, listSupportSessions, downloadCompanyBackup, inspectCompanyBase, getReferenceOffer , deleteCompany } from '../api/admin';
 import RestoreCompanyModal from '../components/RestoreCompanyModal';
 import BackupsOverviewModal from '../components/BackupsOverviewModal';
 import CompanyBackupsPanel from '../components/CompanyBackupsPanel';
@@ -131,6 +131,11 @@ export default function AdminCompanies() {
   const [togglingId, setTogglingId] = useState(null);
 
   const [modalOpen, setModalOpen] = useState(false);
+  // Apagar empresa: confirmed by typing the company's NIF
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteNif, setDeleteNif] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [, setDeleteError] = useToastState('error');
   const [activeTab, setActiveTab] = useState('gestor');
 
   const [companyVatRates, setCompanyVatRates] = useState([]);
@@ -405,6 +410,21 @@ export default function AdminCompanies() {
       setCompanyVatRates([]);
     } finally {
       setVatLoading(false);
+    }
+  }
+
+  async function handleDeleteCompany() {
+    setDeleting(true);
+    try {
+      await deleteCompany(editingId);
+      toast.success('Empresa ' + (form.shortName || form.name) + ' apagada, com todos os seus dados');
+      setDeleteOpen(false);
+      closeModal();
+      await loadCompanies();
+    } catch (err) {
+      setDeleteError(extractErrorMessage(err, 'Não foi possível apagar a empresa'));
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -1006,6 +1026,18 @@ export default function AdminCompanies() {
                 )}
               </div>
 
+              {editingId && (
+                <div className="border border-danger/40 rounded-md px-4 py-3.5 flex items-center justify-between gap-4 flex-wrap">
+                  <div>
+                    <p className="text-sm font-medium text-text-primary">Apagar empresa</p>
+                    <p className="text-[12px] text-text-muted">Apaga a empresa e todos os seus dados (contrato, utilizadores, artigos, stock, documentos de formação). Só é possível sem documentos reais emitidos.</p>
+                  </div>
+                  <button type="button" onClick={() => { setDeleteNif(''); setDeleteOpen(true); }}
+                    className="flex items-center gap-1.5 border border-danger text-danger hover:bg-danger/10 text-[13px] font-medium rounded-md px-3.5 py-2 cursor-pointer transition-colors shrink-0">
+                    <Trash2 size={14} /> Apagar empresa
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -1393,6 +1425,27 @@ export default function AdminCompanies() {
             </button>
           </div>
         )}
+      </Modal>
+
+      <Modal open={deleteOpen} onClose={() => !deleting && setDeleteOpen(false)} title="Apagar empresa">
+        <div className="flex flex-col gap-4">
+          <p className="text-sm text-text-primary">
+            A empresa <span className="font-semibold">{form.name}</span> e <span className="font-semibold">todos os seus dados</span> serão apagados definitivamente: contrato, módulos, utilizadores, artigos, stock, reservas e documentos de formação. Não pode ser desfeito.
+          </p>
+          <div>
+            <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Para confirmar, escreva o NIF da empresa ({form.nif})</label>
+            <input value={deleteNif} onChange={(e) => setDeleteNif(e.target.value)} autoFocus
+              className="w-full bg-bg-inset border border-border rounded-md px-3 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-danger transition-colors" />
+          </div>
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={() => setDeleteOpen(false)} disabled={deleting}
+              className="text-[13px] px-3.5 py-2 rounded-md border border-border text-text-primary hover:border-accent cursor-pointer disabled:opacity-50">Cancelar</button>
+            <button type="button" onClick={handleDeleteCompany} disabled={deleting || deleteNif.trim() !== String(form.nif).trim()}
+              className="flex items-center gap-1.5 text-[13px] font-medium px-3.5 py-2 rounded-md bg-danger text-white hover:opacity-90 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
+              {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />} Apagar definitivamente
+            </button>
+          </div>
+        </div>
       </Modal>
 
       <Modal open={resetModalOpen} onClose={() => setResetModalOpen(false)} title="Redefinir palavra-passe do Gestor">

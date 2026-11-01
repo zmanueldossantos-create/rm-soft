@@ -36,6 +36,11 @@ export async function toggleBankAccountStatus(companyId, accountId) {
   return res.data;
 }
 
+// Apagar empresa: the company and everything it owns (refused once it has issued real documents)
+export async function deleteCompany(companyId) {
+  await apiClient.delete('/admin/companies/' + companyId);
+}
+
 export async function toggleCompanyStatus(companyId) {
   const res = await apiClient.patch('/admin/companies/' + companyId + '/toggle-status');
   return res.data;

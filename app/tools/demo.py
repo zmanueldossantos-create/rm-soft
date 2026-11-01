@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
 
-from sqlalchemy import delete, select
+from sqlalchemy import select
 
 DEMO_NIF = "5000999001"
 DEMO_NAME = "Padaria Sol de Luanda, Lda"
@@ -148,32 +148,25 @@ async def _catalog(db):
 async def purge(db) -> bool:
     """Deletes the demonstration company and everything that belongs to it (only the company with DEMO_NIF)."""
     from app.models.company import Company
-    from app.models.product import Product
-    from app.services.company_backup_service import _tables
 
     company = (await db.execute(select(Company).where(Company.nif == DEMO_NIF))).scalar_one_or_none()
     if company is None:
         return False
-    company_id = company.id
-    images = (await db.execute(select(Product.image_path).where(Product.company_id == company_id))).scalars().all()
-    owned, children, _ = _tables()
-    owned_names = {t.name for t in owned}
-    # the lines first (no company_id: found through their parent row), then the company's tables, last ones first
-    for table in reversed(children):
-        for column in table.c:
-            for fk in column.foreign_keys:
-                parent = fk.column.table
-                if parent.name in owned_names:
-                    ids = select(parent.c.id).where(parent.c.company_id == company_id)
-                    await db.execute(delete(table).where(column.in_(ids)))
-    for table in reversed(owned):
-        await db.execute(delete(table).where(table.c.company_id == company_id))
-    await db.execute(delete(Company.__table__).where(Company.__table__.c.id == company_id))
-    await db.commit()
-    for path in [*images, f"/uploads/logos/{company_id}.png"]:
-        if path:
-            Path(path.lstrip("/")).unlink(missing_ok=True)
+    await _delete_all(db, company.id)
     return True
+
+
+async def _delete_all(db, company_id) -> None:
+    """The demonstration's documents were issued before the Modo formação existed: marked as training first, so
+    the deletion (refused for a company with real documents) takes them with it."""
+    from sqlalchemy import update
+    from app.models.goods_movement import GoodsMovement
+    from app.models.invoice import Invoice
+    from app.services.company_service import delete_company
+    await db.execute(update(Invoice).where(Invoice.company_id == company_id).values(issuance_mode="FORMACAO"))
+    await db.execute(update(GoodsMovement).where(GoodsMovement.company_id == company_id).values(is_training=True))
+    await db.flush()
+    await delete_company(db, company_id)
 
 
 # ----------------------------------------------------------------------------------------------------------- build it
