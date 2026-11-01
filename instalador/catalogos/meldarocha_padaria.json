@@ -1,34 +1,19 @@
 {
-  "_nota": "Base de formação da Mel da Rocha - módulo Padaria. Ficam por fazer à frente dos proprietários: fornecedor Talho Central, matéria-prima Chocolate em pó (e a sua compra), artigo Bolo de chocolate (fatia) com a sua receita e produção, serviço ENT02, cliente Ana Silva.",
+  "_nota": "Base mínima de formação da Mel da Rocha - módulo Padaria: catálogo só, sem movimentos (compras, stock, produção e vendas fazem-se à frente dos proprietários). Ficam por criar ao vivo: categoria Encomendas e festas, fornecedor Bebidas Mutamba, matéria-prima Chocolate em pó, artigo Bolo de chocolate (fatia) com a sua receita, serviço ENT02, cliente Ana Silva.",
   "categorias": [
     "Pão",
     "Pastelaria",
     "Gelados",
     "Hambúrgueres",
-    "Bebidas",
-    "Encomendas e festas"
+    "Bebidas"
   ],
   "fornecedores": [
     {
-      "nome": "Moagem Kwanza, Lda",
+      "nome": "Armazéns Kwanza Alimentar, Lda",
       "nif": "5000999211",
       "telefone": "+244923111211",
-      "email": "vendas@moagemkwanza.ao",
+      "email": "vendas@kwanzaalimentar.ao",
       "condicoes": "30 dias"
-    },
-    {
-      "nome": "Luanda Frescos, Lda",
-      "nif": "5000999212",
-      "telefone": "+244923111212",
-      "email": "encomendas@luandafrescos.ao",
-      "condicoes": "Pronto pagamento"
-    },
-    {
-      "nome": "Bebidas Mutamba, Lda",
-      "nif": "5000999213",
-      "telefone": "+244923111213",
-      "email": "comercial@bebidasmutamba.ao",
-      "condicoes": "15 dias"
     }
   ],
   "materias_primas": [
@@ -36,87 +21,60 @@
       "codigo": "MP01",
       "nome": "Farinha de trigo",
       "unidade": "KG",
-      "stock_minimo": 50
+      "stock_minimo": 25
     },
     {
       "codigo": "MP02",
       "nome": "Fermento",
       "unidade": "KG",
-      "stock_minimo": 2,
-      "validade": true
+      "stock_minimo": 1
     },
     {
       "codigo": "MP03",
       "nome": "Açúcar",
       "unidade": "KG",
-      "stock_minimo": 20
+      "stock_minimo": 10
     },
     {
       "codigo": "MP04",
       "nome": "Sal",
       "unidade": "KG",
-      "stock_minimo": 5
+      "stock_minimo": 2
     },
     {
       "codigo": "MP05",
       "nome": "Manteiga",
       "unidade": "KG",
-      "stock_minimo": 5,
+      "stock_minimo": 3,
       "validade": true
     },
     {
       "codigo": "MP06",
       "nome": "Ovos",
       "unidade": "UN",
-      "stock_minimo": 60,
+      "stock_minimo": 30,
       "validade": true
     },
     {
       "codigo": "MP07",
       "nome": "Leite",
       "unidade": "L",
-      "stock_minimo": 10,
+      "stock_minimo": 5,
       "validade": true
     },
     {
       "codigo": "MP08",
       "nome": "Natas",
       "unidade": "L",
-      "stock_minimo": 3,
-      "validade": true
-    },
-    {
-      "codigo": "MP10",
-      "nome": "Óleo",
-      "unidade": "L",
-      "stock_minimo": 5
-    },
-    {
-      "codigo": "MP11",
-      "nome": "Carne picada",
-      "unidade": "KG",
-      "stock_minimo": 3,
-      "validade": true
-    },
-    {
-      "codigo": "MP12",
-      "nome": "Queijo fatiado",
-      "unidade": "UN",
-      "stock_minimo": 40,
-      "validade": true
-    },
-    {
-      "codigo": "MP13",
-      "nome": "Fiambre",
-      "unidade": "KG",
       "stock_minimo": 2,
       "validade": true
     },
     {
-      "codigo": "MP14",
-      "nome": "Farinha integral",
+      "codigo": "MP09",
+      "nome": "Laranja",
       "unidade": "KG",
-      "stock_minimo": 10
+      "stock_minimo": 5,
+      "validade": true
     }
   ],
   "produtos": [
@@ -130,43 +88,11 @@
     },
     {
       "codigo": "PAO02",
-      "nome": "Pão francês",
-      "categoria": "Pão",
-      "preco": 150,
-      "stock": true,
-      "stock_minimo": 40
-    },
-    {
-      "codigo": "PAO03",
-      "nome": "Pão de forma",
-      "categoria": "Pão",
-      "preco": 1200,
-      "stock": true,
-      "stock_minimo": 8
-    },
-    {
-      "codigo": "PAO04",
-      "nome": "Pão integral",
-      "categoria": "Pão",
-      "preco": 1500,
-      "stock": true,
-      "stock_minimo": 5
-    },
-    {
-      "codigo": "PAO05",
-      "nome": "Croissant simples",
+      "nome": "Croissant",
       "categoria": "Pão",
       "preco": 500,
       "stock": true,
       "stock_minimo": 15
-    },
-    {
-      "codigo": "PAO06",
-      "nome": "Croissant misto",
-      "categoria": "Pão",
-      "preco": 1200,
-      "stock": true,
-      "stock_minimo": 10
     },
     {
       "codigo": "PAS01",
@@ -177,63 +103,12 @@
       "stock_minimo": 15
     },
     {
-      "codigo": "PAS02",
-      "nome": "Queque",
-      "categoria": "Pastelaria",
-      "preco": 400,
-      "stock": true,
-      "stock_minimo": 10
-    },
-    {
-      "codigo": "PAS03",
-      "nome": "Donut",
-      "categoria": "Pastelaria",
-      "preco": 700,
-      "stock": true,
-      "stock_minimo": 10
-    },
-    {
-      "codigo": "PAS04",
-      "nome": "Mil-folhas",
-      "categoria": "Pastelaria",
-      "preco": 900,
-      "stock": true,
-      "stock_minimo": 8
-    },
-    {
-      "codigo": "PAS06",
-      "nome": "Bolo de chocolate inteiro (encomenda)",
-      "categoria": "Pastelaria",
-      "preco": 12000,
-      "stock": false
-    },
-    {
       "codigo": "GEL01",
-      "nome": "Gelado 1 bola",
+      "nome": "Gelado de nata (copo)",
       "categoria": "Gelados",
-      "preco": 800,
-      "stock": false
-    },
-    {
-      "codigo": "GEL02",
-      "nome": "Gelado 2 bolas",
-      "categoria": "Gelados",
-      "preco": 1400,
-      "stock": false
-    },
-    {
-      "codigo": "GEL03",
-      "nome": "Gelado 3 bolas",
-      "categoria": "Gelados",
-      "preco": 1900,
-      "stock": false
-    },
-    {
-      "codigo": "GEL04",
-      "nome": "Gelado copo 500 ml",
-      "categoria": "Gelados",
-      "preco": 3500,
-      "stock": false
+      "preco": 1500,
+      "stock": true,
+      "stock_minimo": 10
     },
     {
       "codigo": "HAM01",
@@ -243,133 +118,27 @@
       "stock": false
     },
     {
-      "codigo": "HAM02",
-      "nome": "Cheeseburger",
-      "categoria": "Hambúrgueres",
-      "preco": 4000,
-      "stock": false
-    },
-    {
-      "codigo": "HAM03",
-      "nome": "Hambúrguer duplo",
-      "categoria": "Hambúrgueres",
-      "preco": 5500,
-      "stock": false
-    },
-    {
-      "codigo": "HAM04",
-      "nome": "Hambúrguer de frango",
-      "categoria": "Hambúrgueres",
-      "preco": 3800,
-      "stock": false
-    },
-    {
-      "codigo": "HAM05",
-      "nome": "Batata frita",
-      "categoria": "Hambúrgueres",
-      "preco": 1500,
-      "stock": false
-    },
-    {
       "codigo": "BEB01",
-      "nome": "Água mineral 0,5 L",
+      "nome": "Sumo natural de laranja (copo)",
       "categoria": "Bebidas",
-      "preco": 300,
+      "preco": 1000,
       "stock": true,
-      "custo": 150,
-      "stock_minimo": 24
+      "stock_minimo": 10
     },
     {
       "codigo": "BEB02",
-      "nome": "Refrigerante lata 33 cl",
+      "nome": "Água mineral 0,5 L",
       "categoria": "Bebidas",
-      "preco": 700,
+      "preco": 300,
+      "custo": 150,
       "stock": true,
-      "custo": 400,
       "stock_minimo": 24
-    },
-    {
-      "codigo": "BEB03",
-      "nome": "Sumo natural",
-      "categoria": "Bebidas",
-      "preco": 1500,
-      "stock": false
-    },
-    {
-      "codigo": "BEB04",
-      "nome": "Café",
-      "categoria": "Bebidas",
-      "preco": 500,
-      "stock": false
-    },
-    {
-      "codigo": "BEB05",
-      "nome": "Galão",
-      "categoria": "Bebidas",
-      "preco": 900,
-      "stock": false
-    },
-    {
-      "codigo": "BEB06",
-      "nome": "Chá",
-      "categoria": "Bebidas",
-      "preco": 500,
-      "stock": false
-    },
-    {
-      "codigo": "ENC01",
-      "nome": "Bolo de aniversário 1 kg",
-      "categoria": "Encomendas e festas",
-      "preco": 15000,
-      "stock": false
-    },
-    {
-      "codigo": "ENC02",
-      "nome": "Bolo de aniversário 2 kg",
-      "categoria": "Encomendas e festas",
-      "preco": 28000,
-      "stock": false
-    },
-    {
-      "codigo": "ENC03",
-      "nome": "Bolo de casamento (por andar)",
-      "categoria": "Encomendas e festas",
-      "preco": 45000,
-      "stock": false
-    },
-    {
-      "codigo": "ENC04",
-      "nome": "Decoração personalizada",
-      "categoria": "Encomendas e festas",
-      "preco": 10000,
-      "stock": false
-    },
-    {
-      "codigo": "ENC05",
-      "nome": "Cabaz de presente",
-      "categoria": "Encomendas e festas",
-      "preco": 25000,
-      "stock": false
-    },
-    {
-      "codigo": "ENC06",
-      "nome": "Salgadinhos para festa (cento)",
-      "categoria": "Encomendas e festas",
-      "preco": 12000,
-      "stock": false
-    },
-    {
-      "codigo": "ENC07",
-      "nome": "Doces para festa (cento)",
-      "categoria": "Encomendas e festas",
-      "preco": 10000,
-      "stock": false
     }
   ],
   "servicos": [
     {
       "codigo": "ENT01",
-      "nome": "Entrega ao domicílio - Luanda centro",
+      "nome": "Entrega ao domicílio",
       "preco": 2000
     }
   ],
@@ -398,80 +167,6 @@
     },
     {
       "produto": "PAO02",
-      "rendimento": 80,
-      "ingredientes": [
-        {
-          "codigo": "MP01",
-          "quantidade": 5
-        },
-        {
-          "codigo": "MP02",
-          "quantidade": 0.1
-        },
-        {
-          "codigo": "MP04",
-          "quantidade": 0.1
-        },
-        {
-          "codigo": "MP10",
-          "quantidade": 0.2
-        }
-      ]
-    },
-    {
-      "produto": "PAO03",
-      "rendimento": 10,
-      "ingredientes": [
-        {
-          "codigo": "MP01",
-          "quantidade": 4
-        },
-        {
-          "codigo": "MP02",
-          "quantidade": 0.08
-        },
-        {
-          "codigo": "MP03",
-          "quantidade": 0.2
-        },
-        {
-          "codigo": "MP04",
-          "quantidade": 0.08
-        },
-        {
-          "codigo": "MP05",
-          "quantidade": 0.2
-        },
-        {
-          "codigo": "MP07",
-          "quantidade": 1
-        }
-      ]
-    },
-    {
-      "produto": "PAO04",
-      "rendimento": 10,
-      "ingredientes": [
-        {
-          "codigo": "MP14",
-          "quantidade": 4
-        },
-        {
-          "codigo": "MP02",
-          "quantidade": 0.08
-        },
-        {
-          "codigo": "MP04",
-          "quantidade": 0.08
-        },
-        {
-          "codigo": "MP03",
-          "quantidade": 0.1
-        }
-      ]
-    },
-    {
-      "produto": "PAO05",
       "rendimento": 40,
       "ingredientes": [
         {
@@ -497,32 +192,6 @@
         {
           "codigo": "MP07",
           "quantidade": 0.5
-        }
-      ]
-    },
-    {
-      "produto": "PAO06",
-      "rendimento": 20,
-      "ingredientes": [
-        {
-          "codigo": "MP01",
-          "quantidade": 1
-        },
-        {
-          "codigo": "MP05",
-          "quantidade": 0.5
-        },
-        {
-          "codigo": "MP13",
-          "quantidade": 0.4
-        },
-        {
-          "codigo": "MP12",
-          "quantidade": 20
-        },
-        {
-          "codigo": "MP06",
-          "quantidade": 2
         }
       ]
     },
@@ -557,11 +226,15 @@
       ]
     },
     {
-      "produto": "PAS02",
-      "rendimento": 30,
+      "produto": "GEL01",
+      "rendimento": 20,
       "ingredientes": [
         {
-          "codigo": "MP01",
+          "codigo": "MP07",
+          "quantidade": 2
+        },
+        {
+          "codigo": "MP08",
           "quantidade": 1
         },
         {
@@ -569,76 +242,22 @@
           "quantidade": 0.6
         },
         {
-          "codigo": "MP05",
-          "quantidade": 0.4
-        },
-        {
-          "codigo": "MP06",
-          "quantidade": 8
-        },
-        {
-          "codigo": "MP07",
-          "quantidade": 0.3
-        }
-      ]
-    },
-    {
-      "produto": "PAS03",
-      "rendimento": 30,
-      "ingredientes": [
-        {
-          "codigo": "MP01",
-          "quantidade": 1.2
-        },
-        {
-          "codigo": "MP03",
-          "quantidade": 0.3
-        },
-        {
-          "codigo": "MP02",
-          "quantidade": 0.03
-        },
-        {
-          "codigo": "MP10",
-          "quantidade": 1
-        },
-        {
-          "codigo": "MP06",
-          "quantidade": 4
-        },
-        {
-          "codigo": "MP07",
-          "quantidade": 0.4
-        }
-      ]
-    },
-    {
-      "produto": "PAS04",
-      "rendimento": 20,
-      "ingredientes": [
-        {
-          "codigo": "MP01",
-          "quantidade": 0.8
-        },
-        {
-          "codigo": "MP05",
-          "quantidade": 0.5
-        },
-        {
-          "codigo": "MP07",
-          "quantidade": 1
-        },
-        {
-          "codigo": "MP03",
-          "quantidade": 0.4
-        },
-        {
           "codigo": "MP06",
           "quantidade": 6
+        }
+      ]
+    },
+    {
+      "produto": "BEB01",
+      "rendimento": 10,
+      "ingredientes": [
+        {
+          "codigo": "MP09",
+          "quantidade": 3
         },
         {
-          "codigo": "MP08",
-          "quantidade": 0.3
+          "codigo": "MP03",
+          "quantidade": 0.2
         }
       ]
     }
@@ -649,111 +268,6 @@
       "nif": "5000999311",
       "telefone": "+244923555100",
       "email": "compras@hotelbaiaazul.ao"
-    }
-  ],
-  "compras": [
-    {
-      "fornecedor": "Moagem Kwanza, Lda",
-      "documento": "FT 2026/1450",
-      "vencimento_dias": 30,
-      "linhas": [
-        {
-          "codigo": "MP01",
-          "quantidade": 100,
-          "preco": 900
-        },
-        {
-          "codigo": "MP14",
-          "quantidade": 20,
-          "preco": 1300
-        },
-        {
-          "codigo": "MP03",
-          "quantidade": 25,
-          "preco": 1200
-        },
-        {
-          "codigo": "MP04",
-          "quantidade": 10,
-          "preco": 300
-        },
-        {
-          "codigo": "MP02",
-          "quantidade": 5,
-          "preco": 6000,
-          "validade_dias": 60
-        },
-        {
-          "codigo": "MP10",
-          "quantidade": 20,
-          "preco": 1800
-        }
-      ]
-    },
-    {
-      "fornecedor": "Luanda Frescos, Lda",
-      "documento": "FR 2026/321",
-      "linhas": [
-        {
-          "codigo": "MP06",
-          "quantidade": 240,
-          "preco": 100,
-          "validade_dias": 21
-        },
-        {
-          "codigo": "MP05",
-          "quantidade": 15,
-          "preco": 4500,
-          "validade_dias": 45
-        },
-        {
-          "codigo": "MP07",
-          "quantidade": 30,
-          "preco": 900,
-          "validade_dias": 10
-        },
-        {
-          "codigo": "MP08",
-          "quantidade": 8,
-          "preco": 2500,
-          "validade_dias": 10
-        },
-        {
-          "codigo": "MP11",
-          "quantidade": 6,
-          "preco": 5500,
-          "validade_dias": 5
-        },
-        {
-          "codigo": "MP12",
-          "quantidade": 100,
-          "preco": 150,
-          "validade_dias": 15
-        },
-        {
-          "codigo": "MP13",
-          "quantidade": 4,
-          "preco": 6000,
-          "validade_dias": 10
-        }
-      ]
-    },
-    {
-      "fornecedor": "Bebidas Mutamba, Lda",
-      "documento": "FT 2026/877",
-      "vencimento_dias": 15,
-      "linhas": [
-        {
-          "codigo": "BEB01",
-          "quantidade": 48,
-          "preco": 150
-        },
-        {
-          "codigo": "BEB02",
-          "quantidade": 48,
-          "preco": 400
-        }
-      ]
     }
   ]
 }

@@ -1,11 +1,12 @@
-"""Catálogo inicial: the base of a new client loaded from a JSON file (app/tools/catalogo_inicial.py) - suppliers, raw
-materials, articles, services, recipes, customers, purchases with their stock entry, and the hotel with its module."""
+"""Catálogo inicial: the base of a new client loaded from a JSON file (app/tools/catalogo_inicial.py) - categories,
+suppliers, raw materials, articles, services, recipes, customers, purchases with their stock entry, and the hotel."""
 import json
 from pathlib import Path
 
 import pytest
 from sqlalchemy import func, select
 
+from app.models.activity import Activity
 from app.models.company_module import CompanyModule
 from app.models.module import Module
 from app.models.movement_type import MovementDirection, MovementType
@@ -16,6 +17,7 @@ from app.models.resource import Resource
 from app.models.stock import Stock
 from app.models.supplier import Supplier
 from app.models.unit_of_measure_catalog import UnitOfMeasureCatalog
+from app.services.activity_service import create_activity
 from app.tools.catalogo_inicial import CatalogError, load
 
 FILES = Path(__file__).parent.parent / "instalador" / "catalogos"
@@ -47,39 +49,50 @@ async def test_the_mel_da_rocha_base(db, company_with_essentials, legal_vat_rate
     company = company_with_essentials["company"]
     await _prepare(db, company.id, "Padaria")
     data = json.loads(FILE.read_text(encoding="utf-8"))
-    from app.models.activity import Activity
-    from app.services.activity_service import create_activity
-    padaria = (await db.execute(select(Module).where(Module.name == "Padaria"))).scalar_one()
-    own = await create_activity(db, company.id, padaria.id, "Padaria Mel")  # named by the gestor: reused, never doubled
 
     check = await load(db, company.nif, data, dry_run=True)  # a check changes nothing
     assert any("Receita de PAO01" in line for line in check["criados"]) and await _count(db, Supplier, company.id) == 0
 
-    report = await load(db, company.nif, data)
-    assert await _count(db, Supplier, company.id) == 3
+    await load(db, company.nif, data)
+    assert await _count(db, Supplier, company.id) == len(data["fornecedores"])
     assert await _count(db, Product, company.id) == len(data["materias_primas"]) + len(data["produtos"])
-    assert await _count(db, PurchaseInvoice, company.id) == 3
     assert (await db.execute(select(func.count(func.distinct(RecipeIngredient.finished_product_id)))
                              .where(RecipeIngredient.company_id == company.id))).scalar_one() == len(data["receitas"])
+    assert await _count(db, PurchaseInvoice, company.id) == 0  # a catalog only: the movements are made in the training
     flour = (await db.execute(select(Product).where(Product.company_id == company.id, Product.code == "MP01"))).scalar_one()
     assert flour.is_raw_material and flour.not_available_pos
-    stock = (await db.execute(select(func.sum(Stock.quantity)).where(Stock.product_id == flour.id))).scalar_one()
-    assert float(stock) == 100  # the purchase brought it in
-    assert (await db.execute(select(func.count()).select_from(Activity).where(Activity.company_id == company.id,
-                                                                              Activity.module_id == padaria.id))).scalar_one() == 1
-    assert any(line == "Atividade Padaria Mel (módulo Padaria)" for line in report["existentes"])
-    in_own = (await db.execute(select(Stock.quantity).where(Stock.product_id == flour.id,
-                                                            Stock.warehouse_id == own.warehouse_id))).scalar_one()
-    assert float(in_own) == 100
-    assert await _count(db, Resource, company.id) == 0
+
+    again = await load(db, company.nif, data)  # run again: nothing duplicated
+    assert not again["criados"] and await _count(db, Supplier, company.id) == len(data["fornecedores"])
+
+
+@pytest.mark.asyncio
+async def test_purchases_go_to_the_activity_the_gestor_made(db, company_with_essentials, legal_vat_rates):
+    company = company_with_essentials["company"]
+    await _prepare(db, company.id, "Padaria")
+    padaria = (await db.execute(select(Module).where(Module.name == "Padaria"))).scalar_one()
+    own = await create_activity(db, company.id, padaria.id, "Padaria Mel")  # named by the gestor: reused, never doubled
+    data = {"fornecedores": [{"nome": "Moagem", "nif": "5000999291"}],
+            "materias_primas": [{"codigo": "MP01", "nome": "Farinha", "unidade": "KG"}],
+            "compras": [{"fornecedor": "Moagem", "documento": "FT 1", "linhas": [{"codigo": "MP01", "quantidade": 100, "preco": 900}]}]}
+    report = await load(db, company.nif, data)
+    assert "Atividade Padaria Mel (módulo Padaria)" in report["existentes"]
+    assert (await db.execute(select(func.count()).select_from(Activity).where(
+        Activity.company_id == company.id, Activity.module_id == padaria.id))).scalar_one() == 1
+    flour = (await db.execute(select(Product).where(Product.company_id == company.id, Product.code == "MP01"))).scalar_one()
+    stock = (await db.execute(select(Stock.quantity).where(Stock.product_id == flour.id,
+                                                           Stock.warehouse_id == own.warehouse_id))).scalar_one()
+    assert float(stock) == 100 and await _count(db, PurchaseInvoice, company.id) == 1
+
+
+@pytest.mark.asyncio
+async def test_the_hotel_comes_with_its_module(db, company_with_essentials, legal_vat_rates):
+    company = company_with_essentials["company"]
+    await _prepare(db, company.id)
     hotel_data = json.loads(HOTEL.read_text(encoding="utf-8"))
     early = await load(db, company.nif, hotel_data)  # the Hotel module not granted yet: nothing of it
     assert any("módulo Hotel ainda não está ativo" in line for line in early["ignorados"])
-
-    again = await load(db, company.nif, data)  # run again: nothing duplicated
-    assert not again["criados"] and await _count(db, PurchaseInvoice, company.id) == 3
-
-    await _prepare(db, company.id, "Hotel")  # the Hotel module granted later: its part comes in
+    await _prepare(db, company.id, "Hotel")
     hotel = await load(db, company.nif, hotel_data)
     assert await _count(db, Resource, company.id) == 6 and any("Diária Quarto Standard" in l for l in hotel["criados"])
 
@@ -98,19 +111,13 @@ async def test_what_is_refused(db, company_with_essentials, legal_vat_rates):
         await load(db, company.nif, {"produtos": [{"codigo": "X", "nome": "X", "preco": 10, "categoria": "Nada"}]})
 
 
-def test_the_file_leaves_one_example_of_each_for_the_training():
+def test_the_file_is_a_small_catalog_that_leaves_the_rest_to_the_training():
     data = json.loads(FILE.read_text(encoding="utf-8"))
     codes = {p["codigo"] for p in data["materias_primas"] + data["produtos"]}
     assert len(codes) == len(data["materias_primas"]) + len(data["produtos"])
     for recipe in data["receitas"]:
         assert recipe["produto"] in codes and all(i["codigo"] in codes for i in recipe["ingredientes"])
-    for purchase in data["compras"]:
-        assert all(line["codigo"] in codes for line in purchase["linhas"])
-    # done live in front of the owners
-    assert "PAS05" not in codes and "MP09" not in codes
-    assert "Talho Central de Luanda, Lda" not in {s["nome"] for s in data["fornecedores"]}
-    assert "hotel" not in data  # the Padaria file loads the Padaria only
-    # a purchase price only for what is bought ready: what is made or prepared takes its cost from production
-    assert {p["codigo"] for p in data["produtos"] if "custo" in p} == {"BEB01", "BEB02"}
-    hotel = json.loads(HOTEL.read_text(encoding="utf-8"))["hotel"]
-    assert "Suite" not in {t["nome"] for t in hotel["tipos_quarto"]}
+    assert len(data["categorias"]) == 5 and len(data["receitas"]) == 5
+    assert {p["categoria"] for p in data["produtos"]} == set(data["categorias"])  # every category has its articles
+    assert not data.get("compras") and "hotel" not in data  # no movement, the Padaria only
+    assert {p["codigo"] for p in data["produtos"] if "custo" in p} == {"BEB02"}  # only what is bought ready
