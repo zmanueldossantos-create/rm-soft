@@ -23,6 +23,12 @@ const LOSS_CATEGORY_LABEL = {
   OUTRO: 'Outro',
 };
 
+// a quantity followed by the product's base unit: 2 KG, 0,05 KG, 40 UN
+function qtyUnit(value, product) {
+  const code = product?.unit_of_measure_code;
+  return formatQty(value) + (code ? ' ' + code : '');
+}
+
 function formatQty(value) {
   return value % 1 === 0 ? String(value) : String(value).replace('.', ',');
 }
@@ -143,7 +149,19 @@ export default function StockMovements() {
     return map;
   }, [warehouses]);
 
-  const groupedMovements = useMemo(() => groupTransfers(movements), [movements]);
+  // A production is one batch: its rows share the same instant and warehouse. The product made comes first, and each
+  // ingredient consumed says for which production (when no reason was typed) - «Produção: 40 UN Croissant».
+  const groupedMovements = useMemo(() => {
+    const rows = groupTransfers(movements);
+    const batchKey = (m) => m.created_at + '|' + m.warehouse_id;
+    const outputs = {};
+    rows.forEach((m) => { if (m.movement_type === 'PRODUCAO' && m.is_production_output) outputs[batchKey(m)] = m; });
+    return rows
+      .map((m, i) => ({ ...m, _order: i, _output: m.movement_type === 'PRODUCAO' && !m.is_production_output ? outputs[batchKey(m)] : null }))
+      .sort((a, b) => (a.created_at === b.created_at && a.warehouse_id === b.warehouse_id
+        ? (b.is_production_output ? 1 : 0) - (a.is_production_output ? 1 : 0) || a._order - b._order
+        : a._order - b._order));
+  }, [movements]);
 
   const filteredMovements = useMemo(() => {
     if (!search.trim()) return groupedMovements;
@@ -227,6 +245,13 @@ export default function StockMovements() {
                   const isTransfer = m.movement_type === 'TRANSFERENCIA' && m.is_transfer_source;
 
                   let reasonCell = m.reason || m.reference || '-';
+                  if (m.movement_type === 'PRODUCAO' && !m.reason && !m.reference) {
+                    const made = m.is_production_output ? m : m._output;
+                    const madeProduct = made ? productById[made.product_id] : null;
+                    reasonCell = made && madeProduct
+                      ? (m.is_production_output ? 'Produção' : 'Produção: ' + qtyUnit(made.quantity, madeProduct) + ' ' + madeProduct.name)
+                      : 'Produção';
+                  }
                   if (m.movement_type === 'PERDA' && m.loss_category) {
                     reasonCell = LOSS_CATEGORY_LABEL[m.loss_category] + (m.reason ? ' - ' + m.reason : '');
                   }
@@ -248,7 +273,7 @@ export default function StockMovements() {
                         {product ? product.name : m.product_id}
                       </td>
                       <td className={'px-6 py-4 font-mono text-right ' + (isOutgoing ? 'text-danger' : 'text-success')}>
-                        {isOutgoing ? '-' : '+'}{formatQty(Math.abs(m.quantity))}
+                        {isOutgoing ? '-' : '+'}{qtyUnit(Math.abs(m.quantity), product)}
                       </td>
                       {/* a product followed by lot: the lots this movement took or filled */}
                       <td className="px-6 py-4 font-mono text-text-muted text-[12px] max-w-[260px]">{m.lots || '-'}</td>
