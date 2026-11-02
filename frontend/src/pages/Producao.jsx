@@ -24,6 +24,9 @@ async function getProductsWithRecipe() {
 const emptyRecipeForm = { productId: '', batchYield: '1', batchYieldSaleUnitId: 'base', rows: [] };
 const emptyProduceForm = { productId: '', warehouseId: '', quantity: '', reason: '', fiscalPeriodId: '', lotNumber: '', expiryDate: '' };
 
+// the columns of the recipe's ingredient table (Configurar receita > Ingredientes)
+const RECIPE_GRID = 'grid grid-cols-[minmax(0,1fr)_7.5rem_9.5rem_5.5rem_2.25rem] gap-2 items-stretch';
+
 export default function Producao() {
   // the warehouse keeper produces (production:produce); only who may (recipes:manage) configures the recipes
   const can = useCan();
@@ -401,7 +404,7 @@ export default function Producao() {
       </div>
 
       
-      <Modal open={recipeModalOpen} onClose={closeRecipeModal} title="Configurar receita" maxWidthClass="max-w-3xl">
+      <Modal open={recipeModalOpen} onClose={closeRecipeModal} title="Configurar receita" maxWidthClass="max-w-5xl">
         <div className="flex flex-col gap-4">
           <div className="flex gap-1 border-b border-border -mt-1">
             {[['produto', 'Produto'], ['ingredientes', 'Ingredientes' + (recipeForm.rows.some((r) => r.ingredientProductId) ? ' (' + recipeForm.rows.filter((r) => r.ingredientProductId).length + ')' : '')], ['resumo', 'Resumo']].map(([key, label]) => (
@@ -411,6 +414,8 @@ export default function Producao() {
               </button>
             ))}
           </div>
+          {/* the same height on every tab: the window does not jump when the tab changes */}
+          <div className="h-[440px] overflow-y-auto pr-1 -mr-1 flex flex-col gap-4">
           {recipeTab === 'produto' && (<>
           <div>
             <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Produto a configurar *</label>
@@ -455,58 +460,58 @@ export default function Producao() {
                 </div>
               ) : (
                 <>
-                  <div className="flex flex-col gap-2.5">
-                    <p className="text-[11px] font-medium uppercase tracking-wide text-text-muted">Ingredientes por lote</p>
-                    {recipeForm.rows.map((row, idx) => (
-                      <div key={idx} className="flex items-center gap-2">
-                        <div className="flex-1 min-w-0">
-                          <Select
-                            value={row.ingredientProductId}
-                            onChange={(v) => { updateRecipeRow(idx, 'ingredientProductId', v); updateRecipeRow(idx, 'saleUnitId', 'base'); }}
-                            options={ingredientOptions(recipeForm.productId).map((p) => ({ value: p.id, label: p.code + ' - ' + p.name + (p.is_raw_material ? ' (matéria-prima)' : '') }))}
-                            placeholder="Ingrediente"
-                          />
-                        </div>
-                        <div className="w-56 shrink-0 flex items-center gap-1.5">
+                  {/* a table: every row on the same columns - ingredient, quantity, unit, its everyday equivalent, remove */}
+                  <div className="flex flex-col gap-2">
+                    <div className={RECIPE_GRID + ' text-[11px] font-medium uppercase tracking-wide text-text-muted px-0.5'}>
+                      <span>Ingrediente</span><span className="text-right">Qtd. por lote</span><span>Unidade</span><span>Equivale a</span><span />
+                    </div>
+                    {recipeForm.rows.length === 0 && (
+                      <p className="text-text-muted text-[13px] py-6 text-center">Nenhum ingrediente - adicione o primeiro com «+ Ingrediente».</p>
+                    )}
+                    {recipeForm.rows.map((row, idx) => {
+                      const ing = allProducts.find((p) => p.id === row.ingredientProductId);
+                      const choices = ing ? unitChoices(ing) : [];
+                      const hint = ing ? smallUnitHint(row.quantityPerBatch, choiceCode(ing, row.saleUnitId)) : null;
+                      return (
+                        <div key={idx} className={RECIPE_GRID}>
+                          <div className="min-w-0">
+                            <Select
+                              value={row.ingredientProductId}
+                              onChange={(v) => { updateRecipeRow(idx, 'ingredientProductId', v); updateRecipeRow(idx, 'saleUnitId', 'base'); }}
+                              options={ingredientOptions(recipeForm.productId).map((p) => ({ value: p.id, label: p.code + ' - ' + p.name + (p.is_raw_material ? ' (MP)' : '') }))}
+                              placeholder="Ingrediente"
+                            />
+                          </div>
                           <input
                             type="number"
                             step="0.0001"
                             min="0.0001"
                             value={row.quantityPerBatch}
                             onChange={(e) => updateRecipeRow(idx, 'quantityPerBatch', e.target.value)}
-                            placeholder="Qtd./lote"
-                            className="w-full bg-bg-inset border border-border rounded-md px-2.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors"
+                            placeholder="0"
+                            className="w-full bg-bg-inset border border-border rounded-md px-2.5 py-2.5 text-sm text-text-primary font-mono text-right outline-none focus:border-accent transition-colors"
                           />
-                          {(() => {
-                            const ing = allProducts.find((p) => p.id === row.ingredientProductId);
-                            if (!ing) return null;
-                            const choices = unitChoices(ing);
-                            return choices.length > 1 ? (
-                              <select value={row.saleUnitId || 'base'} onChange={(e) => updateRecipeRow(idx, 'saleUnitId', e.target.value)}
-                                className="bg-bg-inset border border-border rounded-md px-1.5 py-2 text-[12px] font-mono text-text-primary shrink-0">
-                                {choices.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
-                              </select>
-                            ) : <span className="text-[12px] text-text-muted font-mono shrink-0">{choices[0]?.code}</span>;
-                          })()}
+                          {choices.length > 1 ? (
+                            <select value={row.saleUnitId || 'base'} onChange={(e) => updateRecipeRow(idx, 'saleUnitId', e.target.value)}
+                              className="w-full h-full bg-bg-inset border border-border rounded-md px-2 text-[13px] font-mono text-text-primary cursor-pointer outline-none focus:border-accent">
+                              {choices.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                            </select>
+                          ) : (
+                            <span className="h-full flex items-center px-2.5 border border-border/60 rounded-md text-[13px] font-mono text-text-muted">{choices[0]?.code || '-'}</span>
+                          )}
+                          {/* below 1 KG / 1 L, the everyday unit: 0,6 KG = 600 g, 0,5 L = 50 cl */}
+                          <span className="flex items-center text-[13px] font-mono text-text-muted whitespace-nowrap">{hint || ''}</span>
+                          <button
+                            type="button"
+                            onClick={() => removeRecipeRow(idx)}
+                            aria-label="Remover ingrediente"
+                            className="flex items-center justify-center w-9 h-full rounded-md border border-border text-text-muted hover:text-danger hover:border-danger transition-colors cursor-pointer"
+                          >
+                            ×
+                          </button>
                         </div>
-                        {/* below 1 KG / 1 L, the everyday unit beside it: 0,6 KG = 600 g, 0,5 L = 50 cl */}
-                        <span className="w-16 shrink-0 text-[12px] text-text-muted font-mono whitespace-nowrap">
-                          {(() => {
-                            const ing = allProducts.find((p) => p.id === row.ingredientProductId);
-                            const hint = ing ? smallUnitHint(row.quantityPerBatch, choiceCode(ing, row.saleUnitId)) : null;
-                            return hint ? '= ' + hint : '';
-                          })()}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => removeRecipeRow(idx)}
-                          aria-label="Remover ingrediente"
-                          className="flex items-center justify-center w-9 h-9 rounded-md border border-border text-text-muted hover:text-danger hover:border-danger transition-colors cursor-pointer shrink-0"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
 
 
@@ -518,6 +523,7 @@ export default function Producao() {
               )}
           </>)}
           {recipeTab === 'resumo' && recipeForm.productId && <RecipeSummaryView summary={recipeSummary()} loading={recipeLoading} />}
+          </div>
               <button
                 type="button"
                 onClick={handleSaveRecipe}
