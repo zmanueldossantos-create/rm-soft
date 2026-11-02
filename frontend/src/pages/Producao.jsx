@@ -8,7 +8,8 @@ import { listWarehouses, getProductionEstimate, produceStock } from '../api/stoc
 import apiClient from '../api/client';
 import { unitsApi } from '../api/catalogs';
 import { extractErrorMessage } from '../utils/errors';
-import { smallUnitHint } from '../utils/stockUnits';
+import { qtyWithUnit } from '../utils/stockUnits';
+import { formatKz } from '../utils/format';
 import { useCan } from '../utils/permissions';
 
 import PostingPeriodSelect from '../components/PostingPeriodSelect';
@@ -36,6 +37,7 @@ export default function Producao() {
 
   const [recipeModalOpen, setRecipeModalOpen] = useState(false);
   const [recipeIsEditing, setRecipeIsEditing] = useState(false);
+  const [recipeTab, setRecipeTab] = useState('receita');  // an existing recipe: «Receita» (edit) or «Resumo» (read)
   const [recipeForm, setRecipeForm] = useState(emptyRecipeForm);
   const [recipeLoading, setRecipeLoading] = useState(false);
   const [recipeSaving, setRecipeSaving] = useState(false);
@@ -110,6 +112,30 @@ export default function Producao() {
     return unitChoices(allProducts.find((p) => p.id === produceForm.productId)).find((c) => c.value === (produceForm.saleUnitId || 'base'))?.factor || 1;
   }
 
+  // «Resumo» of the recipe being edited: each ingredient per batch and per unit made, at its average cost (CMP) -
+  // the cost of a batch, of one unit, and the margin on the selling price. The cost is incomplete when an ingredient
+  // has no average cost yet (never bought).
+  function recipeSummary() {
+    const made = allProducts.find((p) => p.id === recipeForm.productId);
+    const yieldChoice = unitChoices(made).find((c) => c.value === (recipeForm.batchYieldSaleUnitId || 'base'));
+    const yieldBase = (parseFloat(recipeForm.batchYield) || 0) * (yieldChoice?.factor || 1);
+    const lines = recipeForm.rows.filter((r) => r.ingredientProductId && parseFloat(r.quantityPerBatch) > 0).map((r) => {
+      const ing = allProducts.find((p) => p.id === r.ingredientProductId);
+      const choice = unitChoices(ing).find((c) => c.value === (r.saleUnitId || 'base'));
+      const baseQty = parseFloat(r.quantityPerBatch) * (choice?.factor || 1);
+      const baseCode = unitChoices(ing)[0]?.code || '';
+      const avg = ing?.average_cost != null ? Number(ing.average_cost) : null;
+      return { name: ing?.name || '?', code: ing?.code || '', baseQty, baseCode, perUnit: yieldBase ? baseQty / yieldBase : null,
+        avg, cost: avg != null ? baseQty * avg : null };
+    });
+    const complete = lines.length > 0 && lines.every((l) => l.cost != null);
+    const batchCost = lines.reduce((t, l) => t + (l.cost || 0), 0);
+    const unitCost = complete && yieldBase ? batchCost / yieldBase : null;
+    const price = made?.price != null ? Number(made.price) : null;
+    return { made, yieldBase, yieldCode: unitChoices(made)[0]?.code || 'UN', lines, complete, batchCost, unitCost, price,
+      margin: unitCost != null && price ? price - unitCost : null };
+  }
+
   function openNewRecipeModal() {
     setRecipeForm({ productId: '', batchYield: '1', batchYieldSaleUnitId: 'base', rows: [] });
     setRecipeError('');
@@ -120,6 +146,7 @@ export default function Producao() {
   async function openEditRecipeModal(product) {
     setRecipeForm({ productId: product.id, batchYield: String(product.batch_yield_entry ?? product.batch_yield), batchYieldSaleUnitId: product.batch_yield_sale_unit_id || 'base', rows: [] });
     setRecipeError('');
+    setRecipeTab('receita');
     setRecipeIsEditing(true);
     setRecipeModalOpen(true);
     setRecipeLoading(true);
@@ -197,22 +224,6 @@ export default function Producao() {
     } finally {
       setRecipeSaving(false);
     }
-  }
-
-  function fractionHint(value) {
-    const num = parseFloat(value);
-    if (!num || num <= 0) return null;
-    const commonFractions = [
-      [0.25, '1/4'], [0.5, '1/2'], [0.75, '3/4'],
-      [0.333, '1/3'], [0.667, '2/3'],
-      [0.2, '1/5'], [0.4, '2/5'], [0.6, '3/5'], [0.8, '4/5'],
-    ];
-    const whole = Math.floor(num);
-    const frac = num - whole;
-    if (frac < 0.001) return null; // already a whole number, no hint needed
-    const match = commonFractions.find(([f]) => Math.abs(frac - f) < 0.01);
-    if (!match) return null;
-    return (whole > 0 ? whole + ' + ' : '') + match[1];
   }
 
   function openProduceModal(product) {
@@ -391,6 +402,17 @@ export default function Producao() {
       
       <Modal open={recipeModalOpen} onClose={closeRecipeModal} title="Configurar receita" maxWidthClass="max-w-3xl">
         <div className="flex flex-col gap-4">
+          {recipeIsEditing && (
+            <div className="flex gap-1 border-b border-border -mt-1">
+              {[['receita', 'Receita'], ['resumo', 'Resumo']].map(([key, label]) => (
+                <button key={key} type="button" onClick={() => setRecipeTab(key)}
+                  className={'px-3.5 py-2 text-[13px] font-medium border-b-2 -mb-px transition-colors cursor-pointer ' + (recipeTab === key ? 'border-accent text-text-primary' : 'border-transparent text-text-muted hover:text-text-primary')}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+          {recipeIsEditing && recipeTab === 'resumo' ? <RecipeSummaryView summary={recipeSummary()} loading={recipeLoading} /> : (<>
           <div>
             <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Produto a configurar *</label>
             <Select
@@ -432,12 +454,7 @@ export default function Producao() {
               ) : (
                 <>
                   <div className="flex flex-col gap-2.5">
-                    <div className="flex items-center justify-between">
-                      <p className="text-[11px] font-medium uppercase tracking-wide text-text-muted">Ingredientes por lote</p>
-                      <button type="button" onClick={addRecipeRow} className="flex items-center gap-1.5 text-[12px] font-medium text-accent hover:text-accent-hover cursor-pointer">
-                        <Plus size={14} /> Adicionar ingrediente
-                      </button>
-                    </div>
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-text-muted">Ingredientes por lote</p>
                     {recipeForm.rows.map((row, idx) => (
                       <div key={idx} className="flex items-center gap-2">
                         <div className="flex-1 min-w-0">
@@ -483,21 +500,10 @@ export default function Producao() {
                   </div>
 
 
-                  {recipeIsEditing && recipeForm.rows.some((r) => r.ingredientProductId && r.quantityPerBatch) && (
-                    <div className="bg-bg-inset border border-border rounded-md p-3">
-                      <p className="text-[11px] text-text-muted leading-snug">
-                        {recipeForm.rows.filter((r) => r.ingredientProductId && r.quantityPerBatch).map((r, i) => {
-                          const ing = allProducts.find((p) => p.id === r.ingredientProductId);
-                          const unitCode = choiceCode(ing, r.saleUnitId);
-                          const hint = fractionHint(r.quantityPerBatch);
-                          const small = smallUnitHint(r.quantityPerBatch, unitCode);  // 0,2 KG (200 g)
-                          return (i > 0 ? ' + ' : '') + (hint || r.quantityPerBatch) + ' ' + unitCode + (small ? ' (' + small + ')' : '') + ' ' + (ing?.name || '?');
-                        })}
-                        {' \u2192 '}
-                        {recipeForm.batchYield || '?'} {choiceCode(allProducts.find((p) => p.id === recipeForm.productId), recipeForm.batchYieldSaleUnitId)} {producibleCandidates.find((p) => p.id === recipeForm.productId)?.name || 'produto'}
-                      </p>
-                    </div>
-                  )}
+                  <button type="button" onClick={addRecipeRow}
+                    className="self-start flex items-center gap-1.5 border border-dashed border-accent/60 hover:border-accent hover:bg-accent/5 text-accent text-[13px] font-medium rounded-md px-3.5 py-2 transition-colors cursor-pointer">
+                    <Plus size={15} /> Ingrediente
+                  </button>
                 </>
               )}
 
@@ -511,6 +517,7 @@ export default function Producao() {
                 {recipeSaving ? <Loader2 size={17} className="animate-spin" /> : <ChefHat size={17} />}
                 {recipeSaving ? 'A guardar...' : 'Guardar receita'}
               </button>
+          </>)}
         </div>
       </Modal>
 
@@ -617,5 +624,62 @@ export default function Producao() {
         </form>
       </Modal>
     </main>
+  );
+}
+
+
+// The «Resumo» tab of an existing recipe: read only, one line per ingredient.
+function RecipeSummaryView({ summary, loading }) {
+  if (loading) {
+    return <div className="flex items-center justify-center py-6 text-text-muted text-sm"><Loader2 size={16} className="animate-spin mr-2" />A carregar receita...</div>;
+  }
+  const { made, yieldBase, yieldCode, lines, complete, batchCost, unitCost, price, margin } = summary;
+  const qty = (q, code) => q == null ? '-' : qtyWithUnit(q, code);
+  const kz = (v) => (v == null ? '-' : formatKz(v) + ' Kz');
+  const th = 'text-[11px] uppercase tracking-wide text-text-muted font-medium px-3 py-2';
+  if (!lines.length) return <p className="text-text-muted text-[13px] text-center py-8">Esta receita ainda não tem ingredientes</p>;
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-baseline justify-between flex-wrap gap-2">
+        <p className="font-display font-semibold text-text-primary text-[16px]">{made?.name || 'Produto'}</p>
+        <p className="text-[13px] text-text-muted">1 lote = <strong className="text-text-primary font-mono">{qty(yieldBase, yieldCode)}</strong></p>
+      </div>
+      <div className="border border-border rounded-md overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead><tr className="border-b border-border bg-bg-inset/40">
+            <th className={th + ' text-left'}>Ingrediente</th>
+            <th className={th + ' text-right'}>Por lote</th>
+            <th className={th + ' text-right'}>Por {yieldCode}</th>
+            <th className={th + ' text-right'}>Custo médio</th>
+            <th className={th + ' text-right'}>Custo no lote</th>
+          </tr></thead>
+          <tbody>
+            {lines.map((l, i) => (
+              <tr key={i} className="border-b border-border last:border-0">
+                <td className="px-3 py-2.5 text-text-primary"><span className="font-mono text-[11px] text-text-muted mr-2">{l.code}</span>{l.name}</td>
+                <td className="px-3 py-2.5 text-right font-mono text-text-primary whitespace-nowrap">{qty(l.baseQty, l.baseCode)}</td>
+                <td className="px-3 py-2.5 text-right font-mono text-text-muted whitespace-nowrap">{qty(l.perUnit, l.baseCode)}</td>
+                <td className="px-3 py-2.5 text-right font-mono text-text-muted whitespace-nowrap">{l.avg == null ? <span className="text-amber-500">sem custo</span> : kz(l.avg) + '/' + l.baseCode}</td>
+                <td className="px-3 py-2.5 text-right font-mono text-text-primary whitespace-nowrap">{kz(l.cost)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+        {[['Custo do lote', complete ? kz(batchCost) : '-'], ['Custo por ' + yieldCode, kz(unitCost)], ['Preço de venda', price ? kz(price) : '-'],
+          ['Margem por ' + yieldCode, margin == null ? '-' : kz(margin) + ' (' + Math.round((margin / price) * 100) + ' %)']].map(([label, value]) => (
+          <div key={label} className="bg-bg-inset border border-border rounded-md px-3 py-2.5">
+            <p className="text-[10.5px] uppercase tracking-wide text-text-muted">{label}</p>
+            <p className={'font-mono text-[14px] mt-0.5 ' + (label.startsWith('Margem') && margin != null && margin < 0 ? 'text-danger' : 'text-text-primary')}>{value}</p>
+          </div>
+        ))}
+      </div>
+      <p className="text-[11px] text-text-muted">
+        {complete
+          ? 'Custo das matérias-primas ao custo médio atual (com o IVA não dedutível) - sem energia nem mão-de-obra.'
+          : 'Custo incompleto: um ingrediente ainda não tem custo médio (nunca foi comprado).'}
+      </p>
+    </div>
   );
 }

@@ -118,7 +118,7 @@ export default function ProductionHistory() {
         </button>
       </div>
 
-      <div className="bg-bg-elevated border border-border rounded-lg overflow-hidden">
+      <div className={batches.length > 0 && !loading && !error ? '' : 'bg-bg-elevated border border-border rounded-lg overflow-hidden'}>
         {loading && (
           <div className="flex items-center justify-center py-16 text-text-muted text-sm">
             <Loader2 size={18} className="animate-spin mr-2" />
@@ -131,34 +131,74 @@ export default function ProductionHistory() {
         {!loading && !error && batches.length === 0 && (
           <p className="text-text-muted text-[13px] text-center py-16">Nenhuma produção encontrada para este filtro</p>
         )}
-        {!loading && !error && batches.length > 0 && (
-          <div className="divide-y divide-border">
-            {batches.map((batch, idx) => (
-              <div key={idx} className="px-6 py-4">
-                <div className="flex items-center justify-between mb-1.5 flex-wrap gap-1">
-                  <p className="font-display font-medium text-text-primary">
-                    {batch.output ? qtyWithUnit(batch.output) + ' × ' + batch.output.product_name : 'Produção'}
-                  </p>
-                  <p className="text-[12px] text-text-muted">{new Date(batch.created_at).toLocaleString('pt-AO')}</p>
-                </div>
-                <p className="text-[12px] text-text-muted">{batch.warehouse_name}</p>
-                <p className="text-[12px] text-text-muted mt-1">
-                  Consumiu: {batch.ingredients.map((i) => qtyWithUnit(i) + ' ' + i.product_name).join(', ')}
-                </p>
-
-                {batch.output && (batch.output.unit_cost != null ? (
-                  <p className="text-[12px] text-text-muted mt-0.5 font-mono">
-                    {'Custo: ' + formatKz(batch.output.unit_cost) + ' Kz/' + (batch.output.unit_code || 'un') + ' \u00b7 total '
-                      + formatKz(batch.output.unit_cost * batch.output.quantity) + ' Kz'}
-                  </p>
-                ) : (
-                  <p className="text-[12px] text-amber-500 mt-0.5">{'Custo incompleto (um ingrediente sem custo)'}</p>
-                ))}
-              </div>
-            ))}
-          </div>
-        )}
+        {!loading && !error && batches.length > 0 && <BatchList batches={batches} />}
       </div>
     </main>
+  );
+}
+
+
+// The batches of the filter: a few totals, then one card per production - what was made, where and when, a table of
+// what it consumed (quantity, average cost, cost) and its cost per unit.
+function BatchList({ batches }) {
+  const kz = (v) => formatKz(v) + ' Kz';
+  const costed = batches.filter((b) => b.output && b.output.unit_cost != null);
+  const totalCost = costed.reduce((t, b) => t + b.output.unit_cost * b.output.quantity, 0);
+  const th = 'text-[10.5px] uppercase tracking-wide text-text-muted font-medium px-3 py-2';
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        {[['Produções', String(batches.length)], ['Custo total das produções', kz(totalCost)],
+          ['Produtos diferentes', String(new Set(batches.map((b) => b.output?.product_code)).size)]].map(([label, value]) => (
+          <div key={label} className="bg-bg-elevated border border-border rounded-lg px-4 py-3">
+            <p className="text-[11px] uppercase tracking-wide text-text-muted">{label}</p>
+            <p className="font-mono text-[18px] text-text-primary mt-1">{value}</p>
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        {batches.map((batch, idx) => {
+          const out = batch.output;
+          return (
+            <div key={idx} className="bg-bg-elevated border border-border rounded-lg overflow-hidden">
+              <div className="px-4 py-3 border-b border-border flex items-start justify-between gap-3 flex-wrap">
+                <div>
+                  <p className="font-display font-semibold text-text-primary text-[15px] flex items-center gap-2 flex-wrap">
+                    {out ? out.product_name : 'Produção'}
+                    {out && <span className="font-mono text-[12px] font-semibold text-accent bg-accent/10 px-2 py-0.5 rounded">+{qtyWithUnit(out)}</span>}
+                  </p>
+                  <p className="text-[12px] text-text-muted mt-0.5">{batch.warehouse_name}</p>
+                </div>
+                <p className="text-[12px] text-text-muted font-mono">{new Date(batch.created_at).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+              </div>
+              <table className="w-full text-[13px]">
+                <thead><tr className="border-b border-border bg-bg-inset/40">
+                  <th className={th + ' text-left'}>Consumiu</th><th className={th + ' text-right'}>Quantidade</th>
+                  <th className={th + ' text-right'}>Custo médio</th><th className={th + ' text-right'}>Custo</th>
+                </tr></thead>
+                <tbody>
+                  {batch.ingredients.map((i, k) => (
+                    <tr key={k} className="border-b border-border last:border-0">
+                      <td className="px-3 py-2 text-text-primary">{i.product_name}</td>
+                      <td className="px-3 py-2 text-right font-mono text-text-primary whitespace-nowrap">{qtyWithUnit(i)}</td>
+                      <td className="px-3 py-2 text-right font-mono text-text-muted whitespace-nowrap">{i.unit_cost == null ? '-' : kz(i.unit_cost) + '/' + (i.unit_code || 'un')}</td>
+                      <td className="px-3 py-2 text-right font-mono text-text-primary whitespace-nowrap">{i.unit_cost == null ? '-' : kz(i.unit_cost * i.quantity)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {out && (out.unit_cost != null ? (
+                <div className="px-4 py-2.5 border-t border-border bg-bg-inset/40 flex items-center justify-between gap-3 flex-wrap font-mono text-[13px]">
+                  <span className="text-text-muted">Custo total <strong className="text-text-primary">{kz(out.unit_cost * out.quantity)}</strong></span>
+                  <span className="text-text-muted">Custo por {out.unit_code || 'un'} <strong className="text-accent text-[14px]">{kz(out.unit_cost)}</strong></span>
+                </div>
+              ) : (
+                <p className="px-4 py-2.5 border-t border-border text-[12px] text-amber-500">Custo incompleto (um ingrediente sem custo)</p>
+              ))}
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
