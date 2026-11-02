@@ -304,7 +304,7 @@ export default function Products() {
     setCategoryFormError('');
     setCategorySaving(true);
     try {
-      const created = await createProductCategory({ name: categoryName, not_available_purchases: false, not_available_pos: false, not_available_sales: false });
+      const created = await createProductCategory({ name: categoryName });
       setCategories((prev) => [...prev, created]);
       updateField('categoryId', created.id);
       setCategoryModalOpen(false);

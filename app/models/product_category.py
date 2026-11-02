@@ -18,8 +18,7 @@ class ProductCategory(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     company_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("companies.id"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(150), nullable=False)
-    not_available_purchases: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    not_available_pos: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # «Não mostrar no site»: kept out of the public catalogue (public API: the company's website) - the only flag
     not_available_sales: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     # the activities whose tills offer its products (Pão at the Padaria counter only) - None: every activity
     activity_ids: Mapped[list[uuid.UUID] | None] = mapped_column(ARRAY(UUID(as_uuid=True)), nullable=True)

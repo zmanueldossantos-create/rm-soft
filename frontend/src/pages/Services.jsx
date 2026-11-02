@@ -165,7 +165,7 @@ export default function Services() {
     setTypeFormError('');
     setTypeSaving(true);
     try {
-      const created = await createServiceType({ name: typeName, not_available_purchases: false, not_available_pos: false, not_available_sales: false });
+      const created = await createServiceType({ name: typeName });
       setServiceTypes((prev) => [...prev, created]);
       updateField('serviceTypeId', created.id);
       setTypeModalOpen(false);

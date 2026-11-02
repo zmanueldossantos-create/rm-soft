@@ -35,13 +35,11 @@ async def list_service_types(db: AsyncSession, company_id: uuid.UUID) -> list[Se
 
 async def create_service_type(
     db: AsyncSession, company_id: uuid.UUID, name: str,
-    not_available_purchases: bool = False, not_available_pos: bool = False, not_available_sales: bool = False,
+    not_available_sales: bool = False,
 ) -> ServiceType:
     await _check_name_available(db, company_id, name)
     service_type = ServiceType(
         company_id=company_id, name=name,
-        not_available_purchases=not_available_purchases,
-        not_available_pos=not_available_pos,
         not_available_sales=not_available_sales,
     )
     db.add(service_type)
@@ -52,7 +50,7 @@ async def create_service_type(
 
 async def update_service_type(
     db: AsyncSession, company_id: uuid.UUID, service_type_id: uuid.UUID, name: str,
-    not_available_purchases: bool = False, not_available_pos: bool = False, not_available_sales: bool = False,
+    not_available_sales: bool = False,
 ) -> ServiceType:
     result = await db.execute(select(ServiceType).where(ServiceType.id == service_type_id, ServiceType.company_id == company_id))
     service_type = result.scalar_one_or_none()
@@ -60,8 +58,6 @@ async def update_service_type(
         raise ServiceTypeNotFoundError("Tipo de serviço não encontrado")
     await _check_name_available(db, company_id, name, exclude_id=service_type_id)
     service_type.name = name
-    service_type.not_available_purchases = not_available_purchases
-    service_type.not_available_pos = not_available_pos
     service_type.not_available_sales = not_available_sales
     await db.commit()
     await db.refresh(service_type)

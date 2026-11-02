@@ -37,15 +37,13 @@ async def list_product_categories(db: AsyncSession, company_id: uuid.UUID) -> li
 
 async def create_product_category(
     db: AsyncSession, company_id: uuid.UUID, name: str,
-    not_available_purchases: bool = False, not_available_pos: bool = False, not_available_sales: bool = False,
+    not_available_sales: bool = False,
     activity_ids: list[uuid.UUID] | None = None,
 ) -> ProductCategory:
     await _check_name_available(db, company_id, name)
     activity_ids = await owned_activity_ids(db, company_id, activity_ids)
     category = ProductCategory(
         company_id=company_id, name=name,
-        not_available_purchases=not_available_purchases,
-        not_available_pos=not_available_pos,
         not_available_sales=not_available_sales, activity_ids=activity_ids,
     )
     db.add(category)
@@ -56,7 +54,7 @@ async def create_product_category(
 
 async def update_product_category(
     db: AsyncSession, company_id: uuid.UUID, category_id: uuid.UUID, name: str,
-    not_available_purchases: bool = False, not_available_pos: bool = False, not_available_sales: bool = False,
+    not_available_sales: bool = False,
     activity_ids: list[uuid.UUID] | None = None,
 ) -> ProductCategory:
     result = await db.execute(select(ProductCategory).where(ProductCategory.id == category_id, ProductCategory.company_id == company_id))
@@ -65,8 +63,6 @@ async def update_product_category(
         raise ProductCategoryNotFoundError("Categoria de produto não encontrada")
     await _check_name_available(db, company_id, name, exclude_id=category_id)
     category.name = name
-    category.not_available_purchases = not_available_purchases
-    category.not_available_pos = not_available_pos
     category.not_available_sales = not_available_sales
     category.activity_ids = await owned_activity_ids(db, company_id, activity_ids)
     await db.commit()

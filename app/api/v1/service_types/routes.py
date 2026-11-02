@@ -40,7 +40,7 @@ async def post_service_type(
     try:
         return await create_service_type(
             db, current_user.company_id, payload.name,
-            payload.not_available_purchases, payload.not_available_pos, payload.not_available_sales,
+            payload.not_available_sales,
         )
     except ServiceTypeAlreadyExistsError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
@@ -56,7 +56,7 @@ async def patch_service_type(
     try:
         return await update_service_type(
             db, current_user.company_id, service_type_id, payload.name,
-            payload.not_available_purchases, payload.not_available_pos, payload.not_available_sales,
+            payload.not_available_sales,
         )
     except ServiceTypeNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))

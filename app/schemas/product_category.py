@@ -6,9 +6,7 @@ from pydantic import BaseModel, field_validator
 
 class ProductCategoryRequest(BaseModel):
     name: str
-    not_available_purchases: bool = False
-    not_available_pos: bool = False
-    not_available_sales: bool = False
+    not_available_sales: bool = False  # «Não mostrar no site»: out of the public catalogue (public API)
     activity_ids: list[uuid.UUID] = []  # the activities whose tills offer its products - empty: every activity
 
     @field_validator("name")
@@ -23,8 +21,6 @@ class ProductCategoryRequest(BaseModel):
 class ProductCategoryResponse(BaseModel):
     id: uuid.UUID
     name: str
-    not_available_purchases: bool
-    not_available_pos: bool
     not_available_sales: bool
     activity_ids: list[uuid.UUID] = []
     is_active: bool

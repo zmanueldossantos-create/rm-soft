@@ -6,9 +6,7 @@ from pydantic import BaseModel, field_validator
 
 class ServiceTypeRequest(BaseModel):
     name: str
-    not_available_purchases: bool = False
-    not_available_pos: bool = False
-    not_available_sales: bool = False
+    not_available_sales: bool = False  # «Não mostrar no site»: out of the public catalogue (public API)
 
     @field_validator("name")
     @classmethod
@@ -22,8 +20,6 @@ class ServiceTypeRequest(BaseModel):
 class ServiceTypeResponse(BaseModel):
     id: uuid.UUID
     name: str
-    not_available_purchases: bool
-    not_available_pos: bool
     not_available_sales: bool
     is_active: bool
     created_at: datetime

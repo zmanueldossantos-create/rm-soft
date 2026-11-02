@@ -40,7 +40,7 @@ async def post_product_category(
     try:
         return await create_product_category(
             db, current_user.company_id, payload.name,
-            payload.not_available_purchases, payload.not_available_pos, payload.not_available_sales,
+            payload.not_available_sales,
             payload.activity_ids,
         )
     except ProductCategoryAlreadyExistsError as e:
@@ -57,7 +57,7 @@ async def patch_product_category(
     try:
         return await update_product_category(
             db, current_user.company_id, category_id, payload.name,
-            payload.not_available_purchases, payload.not_available_pos, payload.not_available_sales,
+            payload.not_available_sales,
             payload.activity_ids,
         )
     except ProductCategoryNotFoundError as e:
