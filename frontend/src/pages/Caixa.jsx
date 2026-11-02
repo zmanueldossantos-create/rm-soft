@@ -2100,13 +2100,6 @@ export default function Caixa() {
                   {formatKz(dailyReportEntries.reduce((sum, e) => sum + (e.direction === 'saída' ? -e.amount : e.amount), 0))} Kz
                 </span>
               </div>
-              <button
-                onClick={() => window.print()}
-                className="flex items-center justify-center gap-2 border border-border hover:border-accent text-text-primary font-medium text-sm rounded-md py-3 transition-colors cursor-pointer"
-              >
-                <Printer size={16} />
-                Imprimir
-              </button>
             </>
           )}
           </>)}
