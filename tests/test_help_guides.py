@@ -29,6 +29,8 @@ def test_links_screens_and_permissions_exist():
         if guide.get("module"):
             assert guide["module"] in module_ids, guide["id"]
         for step in guide["steps"]:
+            if isinstance(step, dict):
+                assert set(step.get("perms", [])) <= CATALOG, (guide["id"], step["text"][:40])
             if isinstance(step, dict) and step.get("link"):
                 assert step["link"].split("?")[0] in ROUTES, (guide["id"], step["link"])
 
@@ -37,7 +39,9 @@ def test_each_user_sees_the_guides_of_his_screens():
     cashier = visible_guides({"pos:view", "pos:checkout"}, "CAIXA")
     assert {g["id"] for g in cashier} == {"caixa-tesouraria", "caixa"}
     circuit = next(g for g in cashier if g["id"] == "caixa-tesouraria")
-    assert [s["link"] for s in circuit["steps"]][:2] == [None, "/caixa"]  # no «Ir» to the gestor's Empresa screen
+    texts = " ".join(s["text"] for s in circuit["steps"])
+    assert circuit["steps"][0]["link"] == "/caixa"  # it starts at «Abrir caixa»
+    assert "Associar" not in texts and "Tesouraria" not in texts  # the gestor's steps are not the cashier's
 
     # a pharmacy (stock, no production): no Matéria-prima nor Produção, as in its menu
     pharmacy = {g["id"] for g in visible_guides({p for p in CATALOG if not p.startswith(("recipes", "production"))}, "GESTOR")}
@@ -79,3 +83,10 @@ async def test_the_assistant_reads_the_guides():
     assert "«Pagar»" in answer["guias"][0]
     nothing = json.loads(await run_tool(None, None, permissions, "consultar_ajuda", {"pergunta": "quartos"}, role="GESTOR"))
     assert "erro" in nothing  # the Reservas guides are not his
+
+
+def test_the_gestor_still_reads_the_whole_circuit():
+    gestor = visible_guides({"pos:view", "tesouraria:overview", "tesouraria:associations_manage"}, "GESTOR")
+    circuit = next(g for g in gestor if g["id"] == "caixa-tesouraria")
+    texts = [s["text"] for s in circuit["steps"]]
+    assert texts[0].startswith("O gestor associa") and texts[-1].startswith("O gestor vê")

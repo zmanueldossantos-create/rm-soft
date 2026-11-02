@@ -8,13 +8,15 @@ Two kinds:
 
 A guide is shown only to who may open its screens, by the same rules as the menu: `perms` (any of them - a sector
 without the screen has not got them, e.g. the Farmácia's), `requires` (all of them, e.g. Matéria-prima needs the
-Produção sector's recipes:view too) and/or `roles`. An "Ir" towards a screen the user may not open is removed. Write the button names exactly as they
+Produção sector's recipes:view too) and/or `roles`. A step may carry its own `perms` (any of them): a step only the
+gestor does - associate a till, look at the Tesouraria - is not shown to a cashier. An "Ir" towards a screen the user
+may not open is removed. Write the button names exactly as they
 appear on the screen; a link is a route of frontend/src/App.jsx (checked by tests/test_help_guides.py).
 """
 import re
 import unicodedata
 
-S = dict  # a step with its screen: S(text=..., link=...)
+S = dict  # a step with its screen: S(text=..., link=..., perms=[...] only for who may do it)
 
 MODULES = [
     {
@@ -48,7 +50,7 @@ MODULES = [
                  "fecha contando a gaveta. O gestor acompanha todas as caixas na Tesouraria.",
         "steps": [
             S(text="O gestor associa cada utilizador de caixa ao seu ponto de venda: separador Atividades, «Associar "
-                   "utilizador».", link="/company-settings?tab=atividades"),
+                   "utilizador».", link="/company-settings?tab=atividades", perms=["tesouraria:associations_manage"]),
             S(text="O caixa abre a sessão com «Abrir caixa»: o fundo vem da sessão anterior.", link="/caixa"),
             S(text="Vende: Fatura/Recibo (paga no momento), Fatura (paga mais tarde, com recibo depois) ou Pro-forma."),
             S(text="Durante o dia, em Operações de Caixa (barra à esquerda): entradas e saídas externas com o seu motivo, e "
@@ -56,7 +58,8 @@ MODULES = [
             S(text="O recibo de uma Fatura paga mais tarde emite-se na caixa (Consultar documentos) ou em Faturas, «Emitir "
                    "Recibo».", link="/invoices"),
             S(text="No fim do dia, «Fechar caixa»: o valor contado na gaveta, e o motivo de uma diferença."),
-            S(text="O gestor vê a Posição de cada caixa, os Movimentos e os Fechos em Finanças → Tesouraria.", link="/tesouraria"),
+            S(text="O gestor vê a Posição de cada caixa, os Movimentos e os Fechos em Finanças → Tesouraria.", link="/tesouraria",
+              perms=["tesouraria:overview"]),
         ],
         "errors": [
             ("Uma transferência fica «Em trânsito»", "A caixa de destino ainda não confirmou a receção (Operações de Caixa). "
@@ -687,8 +690,10 @@ PLATFORM_PAGES = [
 ]
 
 
-def _normalized(guide: dict, kind: str) -> dict:
+def _normalized(guide: dict, kind: str, permissions: set[str]) -> dict:
     steps = [s if isinstance(s, dict) else {"text": s} for s in guide["steps"]]
+    # a step of its own permission (the gestor's) is left out for who has none of them
+    steps = [s for s in steps if not s.get("perms") or any(p in permissions for p in s["perms"])]
     return {"id": guide["id"], "kind": kind, "title": guide["title"], "path": guide.get("path"),
             "module": guide.get("module"), "intro": guide["intro"],
             "steps": [{"text": s["text"], "link": s.get("link")} for s in steps],
@@ -707,9 +712,9 @@ def visible_guides(permissions: set[str], role: str | None) -> list[dict]:
     """The guides this user may read: the circuits first, then the pages. A page's link to its circuit is kept only
     when that circuit is visible too."""
     all_modules, all_pages = MODULES + PLATFORM_MODULES, PAGES + PLATFORM_PAGES
-    modules = [_normalized(g, "module") for g in all_modules if _allowed(g, permissions, role)]
+    modules = [_normalized(g, "module", permissions) for g in all_modules if _allowed(g, permissions, role)]
     module_ids = {m["id"] for m in modules}
-    pages = [_normalized(g, "page") for g in all_pages if _allowed(g, permissions, role)]
+    pages = [_normalized(g, "page", permissions) for g in all_pages if _allowed(g, permissions, role)]
     for page in pages:
         if page["module"] not in module_ids:
             page["module"] = None
