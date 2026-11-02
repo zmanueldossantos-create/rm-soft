@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react';
-import { LayoutDashboard, TrendingUp, Receipt, AlertTriangle, Loader2, Package2, Send, Clock, CheckCircle2, XCircle, ListChecks } from 'lucide-react';
+import { LayoutDashboard, TrendingUp, Receipt, AlertTriangle, Loader2, Package2, Send, Clock, CheckCircle2, XCircle, ListChecks,
+  BarChart3, Wallet, Trophy, Landmark, CalendarClock, Factory, HandCoins, ArrowDownToLine } from 'lucide-react';
+import { Block, Kpi, SalesChart, PaymentsToday, TopProducts, Tills, LowStock, Expiring, ProductionToday, RecentDocuments,
+  formatMoney, versusYesterday } from '../components/PainelBlocks';
 import { getDashboardSummary } from '../api/dashboard';
 import { getMyCompanySetup } from '../api/company';
 import { useAuthStore } from '../store/authStore';
@@ -51,14 +54,6 @@ function SetupCard({ userId }) {
       <SetupChecklist data={setup} />
     </div>
   );
-}
-
-function formatMoney(value) {
-  return new Intl.NumberFormat('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value) + ' Kz';
-}
-
-function formatQty(value) {
-  return value % 1 === 0 ? String(value) : String(value).replace('.', ',');
 }
 
 const STATUS_STYLE = {
@@ -128,38 +123,23 @@ export default function Dashboard() {
 
       {!loading && !error && summary && (
         <div className="flex flex-col gap-6">
-          {/* Revenue cards */}
+          {/* The day, the month, the money owed both ways (each only for who may see it) */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-bg-elevated border border-border rounded-lg p-5">
-              <div className="flex items-center gap-2 text-text-muted text-[11px] uppercase tracking-wide mb-2">
-                <TrendingUp size={13} className="text-accent" />
-                Faturação hoje
-              </div>
-              <p className="font-display font-semibold text-2xl text-text-primary">{formatMoney(summary.revenue_today)}</p>
-            </div>
-            <div className="bg-bg-elevated border border-border rounded-lg p-5">
-              <div className="flex items-center gap-2 text-text-muted text-[11px] uppercase tracking-wide mb-2">
-                <TrendingUp size={13} className="text-accent" />
-                Faturação este mês
-              </div>
-              <p className="font-display font-semibold text-2xl text-text-primary">{formatMoney(summary.revenue_month)}</p>
-            </div>
-            <div className="bg-bg-elevated border border-border rounded-lg p-5">
-              <div className="flex items-center gap-2 text-text-muted text-[11px] uppercase tracking-wide mb-2">
-                <Receipt size={13} className="text-accent" />
-                Faturas este mês
-              </div>
-              <p className="font-display font-semibold text-2xl text-text-primary">{summary.invoice_count_month}</p>
-            </div>
-            <div className="bg-bg-elevated border border-border rounded-lg p-5">
-              <div className="flex items-center gap-2 text-text-muted text-[11px] uppercase tracking-wide mb-2">
-                <Package2 size={13} className="text-accent" />
-                Produtos em alerta
-              </div>
-              <p className={'font-display font-semibold text-2xl ' + (summary.low_stock_products.length > 0 ? 'text-danger' : 'text-text-primary')}>
-                {summary.low_stock_products.length}
-              </p>
-            </div>
+            {(() => { const vs = versusYesterday(summary.revenue_today, summary.revenue_yesterday);
+              return <Kpi icon={TrendingUp} label="Vendas hoje" value={formatMoney(summary.revenue_today)} sub={vs.text} subTone={vs.tone} />; })()}
+            <Kpi icon={TrendingUp} label="Vendas este mês" value={formatMoney(summary.revenue_month)}
+              sub={summary.invoice_count_month + ' documento(s) de venda'} />
+            {summary.receivables
+              ? <Kpi icon={HandCoins} label="A receber de clientes" value={formatMoney(summary.receivables.total)}
+                  sub={summary.receivables.overdue > 0 ? formatMoney(summary.receivables.overdue) + ' em atraso' : summary.receivables.count + ' fatura(s) por pagar'}
+                  subTone={summary.receivables.overdue > 0 ? 'text-danger' : 'text-text-muted'} />
+              : <Kpi icon={Package2} label="Produtos em alerta" value={summary.low_stock_products.length}
+                  valueTone={summary.low_stock_products.length ? 'text-danger' : 'text-text-primary'} />}
+            {summary.payables
+              ? <Kpi icon={ArrowDownToLine} label="A pagar a fornecedores" value={formatMoney(summary.payables.total)}
+                  sub={summary.payables.overdue > 0 ? formatMoney(summary.payables.overdue) + ' vencido' : summary.payables.count + ' fatura(s) de compra por pagar'}
+                  subTone={summary.payables.overdue > 0 ? 'text-danger' : 'text-text-muted'} />
+              : <Kpi icon={Receipt} label="Documentos este mês" value={summary.invoice_count_month} />}
           </div>
 
           {/* Faturação Eletrónica: the AGT not answering (contingência), documents late (the AGT penalises after 24 h) */}
@@ -207,52 +187,40 @@ export default function Dashboard() {
           </div>
           )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Low stock alerts */}
-            <div className="bg-bg-elevated border border-border rounded-lg overflow-hidden">
-              <div className="px-5 py-3.5 border-b border-border flex items-center gap-2">
-                <AlertTriangle size={15} className="text-danger" />
-                <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wide">Stock baixo</p>
-              </div>
-              {summary.low_stock_products.length === 0 ? (
-                <div className="text-center py-10 text-text-muted text-sm">Nenhum produto em alerta</div>
-              ) : (
-                <div className="divide-y divide-border">
-                  {summary.low_stock_products.map((p) => (
-                    <div key={p.code} className="flex items-center justify-between px-5 py-3 text-sm">
-                      <div>
-                        <p className="font-display font-medium text-text-primary">{p.name}</p>
-                        <p className="text-[12px] font-mono text-text-muted">{p.code}</p>
-                      </div>
-                      <p className="font-mono text-danger">{formatQty(p.quantity)} / {formatQty(p.min_stock_threshold)}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+          {/* Sales of the 30 days and what came in today */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <Block icon={BarChart3} title="Vendas dos últimos 30 dias" className="lg:col-span-2">
+              <SalesChart days={summary.sales_30_days} />
+            </Block>
+            <Block icon={Wallet} title="Recebido hoje" to={summary.tills ? '/tesouraria' : undefined}>
+              <PaymentsToday payments={summary.payments_today} />
+            </Block>
+          </div>
 
-            {/* Recent invoices */}
-            <div className="bg-bg-elevated border border-border rounded-lg overflow-hidden">
-              <div className="px-5 py-3.5 border-b border-border flex items-center gap-2">
-                <Receipt size={15} className="text-accent" />
-                <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wide">Últimas faturas</p>
-              </div>
-              {summary.recent_invoices.length === 0 ? (
-                <div className="text-center py-10 text-text-muted text-sm">Nenhuma fatura emitida ainda</div>
-              ) : (
-                <div className="divide-y divide-border">
-                  {summary.recent_invoices.map((inv) => (
-                    <div key={inv.id} className="flex items-center justify-between px-5 py-3 text-sm">
-                      <div>
-                        <p className="font-display font-medium text-text-primary">{inv.series}/{inv.number}</p>
-                        <p className="text-[12px] text-text-muted">{inv.customer_name || 'Sem cliente'} · {inv.business_date}</p>
-                      </div>
-                      <p className="font-mono text-text-primary">{formatMoney(inv.total)}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+          {/* What sells, the tills, the day's production */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <Block icon={Trophy} title="Mais vendidos">
+              <TopProducts today={summary.top_products_today} month={summary.top_products_month} />
+            </Block>
+            {summary.tills && (
+              <Block icon={Landmark} title="Caixas" to="/tesouraria"><Tills tills={summary.tills} /></Block>
+            )}
+            {summary.production_today && (
+              <Block icon={Factory} title="Produção de hoje" to="/producao/historico"><ProductionToday data={summary.production_today} /></Block>
+            )}
+          </div>
+
+          {/* What will be missing, what expires, the last sales */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {summary.expiring !== undefined && (
+              <Block icon={AlertTriangle} tone="text-danger" title="Stock baixo" to="/stock"><LowStock products={summary.low_stock_products} /></Block>
+            )}
+            {summary.expiring && (
+              <Block icon={CalendarClock} tone="text-amber-500" title={'Validades (' + summary.expiring.alert_days + ' dias)'} to="/stock">
+                <Expiring data={summary.expiring} />
+              </Block>
+            )}
+            <Block icon={Receipt} title="Últimas vendas" to="/invoices"><RecentDocuments invoices={summary.recent_invoices} /></Block>
           </div>
         </div>
       )}

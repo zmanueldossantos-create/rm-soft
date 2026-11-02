@@ -17,5 +17,8 @@ async def summary(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("dashboard:view")),
 ):
-    """Returns aggregated stats for the company's dashboard."""
-    return await get_dashboard_summary(db, current_user.company_id)
+    """Returns aggregated stats for the company's dashboard - each block only for who may see it."""
+    from app.services.permission_service import list_my_permissions
+    role = current_user.role.value if hasattr(current_user.role, "value") else current_user.role
+    permissions = set(await list_my_permissions(db, current_user.company_id, role))
+    return await get_dashboard_summary(db, current_user.company_id, permissions)
