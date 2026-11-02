@@ -8,7 +8,7 @@ import { listWarehouses, getProductionEstimate, produceStock } from '../api/stoc
 import apiClient from '../api/client';
 import { unitsApi } from '../api/catalogs';
 import { extractErrorMessage } from '../utils/errors';
-import { qtyWithUnit } from '../utils/stockUnits';
+import { qtyWithUnit, smallUnitHint } from '../utils/stockUnits';
 import { formatKz } from '../utils/format';
 import { useCan } from '../utils/permissions';
 
@@ -487,6 +487,14 @@ export default function Producao() {
                             ) : <span className="text-[12px] text-text-muted font-mono shrink-0">{choices[0]?.code}</span>;
                           })()}
                         </div>
+                        {/* below 1 KG / 1 L, the everyday unit beside it: 0,6 KG = 600 g, 0,5 L = 50 cl */}
+                        <span className="w-16 shrink-0 text-[12px] text-text-muted font-mono whitespace-nowrap">
+                          {(() => {
+                            const ing = allProducts.find((p) => p.id === row.ingredientProductId);
+                            const hint = ing ? smallUnitHint(row.quantityPerBatch, choiceCode(ing, row.saleUnitId)) : null;
+                            return hint ? '= ' + hint : '';
+                          })()}
+                        </span>
                         <button
                           type="button"
                           onClick={() => removeRecipeRow(idx)}
