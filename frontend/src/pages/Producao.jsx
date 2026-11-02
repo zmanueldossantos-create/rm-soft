@@ -8,6 +8,7 @@ import { listWarehouses, getProductionEstimate, produceStock } from '../api/stoc
 import apiClient from '../api/client';
 import { unitsApi } from '../api/catalogs';
 import { extractErrorMessage } from '../utils/errors';
+import { smallUnitHint } from '../utils/stockUnits';
 import { useCan } from '../utils/permissions';
 
 import PostingPeriodSelect from '../components/PostingPeriodSelect';
@@ -489,7 +490,8 @@ export default function Producao() {
                           const ing = allProducts.find((p) => p.id === r.ingredientProductId);
                           const unitCode = choiceCode(ing, r.saleUnitId);
                           const hint = fractionHint(r.quantityPerBatch);
-                          return (i > 0 ? ' + ' : '') + (hint || r.quantityPerBatch) + ' ' + unitCode + ' ' + (ing?.name || '?');
+                          const small = smallUnitHint(r.quantityPerBatch, unitCode);  // 0,2 KG (200 g)
+                          return (i > 0 ? ' + ' : '') + (hint || r.quantityPerBatch) + ' ' + unitCode + (small ? ' (' + small + ')' : '') + ' ' + (ing?.name || '?');
                         })}
                         {' \u2192 '}
                         {recipeForm.batchYield || '?'} {choiceCode(allProducts.find((p) => p.id === recipeForm.productId), recipeForm.batchYieldSaleUnitId)} {producibleCandidates.find((p) => p.id === recipeForm.productId)?.name || 'produto'}

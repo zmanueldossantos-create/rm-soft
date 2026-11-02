@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { qtyWithUnit } from '../utils/stockUnits';
 import { useNavigate } from 'react-router-dom';
 import { History, Loader2, Search, ArrowDownToLine, ArrowUpFromLine, SlidersHorizontal, ClipboardList, ArrowRightLeft, Trash2, Factory, Plus } from 'lucide-react';
 import { listStockMovements, getMovementPeriods, listWarehouses } from '../api/stock';
@@ -23,14 +24,9 @@ const LOSS_CATEGORY_LABEL = {
   OUTRO: 'Outro',
 };
 
-// a quantity followed by the product's base unit: 2 KG, 0,05 KG, 40 UN
+// a quantity followed by the product's base unit (and the everyday unit below 1 KG / 1 L): 2 KG, 0,05 KG (50 g), 40 UN
 function qtyUnit(value, product) {
-  const code = product?.unit_of_measure_code;
-  return formatQty(value) + (code ? ' ' + code : '');
-}
-
-function formatQty(value) {
-  return value % 1 === 0 ? String(value) : String(value).replace('.', ',');
+  return qtyWithUnit(value, product?.unit_of_measure_code);
 }
 
 function formatDateTime(iso) {

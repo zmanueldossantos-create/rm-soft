@@ -1,4 +1,5 @@
 import { formatKz } from '../utils/format';
+import { qtyWithUnit as formatQtyUnit } from '../utils/stockUnits';
 import DateInput from '../components/DateInput';
 import { useState, useEffect } from 'react';
 import { ClipboardList, Loader2 } from 'lucide-react';
@@ -10,10 +11,9 @@ import { extractErrorMessage } from '../utils/errors';
 const MONTH_NAMES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 const TODAY = new Date().toISOString().slice(0, 10);
 
-// a quantity in the pt-PT way (0,1 - up to 3 decimals) followed by its unit: 5 KG, 0,05 KG, 100 UN
+// a quantity followed by its unit (and the everyday unit below 1 KG / 1 L): 5 KG, 0,05 KG (50 g), 100 UN
 function qtyWithUnit(entry) {
-  const qty = Number(entry.quantity).toLocaleString('pt-PT', { maximumFractionDigits: 3 });
-  return entry.unit_code ? qty + ' ' + entry.unit_code : qty;
+  return formatQtyUnit(entry.quantity, entry.unit_code);
 }
 
 export default function ProductionHistory() {
