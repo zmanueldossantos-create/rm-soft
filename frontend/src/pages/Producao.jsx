@@ -48,6 +48,7 @@ export default function Producao() {
   const [produceEstimateError, setProduceEstimateError] = useToastState('error');
   const [produceSaving, setProduceSaving] = useState(false);
   const [produceError, setProduceError] = useToastState('error');
+  const [notice, setNotice] = useToastState('success');  // a recipe saved, a production registered
 
   async function loadData() {
     setLoading(true);
@@ -186,7 +187,9 @@ export default function Producao() {
         quantityPerBatch: parseFloat(r.quantityPerBatch),
         saleUnitId: r.saleUnitId === 'base' ? null : r.saleUnitId,
       })), recipeForm.batchYieldSaleUnitId === 'base' ? null : recipeForm.batchYieldSaleUnitId);
+      const savedName = allProducts.find((p) => p.id === recipeForm.productId)?.name || '';
       closeRecipeModal();
+      setNotice('Receita guardada' + (savedName ? ': ' + savedName : '') + '.');
       await loadData();
     } catch (err) {
       setRecipeError(extractErrorMessage(err, 'Erro ao guardar receita'));
@@ -212,13 +215,15 @@ export default function Producao() {
   }
 
   function openProduceModal(product) {
-    setProduceForm({ productId: product.id, saleUnitId: 'base', warehouseId: '', fiscalPeriodId: '', quantity: '', numBatches: '', batchYield: product.batch_yield, reason: '', lotNumber: '', expiryDate: '' });
+    // the warehouse proposed is the one the capacity is computed for: the «Armazém por defeito», else the first active
+    const proposed = warehouses.find((w) => w.is_default && w.is_active) || warehouses.find((w) => w.is_active);
+    setProduceForm({ productId: product.id, saleUnitId: 'base', warehouseId: proposed?.id || '', fiscalPeriodId: '', quantity: '', numBatches: '', batchYield: product.batch_yield, reason: '', lotNumber: '', expiryDate: '' });
     setProduceEstimate(null);
     setProduceEstimateError('');
     setProduceError('');
     setProduceModalOpen(true);
-    if (warehouses[0]) {
-      loadEstimate(product.id, warehouses[0].id);
+    if (proposed) {
+      loadEstimate(product.id, proposed.id);
     }
   }
 
@@ -275,6 +280,10 @@ export default function Producao() {
     try {
       await produceStock(produceForm.warehouseId, produceForm.productId, parseFloat(produceForm.quantity), produceForm.reason || null, produceForm.fiscalPeriodId, produceForm.saleUnitId === 'base' ? null : produceForm.saleUnitId,
         producedLotRule ? { lotNumber: produceForm.lotNumber.trim(), expiryDate: produceForm.expiryDate } : {});
+      const product = allProducts.find((p) => p.id === produceForm.productId);
+      const warehouse = warehouses.find((w) => w.id === produceForm.warehouseId);
+      setNotice('Produção registada: ' + produceForm.quantity + ' ' + choiceCode(product, produceForm.saleUnitId) + ' de ' + (product?.name || 'produto')
+        + (warehouse ? ' em ' + warehouse.name : '') + '.');
       closeProduceModal();
     } catch (err) {
       setProduceError(extractErrorMessage(err, 'Erro ao produzir'));
@@ -510,7 +519,7 @@ export default function Producao() {
             <Select
               value={produceForm.warehouseId}
               onChange={handleProduceWarehouseChange}
-              options={warehouses.map((w) => ({ value: w.id, label: w.name }))}
+              options={warehouses.filter((w) => w.is_active || w.id === produceForm.warehouseId).map((w) => ({ value: w.id, label: w.name }))}
               placeholder="Selecionar armazém"
             />
           </div>

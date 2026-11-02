@@ -24,6 +24,7 @@ class StockLevelResponse(BaseModel):
     location_id: uuid.UUID | None = None  # emplacements (optional): where it is kept in this warehouse
     location_code: str | None = None
     active_substance: str | None = None  # Farmácia: a medicine is found by its substance (DCI)
+    is_raw_material: bool = False  # «Ocultar matérias-primas» on the stock screens
 
 
 class StockAdjustRequest(BaseModel):

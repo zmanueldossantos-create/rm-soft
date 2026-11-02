@@ -122,6 +122,7 @@ export default function Stock() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
+  const [hideRaw, setHideRaw] = useState(false);  // «Ocultar matérias-primas»: only what is sold
 
   const [newWarehouseModalOpen, setNewWarehouseModalOpen] = useState(false);
   const [editingWarehouseId, setEditingWarehouseId] = useState(null);
@@ -224,6 +225,7 @@ export default function Stock() {
   const defaultWarehouse = warehouses.find((w) => w.is_default && w.is_active) || centralWarehouse;
 
   const filteredLevels = levels.filter((l) => {
+    if (hideRaw && l.is_raw_material) return false;
     if (!search.trim()) return true;
     const q = search.toLowerCase();
     return l.product_code.toLowerCase().includes(q) || l.product_name.toLowerCase().includes(q)
@@ -602,6 +604,12 @@ export default function Stock() {
           className="w-full bg-bg-elevated border border-border rounded-md pl-10 pr-4 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors"
         />
       </div>
+      {view !== 'validades' && levels.some((l) => l.is_raw_material) && (
+        <label className="flex items-center gap-2.5 cursor-pointer select-none">
+          <input type="checkbox" checked={hideRaw} onChange={(e) => setHideRaw(e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
+          <span className="text-sm text-text-primary">Ocultar matérias-primas</span>
+        </label>
+      )}
       </div>
 
       {view === 'validades' && (

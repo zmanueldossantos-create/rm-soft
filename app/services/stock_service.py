@@ -610,6 +610,7 @@ async def list_stock_levels(db: AsyncSession, company_id: uuid.UUID, warehouse_i
             "product_code": product.code,
             "product_name": product.name,
             "active_substance": product.active_substance if product.is_medicine else None,  # Farmácia: found by its DCI
+            "is_raw_material": bool(product.is_raw_material),  # the screen can hide the raw materials
             "quantity": float(stock.quantity),
             "min_stock_threshold": float(product.min_stock_threshold),
             "is_low": float(stock.quantity) <= float(product.min_stock_threshold),
@@ -854,6 +855,9 @@ async def list_production_history(
         .order_by(StockMovement.created_at.desc())
     )
     rows = result.all()
+    # each quantity is shown with its product's base unit (5 KG Farinha, 100 UN Pão)
+    from app.models.unit_of_measure_catalog import UnitOfMeasureCatalog
+    unit_codes = dict((await db.execute(select(UnitOfMeasureCatalog.id, UnitOfMeasureCatalog.code))).all())
 
     batches = {}
     for movement, product, warehouse in rows:
@@ -866,6 +870,7 @@ async def list_production_history(
             "ingredients": [],
         })
         entry = {"product_code": product.code, "product_name": product.name, "quantity": float(movement.quantity),
+                 "unit_code": unit_codes.get(product.unit_of_measure_id),
                  "unit_cost": float(movement.unit_cost) if movement.unit_cost is not None else None}
         if movement.is_production_output:
             batch["output"] = entry

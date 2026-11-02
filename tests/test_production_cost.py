@@ -57,3 +57,26 @@ async def test_an_ingredient_without_cost_leaves_the_cost_incomplete(db, company
     assert float(produced.quantity) == 30  # produced all the same
     bread = (await db.execute(select(Product).where(Product.id == bread_id))).scalar_one()
     assert bread.average_cost is None and (await _output(db, bread_id)).unit_cost is None
+
+
+@pytest.mark.asyncio
+async def test_the_production_history_shows_each_quantity_with_its_unit(db, company_with_essentials):
+    from app.services.stock_service import list_production_history
+    ctx = company_with_essentials
+    flour_id, bread_id = await _bakery(db, ctx, flour_cost=1875)
+    await produce_stock(db, ctx["company"].id, ctx["activity_warehouse"].id, bread_id, 30)
+    batch = (await list_production_history(db, ctx["company"].id))[0]
+    flour = (await db.execute(select(Product).where(Product.id == flour_id))).scalar_one()
+    kilo = (await db.execute(select(UnitOfMeasureCatalog).where(UnitOfMeasureCatalog.id == flour.unit_of_measure_id))).scalar_one()
+    assert batch["output"]["unit_code"] == ctx["unit_un"].code  # 30 UN of bread
+    assert batch["ingredients"][0]["unit_code"] == kilo.code  # 10 KG of flour
+
+
+@pytest.mark.asyncio
+async def test_the_stock_levels_tell_the_raw_materials_apart(db, company_with_essentials):
+    from app.services.stock_service import list_stock_levels
+    ctx = company_with_essentials
+    flour_id, bread_id = await _bakery(db, ctx, flour_cost=1875)
+    await produce_stock(db, ctx["company"].id, ctx["activity_warehouse"].id, bread_id, 30)
+    levels = {l["product_id"]: l["is_raw_material"] for l in await list_stock_levels(db, ctx["company"].id, ctx["activity_warehouse"].id)}
+    assert levels[flour_id] is True and levels[bread_id] is False  # «Ocultar matérias-primas» hides only the flour

@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
-import { FileInput, Plus, Loader2, Trash2, Ban, Search, Eye, Wallet } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { FileInput, Plus, Loader2, Trash2, Ban, Search, Eye, Wallet, Upload, Download } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import SupplierPaymentModal from '../components/SupplierPaymentModal';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
@@ -29,6 +30,34 @@ const labelCls = 'text-[11px] font-medium uppercase tracking-wide text-text-mute
 const th = 'text-[11px] uppercase tracking-wide text-text-muted font-medium px-3 py-2.5 whitespace-nowrap';
 const kz = (v) => formatKz(v) + ' Kz';
 const round2 = (v) => Math.round((v + Number.EPSILON) * 100) / 100;
+
+// Excel template / import of the lines: one row per article; rows without a quantity are ignored, so the template
+// can list every stock product and the user only fills what was bought.
+const EXCEL_HEADERS = ['Código', 'Artigo', 'Unidade', 'Quantidade', 'Preço s/ IVA', 'IVA %', 'Lote', 'Validade (dd/mm/aaaa)'];
+
+function pad2(n) {
+  return String(n).padStart(2, '0');
+}
+
+// an Excel date (a Date cell, dd/mm/aaaa or aaaa-mm-dd text) as aaaa-mm-dd, '' when empty, null when unreadable
+function excelDate(value) {
+  if (value === null || value === undefined || value === '') return '';
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value.getFullYear() + '-' + pad2(value.getMonth() + 1) + '-' + pad2(value.getDate());
+  const text = String(value).trim();
+  let m = text.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/);
+  if (m) return m[3] + '-' + pad2(m[2]) + '-' + pad2(m[1]);
+  m = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (m) return m[1] + '-' + pad2(m[2]) + '-' + pad2(m[3]);
+  return null;
+}
+
+// a number typed with a comma (2,5) or a dot
+function excelNumber(value) {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value === 'number') return value;
+  const n = parseFloat(String(value).trim().replace(/\s/g, '').replace(',', '.'));
+  return Number.isNaN(n) ? NaN : n;
+}
 
 function todayIso() {
   const d = new Date();
@@ -173,6 +202,74 @@ export default function Compras() {
     });
     setScanCode('');
     setScanError('');
+  }
+
+  // Excel: the template lists the stock products (code, name, base unit, last purchase price, the normal VAT)
+  const excelInputRef = useRef(null);
+  function downloadExcelTemplate() {
+    const normal = rates.find((r) => r.tax_category === 'NOR') || rates[0];
+    const rows = products.filter((p) => p.managed_by_stock !== false)
+      .sort((a, b) => (a.code || '').localeCompare(b.code || ''))
+      .map((p) => [p.code || '', p.name, p.unit_of_measure_code || '', null, p.purchase_price != null ? Number(p.purchase_price) : null,
+        normal ? Number(normal.rate) : null, '', '']);
+    const ws = XLSX.utils.aoa_to_sheet([EXCEL_HEADERS, ...rows]);
+    ws['!cols'] = [14, 36, 10, 12, 14, 8, 14, 20].map((wch) => ({ wch }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Compra');
+    XLSX.writeFile(wb, 'modelo_fatura_compra.xlsx');
+  }
+
+  // Import: each row with a quantity becomes a product line (its unit, price, VAT rate by its %, lot and expiry);
+  // the lines already filled stay, the empty ones are replaced. Anything unreadable is listed and skipped.
+  function handleExcelFile(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const wb = XLSX.read(evt.target.result, { type: 'array', cellDates: true });
+        const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: null });
+        const normal = rates.find((r) => r.tax_category === 'NOR') || rates[0];
+        const imported = [];
+        const problems = [];
+        rows.slice(1).forEach((row, i) => {
+          if (!row || row.every((v) => v === null || v === '')) return;
+          const code = String(row[0] ?? '').trim();
+          const quantity = excelNumber(row[3]);
+          if (!code || quantity === null || quantity === 0) return;  // a template row left blank
+          const where = 'linha ' + (i + 2) + ' (' + code + ')';
+          const product = products.find((p) => (p.code || '').toLowerCase() === code.toLowerCase() || (p.barcode || '').toLowerCase() === code.toLowerCase());
+          if (!product) { problems.push(where + ': código desconhecido'); return; }
+          if (Number.isNaN(quantity) || quantity < 0) { problems.push(where + ': quantidade inválida'); return; }
+          const unitCode = String(row[2] ?? '').trim().toUpperCase();
+          const isBase = !unitCode || unitCode === (product.unit_of_measure_code || '').toUpperCase();
+          const unit = isBase ? null : (product.sale_units || []).find((u) => (u.unit_of_measure_code || '').toUpperCase() === unitCode);
+          if (!isBase && !unit) { problems.push(where + ': unidade ' + unitCode + ' desconhecida'); return; }
+          let price = excelNumber(row[4]);
+          if (price === null && product.purchase_price != null) price = round2(Number(product.purchase_price) * (unit ? Number(unit.factor) : 1));
+          if (price === null || Number.isNaN(price) || price < 0) { problems.push(where + ': preço em falta ou inválido'); return; }
+          const pct = excelNumber(row[5]);
+          const rate = pct === null ? normal : rates.find((r) => Number(r.rate) === pct);
+          if (!rate) { problems.push(where + ': taxa de IVA ' + row[5] + '% inexistente'); return; }
+          const expiry = excelDate(row[7]);
+          if (expiry === null) { problems.push(where + ': validade ilegível (use dd/mm/aaaa)'); return; }
+          imported.push({ ...emptyLine(), itemId: product.id, saleUnitId: unit ? unit.id : '', description: product.name,
+            quantity: String(quantity), unitPrice: String(price), rateId: rate.id,
+            lotNumber: String(row[6] ?? '').trim(), expiryDate: expiry });
+        });
+        if (imported.length === 0) {
+          setFormError(problems.length ? 'Nenhuma linha importada - ' + problems.join('; ') : 'Nenhuma linha com quantidade no ficheiro.');
+          return;
+        }
+        setForm((f) => ({ ...f, lines: [...f.lines.filter((l) => l.itemId || l.description.trim()), ...imported] }));
+        if (problems.length) setFormError(imported.length + ' linha(s) importada(s); ignoradas - ' + problems.join('; '));
+        else setNotice(imported.length + ' linha(s) importada(s) do Excel.');
+      } catch {
+        setFormError('Não foi possível ler o ficheiro Excel.');
+      }
+    };
+    reader.readAsArrayBuffer(file);
   }
 
   // a credit note corrects one of the supplier's registered invoices
@@ -447,6 +544,15 @@ export default function Compras() {
               <input value={scanCode} onChange={(e) => { setScanCode(e.target.value); setScanError(''); }}
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleScan(); } }}
                 placeholder="Ler código de barras" className={inputCls + ' font-mono max-w-sm'} />
+              <input ref={excelInputRef} type="file" accept=".xlsx,.xls" onChange={handleExcelFile} className="hidden" />
+              <button type="button" onClick={() => excelInputRef.current?.click()} title="Importar as linhas de um ficheiro Excel"
+                className="flex items-center gap-1.5 border border-border hover:border-accent text-text-primary text-[13px] px-3 py-2 rounded-md transition-colors cursor-pointer">
+                <Upload size={15} /> Importar Excel
+              </button>
+              <button type="button" onClick={downloadExcelTemplate} title="Baixar o modelo com os seus produtos"
+                className="flex items-center gap-1.5 border border-border hover:border-accent text-text-primary text-[13px] px-3 py-2 rounded-md transition-colors cursor-pointer">
+                <Download size={15} /> Modelo
+              </button>
               {scanError && <span className="text-[12px] text-danger">{scanError}</span>}
             </div>
             <div className="border border-border rounded-md overflow-x-auto">

@@ -10,6 +10,12 @@ import { extractErrorMessage } from '../utils/errors';
 const MONTH_NAMES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 const TODAY = new Date().toISOString().slice(0, 10);
 
+// a quantity in the pt-PT way (0,1 - up to 3 decimals) followed by its unit: 5 KG, 0,05 KG, 100 UN
+function qtyWithUnit(entry) {
+  const qty = Number(entry.quantity).toLocaleString('pt-PT', { maximumFractionDigits: 3 });
+  return entry.unit_code ? qty + ' ' + entry.unit_code : qty;
+}
+
 export default function ProductionHistory() {
   const [batches, setBatches] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -131,18 +137,18 @@ export default function ProductionHistory() {
               <div key={idx} className="px-6 py-4">
                 <div className="flex items-center justify-between mb-1.5 flex-wrap gap-1">
                   <p className="font-display font-medium text-text-primary">
-                    {batch.output ? batch.output.quantity + ' × ' + batch.output.product_name : 'Produção'}
+                    {batch.output ? qtyWithUnit(batch.output) + ' × ' + batch.output.product_name : 'Produção'}
                   </p>
                   <p className="text-[12px] text-text-muted">{new Date(batch.created_at).toLocaleString('pt-AO')}</p>
                 </div>
                 <p className="text-[12px] text-text-muted">{batch.warehouse_name}</p>
                 <p className="text-[12px] text-text-muted mt-1">
-                  Consumiu: {batch.ingredients.map((i) => i.quantity + ' ' + i.product_name).join(', ')}
+                  Consumiu: {batch.ingredients.map((i) => qtyWithUnit(i) + ' ' + i.product_name).join(', ')}
                 </p>
 
                 {batch.output && (batch.output.unit_cost != null ? (
                   <p className="text-[12px] text-text-muted mt-0.5 font-mono">
-                    {'Custo: ' + formatKz(batch.output.unit_cost) + ' Kz/un \u00b7 total '
+                    {'Custo: ' + formatKz(batch.output.unit_cost) + ' Kz/' + (batch.output.unit_code || 'un') + ' \u00b7 total '
                       + formatKz(batch.output.unit_cost * batch.output.quantity) + ' Kz'}
                   </p>
                 ) : (

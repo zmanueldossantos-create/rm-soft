@@ -33,6 +33,7 @@ export default function StockDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
+  const [hideRaw, setHideRaw] = useState(false);  // «Ocultar matérias-primas»: only what is sold
   const [filter, setFilter] = useState('todos'); // todos | baixo | zero
   const [periodId, setPeriodId] = useState(''); // '' = the current stock
   const [periods, setPeriods] = useState([]);
@@ -70,11 +71,13 @@ export default function StockDashboard() {
       .catch((err) => setClosingError(extractErrorMessage(err, 'Erro ao carregar o movimento do período')));
   }, [periodId, view]);
 
-  const closingLines = (closing?.lines || []).filter((l) => !search || (l.code + ' ' + l.name).toLowerCase().includes(search.toLowerCase()));
+  const closingLines = (closing?.lines || []).filter((l) => !(hideRaw && l.is_raw_material)
+    && (!search || (l.code + ' ' + l.name).toLowerCase().includes(search.toLowerCase())));
 
   const items = (data?.items || []).filter((item) => {
     if (filter === 'baixo' && !item.is_low) return false;
     if (filter === 'zero' && !item.is_zero) return false;
+    if (hideRaw && item.is_raw_material) return false;
     if (search && !(item.code + ' ' + item.name).toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
@@ -159,6 +162,10 @@ export default function StockDashboard() {
                 className="w-full bg-bg-inset border border-border rounded-md pl-10 pr-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors"
               />
             </div>
+            <label className="flex items-center gap-2.5 cursor-pointer select-none">
+              <input type="checkbox" checked={hideRaw} onChange={(e) => setHideRaw(e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
+              <span className="text-sm text-text-primary">Ocultar matérias-primas</span>
+            </label>
             <div className="w-full sm:w-64">
               <Select
                 value={periodId || 'atual'}
