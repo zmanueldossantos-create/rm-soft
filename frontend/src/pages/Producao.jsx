@@ -37,7 +37,7 @@ export default function Producao() {
 
   const [recipeModalOpen, setRecipeModalOpen] = useState(false);
   const [recipeIsEditing, setRecipeIsEditing] = useState(false);
-  const [recipeTab, setRecipeTab] = useState('receita');  // an existing recipe: «Receita» (edit) or «Resumo» (read)
+  const [recipeTab, setRecipeTab] = useState('produto');  // «Produto» (what, how many per batch), «Ingredientes», «Resumo» (costs)
   const [recipeForm, setRecipeForm] = useState(emptyRecipeForm);
   const [recipeLoading, setRecipeLoading] = useState(false);
   const [recipeSaving, setRecipeSaving] = useState(false);
@@ -139,6 +139,7 @@ export default function Producao() {
   function openNewRecipeModal() {
     setRecipeForm({ productId: '', batchYield: '1', batchYieldSaleUnitId: 'base', rows: [] });
     setRecipeError('');
+    setRecipeTab('produto');  // a new recipe starts with the product it makes
     setRecipeIsEditing(false);
     setRecipeModalOpen(true);
   }
@@ -146,7 +147,7 @@ export default function Producao() {
   async function openEditRecipeModal(product) {
     setRecipeForm({ productId: product.id, batchYield: String(product.batch_yield_entry ?? product.batch_yield), batchYieldSaleUnitId: product.batch_yield_sale_unit_id || 'base', rows: [] });
     setRecipeError('');
-    setRecipeTab('receita');
+    setRecipeTab('ingredientes');  // an existing recipe opens on what is usually changed
     setRecipeIsEditing(true);
     setRecipeModalOpen(true);
     setRecipeLoading(true);
@@ -402,17 +403,15 @@ export default function Producao() {
       
       <Modal open={recipeModalOpen} onClose={closeRecipeModal} title="Configurar receita" maxWidthClass="max-w-3xl">
         <div className="flex flex-col gap-4">
-          {recipeIsEditing && (
-            <div className="flex gap-1 border-b border-border -mt-1">
-              {[['receita', 'Receita'], ['resumo', 'Resumo']].map(([key, label]) => (
-                <button key={key} type="button" onClick={() => setRecipeTab(key)}
-                  className={'px-3.5 py-2 text-[13px] font-medium border-b-2 -mb-px transition-colors cursor-pointer ' + (recipeTab === key ? 'border-accent text-text-primary' : 'border-transparent text-text-muted hover:text-text-primary')}>
-                  {label}
-                </button>
-              ))}
-            </div>
-          )}
-          {recipeIsEditing && recipeTab === 'resumo' ? <RecipeSummaryView summary={recipeSummary()} loading={recipeLoading} /> : (<>
+          <div className="flex gap-1 border-b border-border -mt-1">
+            {[['produto', 'Produto'], ['ingredientes', 'Ingredientes' + (recipeForm.rows.some((r) => r.ingredientProductId) ? ' (' + recipeForm.rows.filter((r) => r.ingredientProductId).length + ')' : '')], ['resumo', 'Resumo']].map(([key, label]) => (
+              <button key={key} type="button" onClick={() => setRecipeTab(key)}
+                className={'px-3.5 py-2 text-[13px] font-medium border-b-2 -mb-px transition-colors cursor-pointer ' + (recipeTab === key ? 'border-accent text-text-primary' : 'border-transparent text-text-muted hover:text-text-primary')}>
+                {label}
+              </button>
+            ))}
+          </div>
+          {recipeTab === 'produto' && (<>
           <div>
             <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Produto a configurar *</label>
             <Select
@@ -444,8 +443,11 @@ export default function Producao() {
             </div>
             <p className="text-[11px] text-text-muted mt-1">Quantas unidades 1 lote completo desta receita produz</p>
           </div>
-
-
+          </>)}
+          {recipeTab !== 'produto' && !recipeForm.productId && (
+            <p className="text-text-muted text-[13px] text-center py-8">Escolha primeiro o produto no separador «Produto».</p>
+          )}
+          {recipeTab === 'ingredientes' && recipeForm.productId && (<>
               {recipeLoading ? (
                 <div className="flex items-center justify-center py-6 text-text-muted text-sm">
                   <Loader2 size={16} className="animate-spin mr-2" />
@@ -514,8 +516,8 @@ export default function Producao() {
                   </button>
                 </>
               )}
-
-
+          </>)}
+          {recipeTab === 'resumo' && recipeForm.productId && <RecipeSummaryView summary={recipeSummary()} loading={recipeLoading} />}
               <button
                 type="button"
                 onClick={handleSaveRecipe}
@@ -525,7 +527,6 @@ export default function Producao() {
                 {recipeSaving ? <Loader2 size={17} className="animate-spin" /> : <ChefHat size={17} />}
                 {recipeSaving ? 'A guardar...' : 'Guardar receita'}
               </button>
-          </>)}
         </div>
       </Modal>
 
