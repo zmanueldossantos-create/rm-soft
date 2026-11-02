@@ -1084,12 +1084,7 @@ export default function CompanySettings() {
 
                       {(
                         <div className="border-t border-border px-4 py-3 bg-bg-inset/40">
-                          <div className="flex items-center justify-between mb-2.5">
-                            <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wide flex items-center gap-1.5"><CreditCard size={12} />Pontos de venda</p>
-                            <button type="button" onClick={() => openCreatePos(a.id)} className="flex items-center gap-1.5 text-accent hover:text-accent-hover text-[12px] font-medium cursor-pointer">
-                              <Plus size={13} />Novo ponto de venda
-                            </button>
-                          </div>
+                          <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wide flex items-center gap-1.5 mb-2.5"><CreditCard size={12} />Pontos de venda</p>
                           {posLoadingActivityId === a.id ? (
                             <div className="flex justify-center py-4"><Loader2 size={16} className="animate-spin text-accent" /></div>
                           ) : !posByActivity[a.id] || posByActivity[a.id].length === 0 ? (
@@ -1126,6 +1121,10 @@ export default function CompanySettings() {
                               ))}
                             </div>
                           )}
+                          <button type="button" onClick={() => openCreatePos(a.id)}
+                            className="mt-2.5 flex items-center gap-1.5 border border-dashed border-accent/60 hover:border-accent hover:bg-accent/5 text-accent text-[13px] font-medium rounded-md px-3.5 py-2 transition-colors cursor-pointer">
+                            <Plus size={15} /> Ponto de venda
+                          </button>
                         </div>
                       )}
                     </div>
