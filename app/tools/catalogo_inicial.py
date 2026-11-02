@@ -8,7 +8,7 @@ example of each kind in front of the owners. Everything goes through the same se
 
 What it loads, in this order (every key optional): categorias, fornecedores, materias_primas, produtos, servicos,
 receitas, clientes, compras (purchase invoices with their stock entry: the stock comes in as in real life), and a
-"hotel" block - room types with their rate and rooms, hotel services - loaded only when the company has the Hotel
+"hotel" block - room types with their rates ("tarifas": the night without "duracao_min", the timed ones with it) and rooms, hotel services - loaded only when the company has the Hotel
 module (run it again after granting it). It may be run again: what already exists (same code, name or document) is
 left as it is and listed - never duplicated, never overwritten. Refused for a company with real (non-training)
 sales documents.
@@ -219,11 +219,14 @@ async def load(db, nif: str, data: dict, dry_run: bool = False) -> dict:
             return
         price = _positive(item.get("preco"), what)
         vat = vat_for(item.get("iva"), what)
+        duration = item.get("duracao_min")  # a timed room rate (1 hora = 60): charged per started slice
+        if duration is not None and (not isinstance(duration, int) or duration <= 0):
+            raise CatalogError(f"{what}: duração inválida ({duration}) - minutos inteiros, maiores que zero")
         if not dry_run:
             services[code] = await create_service(
                 db, cid, code=code, name=name, vat_id=vat.id, unit_of_measure_id=units[item.get("unidade") or "UN"].id,
-                price=price, resource_type_id=resource_type.id if resource_type else None)
-        created(what)
+                price=price, resource_type_id=resource_type.id if resource_type else None, duration_minutes=duration)
+        created(what + (f" ({duration} min)" if duration else ""))
 
     for item in data.get("servicos", []):
         await service(item)
@@ -324,8 +327,9 @@ async def load(db, nif: str, data: dict, dry_run: bool = False) -> dict:
                     created(f"Tipo de quarto {name}")
                 else:
                     existed(f"Tipo de quarto {name}")
-                if item.get("diaria"):
-                    await service(item["diaria"], resource_type)
+                # the type's rates: the night (no duration) and the timed ones (1 hora, 2 horas, day use)
+                for rate in ([item["diaria"]] if item.get("diaria") else []) + item.get("tarifas", []):
+                    await service(rate, resource_type)
                 for room in item.get("quartos", []):
                     key = (resource_type.id if resource_type else None, room["nome"])
                     if key in rooms:

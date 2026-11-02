@@ -1,52 +1,106 @@
 {
-  "_nota": "Base de formação da Mel da Rocha - módulo Hotel (dia 5, depois de ativar o módulo Hotel). Ficam por fazer à frente dos proprietários: tipo Suite, Diária Suite e quarto 107.",
+  "_nota": "Base de formação da Mel da Rocha - módulo Hotel (depois de ativar o módulo Hotel). O tipo de quarto é a categoria (leva as tarifas): Executivo (mais equipado, mais caro) e Clássico. A zona está no nome do quarto: Ala Mel (Mel 1 a 4, Executivo) e Ala Rocha (Rocha 1 a 3, Clássico) - uma nova zona da mesma categoria só leva quartos novos (ex.: Favo 1), uma categoria superior leva um tipo novo com as suas tarifas. Cada tipo tem a diária e a noite (sem duração: por noite) e as tarifas à hora (com duração: por fatia começada). Ficam por fazer à frente dos proprietários: a cama extra e os clientes.",
   "hotel": {
     "atividade": "Hotel",
     "tipos_quarto": [
       {
-        "nome": "Quarto Standard",
+        "nome": "Executivo",
         "entrada": "14:00",
         "saida": "12:00",
-        "diaria": {
-          "codigo": "DIA-STD",
-          "nome": "Diária Quarto Standard",
-          "preco": 25000
-        },
+        "tarifas": [
+          {
+            "codigo": "EXE-DIA",
+            "nome": "Diária Executivo",
+            "preco": 35000
+          },
+          {
+            "codigo": "EXE-NOI",
+            "nome": "Noite Executivo",
+            "preco": 18000
+          },
+          {
+            "codigo": "EXE-1H",
+            "nome": "Executivo 1 hora",
+            "preco": 5000,
+            "duracao_min": 60
+          },
+          {
+            "codigo": "EXE-2H",
+            "nome": "Executivo 2 horas",
+            "preco": 8000,
+            "duracao_min": 120
+          },
+          {
+            "codigo": "EXE-DAY",
+            "nome": "Day use Executivo",
+            "preco": 20000,
+            "duracao_min": 480
+          }
+        ],
         "quartos": [
           {
-            "nome": "101",
+            "nome": "Mel 1",
             "capacidade": 2
           },
           {
-            "nome": "102",
+            "nome": "Mel 2",
             "capacidade": 2
           },
           {
-            "nome": "103",
+            "nome": "Mel 3",
             "capacidade": 2
           },
           {
-            "nome": "104",
-            "capacidade": 2
+            "nome": "Mel 4",
+            "capacidade": 3
           }
         ]
       },
       {
-        "nome": "Quarto Superior",
+        "nome": "Clássico",
         "entrada": "14:00",
         "saida": "12:00",
-        "diaria": {
-          "codigo": "DIA-SUP",
-          "nome": "Diária Quarto Superior",
-          "preco": 35000
-        },
+        "tarifas": [
+          {
+            "codigo": "CLA-DIA",
+            "nome": "Diária Clássico",
+            "preco": 20000
+          },
+          {
+            "codigo": "CLA-NOI",
+            "nome": "Noite Clássico",
+            "preco": 10000
+          },
+          {
+            "codigo": "CLA-1H",
+            "nome": "Clássico 1 hora",
+            "preco": 3000,
+            "duracao_min": 60
+          },
+          {
+            "codigo": "CLA-2H",
+            "nome": "Clássico 2 horas",
+            "preco": 5000,
+            "duracao_min": 120
+          },
+          {
+            "codigo": "CLA-DAY",
+            "nome": "Day use Clássico",
+            "preco": 12000,
+            "duracao_min": 480
+          }
+        ],
         "quartos": [
           {
-            "nome": "105",
+            "nome": "Rocha 1",
             "capacidade": 2
           },
           {
-            "nome": "106",
+            "nome": "Rocha 2",
+            "capacidade": 2
+          },
+          {
+            "nome": "Rocha 3",
             "capacidade": 2
           }
         ]

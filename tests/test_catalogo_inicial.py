@@ -94,7 +94,13 @@ async def test_the_hotel_comes_with_its_module(db, company_with_essentials, lega
     assert any("módulo Hotel ainda não está ativo" in line for line in early["ignorados"])
     await _prepare(db, company.id, "Hotel")
     hotel = await load(db, company.nif, hotel_data)
-    assert await _count(db, Resource, company.id) == 6 and any("Diária Quarto Standard" in l for l in hotel["criados"])
+    assert await _count(db, Resource, company.id) == 7  # Ala Mel (4) + Ala Rocha (3)
+    from app.models.service import Service
+    rates = {s.code: s for s in (await db.execute(select(Service).where(Service.company_id == company.id))).scalars().all()}
+    assert rates["EXE-DIA"].duration_minutes is None and float(rates["EXE-DIA"].price) == 35000  # the night: per night
+    assert rates["CLA-2H"].duration_minutes == 120 and float(rates["CLA-2H"].price) == 5000  # timed: per started slice
+    assert rates["EXE-1H"].resource_type_id == rates["EXE-DIA"].resource_type_id != rates["CLA-1H"].resource_type_id
+    assert any("Day use Clássico" in line and "480 min" in line for line in hotel["criados"])
 
 
 @pytest.mark.asyncio
