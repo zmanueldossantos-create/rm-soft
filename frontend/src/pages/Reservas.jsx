@@ -211,8 +211,11 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
       const active = data.filter((a) => a.is_active);
       setActivities(active);
       // In the till: the till's own activity. Otherwise one active activity is selected for the user, else the choice stays free.
+      // (the only one with resources - the Hotel next to a Padaria - counts as one)
+      const withResources = active.filter((a) => (a.capabilities || []).includes('RESOURCES'));
       if (activityId) setSelectedActivityId(activityId);
       else if (active.length === 1) setSelectedActivityId(active[0].id);
+      else if (withResources.length === 1) setSelectedActivityId(withResources[0].id);
     }).catch((err) => setError(extractErrorMessage(err, 'Erro ao carregar atividades')));
     listServices().then((data) => setServices(data.filter((s) => s.is_active))).catch(() => {});
     listResourceTypes().then(setResourceTypesCatalog).catch(() => {});

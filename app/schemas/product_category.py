@@ -9,6 +9,7 @@ class ProductCategoryRequest(BaseModel):
     not_available_purchases: bool = False
     not_available_pos: bool = False
     not_available_sales: bool = False
+    activity_ids: list[uuid.UUID] = []  # the activities whose tills offer its products - empty: every activity
 
     @field_validator("name")
     @classmethod
@@ -25,8 +26,14 @@ class ProductCategoryResponse(BaseModel):
     not_available_purchases: bool
     not_available_pos: bool
     not_available_sales: bool
+    activity_ids: list[uuid.UUID] = []
     is_active: bool
     created_at: datetime
+
+    @field_validator("activity_ids", mode="before")
+    @classmethod
+    def no_activity_means_all(cls, v):
+        return v or []
 
     class Config:
         from_attributes = True

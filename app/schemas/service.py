@@ -31,6 +31,7 @@ class ServiceCreateRequest(BaseModel):
     brand: str | None = None
     withholding_tax_id: uuid.UUID | None = None
     not_available_pos: bool = False
+    activity_ids: list[uuid.UUID] = []  # the activities whose tills offer it - empty: every activity
     status: str = "ACTIVO"
     exemption_reason_id: uuid.UUID | None = None
 
@@ -72,10 +73,16 @@ class ServiceResponse(BaseModel):
     brand: str | None
     withholding_tax_id: uuid.UUID | None
     not_available_pos: bool
+    activity_ids: list[uuid.UUID] = []
     status: str
     exemption_reason_id: uuid.UUID | None
     is_active: bool
     created_at: datetime
+
+    @field_validator("activity_ids", mode="before")
+    @classmethod
+    def no_activity_means_all(cls, v):
+        return v or []
 
     class Config:
         from_attributes = True

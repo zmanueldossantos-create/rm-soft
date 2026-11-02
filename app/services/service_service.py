@@ -7,7 +7,7 @@ Every query is scoped to the caller's company_id (multi-tenant isolation).
 """
 from app.models.resource_type_catalog import ResourceTypeCatalog
 from app.models.service_type import ServiceType
-from app.services.ownership import ensure_owned
+from app.services.ownership import ensure_owned, owned_activity_ids
 from app.services.product_service import ArticleUnitRequiredError
 from app.services.vat_rule_service import resolve_article_vat
 import uuid
@@ -67,6 +67,7 @@ async def create_service(
     status: str = "ACTIVO",
     exemption_reason_id: uuid.UUID | None = None,
     duration_minutes: int | None = None,
+    activity_ids: list[uuid.UUID] | None = None,
 ) -> Service:
     await _check_fields_available(db, company_id, code, name)
     await ensure_owned(db, company_id, ServiceType, service_type_id, "Tipo de serviço não encontrado")
@@ -74,6 +75,7 @@ async def create_service(
     if unit_of_measure_id is None:  # every article has a base unit: the SAF-T and the documents show it
         raise ArticleUnitRequiredError("A unidade base é obrigatória")
     exemption_reason_id = await resolve_article_vat(db, company_id, vat_id, exemption_reason_id)
+    activity_ids = await owned_activity_ids(db, company_id, activity_ids)
 
     service = Service(
         company_id=company_id, code=code, name=name, vat_id=vat_id,
@@ -81,7 +83,7 @@ async def create_service(
         unit_of_measure_id=unit_of_measure_id, price=price, brand=brand, duration_minutes=duration_minutes,
         withholding_tax_id=withholding_tax_id,
         not_available_pos=not_available_pos, status=status,
-        exemption_reason_id=exemption_reason_id,
+        exemption_reason_id=exemption_reason_id, activity_ids=activity_ids,
     )
     db.add(service)
     await db.commit()
@@ -139,6 +141,7 @@ async def update_service(
     status: str = "ACTIVO",
     exemption_reason_id: uuid.UUID | None = None,
     duration_minutes: int | None = None,
+    activity_ids: list[uuid.UUID] | None = None,
 ) -> Service:
     service = await get_service_or_raise(db, company_id, service_id)
     await _check_fields_available(db, company_id, code, name, exclude_id=service_id)
@@ -160,6 +163,7 @@ async def update_service(
     service.brand = brand
     service.withholding_tax_id = withholding_tax_id
     service.not_available_pos = not_available_pos
+    service.activity_ids = await owned_activity_ids(db, company_id, activity_ids)
     service.status = status
     service.exemption_reason_id = exemption_reason_id
 

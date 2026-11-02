@@ -211,7 +211,7 @@ async def load(db, nif: str, data: dict, dry_run: bool = False) -> dict:
     # -------------------------------------------------------------------------------------------------- services
     services = {s.code: s for s in (await db.execute(select(Service).where(Service.company_id == cid))).scalars().all()}
 
-    async def service(item: dict, resource_type=None) -> None:
+    async def service(item: dict, resource_type=None, activity_ids=None) -> None:
         code, name = item["codigo"], item["nome"]
         what = f"Serviço {code} {name}"
         if code in services:
@@ -225,7 +225,8 @@ async def load(db, nif: str, data: dict, dry_run: bool = False) -> dict:
         if not dry_run:
             services[code] = await create_service(
                 db, cid, code=code, name=name, vat_id=vat.id, unit_of_measure_id=units[item.get("unidade") or "UN"].id,
-                price=price, resource_type_id=resource_type.id if resource_type else None, duration_minutes=duration)
+                price=price, resource_type_id=resource_type.id if resource_type else None, duration_minutes=duration,
+                activity_ids=activity_ids)
         created(what + (f" ({duration} min)" if duration else ""))
 
     for item in data.get("servicos", []):
@@ -340,8 +341,8 @@ async def load(db, nif: str, data: dict, dry_run: bool = False) -> dict:
                                               capacity=room.get("capacidade"))
                         rooms.add(key)
                     created(f"Quarto {room['nome']} ({name})")
-            for item in hotel.get("servicos", []):
-                await service(item)
+            for item in hotel.get("servicos", []):  # the hotel's services: offered at the hotel's tills only
+                await service(item, activity_ids=[hotel_activity.id] if hotel_activity is not None else None)
 
     return report
 

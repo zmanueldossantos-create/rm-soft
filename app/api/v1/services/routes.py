@@ -48,6 +48,7 @@ async def create_new_service(
             not_available_pos=payload.not_available_pos,
             status=payload.status,
             exemption_reason_id=payload.exemption_reason_id,
+            activity_ids=payload.activity_ids,
         )
     except ServiceAlreadyExistsError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
@@ -92,6 +93,7 @@ async def edit_service(
             not_available_pos=payload.not_available_pos,
             status=payload.status,
             exemption_reason_id=payload.exemption_reason_id,
+            activity_ids=payload.activity_ids,
         )
     except ServiceAlreadyExistsError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))

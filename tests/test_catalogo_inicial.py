@@ -101,6 +101,8 @@ async def test_the_hotel_comes_with_its_module(db, company_with_essentials, lega
     assert rates["CLA-2H"].duration_minutes == 120 and float(rates["CLA-2H"].price) == 5000  # timed: per started slice
     assert rates["EXE-1H"].resource_type_id == rates["EXE-DIA"].resource_type_id != rates["CLA-1H"].resource_type_id
     assert any("Day use Clássico" in line and "480 min" in line for line in hotel["criados"])
+    hotel_activity = (await db.execute(select(Activity).where(Activity.company_id == company.id, Activity.name == "Hotel"))).scalars().one()
+    assert rates["HOT-PEQ"].activity_ids == [hotel_activity.id]  # a hotel service: at the hotel's tills only
 
 
 @pytest.mark.asyncio

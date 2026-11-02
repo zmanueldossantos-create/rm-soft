@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime
 from sqlalchemy import String, Boolean, DateTime, ForeignKey, func
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from app.core.database import Base
 
 
@@ -21,6 +21,8 @@ class ProductCategory(Base):
     not_available_purchases: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     not_available_pos: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     not_available_sales: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # the activities whose tills offer its products (Pão at the Padaria counter only) - None: every activity
+    activity_ids: Mapped[list[uuid.UUID] | None] = mapped_column(ARRAY(UUID(as_uuid=True)), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

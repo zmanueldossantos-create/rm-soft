@@ -1,4 +1,5 @@
 import { formatKz } from '../utils/format';
+import { offeredIn } from '../components/ActivityScopePicker';
 import { FREE, priceOf, levelOptions, hasPriceChoice, unitCost } from '../utils/priceLevels';
 import { guessLegalPersonType, isPessoaColetiva, LEGAL_PERSON_OPTIONS } from '../utils/customerType';
 import { API_ORIGIN } from '../api/config';
@@ -705,7 +706,11 @@ export default function Caixa() {
     setCart([]);
   }
 
+  // the till's activity offers only its articles: a category / service ticked for other activities stays out
+  const tillActivityId = pointsOfSale.find((p) => p.id === selectedPosId)?.activity_id;
+  const categoryOffered = (categoryId) => offeredIn(categories.find((c) => c.id === categoryId)?.activity_ids, tillActivityId);
   const filteredProducts = products.filter((p) => {
+    if (!categoryOffered(p.category_id)) return false;
     if (activeCategoryId !== 'all' && activeCategoryId !== 'services' && p.category_id !== activeCategoryId) return false;
     if (!productSearch.trim()) return true;
     const q = productSearch.toLowerCase();
@@ -714,6 +719,7 @@ export default function Caixa() {
   });
 
   const filteredServices = services.filter((s) => {
+    if (!offeredIn(s.activity_ids, tillActivityId)) return false;
     if (!productSearch.trim()) return true;
     const q = productSearch.toLowerCase();
     return (s.code || '').toLowerCase().includes(q) || s.name.toLowerCase().includes(q);
@@ -1578,7 +1584,7 @@ export default function Caixa() {
                     >
                       Todos
                     </button>
-                    {categories.filter((c) => products.some((p) => p.category_id === c.id)).map((c) => (
+                    {categories.filter((c) => categoryOffered(c.id) && products.some((p) => p.category_id === c.id)).map((c) => (
                       <button
                         key={c.id}
                         onClick={() => setActiveCategoryId(c.id)}

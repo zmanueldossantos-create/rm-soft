@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import ActivityScopePicker from '../components/ActivityScopePicker';
 import { Tags, Wrench, Plus, Pencil, Loader2, X, PiggyBank, CreditCard, Boxes, PackageMinus, Pill } from 'lucide-react';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
@@ -67,7 +68,7 @@ const CATALOG_PERMS = {
 // Name-only catalogs: no other field in their form.
 const NAME_ONLY = ['consumption_reasons', 'pharmaceutical_forms'];
 
-const emptyForm = { name: '', not_available_purchases: false, not_available_pos: false, not_available_sales: false };
+const emptyForm = { name: '', not_available_purchases: false, not_available_pos: false, not_available_sales: false, activity_ids: [] };
 const emptyNameOnlyForm = { name: '', requires_service: false, default_start_time: '', default_end_time: '' };
 const emptyReasonForm = { name: '', direction: 'SAIDA' };
 
@@ -232,6 +233,7 @@ export default function Categorias() {
         not_available_purchases: item.not_available_purchases,
         not_available_pos: item.not_available_pos,
         not_available_sales: item.not_available_sales,
+        activity_ids: item.activity_ids || [],  // a product category: the activities whose tills offer its products
       });
     }
     setFormError('');
@@ -447,6 +449,11 @@ export default function Categorias() {
                   <input type="checkbox" checked={form.not_available_sales} onChange={(e) => updateField('not_available_sales', e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
                   <span className="text-sm text-text-primary">Não disponível em vendas</span>
                 </label>
+                {activeCatalog?.key === 'product_categories' && (
+                  <div className="pt-2 border-t border-border mt-1">
+                    <ActivityScopePicker value={form.activity_ids || []} onChange={(v) => updateField('activity_ids', v)} />
+                  </div>
+                )}
               </div>
             )}
             <button

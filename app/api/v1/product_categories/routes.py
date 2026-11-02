@@ -41,6 +41,7 @@ async def post_product_category(
         return await create_product_category(
             db, current_user.company_id, payload.name,
             payload.not_available_purchases, payload.not_available_pos, payload.not_available_sales,
+            payload.activity_ids,
         )
     except ProductCategoryAlreadyExistsError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
@@ -57,6 +58,7 @@ async def patch_product_category(
         return await update_product_category(
             db, current_user.company_id, category_id, payload.name,
             payload.not_available_purchases, payload.not_available_pos, payload.not_available_sales,
+            payload.activity_ids,
         )
     except ProductCategoryNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))

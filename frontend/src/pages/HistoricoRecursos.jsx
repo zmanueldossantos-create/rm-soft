@@ -63,7 +63,10 @@ export default function HistoricoRecursos() {
     listActivities().then((data) => {
       const active = data.filter((a) => a.is_active);
       setActivities(active);
-      if (!selectedActivityId && active.length === 1) setSelectedActivityId(active[0].id);
+      // one activity, or the only one with resources (the Hotel next to a Padaria): selected for the user
+      const withResources = active.filter((a) => (a.capabilities || []).includes('RESOURCES'));
+      const only = active.length === 1 ? active[0] : withResources.length === 1 ? withResources[0] : null;
+      if (!selectedActivityId && only) setSelectedActivityId(only.id);
       else if (!selectedActivityId) setLoading(false);
     }).catch((err) => setError(extractErrorMessage(err, 'Erro ao carregar atividades')));
   }, []);

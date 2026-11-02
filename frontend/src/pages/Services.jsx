@@ -1,4 +1,5 @@
 import VatReclassify from '../components/VatReclassify';
+import ActivityScopePicker from '../components/ActivityScopePicker';
 import ExemptionMotiveField from '../components/ExemptionMotiveField';
 import { useState, useEffect, useMemo } from 'react';
 import { Wrench, Plus, Loader2, Search, Pencil } from 'lucide-react';
@@ -38,7 +39,7 @@ const inputClass = "w-full bg-bg-inset border border-border rounded-md px-3.5 py
 const emptyForm = {
   code: '', name: '', serviceTypeId: '', resourceTypeId: '', description: '', unitOfMeasureId: '',
   price: '', brand: '', vatId: '', withholdingTaxId: '',
-  notAvailablePos: false, status: 'ACTIVO',
+  notAvailablePos: false, status: 'ACTIVO', activityIds: [],
   exemptionReasonId: '',
   durationMinutes: '',
 };
@@ -140,6 +141,7 @@ export default function Services() {
       vatId: service.vat_id,
       withholdingTaxId: service.withholding_tax_id || '',
       notAvailablePos: service.not_available_pos,
+      activityIds: service.activity_ids || [],
       status: service.status,
       exemptionReasonId: service.exemption_reason_id || '',
     });
@@ -192,6 +194,7 @@ export default function Services() {
       vat_id: form.vatId,
       withholding_tax_id: form.withholdingTaxId || null,
       not_available_pos: form.notAvailablePos,
+      activity_ids: form.activityIds,
       status: form.status,
       exemption_reason_id: form.exemptionReasonId || null,
       duration_minutes: form.durationMinutes !== '' ? parseInt(form.durationMinutes, 10) : null,
@@ -386,6 +389,8 @@ export default function Services() {
           <Field label="Descrição">
             <textarea value={form.description} onChange={(e) => updateField('description', e.target.value)} rows={2} className={inputClass} />
           </Field>
+
+          <ActivityScopePicker value={form.activityIds} onChange={(v) => updateField('activityIds', v)} />
 
           <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border">
             <label className="flex items-center gap-2.5 cursor-pointer select-none">

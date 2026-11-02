@@ -49,9 +49,11 @@ export default function Recursos() {
     listActivities().then((data) => {
       const active = data.filter((a) => a.is_active);
       setActivities(active);
-      // One active activity: nothing to choose, it is selected for the user. Otherwise the choice stays free -
-      // and the spinner must not wait for a load that only starts once an activity is picked.
-      if (active.length === 1) setSelectedActivityId(active[0].id);
+      // One activity with resources (the Hotel next to a Padaria) - or one activity at all: selected for the user.
+      // Otherwise the choice stays free - and the spinner must not wait for a load that only starts once one is picked.
+      const withResources = active.filter((a) => (a.capabilities || []).includes('RESOURCES'));
+      const only = active.length === 1 ? active[0] : withResources.length === 1 ? withResources[0] : null;
+      if (only) setSelectedActivityId(only.id);
       else setLoading(false);
     }).catch((err) => setError(extractErrorMessage(err, 'Erro ao carregar atividades')));
     // Resource types are managed under Configuracoes > Catalogos > Tipos de Recurso -

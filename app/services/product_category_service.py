@@ -8,6 +8,7 @@ import uuid
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.ownership import owned_activity_ids
 from app.models.product_category import ProductCategory
 
 
@@ -37,13 +38,15 @@ async def list_product_categories(db: AsyncSession, company_id: uuid.UUID) -> li
 async def create_product_category(
     db: AsyncSession, company_id: uuid.UUID, name: str,
     not_available_purchases: bool = False, not_available_pos: bool = False, not_available_sales: bool = False,
+    activity_ids: list[uuid.UUID] | None = None,
 ) -> ProductCategory:
     await _check_name_available(db, company_id, name)
+    activity_ids = await owned_activity_ids(db, company_id, activity_ids)
     category = ProductCategory(
         company_id=company_id, name=name,
         not_available_purchases=not_available_purchases,
         not_available_pos=not_available_pos,
-        not_available_sales=not_available_sales,
+        not_available_sales=not_available_sales, activity_ids=activity_ids,
     )
     db.add(category)
     await db.commit()
@@ -54,6 +57,7 @@ async def create_product_category(
 async def update_product_category(
     db: AsyncSession, company_id: uuid.UUID, category_id: uuid.UUID, name: str,
     not_available_purchases: bool = False, not_available_pos: bool = False, not_available_sales: bool = False,
+    activity_ids: list[uuid.UUID] | None = None,
 ) -> ProductCategory:
     result = await db.execute(select(ProductCategory).where(ProductCategory.id == category_id, ProductCategory.company_id == company_id))
     category = result.scalar_one_or_none()
@@ -64,6 +68,7 @@ async def update_product_category(
     category.not_available_purchases = not_available_purchases
     category.not_available_pos = not_available_pos
     category.not_available_sales = not_available_sales
+    category.activity_ids = await owned_activity_ids(db, company_id, activity_ids)
     await db.commit()
     await db.refresh(category)
     return category

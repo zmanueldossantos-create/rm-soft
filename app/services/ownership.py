@@ -20,3 +20,16 @@ async def ensure_owned(db: AsyncSession, company_id: uuid.UUID, model, object_id
     found = (await db.execute(select(model.id).where(model.id == object_id, model.company_id == company_id))).scalar_one_or_none()
     if found is None:
         raise NotOwnedError(message)
+
+
+async def owned_activity_ids(db: AsyncSession, company_id: uuid.UUID, activity_ids: list[uuid.UUID] | None) -> list[uuid.UUID] | None:
+    """The activities an article is offered in (its tills): each one of the company's, without repeats - None (every
+    activity) when the list is empty."""
+    from app.models.activity import Activity
+    wanted = list(dict.fromkeys(activity_ids or []))
+    if not wanted:
+        return None
+    found = set((await db.execute(select(Activity.id).where(Activity.id.in_(wanted), Activity.company_id == company_id))).scalars().all())
+    if len(found) != len(wanted):
+        raise NotOwnedError("Atividade não encontrada")
+    return wanted

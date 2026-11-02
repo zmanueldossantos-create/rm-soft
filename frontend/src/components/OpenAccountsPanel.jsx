@@ -1,4 +1,5 @@
 import { formatKz } from '../utils/format';
+import { offeredIn } from './ActivityScopePicker';
 import { useState, useEffect, useRef } from 'react';
 import { listProductCategories } from '../api/productCategories';
 import { ChefHat } from 'lucide-react';
@@ -510,13 +511,16 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
 
   // the catalogue: by name, code or barcode (a package's too), within the chosen category
   const searchText = itemSearch.trim().toLowerCase();
-  const filteredProducts = products.filter((p) => (!itemCategory || p.category_id === itemCategory) && (!searchText
+  // the account's activity offers only its articles (a Hotel service never on a Padaria table)
+  const accountActivityId = detailAccount?.activity_id || selectedActivityId;
+  const categoryOffered = (categoryId) => offeredIn(categories.find((c) => c.id === categoryId)?.activity_ids, accountActivityId);
+  const filteredProducts = products.filter((p) => categoryOffered(p.category_id) && (!itemCategory || p.category_id === itemCategory) && (!searchText
     || p.name.toLowerCase().includes(searchText) || (p.code || '').toLowerCase().includes(searchText) || medicineSearchText(p).includes(searchText)
     || (p.barcode || '').includes(searchText) || (p.sale_units || []).some((u) => (u.barcode || '').includes(searchText))));
   // a room rate goes on a stay's account only (hotel check-in); a table's or counter's account never offers it
-  const filteredServices = services.filter((s) => (!s.is_stay_rate || detailAccount?.booking_id) && (!searchText || s.name.toLowerCase().includes(searchText)
+  const filteredServices = services.filter((s) => offeredIn(s.activity_ids, accountActivityId) && (!s.is_stay_rate || detailAccount?.booking_id) && (!searchText || s.name.toLowerCase().includes(searchText)
     || (s.code || '').toLowerCase().includes(searchText)));
-  const usedCategories = categories.filter((c) => products.some((p) => p.category_id === c.id));
+  const usedCategories = categories.filter((c) => categoryOffered(c.id) && products.some((p) => p.category_id === c.id));
 
   return (
     <main className={posId ? '' : 'max-w-[1600px] mx-auto px-4 sm:px-6 md:px-8 py-6 sm:py-9'}>

@@ -9,7 +9,7 @@ from datetime import datetime
 
 from sqlalchemy import String, Numeric, Boolean, Integer, DateTime, ForeignKey, Enum, func, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import ARRAY, UUID
 
 from app.core.database import Base
 
@@ -53,6 +53,8 @@ class Service(Base):
     brand: Mapped[str | None] = mapped_column(String(100), nullable=True)  # marca
     withholding_tax_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("withholding_taxes.id"), nullable=True)
     not_available_pos: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # the activities whose tills offer it (a Hotel service at the Receção only) - None: every activity
+    activity_ids: Mapped[list[uuid.UUID] | None] = mapped_column(ARRAY(UUID(as_uuid=True)), nullable=True)
     status: Mapped[ProductServiceStatus] = mapped_column(Enum(ProductServiceStatus, name="productservicestatus"), nullable=False, default=ProductServiceStatus.ACTIVO)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
