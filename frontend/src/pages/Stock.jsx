@@ -150,7 +150,7 @@ export default function Stock() {
   const [reason, setReason] = useState('');
   const [fiscalPeriodId, setFiscalPeriodId] = useState(''); // internal entry: the period chosen when a soft-closed one exists
   const [periodChoice, setPeriodChoice] = useState(false);
-  const [opWarehouseId, setOpWarehouseId] = useState(''); // loss / adjustment: chosen in the modal, never preselected
+  const [opWarehouseId, setOpWarehouseId] = useState(''); // loss / adjustment: proposed = the warehouse on screen, changeable
   const [saleUnitId, setSaleUnitId] = useState(''); // the unit the quantity is entered in (SC...); empty = base unit
   const [countLines, setCountLines] = useState(EMPTY_COUNT); // adjustment: the stock counted, possibly in several units
   const [transferFromWarehouseId, setTransferFromWarehouseId] = useState('');
@@ -391,7 +391,7 @@ export default function Stock() {
   function openLossModal() {
     setFiscalPeriodId('');
     setSaleUnitId('');
-    setOpWarehouseId('');
+    setOpWarehouseId(selectedWarehouseId || '');  // the warehouse on screen, as the transfer does
     setSelectedProductId('');
     setQuantity(''); setCountLines(EMPTY_COUNT);
     setReason('');
@@ -432,7 +432,7 @@ export default function Stock() {
   function openAdjustModal() {
     setFiscalPeriodId('');
     setSaleUnitId('');
-    setOpWarehouseId('');
+    setOpWarehouseId(selectedWarehouseId || '');  // the warehouse on screen, as the transfer does
     setSelectedProductId('');
     setQuantity(''); setCountLines(EMPTY_COUNT);
     setReason('');
