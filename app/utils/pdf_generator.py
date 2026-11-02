@@ -240,6 +240,19 @@ def _make_qr_image(data: str, agt_logo: bool = False):
     return buffer
 
 
+def _draw_logo(c, logo_path: str, x: float, top: float, max_w: float, max_h: float, align: str = "left") -> float:
+    """The company's logo at its own proportions inside max_w x max_h, hanging from top: a square logo fills the
+    height, a wide one (a banner) the width - never squeezed into a small square. align: left / center / right of x.
+    Returns the height drawn."""
+    reader = ImageReader(logo_path)
+    iw, ih = reader.getSize()
+    scale = min(max_w / iw, max_h / ih) if iw and ih else 0
+    w, h = iw * scale, ih * scale
+    left = x - w / 2 if align == "center" else x - w if align == "right" else x
+    c.drawImage(reader, left, top - h, width=w, height=h, mask="auto")
+    return h
+
+
 def _resolve_logo_path(company: dict) -> str | None:
     """company['logo_path'] is a URL like /uploads/logos/{id}.png - resolve
     it to the physical file on disk, since the PDF generator runs on the
@@ -319,9 +332,8 @@ def generate_invoice_pdf_thermal(invoice: dict, lines: list[dict], company: dict
         y -= 3 * mm
 
     if logo_path:
-        logo_size = 13 * mm
-        c.drawImage(ImageReader(logo_path), center_x - logo_size / 2, y - logo_size, width=logo_size, height=logo_size, preserveAspectRatio=True, mask="auto")
-        y -= logo_size + 2 * mm
+        # + the name's height: its first line is drawn from its baseline, so it must start below the logo
+        y -= _draw_logo(c, logo_path, center_x, y, 60 * mm, 16 * mm, align="center") + 6 * mm
 
     # Company name wraps onto up to two centered lines if long.
     name = company["name"]
@@ -331,8 +343,9 @@ def generate_invoice_pdf_thermal(invoice: dict, lines: list[dict], company: dict
         center(name[mid:].strip(), size=10.5, bold=True)
     else:
         center(name, size=10.5, bold=True)
-    if _full_address(company):
-        center(_full_address(company)[:48], size=7.5, color=TEXT_MUTED)
+    if _full_address(company):  # wrapped, never cut
+        for address_line in _wrap_to_width(c, _full_address(company), "Helvetica", 7.5, width - 2 * margin):
+            center(address_line, size=7.5, color=TEXT_MUTED)
     center(f"Contribuinte: {company['nif']}", size=7.5, color=TEXT_MUTED)
     phone = company.get("phone_number") or ""
     if phone:
@@ -569,9 +582,12 @@ def _draw_company_box(c, x, y, w, company, label="Contribuinte"):
         ("Contacto: ", phones),
         ("NIF: ", company["nif"]),
     ]
+    # the company's full name wraps under its label too (never cut: «... PRESTAÇÃO DE SERVIÇOS, LDA»)
+    name_label_w = c.stringWidth(fixed_lines[0][0], "Helvetica-Bold", 9)
+    name_wrapped = _wrap_to_width(c, company["name"], "Helvetica", 9, w - 8 * mm - name_label_w)
 
     row_h = 5.2 * mm
-    total_rows = 1 + len(addr_wrapped) + 2
+    total_rows = len(name_wrapped) + len(addr_wrapped) + 2
     box_h = total_rows * row_h + 6 * mm
     c.setStrokeColor(TEXT_MUTED)
     c.setLineWidth(0.8)
@@ -583,8 +599,9 @@ def _draw_company_box(c, x, y, w, company, label="Contribuinte"):
     c.drawString(x + 4 * mm, ty, fixed_lines[0][0])
     lbl_w = c.stringWidth(fixed_lines[0][0], "Helvetica-Bold", 9)
     c.setFont("Helvetica", 9)
-    c.drawString(x + 4 * mm + lbl_w, ty, fixed_lines[0][1][:48])
-    ty -= row_h
+    for name_line in name_wrapped:
+        c.drawString(x + 4 * mm + lbl_w, ty, name_line)
+        ty -= row_h
 
     c.setFont("Helvetica-Bold", 9)
     c.drawString(x + 4 * mm, ty, addr_label)
@@ -674,9 +691,8 @@ def generate_factura_style_a4(invoice, lines, company, customer):
 
     logo_path = _resolve_logo_path(company)
     logo_top = page_height - 12 * mm
-    if logo_path:
-        logo_size = 20 * mm
-        c.drawImage(ImageReader(logo_path), margin, logo_top - logo_size, width=logo_size, height=logo_size, preserveAspectRatio=True, mask="auto")
+    if logo_path:  # up to the width of the company box, above it
+        _draw_logo(c, logo_path, margin, logo_top, 92 * mm, 24 * mm)
 
     box_y = page_height - 42 * mm
     box_w = 92 * mm
@@ -1011,9 +1027,8 @@ def generate_recibo_style_a4(invoice, company, customer):
     c.drawString(margin, ty, f"Data de emissão: {_emission_text(invoice)}")
 
     logo_path = _resolve_logo_path(company)
-    if logo_path:
-        logo_size = 18 * mm
-        c.drawImage(ImageReader(logo_path), page_width - margin - logo_size, top - 12 * mm, width=logo_size, height=logo_size, preserveAspectRatio=True, mask="auto")
+    if logo_path:  # top right, sitting on the same line as before
+        _draw_logo(c, logo_path, page_width - margin, top + 6 * mm, 70 * mm, 18 * mm, align="right")
 
     c.setFillColor(TEXT_MUTED)
     c.setFont("Helvetica-Oblique", 7)

@@ -8,12 +8,11 @@ from datetime import datetime, timedelta, timezone
 from reportlab.lib.colors import HexColor
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
-from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas
 
 from app.utils.pdf_generator import (
     ACCENT, BORDER, TABLE_HEADER_BG, TABLE_ROW_ALT, TEXT_MUTED, TEXT_PRIMARY,
-    _draw_company_box, _resolve_logo_path, _wrap_to_width,
+    _draw_company_box, _draw_logo, _resolve_logo_path, _wrap_to_width,
 )
 
 LUANDA = timezone(timedelta(hours=1))  # Angola: UTC+1 all year, no daylight saving
@@ -102,8 +101,7 @@ def _draw_header(p: "_Page", company: dict, title: str, right_lines: list[str], 
     MARGIN, CONTENT_W = margin, content_w  # noqa: N806 - the page format of this report
     logo = _resolve_logo_path(company)
     if logo:
-        c.drawImage(ImageReader(logo), MARGIN, p.y - 18 * mm, width=40 * mm, height=18 * mm,
-                    preserveAspectRatio=True, anchor="w", mask="auto")
+        _draw_logo(c, logo, MARGIN, p.y, 80 * mm, 18 * mm)
     c.setFillColor(ACCENT)
     c.setFont("Helvetica-Bold", 15)
     c.drawRightString(MARGIN + CONTENT_W, p.y - 6 * mm, title)

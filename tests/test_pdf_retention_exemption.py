@@ -67,3 +67,13 @@ def test_ticket_prints_the_withholding_and_wraps_the_official_reason():
     seen = _texts(generate_invoice_pdf_thermal, _invoice(10.0))
     assert "Retenção:" in seen and "Líquido a pagar:" in seen
     assert any(text.startswith("Isento nos termos") for text in seen)  # the reason, wrapped to the ticket's width
+
+def test_the_company_long_name_is_wrapped_never_cut():
+    long_name = "MEL DA ROCHA - COMÉRCIO GERAL E PRESTAÇÃO DE SERVIÇOS, LDA"
+    global COMPANY
+    saved, COMPANY = COMPANY, {**COMPANY, "name": long_name}
+    try:
+        seen = " ".join(_texts(generate_invoice_pdf_a4, _invoice(0.0)))
+    finally:
+        COMPANY = saved
+    assert "SERVIÇOS, LDA" in seen  # the end of the name is printed (on a second line of the box)
