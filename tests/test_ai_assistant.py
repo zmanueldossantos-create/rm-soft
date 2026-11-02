@@ -15,7 +15,7 @@ from app.models.ai_conversation import AiConversation, AiMessage
 from app.models.product import Product, ProductType
 from app.services.ai import assistant_service, provider_client, tools
 from app.services.ai.assistant_service import AssistantError, ask, assistant_status, list_conversations, list_messages
-from app.services.ai.provider_client import AiProviderError, ProviderReply, _anthropic_messages, _openai_messages
+from app.services.ai.provider_client import AiProviderError, AiProviderTimeout, ProviderReply, _anthropic_messages, _openai_messages
 from app.services.ai_settings_service import update_company_ai_switches, update_platform_ai
 from app.services.customer_service import create_customer
 from app.services.invoice_service import create_invoice
@@ -165,6 +165,15 @@ async def test_a_question_answered_with_a_tool(db, company_with_essentials, monk
         await ask(db, gestor, "Vendas de hoje?")
     assert (await db.execute(select(func.count(AiMessage.id)))).scalar_one() == 4
     assert (await db.execute(select(func.count(AiConversation.id)))).scalar_one() == 1
+
+    # a slow provider: the answer says which question was lost and what to do
+    async def slow(*args, **kwargs):
+        raise AiProviderTimeout("O fornecedor de IA não respondeu a tempo")
+    monkeypatch.setattr(provider_client, "chat", slow)
+    await db.refresh(gestor)  # expired by the rollback of the failure above
+    with pytest.raises(AssistantError, match="«Lista dos clientes».*envie a pergunta novamente"):
+        await ask(db, gestor, "Lista dos clientes")
+    assert (await db.execute(select(func.count(AiMessage.id)))).scalar_one() == 4
 
     # another company's user cannot open this conversation
     other = await _second_company(db)

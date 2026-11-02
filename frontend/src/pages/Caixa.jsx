@@ -1646,6 +1646,8 @@ export default function Caixa() {
                               {stockLevels[p.id] ?? 0} {p.unit_of_measure_code || 'Un'}
                             </span>
                           )}
+                          {/* made on the spot (a hamburger) or a service: sold freely, no quantity to show */}
+                          {!p.managed_by_stock && <span className="text-[10px] text-text-muted">Sem controlo de stock</span>}
                         </div>
                       </div>
                     </button>

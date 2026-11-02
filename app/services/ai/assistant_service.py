@@ -16,7 +16,7 @@ from app.models.company import Company
 from app.models.company_ai_settings import CompanyAiSettings
 from app.models.user import User
 from app.services.ai import provider_client
-from app.services.ai.provider_client import AiProviderError
+from app.services.ai.provider_client import AiProviderError, AiProviderTimeout
 from app.services.ai.actions import (
     ActionContext, ActionError, action_tools_for, decide_action, is_action_tool, run_action_tool,
 )
@@ -196,6 +196,12 @@ async def ask(db: AsyncSession, user: User, question: str, conversation_id: uuid
                 transcript.append({"role": "tool", "tool_call_id": call["id"], "name": call["name"], "content": result})
         else:
             answer = ""
+    except AiProviderTimeout:
+        # which question, why, and what to do - on Telegram several questions may be waiting at once
+        await db.rollback()
+        asked = question.strip().replace("\n", " ")
+        asked = asked if len(asked) <= 80 else asked[:77] + "..."
+        raise AssistantError(f"⏳ Demorei demasiado a responder a «{asked}». Por favor, envie a pergunta novamente.")
     except AiProviderError as e:
         await db.rollback()
         raise AssistantError(str(e))

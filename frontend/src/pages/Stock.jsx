@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { qtyWithUnit } from '../utils/stockUnits';
 import { Package2, Plus, Loader2, Search, AlertTriangle, ArrowDownToLine, SlidersHorizontal, Warehouse, Pencil, Check, X, ArrowRightLeft, Trash2, Power, ClipboardCheck, MapPin, Star } from 'lucide-react';
 import Modal from '../components/Modal';
 import MovementForm from '../components/MovementForm';
@@ -671,9 +672,9 @@ export default function Stock() {
                         )}
                       </td>
                     )}
-                    <td className="px-6 py-4 font-mono text-text-primary text-right">{formatQty(l.quantity)}</td>
+                    <td className="px-6 py-4 font-mono text-text-primary text-right whitespace-nowrap">{qtyWithUnit(l.quantity, products.find((x) => x.id === l.product_id)?.unit_of_measure_code)}</td>
                       <td className="px-6 py-4">{(() => { const p = products.find((x) => x.id === l.product_id); return <UnitBreakdown quantity={l.quantity} baseCode={p?.unit_of_measure_code} units={(p?.sale_units || []).map((u) => ({ code: u.unit_of_measure_code, factor: Number(u.factor) }))} />; })()}</td>
-                    <td className="px-6 py-4 font-mono text-text-muted text-right">{formatQty(l.min_stock_threshold)}</td>
+                    <td className="px-6 py-4 font-mono text-text-muted text-right whitespace-nowrap">{formatQty(l.min_stock_threshold)} {products.find((x) => x.id === l.product_id)?.unit_of_measure_code || ''}</td>
                     <td className="px-6 py-4">
                       {l.is_low ? (
                         <span className="inline-flex items-center gap-1 bg-danger/10 text-danger text-[11px] font-semibold uppercase tracking-wide px-2.5 py-1 rounded">

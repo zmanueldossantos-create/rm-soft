@@ -20,6 +20,10 @@ class AiProviderError(Exception):
     """The provider could not answer - the message is shown as it is (PT-PT)."""
 
 
+class AiProviderTimeout(AiProviderError):
+    """The provider took longer than the time allowed - the question can be asked again."""
+
+
 async def complete(provider: str, model: str, api_key: str, system: str, messages: list[dict],
                    max_tokens: int = 1024, timeout: float = 60) -> str:
     """The provider's text answer. messages: [{"role": "user" | "assistant", "content": str}]."""
@@ -41,7 +45,7 @@ async def complete(provider: str, model: str, api_key: str, system: str, message
                           "messages": [{"role": "system", "content": system}, *messages]},
                 )
     except httpx.TimeoutException:
-        raise AiProviderError("O fornecedor de IA não respondeu a tempo")
+        raise AiProviderTimeout("O fornecedor de IA não respondeu a tempo")
     except httpx.HTTPError:
         raise AiProviderError("Sem ligação ao fornecedor de IA - verifique a ligação à internet")
     if response.status_code in (401, 403):
@@ -153,7 +157,7 @@ async def chat(provider: str, model: str, api_key: str, system: str, transcript:
                     headers={"Authorization": f"Bearer {api_key}", "content-type": "application/json"},
                 )
     except httpx.TimeoutException:
-        raise AiProviderError("O fornecedor de IA não respondeu a tempo")
+        raise AiProviderTimeout("O fornecedor de IA não respondeu a tempo")
     except httpx.HTTPError:
         raise AiProviderError("Sem ligação ao fornecedor de IA - verifique a ligação à internet")
     if response.status_code in (401, 403):
