@@ -118,10 +118,12 @@ export default function Categorias() {
     }
   }
 
-  useEffect(() => { if (pharmacyEnabled) loadCounts(); }, [pharmacyEnabled]); // its catalogs appear once known
+  // Counts follow the visible cards: they appear once the user's permissions (and the pharmacy
+  // context) are known - counting only on mount left them at 0 when permissions arrived later.
+  const visibleKeys = visibleCatalogs.map((c) => c.key).join(',');
+  useEffect(() => { if (visibleKeys) loadCounts(); }, [visibleKeys]);
 
   useEffect(() => {
-    loadCounts();
     listPaymentMethodPreferences().then(setPaymentMethods).catch(() => {});
     listDocumentTypePaymentTermPreferences().then(setPaymentTermPrefs).catch(() => {});
   }, []);
