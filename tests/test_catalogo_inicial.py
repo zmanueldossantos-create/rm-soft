@@ -94,7 +94,7 @@ async def test_the_hotel_comes_with_its_module(db, company_with_essentials, lega
     assert any("módulo Hotel ainda não está ativo" in line for line in early["ignorados"])
     await _prepare(db, company.id, "Hotel")
     hotel = await load(db, company.nif, hotel_data)
-    assert await _count(db, Resource, company.id) == 7  # Ala Mel (4) + Ala Rocha (3)
+    assert await _count(db, Resource, company.id) == 7  # Executivo 101-104 + Clássico 201-203
     from app.models.service import Service
     rates = {s.code: s for s in (await db.execute(select(Service).where(Service.company_id == company.id))).scalars().all()}
     assert rates["EXE-DIA"].duration_minutes is None and float(rates["EXE-DIA"].price) == 35000  # the night: per night

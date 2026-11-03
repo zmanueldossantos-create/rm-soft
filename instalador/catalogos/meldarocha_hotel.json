@@ -1,5 +1,5 @@
 {
-  "_nota": "Base de formação da Mel da Rocha - módulo Hotel (depois de ativar o módulo Hotel). O tipo de quarto é a categoria (leva as tarifas): Executivo (mais equipado, mais caro) e Clássico. A zona está no nome do quarto: Ala Mel (Mel 1 a 4, Executivo) e Ala Rocha (Rocha 1 a 3, Clássico) - uma nova zona da mesma categoria só leva quartos novos (ex.: Favo 1), uma categoria superior leva um tipo novo com as suas tarifas. Cada tipo tem a diária e a noite (sem duração: por noite) e as tarifas à hora (com duração: por fatia começada). Ficam por fazer à frente dos proprietários: a cama extra e os clientes.",
+  "_nota": "Base de formação da Mel da Rocha - módulo Hotel (depois de ativar o módulo Hotel). O tipo de quarto é a categoria (leva as tarifas): Executivo (mais equipado, mais caro) e Clássico. Os quartos têm o número (1.º andar 101 a 104, Executivo; 2.º andar 201 a 203, Clássico) - um quarto novo da mesma categoria só leva um número novo, uma categoria superior leva um tipo novo com as suas tarifas. Cada tipo tem a diária e a noite (sem duração: por noite) e as tarifas à hora (com duração: por fatia começada). Ficam por fazer à frente dos proprietários: a cama extra e os clientes.",
   "hotel": {
     "atividade": "Hotel",
     "tipos_quarto": [
@@ -39,19 +39,19 @@
         ],
         "quartos": [
           {
-            "nome": "Mel 1",
+            "nome": "101",
             "capacidade": 2
           },
           {
-            "nome": "Mel 2",
+            "nome": "102",
             "capacidade": 2
           },
           {
-            "nome": "Mel 3",
+            "nome": "103",
             "capacidade": 2
           },
           {
-            "nome": "Mel 4",
+            "nome": "104",
             "capacidade": 3
           }
         ]
@@ -92,15 +92,15 @@
         ],
         "quartos": [
           {
-            "nome": "Rocha 1",
+            "nome": "201",
             "capacidade": 2
           },
           {
-            "nome": "Rocha 2",
+            "nome": "202",
             "capacidade": 2
           },
           {
-            "nome": "Rocha 3",
+            "nome": "203",
             "capacidade": 2
           }
         ]
