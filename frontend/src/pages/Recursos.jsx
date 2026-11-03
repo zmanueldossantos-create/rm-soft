@@ -9,6 +9,8 @@ import { listResources, createResource, updateResource, toggleResourceStatus, li
 import { extractErrorMessage } from '../utils/errors';
 import Modal from '../components/Modal';
 import { useToastState } from '../components/Toaster';
+import { useAuthStore } from '../store/authStore';
+import { rememberedActivity, writeLastActivity } from '../utils/lastActivity';
 
 function ToggleSwitch({ checked, onChange, disabled }) {
   const trackClass = 'relative w-9 h-5 rounded-full transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ' + (checked ? 'bg-success' : 'bg-border');
@@ -31,6 +33,7 @@ export default function Recursos() {
   const can = useCan();
   const navigate = useNavigate();
   const [activities, setActivities] = useState([]);
+  const userId = useAuthStore((s) => s.user)?.id;
   const [selectedActivityId, setSelectedActivityId] = useState('');
   const [resources, setResources] = useState([]);
   const [resourceTypes, setResourceTypes] = useState([]);
@@ -52,7 +55,8 @@ export default function Recursos() {
       // One activity with resources (the Hotel next to a Padaria) - or one activity at all: selected for the user.
       // Otherwise the choice stays free - and the spinner must not wait for a load that only starts once one is picked.
       const withResources = active.filter((a) => (a.capabilities || []).includes('RESOURCES'));
-      const only = active.length === 1 ? active[0] : withResources.length === 1 ? withResources[0] : null;
+      // the activity this user picked last on this device comes first
+      const only = active.length === 1 ? active[0] : rememberedActivity(userId, active) || (withResources.length === 1 ? withResources[0] : null);
       if (only) setSelectedActivityId(only.id);
       else setLoading(false);
     }).catch((err) => setError(extractErrorMessage(err, 'Erro ao carregar atividades')));
@@ -162,7 +166,7 @@ export default function Recursos() {
         <div className="w-64 mb-4">
           <Select
             value={selectedActivityId}
-            onChange={setSelectedActivityId}
+            onChange={(id) => { setSelectedActivityId(id); writeLastActivity(userId, id); }}
             options={activities.map((a) => ({ value: a.id, label: a.name }))}
             placeholder="Selecionar atividade"
           />

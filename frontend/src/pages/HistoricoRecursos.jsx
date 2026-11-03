@@ -8,6 +8,8 @@ import { listActivities } from '../api/activity';
 import { listResources, getResourceHistory } from '../api/booking';
 import { extractErrorMessage } from '../utils/errors';
 import { useToastState } from '../components/Toaster';
+import { useAuthStore } from '../store/authStore';
+import { rememberedActivity, writeLastActivity } from '../utils/lastActivity';
 
 // The history of the resources (resource_history_service): every use of a room, a table or a practitioner over a
 // period - a stay, a passage, a marcação, a reservation, a table's account - with its document and what it brought in
@@ -49,6 +51,7 @@ const labelCls = 'text-[11px] font-medium uppercase tracking-wide text-text-mute
 export default function HistoricoRecursos() {
   const [searchParams] = useSearchParams();  // ?activity=...&resource=... from the Histórico button of Recursos
   const [activities, setActivities] = useState([]);
+  const userId = useAuthStore((s) => s.user)?.id;
   const [selectedActivityId, setSelectedActivityId] = useState(searchParams.get('activity') || '');
   const [resources, setResources] = useState([]);
   const [resourceId, setResourceId] = useState(searchParams.get('resource') || '');
@@ -65,7 +68,8 @@ export default function HistoricoRecursos() {
       setActivities(active);
       // one activity, or the only one with resources (the Hotel next to a Padaria): selected for the user
       const withResources = active.filter((a) => (a.capabilities || []).includes('RESOURCES'));
-      const only = active.length === 1 ? active[0] : withResources.length === 1 ? withResources[0] : null;
+      // the activity this user picked last on this device comes first (a link with ?activity= still wins)
+      const only = active.length === 1 ? active[0] : rememberedActivity(userId, active) || (withResources.length === 1 ? withResources[0] : null);
       if (!selectedActivityId && only) setSelectedActivityId(only.id);
       else if (!selectedActivityId) setLoading(false);
     }).catch((err) => setError(extractErrorMessage(err, 'Erro ao carregar atividades')));
@@ -94,6 +98,7 @@ export default function HistoricoRecursos() {
 
   function chooseActivity(id) {
     setSelectedActivityId(id);
+    writeLastActivity(userId, id);
     setResourceId('');
   }
 

@@ -20,6 +20,8 @@ import { extractErrorMessage } from '../utils/errors';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
 import { useToastState } from '../components/Toaster';
+import { useAuthStore } from '../store/authStore';
+import { rememberedActivity, writeLastActivity } from '../utils/lastActivity';
 
 const STATUS_LABELS = {
   PENDENTE: 'Pendente',
@@ -134,6 +136,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
   const [extendSaving, setExtendSaving] = useState(false);
   const can = useCan();
   const [activities, setActivities] = useState([]);
+  const userId = useAuthStore((s) => s.user)?.id;
   const [selectedActivityId, setSelectedActivityId] = useState('');
   // The activity's own workflow (the capabilities of its module): with the hotel stay a booking is billed through
   // its check-in and its account; without it (spa, salão, consultório) a marcação is charged at the till. The words
@@ -215,6 +218,8 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
       const withResources = active.filter((a) => (a.capabilities || []).includes('RESOURCES'));
       if (activityId) setSelectedActivityId(activityId);
       else if (active.length === 1) setSelectedActivityId(active[0].id);
+      // the activity this user picked last on this device
+      else if (rememberedActivity(userId, active)) setSelectedActivityId(rememberedActivity(userId, active).id);
       else if (withResources.length === 1) setSelectedActivityId(withResources[0].id);
     }).catch((err) => setError(extractErrorMessage(err, 'Erro ao carregar atividades')));
     listServices().then((data) => setServices(data.filter((s) => s.is_active))).catch(() => {});
@@ -972,7 +977,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
           {activities.map((a) => (
             <button
               key={a.id}
-              onClick={() => setSelectedActivityId(a.id)}
+              onClick={() => { setSelectedActivityId(a.id); writeLastActivity(userId, a.id); }}
               className={'px-3.5 py-1.5 rounded-md text-[13px] font-medium transition-colors cursor-pointer ' + (selectedActivityId === a.id ? 'bg-accent text-white' : 'bg-bg-elevated border border-border text-text-muted hover:text-text-primary')}
             >
               {a.name}
