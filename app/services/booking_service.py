@@ -73,6 +73,23 @@ class IncompatibleServiceError(Exception):
     pass
 
 
+class CapacityExceededError(IncompatibleServiceError):
+    """More guests than the resource holds (its «Capacidade») - refused like an invalid booking (422)."""
+
+
+async def ensure_capacity(db: AsyncSession, resource, party_size: int | None) -> None:
+    """A room (a resource whose type needs a rate - a stay) takes no more guests than its capacity. A restaurant table
+    stays flexible (a chair added), and no capacity or no party size given means no limit."""
+    if not (resource.capacity and party_size and party_size > resource.capacity):
+        return
+    requires_service = (await db.execute(select(ResourceTypeCatalog.requires_service)
+                                         .where(ResourceTypeCatalog.id == resource.resource_type_id))).scalar_one_or_none()
+    if requires_service:
+        people = "pessoa" if resource.capacity == 1 else "pessoas"
+        raise CapacityExceededError(f"{resource.name} tem capacidade para {resource.capacity} {people} - "
+                                    f"a reserva tem {party_size}")
+
+
 async def _validate_service_for_resource(db: AsyncSession, company_id: uuid.UUID, resource, service_id: uuid.UUID | None) -> None:
     """Enforces ResourceTypeCatalog.requires_service (e.g. a CHAMBRE always has a
     rate to charge, even for a short stay) and, when a service IS given, that it's
@@ -112,6 +129,7 @@ async def create_booking(
     await ensure_owned(db, company_id, Customer, customer_id, "Cliente não encontrado")
     await ensure_owned(db, company_id, Service, service_id, "Serviço não encontrado")
     await _validate_service_for_resource(db, company_id, resource, service_id)
+    await ensure_capacity(db, resource, party_size)
 
     if await _has_overlap(db, resource_id, starts_at, ends_at):
         raise BookingOverlapError("Este recurso já tem uma reserva neste período")
@@ -251,6 +269,7 @@ async def reschedule_booking(
 
     resource = await get_resource_or_raise(db, company_id, booking.resource_id)
     await _validate_service_for_resource(db, company_id, resource, service_id)
+    await ensure_capacity(db, resource, party_size)
 
     if await _has_overlap(db, booking.resource_id, starts_at, ends_at, exclude_booking_id=booking_id):
         raise BookingOverlapError("Este recurso já tem uma reserva neste período")

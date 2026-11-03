@@ -8,7 +8,8 @@ import pytest
 
 from app.models.resource import Resource
 from app.models.resource_type_catalog import ResourceTypeCatalog
-from app.services.booking_service import create_booking, reschedule_booking
+from app.models.service import Service
+from app.services.booking_service import CapacityExceededError, create_booking, reschedule_booking
 from app.services.resource_status_service import list_resource_statuses
 
 NOW = datetime(2026, 9, 20, 12, 0, tzinfo=timezone.utc)
@@ -77,3 +78,39 @@ async def test_status_reports_the_guest_details_of_the_reserving_booking(db, com
     rows = await list_resource_statuses(db, ctx["company"].id, ctx["activity"].id, now=NOW, window_minutes=60)
     assert len(rows) == 1 and rows[0]["status"] == "RESERVADA"
     assert rows[0]["booking_guest_name"] == "Família Silva" and rows[0]["booking_party_size"] == 6
+
+
+async def _room(db, ctx, capacity=2):
+    resource_type = ResourceTypeCatalog(company_id=ctx["company"].id, name="Executivo", requires_service=True)
+    db.add(resource_type)
+    await db.flush()
+    rate = Service(company_id=ctx["company"].id, code="EXE-DIA", name="Diária Executivo", price=35000,
+                   vat_id=ctx["vat_nor"].id,
+                   resource_type_id=resource_type.id)
+    room = Resource(company_id=ctx["company"].id, activity_id=ctx["activity"].id, resource_type_id=resource_type.id,
+                    name="101", capacity=capacity)
+    db.add_all([rate, room])
+    await db.commit()
+    return room.id, rate.id
+
+
+@pytest.mark.asyncio
+async def test_a_room_refuses_more_guests_than_its_capacity(db, company_with_essentials):
+    ctx = company_with_essentials
+    company_id, user_id = ctx["company"].id, ctx["gestor"].id
+    room_id, rate_id = await _room(db, ctx)
+    start, end = NOW + timedelta(hours=2), NOW + timedelta(days=1)
+    with pytest.raises(CapacityExceededError, match="101 tem capacidade para 2 pessoas - a reserva tem 3"):
+        await create_booking(db, company_id, room_id, user_id, start, end, service_id=rate_id, party_size=3)
+    booking = await create_booking(db, company_id, room_id, user_id, start, end, service_id=rate_id, party_size=2)
+    with pytest.raises(CapacityExceededError):
+        await reschedule_booking(db, company_id, booking.id, start, end, service_id=rate_id, party_size=4)
+
+
+@pytest.mark.asyncio
+async def test_a_table_stays_flexible_beyond_its_capacity(db, company_with_essentials):
+    ctx = company_with_essentials
+    table = await _table(db, ctx)  # capacity 4, its type needs no rate: a chair can be added
+    booking = await create_booking(db, ctx["company"].id, table.id, ctx["gestor"].id,
+                                   NOW + timedelta(hours=2), NOW + timedelta(hours=4), party_size=6)
+    assert booking.party_size == 6

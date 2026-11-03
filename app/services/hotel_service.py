@@ -43,7 +43,7 @@ from app.models.cash_session import CashSession, CashSessionStatus
 from app.models.service import Service
 from app.models.invoice import Invoice
 from app.services.booking_service import (
-    get_booking_or_raise, _clean_guest_name, _has_overlap, _validate_service_for_resource,
+    get_booking_or_raise, _clean_guest_name, _has_overlap, _validate_service_for_resource, ensure_capacity,
     BookingOverlapError, InvalidBookingRangeError,
 )
 from app.services.document_rules import default_paid_on_issue_type
@@ -224,6 +224,7 @@ async def walk_in(
     if not service.duration_minutes:
         raise InvalidWalkInError("Uma entrada imediata precisa de um serviço com duração (30 min, 1 hora...) - uma diária faz-se por reserva")
     await _validate_service_for_resource(db, company_id, resource, service.id)
+    await ensure_capacity(db, resource, party_size)
     pos = (await db.execute(
         select(PointOfSale).where(PointOfSale.id == pos_id, PointOfSale.activity_id == resource.activity_id)
     )).scalar_one_or_none()
