@@ -35,7 +35,7 @@ from app.services.fiscal_period_service import ensure_period_open
 from app.services.invoice_service import _exemption_for, _simulate_atcud, _simulate_hash
 from app.services.product_sale_unit_service import SaleUnitInvalidError, resolve_line_unit
 from app.services.stock_lot_service import lots_in, lots_out, parts_taken_by
-from app.services.stock_service import InsufficientStockError, _get_or_create_stock_row, _stock_rule, ensure_available_at_period_end
+from app.services.stock_service import InsufficientStockError, _get_or_create_stock_row, current_unit_cost, _stock_rule, ensure_available_at_period_end
 
 MOVEMENT_TYPES = {"GR": "Guia de Remessa", "GT": "Guia de Transporte", "GD": "Guia de Devolução"}
 # A customer in one of these states receives no goods
@@ -91,7 +91,7 @@ async def _move(db: AsyncSession, company_id: uuid.UUID, period: FiscalPeriod, p
         stock.quantity = in_before + quantity
     reason = ("Anulação da " if back else "") + ref
     common = dict(company_id=company_id, fiscal_period_id=period.id, product_id=product.id, quantity=quantity,
-                  reason=reason, reference=ref)
+                  reason=reason, reference=ref, unit_cost=await current_unit_cost(db, product.id))
     out_row = in_row = None
     if out_id is not None and in_id is not None:  # a transfer: the pair of the ledger
         out_row = StockMovement(**common, warehouse_id=out_id, movement_type=MovementType.TRANSFERENCIA,

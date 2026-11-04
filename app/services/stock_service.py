@@ -250,6 +250,17 @@ async def ensure_available_at_period_end(
         )
 
 
+async def current_unit_cost(db: AsyncSession, product_id: uuid.UUID) -> float | None:
+    """The cost per base unit a movement takes the goods at - their weighted average cost, else the purchase price
+    typed on the product sheet (None: unknown). Written on every movement (sale, loss, transfer, adjustment...) so the
+    value of what left or entered the stock is known when it happened - the cost of the sales in the accounting."""
+    row = (await db.execute(select(Product.average_cost, Product.purchase_price).where(Product.id == product_id))).first()
+    if row is None:
+        return None
+    cost = row.average_cost if row.average_cost is not None else row.purchase_price
+    return round(float(cost), 4) if cost is not None else None
+
+
 async def _get_or_create_stock_row(db: AsyncSession, company_id: uuid.UUID, product_id: uuid.UUID, warehouse_id: uuid.UUID) -> Stock:
     """The product's stock row in this warehouse, locked until the caller's commit and read again: two tills selling
     the same product at the same moment wait for each other instead of both writing «10 - 1 = 9»."""
@@ -388,15 +399,16 @@ async def transfer_stock(
     source_stock.quantity = float(source_stock.quantity) - quantity
     dest_stock.quantity = dest_before + quantity
 
+    cost = await current_unit_cost(db, product_id)
     out_movement = StockMovement(
         company_id=company_id, fiscal_period_id=posting_period.id, product_id=product_id, warehouse_id=from_warehouse_id,
         movement_type=MovementType.TRANSFERENCIA, quantity=quantity, reason=reason,
-        counterpart_warehouse_id=to_warehouse_id, is_transfer_source=True,
+        counterpart_warehouse_id=to_warehouse_id, is_transfer_source=True, unit_cost=cost,
     )
     in_movement = StockMovement(
         company_id=company_id, fiscal_period_id=posting_period.id, product_id=product_id, warehouse_id=to_warehouse_id,
         movement_type=MovementType.TRANSFERENCIA, quantity=quantity, reason=reason,
-        counterpart_warehouse_id=from_warehouse_id, is_transfer_source=False,
+        counterpart_warehouse_id=from_warehouse_id, is_transfer_source=False, unit_cost=cost,
     )
     db.add(out_movement)
     db.add(in_movement)
@@ -442,7 +454,7 @@ async def record_stock_loss(
     movement = StockMovement(
         company_id=company_id, fiscal_period_id=posting_period.id, product_id=product_id, warehouse_id=warehouse.id,
         movement_type=MovementType.PERDA, quantity=quantity,
-        loss_category=LossCategory(loss_category), reason=reason,
+        loss_category=LossCategory(loss_category), reason=reason, unit_cost=await current_unit_cost(db, product_id),
     )
     db.add(movement)
     await lots_out(db, company_id, product_id, warehouse.id, quantity, movement, lot_id=lot_id)
@@ -489,6 +501,7 @@ async def adjust_stock(
     movement = StockMovement(
         company_id=company_id, fiscal_period_id=posting_period.id, product_id=product_id, warehouse_id=warehouse.id,
         movement_type=MovementType.AJUSTE, quantity=delta, reason=reason,  # signed - preserves direction for display
+        unit_cost=await current_unit_cost(db, product_id),
     )
     db.add(movement)
     if delta > 0:
@@ -542,6 +555,7 @@ async def deduct_stock_for_sale(
     movement = StockMovement(
         company_id=company_id, fiscal_period_id=posting_period.id, product_id=product_id, warehouse_id=warehouse_id,
         movement_type=MovementType.SAIDA, quantity=quantity, reference=reference,
+        unit_cost=await current_unit_cost(db, product_id),
     )
     db.add(movement)
     # FEFO, never an expired lot - a product followed by lot (see stock_lot_service)
@@ -572,10 +586,17 @@ async def return_stock_for_credit_note(
     stock = await _get_or_create_stock_row(db, company_id, product_id, warehouse_id)
     stock_before = float(stock.quantity)
     stock.quantity = stock_before + quantity
+    # back at the cost the sale took them out at (its SAIDA), else at the current cost
+    sale_cost = (await db.execute(select(StockMovement.unit_cost).where(
+        StockMovement.company_id == company_id, StockMovement.product_id == product_id,
+        StockMovement.warehouse_id == warehouse_id, StockMovement.movement_type == MovementType.SAIDA,
+        StockMovement.reference == sale_reference, StockMovement.unit_cost.is_not(None),
+    ).limit(1))).scalar_one_or_none() if sale_reference else None
     movement = StockMovement(
         company_id=company_id, fiscal_period_id=posting_period.id, product_id=product_id, warehouse_id=warehouse_id,
         movement_type=MovementType.RECEPCAO, quantity=quantity, reference=reference,
         reason="Devolução - nota de crédito",
+        unit_cost=float(sale_cost) if sale_cost is not None else await current_unit_cost(db, product_id),
     )
     db.add(movement)
     parts = await parts_taken_by(db, company_id, product_id, warehouse_id, sale_reference, [MovementType.SAIDA]) if sale_reference else []

@@ -239,7 +239,7 @@ async def validate_inventory(db: AsyncSession, company_id: uuid.UUID, inventory_
         movement = StockMovement(
             company_id=company_id, fiscal_period_id=period.id, product_id=product.id, warehouse_id=inventory.warehouse_id,
             movement_type=MovementType.AJUSTE, quantity=diff, reference=reference,  # signed, as every AJUSTE
-            reason=f"Inventário {reference}",
+            reason=f"Inventário {reference}", unit_cost=cost,
         )
         db.add(movement)
         # the lots (a product followed by lot): a shortage leaves FEFO, a surplus enters as "Sem lote"
