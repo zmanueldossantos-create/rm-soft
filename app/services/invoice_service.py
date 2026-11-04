@@ -907,6 +907,7 @@ async def create_credit_note(
     restock: bool = False,
     refunds: list[dict] | None = None,
     refund_pos_id: uuid.UUID | None = None,
+    refund_bank_account_id: uuid.UUID | None = None,
 ) -> Invoice:
     """
     Creates a Nota de Credito (NC) against an already-issued Factura/Factura-Recibo,
@@ -1120,7 +1121,17 @@ async def create_credit_note(
             if amount <= 0:
                 raise RefundNotAllowedError("O valor a devolver deve ser maior que zero")
             refund_lines.append((method.id, amount, bool(method.is_cash)))
+            if method.uses_bank_account and refund_bank_account_id is None:
+                raise RefundNotAllowedError(f"Escolha a conta bancária de onde sai o reembolso ({method.name})")
         refund_total = round(sum(amount for _, amount, _ in refund_lines), 2)
+        if refund_bank_account_id is not None:
+            from app.models.company_bank_account import CompanyBankAccount
+            if (await db.execute(select(CompanyBankAccount.id).where(
+                    CompanyBankAccount.id == refund_bank_account_id, CompanyBankAccount.company_id == company_id,
+                    CompanyBankAccount.is_active.is_(True)))).scalar_one_or_none() is None:
+                raise RefundNotAllowedError("Conta bancária inválida")
+            if not any(methods[m].uses_bank_account for m, _, _ in refund_lines):
+                refund_bank_account_id = None  # no bank refund: no account
 
         # Only an overpayment goes back: on a Fatura not yet settled the credit note first reduces what is owed.
         collected, refunded, due_before = await _credit_note_refund_figures(db, reference_invoice, previous_notes)
@@ -1152,6 +1163,8 @@ async def create_credit_note(
             refund_session_id = refund_session.id
     elif refund_pos_id is not None:
         raise RefundNotAllowedError("Foi escolhida uma caixa mas nenhum valor a devolver")
+    else:
+        refund_bank_account_id = None
 
     doc_type_result = await db.execute(select(DocumentType).where(DocumentType.code == "NC"))
     doc_type = doc_type_result.scalar_one_or_none()
@@ -1182,6 +1195,7 @@ async def create_credit_note(
         activity_id=activity_id,
         customer_id=reference_invoice.customer_id,
         cash_session_id=refund_session_id,
+        bank_account_id=refund_bank_account_id,  # a refund by transfer leaves this account (Tesouraria › Bancos)
         invoice_type=InvoiceType.NOTA_CREDITO,
         document_type_id=doc_type.id,
         series=series_row.series_code,

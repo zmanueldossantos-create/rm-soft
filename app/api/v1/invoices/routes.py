@@ -121,6 +121,7 @@ async def create_new_credit_note(
             restock=payload.restock,
             refunds=[{"payment_method_id": r.payment_method_id, "amount": r.amount} for r in payload.refunds],
             refund_pos_id=payload.refund_pos_id,
+            refund_bank_account_id=payload.refund_bank_account_id,
         )
     except PeriodClosedError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))

@@ -142,3 +142,29 @@ async def test_a_purchase_fatura_recibo_paid_from_the_bank(db, company_with_esse
     # the supplier's account: the FR and its payment, never a second «Pago na emissão»
     descriptions = [e["description"] for e in (await supplier_statement(db, company_id, supplier_id))["lines"]]
     assert not any("Pago na emissão" in d for d in descriptions) and any(d.startswith("Pagamento") for d in descriptions)
+
+
+@pytest.mark.asyncio
+async def test_a_credit_note_refund_by_transfer_leaves_its_bank_account(db, company_with_essentials):
+    from app.services.invoice_service import RefundNotAllowedError, create_credit_note
+    from sqlalchemy import select as _select
+    from app.models.invoice_line import InvoiceLine
+    ctx = company_with_essentials
+    ctx["pm_mb"].uses_bank_account = True
+    await db.commit()
+    company_id = ctx["company"].id
+    account_id = await _account(db, company_id)
+    await set_opening_balance(db, company_id, account_id, 0, date.today())
+    ids = _ids(ctx)
+    _product_id, invoice_id = await _sold_product(db, ids)
+    await create_receipt(db, ids["company"], ids["activity"], reference_invoice_id=invoice_id, amount=4560.0,
+                         payment_method_id=ctx["pm_mb"].id, bank_account_id=account_id)  # paid in full on the bank
+    line_id = (await db.execute(_select(InvoiceLine.id).where(InvoiceLine.invoice_id == invoice_id))).scalars().first()
+    kwargs = dict(company_id=company_id, activity_id=ids["activity"], reference_invoice_id=invoice_id,
+                  credit_note_reason="ANL", credit_note_cause="Devolução", lines_input=[{"invoice_line_id": line_id, "quantity": 1}],
+                  refunds=[{"payment_method_id": ctx["pm_mb"].id, "amount": 1140.0}])
+    with pytest.raises(RefundNotAllowedError, match="conta bancária"):
+        await create_credit_note(db, **kwargs)
+    await create_credit_note(db, **kwargs, refund_bank_account_id=account_id)
+    statement = await get_bank_statement(db, company_id, account_id)
+    assert [(l["amount_in"], l["amount_out"]) for l in statement["lines"]] == [(4560.0, 0.0), (0.0, 1140.0)]

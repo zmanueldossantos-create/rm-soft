@@ -11,6 +11,8 @@ import { listActivities } from '../api/activity';
 import { listCustomers } from '../api/customers';
 import { listVatRates } from '../api/vat';
 import { paymentTermsApi, paymentMethodsApi, unitsApi, documentRulesApi, banksApi, withholdingTaxesApi } from '../api/catalogs';
+import { listBankPositions } from '../api/tesouraria';
+import BankBalanceWarning, { bankShortfall } from './BankBalanceWarning';
 import { getMyCompany, getMyCompanyBankAccounts } from '../api/company';
 import { listDocumentSeries } from '../api/documentSeries';
 import { extractErrorMessage } from '../utils/errors';
@@ -129,9 +131,14 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
   const [refundMethodId, setRefundMethodId] = useState('');
   const [refundAmount, setRefundAmount] = useState('');
   const [refundPosId, setRefundPosId] = useState('');
+  const [refundBankId, setRefundBankId] = useState(''); // a refund by transfer: the account it leaves
+  const [refundNegativeOk, setRefundNegativeOk] = useState(false);
+  const [bankPositions, setBankPositions] = useState([]); // the balances, to warn before an account goes negative
   // Cash collected from this screen (a Fatura/Recibo, a deposit on a Fatura) enters an explicitly chosen cash point.
   const [cashPoints, setCashPoints] = useState([]);
   const [cashPosId, setCashPosId] = useState('');
+  const refundUsesBank = paymentMethods.find((pm) => pm.id === refundMethodId)?.uses_bank_account === true;
+  const refundShortfall = refundUsesBank ? bankShortfall(bankPositions, refundBankId, parseFloat(refundAmount) || 0) : null;
   const refundableFor = (ncTotal) => (refundInfo
     ? Math.max(refundInfo.collected - refundInfo.refunded - Math.max(refundInfo.due - ncTotal, 0), 0)
     : 0);
@@ -211,6 +218,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
               info = null;
             }
             setRefundInfo(info);
+            listBankPositions().then(setBankPositions).catch(() => setBankPositions([])); // without the Tesouraria view: no warning
             // Each line starts at what is left to credit on it (earlier credit notes deducted), not its original quantity.
             setNcLines(ref.lines.map((l) => {
               const remaining = Number(info?.remaining_by_line?.[l.id] ?? l.quantity);
@@ -524,6 +532,16 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
           setSaving(false);
           return;
         }
+        if (refundUsesBank && !refundBankId) {
+          setFormError('Selecione a conta bancária de onde sai o reembolso');
+          setSaving(false);
+          return;
+        }
+        if (refundShortfall && !refundNegativeOk) {
+          setFormError('Confirme o reembolso com saldo bancário negativo');
+          setSaving(false);
+          return;
+        }
       }
       await createCreditNote({
         activity_id: referenceInvoice.activity_id,
@@ -534,6 +552,7 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
         restock: ncRestock && selectedLines.some((l) => l.is_product),
         refunds: refundAsked ? [{ payment_method_id: refundMethodId, amount: parseFloat(refundAmount) }] : [],
         refund_pos_id: refundAsked && refundPosId ? refundPosId : null,
+        refund_bank_account_id: refundAsked && refundUsesBank ? refundBankId : null,
       });
       onCreated?.();
       onClose();
@@ -806,6 +825,14 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                               <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Valor a devolver *</label>
                               <input type="number" min="0" step="0.01" value={refundAmount} onChange={(e) => setRefundAmount(e.target.value)} className={inputClass} />
                             </div>
+                            {refundUsesBank && (
+                              <div className="col-span-2 flex flex-col gap-2">
+                                <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted block">Conta bancária de saída *</label>
+                                <Select value={refundBankId} onChange={(v) => { setRefundBankId(v); setRefundNegativeOk(false); }} placeholder="Selecionar"
+                                  options={bankAccounts.map((b) => ({ value: b.id, label: (bankById[b.bank_id]?.acronym || '?') + ' - ' + b.account_number }))} />
+                                <BankBalanceWarning shortfall={refundShortfall} confirmed={refundNegativeOk} onConfirm={setRefundNegativeOk} />
+                              </div>
+                            )}
                             {paymentMethods.find((pm) => pm.id === refundMethodId)?.is_cash === true && (
                               <div className="col-span-2">
                                 <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Caixa de saída *</label>

@@ -195,6 +195,7 @@ class CreditNoteCreateRequest(BaseModel):
     restock: bool = False  # explicit choice: return the credited product lines to the sale warehouse
     refunds: list[CreditNoteRefundRequest] = []  # explicit choice: money given back, by payment method
     refund_pos_id: uuid.UUID | None = None  # the cash point the money comes out of - required for cash
+    refund_bank_account_id: uuid.UUID | None = None  # the bank account a refund by transfer leaves - required then
 
     @field_validator("lines")
     @classmethod
