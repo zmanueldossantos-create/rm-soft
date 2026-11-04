@@ -14,7 +14,8 @@ import { listVatRates } from '../api/vat';
 import { withholdingTaxesApi, paymentTermsApi } from '../api/catalogs';
 import useDocumentRules, { DOC_CODE_BY_TYPE } from '../utils/documentRules';
 import { getMyCompanyBankAccounts } from '../api/company';
-import { createProFormaFromPos, getPosStock, getIssuableTypes } from '../api/pos';
+import { createProFormaFromPos, getPosStock, getIssuableTypes, listPosTerminals } from '../api/pos';
+import TerminalPicker, { terminalMissing } from '../components/TerminalPicker';
 import { listPaymentMethodPreferences } from '../api/tesouraria';
 import { Wallet, Plus, Minus, Trash2, Loader2, Search, X, ShoppingCart, LogOut, CheckCircle2, FileSearch, ArrowLeftRight, Coins, Receipt, Printer, FileText, ChevronLeft, Snowflake, MonitorUp } from 'lucide-react';
 import { useCustomerDisplay } from '../utils/customerDisplay';
@@ -991,6 +992,7 @@ export default function Caixa() {
       }
     }
     setPayments([]);
+    setTerminalId('');
     setCashGiven('');
     const need = selectedInvoiceType === 'PRO_FORMA' ? null : prescriptionNeedOf(cart, Object.fromEntries(products.map((p) => [p.id, p])));
     if (need) { setPrescriptionNeed(need); return; }
@@ -1025,6 +1027,14 @@ export default function Caixa() {
   const [paymentTerms, setPaymentTerms] = useState([]);
   const [paymentMethods, setPaymentMethods] = useState([]);
   const [bankAccounts, setBankAccounts] = useState([]);
+  // the TPA / Express of this point of sale, and the one the card payment went through (several fit: the cashier says)
+  const [posTerminals, setPosTerminals] = useState([]);
+  const [terminalId, setTerminalId] = useState('');
+  useEffect(() => {
+    setTerminalId('');
+    if (!selectedPosId) { setPosTerminals([]); return; }
+    listPosTerminals(selectedPosId).then(setPosTerminals).catch(() => setPosTerminals([]));
+  }, [selectedPosId]);
   const [ftPaymentTermId, setFtPaymentTermId] = useState('');
   const [ftPaymentMethodId, setFtPaymentMethodId] = useState('');
   const [ftBankAccountId, setFtBankAccountId] = useState('');
@@ -1226,6 +1236,7 @@ export default function Caixa() {
     setLiquidationTarget(proForma);
     setLiquidationTargetType(posLiquidationOptions.some((o) => o.value === defaultPaidType) ? defaultPaidType : posLiquidationOptions[0].value);
     setPayments([]);
+    setTerminalId('');
     setCheckoutError('');
     setLastInvoice(null);
     setPaymentModalOpen(true);
@@ -1301,8 +1312,9 @@ export default function Caixa() {
     setCheckoutSaving(true);
     try {
       const validPayments = payments.filter((p) => parseFloat(p.amount) > 0);
+      if (terminalMissing(posTerminals, paymentMethods, validPayments, terminalId)) return;
       if (paymentMode === 'liquidation') {
-        const invoice = await liquidatePendingInvoice(selectedPosId, liquidationTarget.id, liquidationTargetType, validPayments);
+        const invoice = await liquidatePendingInvoice(selectedPosId, liquidationTarget.id, liquidationTargetType, validPayments, terminalId);
         showSaleDoneToCustomer(invoice, customerChange);
         setLastInvoice(invoice);
         setPaymentModalOpen(false);
@@ -1319,7 +1331,7 @@ export default function Caixa() {
           validPayments,
           selectedInvoiceType,
           globalDiscountPercent,
-          { prescription, insurance: insurancePayload() },
+          { prescription, insurance: insurancePayload(), terminalId },
         );
         showSaleDoneToCustomer(invoice, customerChange);
         setLastInvoice(invoice);
@@ -2015,7 +2027,7 @@ export default function Caixa() {
           <div className={'text-[13px] px-3.5 py-2.5 rounded-r border-l-2 ' + (paymentsRemaining === 0 ? 'bg-success/10 border-success text-success' : paymentsRemaining > 0 ? 'bg-accent/10 border-accent text-accent' : 'bg-danger/10 border-danger text-danger')}>
             {paymentsRemaining === 0 ? 'Valor exato' : paymentsRemaining > 0 ? `Falta ${formatKz(paymentsRemaining)} Kz` : `Excede em ${formatKz(Math.abs(paymentsRemaining))} Kz`}
           </div>
-
+          <TerminalPicker terminals={posTerminals} methods={paymentMethods} payments={payments} value={terminalId} onChange={setTerminalId} />
 
           <button
             onClick={handleConfirmSale}
@@ -2260,6 +2272,9 @@ export default function Caixa() {
                   {paymentsRemaining === 0 ? 'Valor exato' : paymentsRemaining > 0 ? `Falta ${formatKz(paymentsRemaining)} Kz` : `Excede em ${formatKz(Math.abs(paymentsRemaining))} Kz`}
                 </div>
               )}
+              {paidOnIssue && (
+                <TerminalPicker terminals={posTerminals} methods={paymentMethods} payments={payments} value={terminalId} onChange={setTerminalId} />
+              )}
               {paidOnIssue && cashPart > 0 && (
                 <div className="flex items-center gap-2 mt-1">
                   <label className="text-[13px] text-text-muted flex-1">Entregue pelo cliente</label>
@@ -2311,6 +2326,9 @@ export default function Caixa() {
             </button>
             <button
               onClick={() => {
+                // the terminal is asked here, the confirmation still open (several TPA / Express fit the card payment)
+                if (paidOnIssue && selectedInvoiceType !== 'PRO_FORMA'
+                  && terminalMissing(posTerminals, paymentMethods, payments.filter((p) => parseFloat(p.amount) > 0), terminalId)) return;
                 setSaleConfirmModalOpen(false);
                 if (selectedInvoiceType === 'PRO_FORMA') handleCreateProForma();
                 else if (billsLater) handleConfirmFt();

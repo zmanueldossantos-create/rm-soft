@@ -14,6 +14,7 @@ class SupplierCreateRequest(BaseModel):
     address: str | None = None
     payment_terms: str | None = None
     notes: str | None = None
+    iban: str | None = None  # the account its transfers are paid to
 
 
 class SupplierUpdateRequest(SupplierCreateRequest):
@@ -32,6 +33,7 @@ class SupplierResponse(BaseModel):
     address: str | None
     payment_terms: str | None
     notes: str | None
+    iban: str | None = None
     is_active: bool
     created_at: datetime
 

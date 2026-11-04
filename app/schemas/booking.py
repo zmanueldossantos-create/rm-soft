@@ -127,6 +127,7 @@ class BookingChargeRequest(BaseModel):
     pos_id: uuid.UUID
     payments: list[BookingChargePaymentInput]
     customer_id: uuid.UUID | None = None
+    terminal_id: uuid.UUID | None = None  # the TPA / Express of the bank payments (Tesouraria): None = decided by itself
 
 
 class BookingStatusUpdateRequest(BaseModel):

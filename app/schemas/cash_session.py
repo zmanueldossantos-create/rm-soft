@@ -105,6 +105,7 @@ class CheckoutRequest(BaseModel):
     payments: list[CheckoutPaymentInput] = []
     prescription: PrescriptionInput | None = None  # the receita of a pharmacy sale
     insurance: InsuranceInput | None = None  # a sale shared with an insurer (Farmácia)
+    terminal_id: uuid.UUID | None = None  # the TPA / Express of the bank payments (Tesouraria): None = decided by itself
 
     @field_validator("lines")
     @classmethod
@@ -138,3 +139,4 @@ class LiquidatePendingInvoiceRequest(BaseModel):
     pro_forma_id: uuid.UUID
     target_invoice_type: str
     payments: list[CheckoutPaymentInput]
+    terminal_id: uuid.UUID | None = None  # the TPA / Express of the bank payments (Tesouraria): None = decided by itself

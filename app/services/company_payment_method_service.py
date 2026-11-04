@@ -37,6 +37,7 @@ async def list_payment_method_preferences(db: AsyncSession, company_id: uuid.UUI
             "allows_payment": m.allows_payment,
             "allows_receipt": m.allows_receipt,
             "is_cash": m.is_cash,
+            "uses_bank_account": m.uses_bank_account,  # lands on a bank account: a terminal at the till
             "available_at_pos": prefs_by_method_id.get(m.id, False),
         }
         for m in catalog

@@ -12,7 +12,8 @@ import { listProducts } from '../api/products';
 import { listServices } from '../api/services';
 import { listPaymentMethodPreferences } from '../api/tesouraria';
 import { listOpenAccounts, openAccount, getOpenAccount, listAccountLines, addAccountLine, updateAccountLineQuantity, updateAccountLineUnit, removeAccountLine, closeAccount, cancelOpenAccount, sendToKitchen, transferAccountLines } from '../api/openAccount';
-import { getPosStockLevels } from '../api/pos';
+import { getPosStockLevels, listPosTerminals } from '../api/pos';
+import TerminalPicker, { terminalMissing } from './TerminalPicker';
 import { withholdingTaxesApi } from '../api/catalogs';
 import { withholdingOf } from '../utils/withholding';
 import { extractErrorMessage } from '../utils/errors';
@@ -81,6 +82,9 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
 
   const [closeModalOpen, setCloseModalOpen] = useState(false);
   const [closePayments, setClosePayments] = useState([]);
+  // the TPA / Express of the till that cashes the account, and the one the card payment went through
+  const [closeTerminals, setCloseTerminals] = useState([]);
+  const [closeTerminalId, setCloseTerminalId] = useState('');
   const [closeError, setCloseError] = useToastState('error');
   const [closeSaving, setCloseSaving] = useState(false);
   const [closeInvoiceType, setCloseInvoiceType] = useState('');
@@ -335,6 +339,9 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
 
   function openCloseModal() {
     setClosePayments([]);
+    setCloseTerminalId('');
+    const closingPos = posId || detailAccount?.pos_id;
+    if (closingPos) listPosTerminals(closingPos).then(setCloseTerminals).catch(() => setCloseTerminals([]));
     setCloseError('');
     setCloseInvoiceType(closeOptions?.defaultType || '');
     setCloseCustomerId(detailAccount?.customer_id || '');
@@ -382,6 +389,8 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
   async function handleCloseSubmit() {
     if (!detailAccount) return;
     setCloseError('');
+    const paid = !closePaidOnIssue ? [] : closePayments.filter((p) => parseFloat(p.amount) > 0);
+    if (terminalMissing(closeTerminals, paymentMethods, paid.map((p) => ({ paymentMethodId: p.payment_method_id, amount: p.amount })), closeTerminalId)) return;
     setCloseSaving(true);
     try {
       const closed = await closeAccount(detailAccount.id, {
@@ -390,7 +399,8 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
         customer_id: closeCustomerId || null,
         discount_global_percent: Number(closeDiscount) || 0,
         payment_term_id: closeNeedsTerm ? closePaymentTermId || null : null,
-        payments: !closePaidOnIssue ? [] : closePayments.filter((p) => parseFloat(p.amount) > 0).map((p) => ({ payment_method_id: p.payment_method_id, amount: parseFloat(p.amount) })),
+        payments: paid.map((p) => ({ payment_method_id: p.payment_method_id, amount: parseFloat(p.amount) })),
+        terminal_id: closeTerminalId || null,
       });
       setCloseModalOpen(false);
       setDetailAccount(null);
@@ -964,6 +974,10 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
             <div className={'text-[12px] px-3 py-2 rounded-r border-l-2 ' + (closeRemaining === 0 ? 'bg-success/10 border-success text-success' : closeRemaining > 0 ? 'bg-accent/10 border-accent text-accent' : 'bg-danger/10 border-danger text-danger')}>
               {closeRemaining === 0 ? 'Valor exato' : closeRemaining > 0 ? `Falta ${formatKz(closeRemaining)} Kz` : `Excede em ${formatKz(Math.abs(closeRemaining))} Kz`}
             </div>
+          )}
+          {closePaidOnIssue && (
+            <TerminalPicker terminals={closeTerminals} methods={paymentMethods} value={closeTerminalId} onChange={setCloseTerminalId}
+              payments={closePayments.map((p) => ({ paymentMethodId: p.payment_method_id, amount: p.amount }))} />
           )}
           <button
             onClick={handleCloseSubmit}

@@ -217,6 +217,7 @@ async def post_checkout(
             due_date=payload.due_date,
             prescription=payload.prescription.model_dump() if payload.prescription else None,
             insurance=payload.insurance.model_dump() if payload.insurance else None,
+            terminal_id=payload.terminal_id,
         )
         from app.services.notification_service import notify_price_changed, notify_sale  # Notificações: «Venda»
         await notify_sale(db, current_user, invoice, pos_id)
@@ -287,6 +288,7 @@ async def post_liquidate_pending_invoice(
             db, current_user.company_id, pos_id,
             payload.pro_forma_id, payload.target_invoice_type,
             [{"payment_method_id": p.payment_method_id, "amount": p.amount} for p in payload.payments],
+            terminal_id=payload.terminal_id,
         )
     except NoOpenSessionError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
@@ -342,3 +344,14 @@ async def get_stock_of_point_of_sale(
     """The stock the point of sale sells from (its activity's warehouse), for the till to warn before checkout."""
     from app.services.pos_service import get_pos_stock
     return await get_pos_stock(db, current_user.company_id, pos_id)
+
+
+@router.get("/terminals")
+async def get_terminals_of_point_of_sale(
+    pos_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("pos:view")),
+) -> list[dict]:
+    """The TPA / Multicaixa Express the till of this point of sale may use, for the cashier's choice of a card payment."""
+    from app.services.payment_terminal_service import list_pos_terminals
+    return await list_pos_terminals(db, current_user.company_id, pos_id)

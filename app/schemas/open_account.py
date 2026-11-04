@@ -100,6 +100,7 @@ class OpenAccountCloseRequest(BaseModel):
     customer_id: uuid.UUID | None = None  # None: the account's own customer, if any
     discount_global_percent: float = Field(default=0, ge=0, le=100)
     payment_term_id: uuid.UUID | None = None  # a document billed later (FT)
+    terminal_id: uuid.UUID | None = None  # the TPA / Express of the bank payments (Tesouraria): None = decided by itself
 
 
 class OpenAccountTransferItem(BaseModel):

@@ -26,6 +26,7 @@ class WalkInRequest(BaseModel):
     customer_id: uuid.UUID | None = None
     guest_name: str | None = Field(default=None, max_length=150)
     party_size: int | None = Field(default=None, ge=1, le=1000)
+    terminal_id: uuid.UUID | None = None  # the TPA / Express of the bank payments (Tesouraria): None = decided by itself
 
 
 class WalkInResponse(BaseModel):

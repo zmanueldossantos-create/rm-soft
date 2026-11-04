@@ -32,11 +32,17 @@ async def _check_nif(db: AsyncSession, nif: str | None, country_id: uuid.UUID | 
         raise SupplierNifRequiredError("O NIF é obrigatório para um fornecedor de Angola")
 
 
+def _clean_iban(iban: str | None) -> str | None:
+    """The IBAN as typed, without its spaces and in capitals (AO06 0040 ... -> AO060040...); empty = none."""
+    clean = "".join((iban or "").split()).upper()
+    return clean or None
+
+
 async def create_supplier(
     db: AsyncSession, company_id: uuid.UUID, name: str,
     nif: str | None = None, phone_number: str | None = None, email: str | None = None,
     address: str | None = None, payment_terms: str | None = None, notes: str | None = None,
-    trade_name: str | None = None, country_id: uuid.UUID | None = None,
+    trade_name: str | None = None, country_id: uuid.UUID | None = None, iban: str | None = None,
 ) -> Supplier:
     await _check_nif(db, nif, country_id)
     existing_result = await db.execute(
@@ -48,7 +54,7 @@ async def create_supplier(
     supplier = Supplier(
         company_id=company_id, name=name, nif=nif, phone_number=phone_number,
         email=email, address=address, payment_terms=payment_terms, notes=notes,
-        trade_name=trade_name, country_id=country_id,
+        trade_name=trade_name, country_id=country_id, iban=_clean_iban(iban),
     )
     db.add(supplier)
     await db.commit()
@@ -73,7 +79,7 @@ async def update_supplier(
     db: AsyncSession, company_id: uuid.UUID, supplier_id: uuid.UUID, name: str,
     nif: str | None = None, phone_number: str | None = None, email: str | None = None,
     address: str | None = None, payment_terms: str | None = None, notes: str | None = None,
-    trade_name: str | None = None, country_id: uuid.UUID | None = None,
+    trade_name: str | None = None, country_id: uuid.UUID | None = None, iban: str | None = None,
 ) -> Supplier:
     supplier = await get_supplier_or_raise(db, company_id, supplier_id)
     await _check_nif(db, nif, country_id)
@@ -93,6 +99,7 @@ async def update_supplier(
     supplier.notes = notes
     supplier.trade_name = trade_name
     supplier.country_id = country_id
+    supplier.iban = _clean_iban(iban)
     await db.commit()
     await db.refresh(supplier)
     return supplier

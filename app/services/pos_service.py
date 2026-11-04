@@ -12,6 +12,7 @@ from app.models.invoice import Invoice
 from app.services.cash_session_service import get_open_session, SessionNotFoundError
 from app.services.user_cash_point_access_service import require_cash_point_access
 from app.services.invoice_service import create_invoice, convert_pro_forma_to_invoice, create_pro_forma
+from app.services.payment_terminal_service import resolve_terminal
 
 
 class NoOpenSessionError(Exception):
@@ -73,8 +74,11 @@ async def checkout(
     observations: str | None = None,
     prescription: dict | None = None,
     insurance: dict | None = None,
+    terminal_id: uuid.UUID | None = None,
 ) -> Invoice:
     """
+    terminal_id: the TPA / Multicaixa Express the cashier chose for the bank payments - its bank account becomes the
+    document's (see payment_terminal_service.resolve_terminal: when only one terminal fits it is taken by itself).
     prescription: the receita of a pharmacy sale (see pharmacy_service.check_prescription).
     insurance: a sale shared with an insurer (insurance_service.shared_sale) - the patient's document is returned (the
     insurer's when it pays everything), with insurer_invoice_id attached.
@@ -101,6 +105,9 @@ async def checkout(
     await _ensure_sellable_at_pos(db, company_id, lines_input)
     if not stay_sale:
         await _ensure_no_stay_rate(db, company_id, lines_input)
+    terminal = await resolve_terminal(db, company_id, pos_id, payments, terminal_id)
+    if terminal is not None:
+        bank_account_id = terminal.bank_account_id
 
     if insurance:
         from app.services.insurance_service import shared_sale
@@ -110,6 +117,8 @@ async def checkout(
             observations=observations,
         )
         invoice = patient_invoice or insurer_invoice
+        if patient_invoice is not None and terminal is not None:  # the patient's part paid by card: its bank
+            patient_invoice.bank_account_id, patient_invoice.terminal_id = terminal.bank_account_id, terminal.id
         # the Caixa shows (and prints) the insurer's Fatura too
         invoice.insurer_invoice_id = insurer_invoice.id
         invoice.insurer_invoice_reference = f"{insurer_invoice.series}/{insurer_invoice.number}"
@@ -130,6 +139,8 @@ async def checkout(
         due_date=due_date,
         prescription=prescription,
     )
+    if terminal is not None:
+        invoice.terminal_id = terminal.id
     return invoice
 
 
@@ -171,6 +182,7 @@ async def liquidate_pending_invoice(
     pro_forma_id: uuid.UUID,
     target_invoice_type: str,
     payments: list[dict],
+    terminal_id: uuid.UUID | None = None,
 ) -> Invoice:
     """
     Liquidates a pending Pro-forma from the Caixa screen: requires an open
@@ -183,13 +195,17 @@ async def liquidate_pending_invoice(
     session = await get_open_session(db, company_id, pos_id)
     if session is None:
         raise NoOpenSessionError("Não há nenhuma sessão de caixa aberta para este ponto de venda - abra a caixa antes de liquidar")
+    terminal = await resolve_terminal(db, company_id, pos_id, payments, terminal_id)
 
     invoice = await convert_pro_forma_to_invoice(
         db, company_id, pro_forma_id, target_invoice_type,
         business_date=date.today(),  # the real day of the sale, never the session's (it may be days old)
         cash_session_id=session.id,
         payments=payments,
+        bank_account_id=terminal.bank_account_id if terminal is not None else None,
     )
+    if terminal is not None:
+        invoice.terminal_id = terminal.id
     return invoice
 
 

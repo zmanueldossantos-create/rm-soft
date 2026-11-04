@@ -87,6 +87,7 @@ from app.models.purchase_invoice import PurchaseInvoice, PurchaseInvoiceLine  # 
 from app.models.goods_movement import GoodsMovement, GoodsMovementLine  # noqa: E402,F401 - guias GR, GT, GD (MovementOfGoods)
 from app.models.supplier_payment import SupplierPayment, SupplierPaymentAllocation  # noqa: E402,F401 - supplier payments (conta corrente)
 from app.models.bank_movement import BankMovement  # noqa: E402,F401 - Tesouraria: movements typed on a bank account
+from app.models.payment_terminal import PaymentTerminal  # noqa: E402,F401 - Tesouraria: TPA / Multicaixa Express
 from app.models.company_ai_settings import CompanyAiSettings  # noqa: E402,F401 - the AI assistant per company
 from app.models.ai_conversation import AiConversation, AiMessage  # noqa: E402,F401 - the AI assistant's conversations
 from app.models.ai_pending_action import AiPendingAction  # noqa: E402,F401 - actions prepared by the AI assistant

@@ -84,7 +84,7 @@ async def post_walk_in(
         booking, invoice = await walk_in(
             db, current_user.company_id, payload.resource_id, payload.service_id, current_user, payload.pos_id,
             [{"payment_method_id": p.payment_method_id, "amount": p.amount} for p in payload.payments],
-            payload.customer_id, payload.guest_name, payload.party_size,
+            payload.customer_id, payload.guest_name, payload.party_size, terminal_id=payload.terminal_id,
         )
         return {"booking": booking, "invoice_id": invoice.id}
     except ResourceNotFoundError as e:

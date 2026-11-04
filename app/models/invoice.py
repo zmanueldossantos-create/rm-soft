@@ -125,6 +125,8 @@ class Invoice(Base):
     payment_term_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("payment_terms.id"), nullable=True)
     payment_method_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("payment_method_catalog.id"), nullable=True)
     bank_account_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("company_bank_accounts.id"), nullable=True)
+    # The TPA / Multicaixa Express the till payment went through (Tesouraria): it chose bank_account_id.
+    terminal_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("payment_terminals.id"), nullable=True)
     due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     valid_until: Mapped[date | None] = mapped_column(Date, nullable=True)  # an orçamento: converted up to this day
     amount_received: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)

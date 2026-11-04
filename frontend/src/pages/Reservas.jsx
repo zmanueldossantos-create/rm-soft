@@ -19,6 +19,8 @@ import { listServices } from '../api/services';
 import { extractErrorMessage } from '../utils/errors';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
+import TerminalPicker, { terminalMissing } from '../components/TerminalPicker';
+import { listPosTerminals } from '../api/pos';
 import { useToastState } from '../components/Toaster';
 import { useAuthStore } from '../store/authStore';
 import { rememberedActivity, writeLastActivity } from '../utils/lastActivity';
@@ -125,6 +127,9 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
   const [walkInForm, setWalkInForm] = useState({ resourceId: '', serviceId: '', customerId: '', guestName: '', partySize: '' });
   const [walkInRooms, setWalkInRooms] = useState([]);
   const [walkInMethods, setWalkInMethods] = useState([]);
+  // the TPA / Express of this till, and the one a card payment went through (several fit: the receptionist says)
+  const [walkInTerminals, setWalkInTerminals] = useState([]);
+  const [walkInTerminalId, setWalkInTerminalId] = useState('');
   const [walkInPayments, setWalkInPayments] = useState({});
   const [vatRates, setVatRates] = useState([]);
   const [withholdingTaxes, setWithholdingTaxes] = useState([]);
@@ -517,6 +522,8 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
     const [methods, rates] = await Promise.all([listPaymentMethodPreferences(), listVatRates()]);
     setWalkInMethods(methods.filter((m) => m.available_at_pos && m.allows_receipt));
     setVatRates(rates);
+    setWalkInTerminalId('');
+    if (posId) listPosTerminals(posId).then(setWalkInTerminals).catch(() => setWalkInTerminals([]));
     withholdingTaxesApi.list().then(setWithholdingTaxes).catch(() => {});
   }
 
@@ -554,6 +561,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
       setWalkInError('O pagamento (' + formatKz(walkInPaid) + ' Kz) deve ser igual ao valor a pagar (' + formatKz(walkInDue) + ' Kz)');
       return;
     }
+    if (terminalMissing(walkInTerminals, walkInMethods, walkInPaymentList, walkInTerminalId)) return;
     setWalkInSaving(true);
     setWalkInError('');
     try {
@@ -561,6 +569,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
         pos_id: posId,
         payments: Object.entries(walkInPayments).filter(([, v]) => Number(v) > 0).map(([id, v]) => ({ payment_method_id: id, amount: Number(v) })),
         customer_id: walkInForm.customerId || null,  // none: Consumidor final
+        terminal_id: walkInTerminalId || null,
       });
       setChargeTarget(null);
       setAgendaVersion((v) => v + 1);
@@ -596,6 +605,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
   const walkInDue = Math.round((walkInTotal - walkInRetention) * 100) / 100;
   const walkInPaid = Object.values(walkInPayments).reduce((sum, v) => sum + (Number(v) || 0), 0);
   const walkInRemaining = Math.round((walkInDue - walkInPaid) * 100) / 100;
+  const walkInPaymentList = Object.entries(walkInPayments).map(([paymentMethodId, amount]) => ({ paymentMethodId, amount }));
 
   // As in the till's Fechar conta: nothing chosen for the reception - ticking a method puts the rest on it.
   function chooseWalkInService(serviceId) {
@@ -625,6 +635,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
       setWalkInError('O pagamento (' + formatKz(walkInPaid) + ' Kz) deve ser igual ao valor a pagar (' + formatKz(walkInDue) + ' Kz)');
       return;
     }
+    if (terminalMissing(walkInTerminals, walkInMethods, walkInPaymentList, walkInTerminalId)) return;
     setWalkInSaving(true);
     setWalkInError('');
     try {
@@ -636,6 +647,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
         customer_id: walkInForm.customerId || null,  // none: Consumidor final
         guest_name: walkInForm.guestName.trim() || null,
         party_size: walkInForm.partySize ? parseInt(walkInForm.partySize, 10) : null,
+        terminal_id: walkInTerminalId || null,
       });
       setWalkInOpen(false);
       await loadBookings();
@@ -798,6 +810,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
               <div className={'text-[12px] px-3 py-2 rounded-r border-l-2 ' + (walkInRemaining === 0 ? 'bg-success/10 border-success text-success' : walkInRemaining > 0 ? 'bg-accent/10 border-accent text-accent' : 'bg-danger/10 border-danger text-danger')}>
                 {walkInRemaining === 0 ? 'Valor exato' : walkInRemaining > 0 ? `Falta ${formatKz(walkInRemaining)} Kz` : `Excede em ${formatKz(Math.abs(walkInRemaining))} Kz`}
               </div>
+              <TerminalPicker terminals={walkInTerminals} methods={walkInMethods} payments={walkInPaymentList} value={walkInTerminalId} onChange={setWalkInTerminalId} />
             </div>
     );
   }

@@ -216,7 +216,7 @@ async def post_charge_booking(
         booking, invoice = await charge_booking(
             db, current_user.company_id, booking_id, current_user, payload.pos_id,
             [{"payment_method_id": p.payment_method_id, "amount": p.amount} for p in payload.payments],
-            payload.customer_id,
+            payload.customer_id, terminal_id=payload.terminal_id,
         )
         return {"booking": booking, "invoice_id": invoice.id}
     except (BookingNotFoundError, ResourceNotFoundError, CustomerNotFoundError) as e:

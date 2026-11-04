@@ -37,6 +37,8 @@ class Supplier(Base):
     phone_number: Mapped[str | None] = mapped_column(String(20), nullable=True)
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     address: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # the account its transfers are paid to (shown on a payment by transfer) - free text: a foreign supplier's too
+    iban: Mapped[str | None] = mapped_column(String(50), nullable=True)
     payment_terms: Mapped[str | None] = mapped_column(String(100), nullable=True)  # free text v1 - e.g. "30 dias", "a vista"
     notes: Mapped[str | None] = mapped_column(String(1000), nullable=True)
 

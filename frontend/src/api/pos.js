@@ -65,6 +65,7 @@ export async function checkout(posId, customerId, lines, payments, invoiceType =
     payments: payments.map((p) => ({ payment_method_id: p.paymentMethodId, amount: p.amount })),
     prescription: ftDetails.prescription || null,  // the receita of a pharmacy sale
     insurance: ftDetails.insurance || null,  // a sale shared with an insurer (Farmácia)
+    terminal_id: ftDetails.terminalId || null,  // the TPA / Express of the card payment (none: decided by itself)
   });
   return res.data;
 }
@@ -90,11 +91,12 @@ export async function createProFormaFromPos(posId, customerId, lines, discountGl
 }
 
 
-export async function liquidatePendingInvoice(posId, proFormaId, targetInvoiceType, payments) {
+export async function liquidatePendingInvoice(posId, proFormaId, targetInvoiceType, payments, terminalId = null) {
   const res = await apiClient.post('/pos/liquidate/' + posId, {
     pro_forma_id: proFormaId,
     target_invoice_type: targetInvoiceType,
     payments: payments.map((p) => ({ payment_method_id: p.paymentMethodId, amount: p.amount })),
+    terminal_id: terminalId || null,
   });
   return res.data;
 }
@@ -114,5 +116,11 @@ export async function fetchClosingReportPdfBlob(sessionId) {
 // The document types that can take a number now (a series exists, or is made automatically) - the Caixa offers only these
 export async function getIssuableTypes() {
   const res = await apiClient.get('/pos/issuable-types');
+  return res.data;
+}
+
+// The TPA / Multicaixa Express the till of this point of sale may use (the cashier's choice of a card payment)
+export async function listPosTerminals(posId) {
+  const res = await apiClient.get('/pos/terminals', { params: { pos_id: posId } });
   return res.data;
 }

@@ -3,8 +3,9 @@ Tesouraria - the company's bank accounts: their balance and their statement (ext
 
 A bank account's movements are read from the documents that already name it - nothing is typed twice:
   - the money collected on it: the payments of a sale, a receipt or a down payment whose method lands on a bank account
-    (uses_bank_account: transfer, card, Multicaixa...) and whose document names this account; a refund of a credit
-    note (a negative payment) leaves it;
+    (uses_bank_account: transfer, card, Multicaixa...) and whose document names this account - at the till, the
+    account of the TPA / Express the payment went through (PaymentTerminal); a refund of a credit note (a negative
+    payment) leaves it;
   - the money paid from it: the supplier payments made from this account; a cancelled one comes back on its
     cancellation day, so the statement keeps both;
   - the movements typed on the account in the Tesouraria (BankMovement: bank fees, a capital entry...), each with a
@@ -35,6 +36,7 @@ from app.models.customer import Customer
 from app.models.invoice import Invoice
 from app.models.payment import Payment
 from app.models.payment_method_catalog import PaymentMethodCatalog
+from app.models.payment_terminal import PaymentTerminal
 from app.models.supplier import Supplier
 from app.models.supplier_payment import SupplierPayment, SupplierPaymentStatus
 from app.services.document_rules import DOC_CODE_BY_INVOICE_TYPE
@@ -82,19 +84,20 @@ async def _lines(db: AsyncSession, company_id: uuid.UUID, account: CompanyBankAc
     lines: list[_Line] = []
 
     collected = (await db.execute(
-        select(Invoice, Payment.amount, PaymentMethodCatalog.name, Customer.name)
+        select(Invoice, Payment.amount, PaymentMethodCatalog.name, Customer.name, PaymentTerminal.name)
         .join(Payment, Payment.invoice_id == Invoice.id)
         .join(PaymentMethodCatalog, PaymentMethodCatalog.id == Payment.payment_method_id)
         .outerjoin(Customer, Customer.id == Invoice.customer_id)
+        .outerjoin(PaymentTerminal, PaymentTerminal.id == Invoice.terminal_id)
         .where(Invoice.company_id == company_id, Invoice.bank_account_id == account.id,
                PaymentMethodCatalog.uses_bank_account.is_(True), Invoice.issuance_mode != "FORMACAO")
     )).all()
-    for invoice, amount, method_name, customer_name in collected:
+    for invoice, amount, method_name, customer_name, terminal_name in collected:
         code = DOC_CODE_BY_INVOICE_TYPE.get(invoice.invoice_type.value, invoice.invoice_type.value)
         refund = float(amount) < 0
         lines.append(_Line(
             day=invoice.business_date, at=invoice.created_at, document=f"{code} {invoice.series}/{invoice.number}",
-            description=" · ".join(filter(None, [customer_name, method_name, "Reembolso" if refund else None])),
+            description=" · ".join(filter(None, [customer_name, method_name, terminal_name, "Reembolso" if refund else None])),
             amount=float(amount),
         ))
 

@@ -21,7 +21,7 @@ function ToggleSwitch({ checked, onChange, disabled }) {
   );
 }
 
-const emptyForm = { name: '', tradeName: '', countryId: '', nif: '', phoneNumber: '', email: '', address: '', paymentTerms: '', notes: '' };
+const emptyForm = { name: '', tradeName: '', countryId: '', nif: '', phoneNumber: '', email: '', address: '', paymentTerms: '', notes: '', iban: '' };
 
 export default function Fornecedores() {
   const can = useCan();
@@ -92,6 +92,7 @@ export default function Fornecedores() {
       address: supplier.address || '',
       paymentTerms: supplier.payment_terms || '',
       notes: supplier.notes || '',
+      iban: supplier.iban || '',
     });
     setFormError('');
     setFormOpen(true);
@@ -112,6 +113,7 @@ export default function Fornecedores() {
         address: form.address || null,
         payment_terms: form.paymentTerms || null,
         notes: form.notes || null,
+        iban: form.iban || null,
       };
       if (editingId) {
         await updateSupplier(editingId, payload);
@@ -260,6 +262,10 @@ export default function Fornecedores() {
               <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Condições de pagamento (opcional)</label>
               <input value={form.paymentTerms} onChange={(e) => setForm((p) => ({ ...p, paymentTerms: e.target.value }))} placeholder="Ex: 30 dias, à vista" className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
             </div>
+          </div>
+          <div>
+            <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">IBAN para transferências (opcional)</label>
+            <input value={form.iban} maxLength={50} onChange={(e) => setForm((p) => ({ ...p, iban: e.target.value }))} placeholder="AO06 0000 0000 0000 0000 0000 0" className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm font-mono text-text-primary outline-none focus:border-accent transition-colors" />
           </div>
           <div>
             <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Notas (opcional)</label>

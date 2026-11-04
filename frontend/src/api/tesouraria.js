@@ -189,3 +189,24 @@ export async function cancelBankMovement(movementId, reason) {
   const res = await apiClient.post(`/tesouraria/bank-movements/${movementId}/cancel`, { reason });
   return res.data;
 }
+
+// The TPA / Multicaixa Express of the company: { name, kind: TPA|EXPRESS, bank_account_id, pos_id, payment_method_ids }
+export async function listTerminals() {
+  const res = await apiClient.get('/tesouraria/terminals');
+  return res.data;
+}
+
+export async function createTerminal(payload) {
+  const res = await apiClient.post('/tesouraria/terminals', payload);
+  return res.data;
+}
+
+export async function updateTerminal(terminalId, payload) {
+  const res = await apiClient.put(`/tesouraria/terminals/${terminalId}`, payload);
+  return res.data;
+}
+
+export async function toggleTerminal(terminalId) {
+  const res = await apiClient.patch(`/tesouraria/terminals/${terminalId}/toggle-status`);
+  return res.data;
+}

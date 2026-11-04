@@ -30,7 +30,7 @@ async def post_create_supplier(
         return await create_supplier(
             db, current_user.company_id, payload.name, payload.nif, payload.phone_number,
             payload.email, payload.address, payload.payment_terms, payload.notes,
-            trade_name=payload.trade_name, country_id=payload.country_id,
+            trade_name=payload.trade_name, country_id=payload.country_id, iban=payload.iban,
         )
     except SupplierAlreadyExistsError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
@@ -57,7 +57,7 @@ async def patch_supplier(
         return await update_supplier(
             db, current_user.company_id, supplier_id, payload.name, payload.nif, payload.phone_number,
             payload.email, payload.address, payload.payment_terms, payload.notes,
-            trade_name=payload.trade_name, country_id=payload.country_id,
+            trade_name=payload.trade_name, country_id=payload.country_id, iban=payload.iban,
         )
     except SupplierNifRequiredError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))

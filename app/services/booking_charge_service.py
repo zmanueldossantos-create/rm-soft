@@ -40,6 +40,7 @@ class BookingNotChargeableError(Exception):
 async def charge_booking(
     db: AsyncSession, company_id: uuid.UUID, booking_id: uuid.UUID, selling_user: "User", pos_id: uuid.UUID,
     payments: list[dict], customer_id: uuid.UUID | None = None, now: datetime | None = None,
+    terminal_id: uuid.UUID | None = None,
 ) -> tuple[Booking, Invoice]:
     """Everything is checked before the sale - the state, the service and its price, the day, the till of the
     resource's activity - so nothing is ever cashed for a marcação that cannot end here. customer_id: the customer
@@ -77,6 +78,7 @@ async def charge_booking(
         stay_sale=True,  # the service of a resource that requires one: sold with its booking only
         observations=stay_observation(resource.name, booking.starts_at, booking.ends_at, booking.guest_name,
                                       booking.party_size, person_label="Cliente"),
+        terminal_id=terminal_id,
     )
     booking.status = BookingStatus.CONCLUIDA
     booking.invoice_id = invoice.id

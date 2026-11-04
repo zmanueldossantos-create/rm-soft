@@ -137,6 +137,7 @@ class PaymentMethodPreferenceResponse(BaseModel):
     is_cash: bool
     available_at_pos: bool
     short_label: str | None = None
+    uses_bank_account: bool = False
 
 
 class PaymentMethodPreferenceUpdateRequest(BaseModel):

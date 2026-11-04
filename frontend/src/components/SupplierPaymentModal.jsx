@@ -10,6 +10,7 @@ import { getMyCompanyBankAccounts } from '../api/company';
 import { getOpenCashPoints } from '../api/invoices';
 import { createSupplierPayment } from '../api/supplierPayments';
 import { listBankPositions } from '../api/tesouraria';
+import { listSuppliers } from '../api/suppliers';
 import BankBalanceWarning, { bankShortfall } from './BankBalanceWarning';
 import { useToastState } from './Toaster';
 
@@ -31,6 +32,7 @@ export default function SupplierPaymentModal({ invoices, onClose, onPaid }) {
   const [tills, setTills] = useState([]);
   const [bankPositions, setBankPositions] = useState([]); // the balances, to warn before an account goes negative
   const [negativeOk, setNegativeOk] = useState(false);
+  const [supplierIban, setSupplierIban] = useState(''); // where a transfer goes
   const [amounts, setAmounts] = useState({});
   const [form, setForm] = useState({ methodId: '', bankAccountId: '', posId: '', date: todayIso(), reference: '', notes: '' });
   const [error, setError] = useToastState('error');
@@ -46,6 +48,8 @@ export default function SupplierPaymentModal({ invoices, onClose, onPaid }) {
     banksApi.list().then(setBanks).catch(() => setBanks([]));
     getOpenCashPoints().then(setTills).catch(() => setTills([]));
     listBankPositions().then(setBankPositions).catch(() => setBankPositions([])); // without the Tesouraria view: no warning
+    // the account a transfer goes to: the supplier's IBAN (Fornecedores)
+    listSuppliers().then((list) => setSupplierIban(list.find((s) => s.id === invoices[0]?.supplier_id)?.iban || '')).catch(() => setSupplierIban(''));
     setNegativeOk(false);
   }, [invoices]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -144,6 +148,13 @@ export default function SupplierPaymentModal({ invoices, onClose, onPaid }) {
             <input value={form.notes} onChange={(e) => set({ notes: e.target.value })} placeholder="Opcional" className={inputCls} />
           </div>
         </div>
+        {method?.code === 'TB' && (
+          <p className={'text-[13px] px-3.5 py-2.5 rounded-md border ' + (supplierIban ? 'border-border bg-bg-inset text-text-primary' : 'border-amber-500/40 bg-amber-500/10 text-amber-500')}>
+            {supplierIban
+              ? <>Transferir para o IBAN do fornecedor: <span className="font-mono">{supplierIban}</span></>
+              : 'O fornecedor não tem IBAN - indique-o na ficha do fornecedor (Fornecedores), para o ter à mão na transferência.'}
+          </p>
+        )}
         <BankBalanceWarning shortfall={shortfall} confirmed={negativeOk} onConfirm={setNegativeOk} />
         <p className="text-[12px] text-text-muted">
           {method?.is_cash ? 'O numerário sai hoje da caixa escolhida (uma saída automática «Pagamento a fornecedor»).' : 'O pagamento fica registado; as faturas pagas deixam de estar em dívida.'}

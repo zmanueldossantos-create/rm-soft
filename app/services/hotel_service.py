@@ -209,6 +209,7 @@ async def walk_in(
     db: AsyncSession, company_id: uuid.UUID, resource_id: uuid.UUID, service_id: uuid.UUID, selling_user: "User",
     pos_id: uuid.UUID, payments: list[dict], customer_id: uuid.UUID | None = None,
     guest_name: str | None = None, party_size: int | None = None, now: datetime | None = None,
+    terminal_id: uuid.UUID | None = None,
 ) -> tuple[Booking, Invoice]:
     """A passage (30 min, 1 hora, 2 horas...), paid before going in. Everything is checked first - the room free
     for the whole duration and not still occupied, a timed service of its type, a till of its activity - so nothing is
@@ -246,6 +247,7 @@ async def walk_in(
         [{"product_id": None, "service_id": str(service.id), "quantity": 1.0, "sale_unit_id": None}],
         payments, invoice_type=await default_paid_on_issue_type(db), stay_sale=True,
         observations=stay_observation(resource.name, starts_at, ends_at, _clean_guest_name(guest_name), party_size),
+        terminal_id=terminal_id,
     )
     booking = Booking(
         company_id=company_id, resource_id=resource.id, customer_id=customer_id, service_id=service.id,

@@ -7,6 +7,7 @@ import { formatKz } from '../utils/format';
 import { extractErrorMessage } from '../utils/errors';
 import { getTreasuryPosition, listTreasuryMovements, listTreasuryClosings, listBankPositions, getBankStatement, setBankOpeningBalance, listCashMovementReasons, createBankMovement, cancelBankMovement } from '../api/tesouraria';
 import BankBalanceWarning, { bankShortfall } from '../components/BankBalanceWarning';
+import TerminalsPanel from '../components/TerminalsPanel';
 import { useCan } from '../utils/permissions';
 import { fetchClosingReportPdfBlob } from '../api/pos';
 import { getCurrentPeriod } from '../api/fiscal';
@@ -227,7 +228,7 @@ function bankLabel(b) {
 }
 
 // Bancos: a card per account (balance today, its opening balance), the statement of the one picked over the period.
-function Banks({ banks, selectedId, onSelect, statement, onEditOpening, onNewMovement, onCancelMovement }) {
+function Banks({ banks, selectedId, onSelect, statement, onEditOpening, onNewMovement, onCancelMovement, children }) {
   if (banks.length === 0) {
     return <p className="text-text-muted text-[13px] text-center py-12">Nenhuma conta bancária - crie-as em Administração › Empresa › Coordenadas Bancárias</p>;
   }
@@ -267,6 +268,8 @@ function Banks({ banks, selectedId, onSelect, statement, onEditOpening, onNewMov
           </button>
         ))}
       </div>
+
+      {children}
 
       {statement && (
         <>
@@ -560,7 +563,9 @@ export default function Tesouraria() {
         <Banks banks={banks} selectedId={bankId} onSelect={setBankId} statement={statement}
           onEditOpening={can('tesouraria:banks_manage') ? (b) => setOpening({ bank: b, amount: String(b.opening_balance || ''), date: b.opening_date || todayIso() }) : null}
           onNewMovement={can('tesouraria:bank_movements') && selectedBank?.is_active ? () => setNewMovement({ reasonId: '', amount: '', date: todayIso(), reference: '', description: '', negativeOk: false }) : null}
-          onCancelMovement={can('tesouraria:bank_movements') ? (line) => setCancelling({ line, reason: '' }) : null} />
+          onCancelMovement={can('tesouraria:bank_movements') ? (line) => setCancelling({ line, reason: '' }) : null}>
+          {selectedBank && <TerminalsPanel key={selectedBank.id} account={selectedBank} canManage={can('tesouraria:banks_manage')} />}
+        </Banks>
       ) : (
         <Closings closings={closings} onReport={openReport} />
       )}

@@ -255,3 +255,25 @@ class BankMovementResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# ---------- Terminais: TPA / Multicaixa Express and the bank account their payments land on ----------
+
+class PaymentTerminalRequest(BaseModel):
+    name: str
+    kind: Literal["TPA", "EXPRESS"]
+    bank_account_id: uuid.UUID
+    pos_id: uuid.UUID | None = None  # None: any point of sale
+    payment_method_ids: list[uuid.UUID]
+
+
+class PaymentTerminalResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    kind: str
+    bank_account_id: uuid.UUID
+    bank_account_label: str
+    pos_id: uuid.UUID | None
+    pos_name: str | None
+    payment_method_ids: list[uuid.UUID]
+    is_active: bool

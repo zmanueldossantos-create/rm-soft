@@ -510,3 +510,60 @@ async def post_cancel_bank_movement(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except BankMovementError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+# ---------- Terminais: TPA / Multicaixa Express - the bank account a card payment at the till lands on ----------
+
+from app.schemas.tesouraria import PaymentTerminalRequest, PaymentTerminalResponse  # noqa: E402
+from app.services.payment_terminal_service import (  # noqa: E402
+    PaymentTerminalError, PaymentTerminalNotFoundError, create_terminal, list_terminals, toggle_terminal,
+    update_terminal,
+)
+
+
+@router.get("/terminals", response_model=list[PaymentTerminalResponse])
+async def get_terminals(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("tesouraria:overview")),
+):
+    return await list_terminals(db, current_user.company_id)
+
+
+@router.post("/terminals", response_model=PaymentTerminalResponse, status_code=status.HTTP_201_CREATED)
+async def post_terminal(
+    payload: PaymentTerminalRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("tesouraria:banks_manage")),
+):
+    try:
+        return await create_terminal(db, current_user.company_id, payload.name, payload.kind, payload.bank_account_id,
+                                     payload.pos_id, payload.payment_method_ids)
+    except PaymentTerminalError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.put("/terminals/{terminal_id}", response_model=PaymentTerminalResponse)
+async def put_terminal(
+    terminal_id: uuid.UUID, payload: PaymentTerminalRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("tesouraria:banks_manage")),
+):
+    try:
+        return await update_terminal(db, current_user.company_id, terminal_id, payload.name, payload.kind,
+                                     payload.bank_account_id, payload.pos_id, payload.payment_method_ids)
+    except PaymentTerminalNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except PaymentTerminalError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.patch("/terminals/{terminal_id}/toggle-status", response_model=PaymentTerminalResponse)
+async def patch_toggle_terminal(
+    terminal_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("tesouraria:banks_manage")),
+):
+    try:
+        return await toggle_terminal(db, current_user.company_id, terminal_id)
+    except PaymentTerminalNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
