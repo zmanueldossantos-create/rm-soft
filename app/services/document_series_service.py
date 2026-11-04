@@ -463,7 +463,10 @@ async def get_next_number(db: AsyncSession, series: DocumentSeries) -> int:
     """Increments and returns the series' running counter - one call per issued document.
     Uses flush (not commit) so this stays inside the caller's own transaction: if invoice
     creation later rolls back (e.g. insufficient stock), the number is never actually
-    consumed - a committed gap in the sequence would violate SAF-T continuity."""
+    consumed - a committed gap in the sequence would violate SAF-T continuity.
+    The series row is locked first (FOR UPDATE, read again): two tills issuing at the same moment wait for each other
+    one transaction long instead of taking the same number - the lock ends with the caller's commit."""
+    await db.refresh(series, attribute_names=["current_number"], with_for_update=True)
     if series.current_number + 1 > series.number_end:
         raise SeriesNotFoundError(f"Série {series.series_code} esgotada (último número autorizado: {series.number_end}) "
                                   "- peça uma nova série à AGT")

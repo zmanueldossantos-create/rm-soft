@@ -14,7 +14,7 @@ import enum
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import String, Numeric, Integer, Date, DateTime, ForeignKey, Enum, func, UniqueConstraint
+from sqlalchemy import String, Numeric, Integer, Date, DateTime, ForeignKey, Enum, func, UniqueConstraint, Index
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
@@ -74,6 +74,9 @@ class Invoice(Base):
         # year-based code) - each document type keeps its own independent
         # counter, so uniqueness must include document_type_id.
         UniqueConstraint("company_id", "document_type_id", "series", "number", name="uq_invoice_company_doctype_series_number"),
+        # the lists (newest first) and every report by period, without reading the whole table
+        Index("ix_invoices_company_created_at", "company_id", "created_at"),
+        Index("ix_invoices_company_business_date", "company_id", "business_date"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -111,7 +114,7 @@ class Invoice(Base):
     document_status: Mapped[DocumentLifecycleStatus] = mapped_column(Enum(DocumentLifecycleStatus), nullable=False, default=DocumentLifecycleStatus.EMITIDO)
 
     # Only set on Nota de Credito / Nota de Debito - the invoice being rectified/cancelled.
-    reference_invoice_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("invoices.id"), nullable=True)
+    reference_invoice_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("invoices.id"), nullable=True, index=True)
     # Set on a Pro-forma (FP) once it has been converted into a real FT/FR - see
     # convert_pro_forma_to_invoice. A converted FP should no longer be convertible again.
     converted_to_invoice_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("invoices.id"), nullable=True)

@@ -132,7 +132,8 @@ async def start_relay_agent() -> None:
     from app.services.relay_agent import supervisor_loop
     settings = get_settings()
     if settings.RELAY_AGENT_LOOP and not settings.RELAY_SERVER:
-        app.state.relay_agent = asyncio.create_task(supervisor_loop())
+        from app.core.singleton import run_singleton  # once for the server, whatever the number of API processes
+        app.state.relay_agent = asyncio.create_task(run_singleton("relay-agent", supervisor_loop))
 
 
 @app.on_event("startup")
@@ -154,7 +155,8 @@ async def start_telegram_polling() -> None:
     if settings.is_saas:
         app.state.telegram_webhook = asyncio.create_task(ensure_webhook())
     elif settings.TELEGRAM_POLLING:
-        app.state.telegram_polling = asyncio.create_task(polling_loop())
+        from app.core.singleton import run_singleton  # one reader per bot, whatever the number of API processes
+        app.state.telegram_polling = asyncio.create_task(run_singleton("telegram-polling", polling_loop))
 
 
 app.add_middleware(

@@ -59,7 +59,7 @@ class GoodsMovement(Base):
     is_training: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)  # Modo formação
 
     status: Mapped[GoodsMovementStatus] = mapped_column(Enum(GoodsMovementStatus), nullable=False, default=GoodsMovementStatus.EMITIDA)
-    invoice_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("invoices.id"), nullable=True)  # a GR invoiced
+    invoice_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("invoices.id"), nullable=True, index=True)  # a GR invoiced
     cancel_reason: Mapped[str | None] = mapped_column(String(300), nullable=True)
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     cancelled_by_user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
@@ -73,7 +73,7 @@ class GoodsMovementLine(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     goods_movement_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("goods_movements.id"), nullable=False, index=True)
     position: Mapped[int] = mapped_column(Integer, nullable=False)
-    product_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("products.id"), nullable=False)
+    product_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("products.id"), nullable=False, index=True)
     product_code: Mapped[str] = mapped_column(String(50), nullable=False)
     description: Mapped[str] = mapped_column(String(255), nullable=False)
     sale_unit_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("product_sale_units.id"), nullable=True)

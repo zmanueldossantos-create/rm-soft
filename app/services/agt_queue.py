@@ -10,6 +10,8 @@ Two ways to run the steps, chosen by AGT_QUEUE (app.core.config):
   base   - the server's own loop (Windows installation, no Redis): agt_queue_loop runs what is due every 5 seconds (at
            once after a new document).
 A network failure never makes a document ERRO: only the AGT refusing it does («I», or its data refused).
+Several workers (Celery's processes, the server's) may look at the same documents at once: each step claims its
+document first (its row locked, FOR UPDATE SKIP LOCKED) and checks it is still due - a document is never sent twice.
 """
 import asyncio
 import logging
@@ -53,25 +55,42 @@ async def queue_for_agt(db: AsyncSession, invoice: Invoice) -> None:
     _wake.set()
 
 
+def _due(now: datetime) -> tuple:
+    """The conditions of a document whose next AGT step is due now."""
+    return (Invoice.agt_next_attempt_at.is_not(None), Invoice.agt_next_attempt_at <= now,
+            Invoice.issuance_mode == "ELETRONICA",
+            Invoice.status.in_((InvoiceStatus.PENDENTE, InvoiceStatus.POR_ENVIAR, InvoiceStatus.ENVIADA)))
+
+
+async def claim_due(db: AsyncSession, invoice_id, now: datetime | None = None) -> Invoice | None:
+    """The document, locked for this worker until its step is committed - or None: another worker is on it, or it is
+    no longer due (that worker did the step). Never the same step twice, so never the same document sent twice."""
+    now = now or datetime.now(timezone.utc)
+    return (await db.execute(select(Invoice).where(Invoice.id == invoice_id, *_due(now))
+                             .with_for_update(skip_locked=True))).scalar_one_or_none()
+
+
 async def send_due(db: AsyncSession, step=None, now: datetime | None = None) -> int:
     """Runs the step of every document due now, oldest first (the numbering's order); returns how many. step: the AGT
     step (app.services.agt_service.process - replaced in the tests)."""
     from app.services.agt_service import process
     step = step or process
     now = now or datetime.now(timezone.utc)
-    ids = (await db.execute(select(Invoice.id).where(
-        Invoice.agt_next_attempt_at.is_not(None), Invoice.agt_next_attempt_at <= now,
-        Invoice.issuance_mode == "ELETRONICA",
-        Invoice.status.in_((InvoiceStatus.PENDENTE, InvoiceStatus.POR_ENVIAR, InvoiceStatus.ENVIADA)))
+    ids = (await db.execute(select(Invoice.id).where(*_due(now))
         .order_by(Invoice.created_at, Invoice.number).limit(50))).scalars().all()
     for invoice_id in ids:
-        invoice = await db.get(Invoice, invoice_id)
+        invoice = await claim_due(db, invoice_id, now)
+        if invoice is None:  # another worker has it, or did this step meanwhile
+            continue
         try:
             await step(db, invoice)
         except Exception:  # noqa: BLE001 - one document never stops the others
             log.exception("AGT: step failed for %s", invoice_id)
             await db.rollback()
-            invoice = await db.get(Invoice, invoice_id)
+            invoice = (await db.execute(select(Invoice).where(Invoice.id == invoice_id)
+                                        .with_for_update(skip_locked=True))).scalar_one_or_none()
+            if invoice is None:
+                continue
             if invoice.status == InvoiceStatus.POR_ENVIAR:
                 invoice.status = InvoiceStatus.PENDENTE
             invoice.agt_next_attempt_at = datetime.now(timezone.utc) + timedelta(minutes=10)

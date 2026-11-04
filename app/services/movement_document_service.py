@@ -121,6 +121,8 @@ async def create_stock_movement_document(
         raise EmptyMovementError("O movimento deve ter pelo menos uma linha")
 
     series = await _get_or_create_movement_series(db, company_id, movement_type_id, movement_date.year)
+    # locked and read again: two documents at the same moment never take the same number (ends with the commit)
+    await db.refresh(series, attribute_names=["current_number"], with_for_update=True)
     series.current_number += 1
     next_number = series.current_number
 

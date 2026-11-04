@@ -55,7 +55,7 @@ class Booking(Base):
     guest_name: Mapped[str | None] = mapped_column(String(150), nullable=True)
     party_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # A passage (30 min, 1 h...) is paid before going in: its invoice, issued at the entry (hotel_service.walk_in).
-    invoice_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("invoices.id"), nullable=True)
+    invoice_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("invoices.id"), nullable=True, index=True)
     # The real departure of a stay (check-out, or its account paid at the till) - compared with ends_at, it shows
     # a guest who stayed beyond the planned end (occupancy history).
     checked_out_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

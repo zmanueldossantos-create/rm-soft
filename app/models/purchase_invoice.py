@@ -79,7 +79,7 @@ class PurchaseInvoiceLine(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     purchase_invoice_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("purchase_invoices.id"), nullable=False, index=True)
     position: Mapped[int] = mapped_column(Integer, nullable=False)
-    product_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("products.id"), nullable=True)
+    product_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("products.id"), nullable=True, index=True)
     service_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("services.id"), nullable=True)
     description: Mapped[str] = mapped_column(String(255), nullable=False)
     # a product line: the unit it was bought in (None = the product's base unit), its code and base units per unit

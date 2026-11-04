@@ -26,8 +26,8 @@ class InvoiceLine(Base):
     line_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # Exactly one of product_id / service_id is set - a line sells either a physical
     # good (Product) or a Service (see Phase C decision to keep them as separate tables).
-    product_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("products.id"), nullable=True)
-    service_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("services.id"), nullable=True)
+    product_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("products.id"), nullable=True, index=True)
+    service_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("services.id"), nullable=True, index=True)
 
     product_name_snapshot: Mapped[str] = mapped_column(String(255), nullable=False)  # in case product is edited/deactivated later
     quantity: Mapped[float] = mapped_column(Numeric(12, 3), nullable=False)

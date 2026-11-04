@@ -251,8 +251,11 @@ async def ensure_available_at_period_end(
 
 
 async def _get_or_create_stock_row(db: AsyncSession, company_id: uuid.UUID, product_id: uuid.UUID, warehouse_id: uuid.UUID) -> Stock:
+    """The product's stock row in this warehouse, locked until the caller's commit and read again: two tills selling
+    the same product at the same moment wait for each other instead of both writing «10 - 1 = 9»."""
     result = await db.execute(
         select(Stock).where(Stock.product_id == product_id, Stock.warehouse_id == warehouse_id)
+        .with_for_update().execution_options(populate_existing=True)
     )
     stock = result.scalar_one_or_none()
     if stock is None:

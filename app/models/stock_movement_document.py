@@ -48,7 +48,7 @@ class StockMovementDocumentLine(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     document_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("stock_movement_documents.id"), nullable=False, index=True)
-    product_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("products.id"), nullable=False)
+    product_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("products.id"), nullable=False, index=True)
 
     product_code_snapshot: Mapped[str] = mapped_column(String(50), nullable=False)
     product_name_snapshot: Mapped[str] = mapped_column(String(200), nullable=False)

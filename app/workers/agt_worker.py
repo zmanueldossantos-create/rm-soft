@@ -15,13 +15,18 @@ from app.models.invoice import Invoice
 
 async def _step(invoice_id: str) -> float | None:
     """Runs what is due (this document first); returns in how many seconds this document's next step is due."""
-    from app.services.agt_queue import send_due
+    from app.services.agt_queue import claim_due, send_due
     from app.services.agt_service import process
     try:
         async with AsyncSessionLocal() as db:
-            invoice = await db.get(Invoice, uuid.UUID(invoice_id))
+            invoice = await claim_due(db, uuid.UUID(invoice_id))
             if invoice is None:
-                return None
+                # not due (its step was done by another worker) or being done right now: look again at its next step
+                await db.rollback()
+                current = await db.get(Invoice, uuid.UUID(invoice_id))
+                if current is None or current.agt_next_attempt_at is None:
+                    return None
+                return max((current.agt_next_attempt_at - datetime.now(timezone.utc)).total_seconds(), 5)
             await process(db, invoice)
             await db.commit()
             await send_due(db)  # the others due meanwhile

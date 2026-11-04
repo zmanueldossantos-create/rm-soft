@@ -2029,9 +2029,12 @@ async def list_invoices(
     see point-8 discussion). The caller (route) passes pos_id only for CAIXA; None for GESTOR.
     """
     query = select(Invoice).where(Invoice.company_id == company_id)
-    if year is not None:
-        query = query.where(extract("year", Invoice.business_date) == year)
-    if month is not None:
+    if year is not None and month is not None:  # a date range, not extract(): the business_date index is used
+        query = query.where(Invoice.business_date >= date(year, month, 1),
+                            Invoice.business_date < (date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)))
+    elif year is not None:
+        query = query.where(Invoice.business_date >= date(year, 1, 1), Invoice.business_date < date(year + 1, 1, 1))
+    elif month is not None:
         query = query.where(extract("month", Invoice.business_date) == month)
     if date_from is not None:
         query = query.where(Invoice.business_date >= date_from)
