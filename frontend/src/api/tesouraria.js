@@ -152,3 +152,24 @@ export async function listTreasuryClosings(filters = {}) {
   const res = await apiClient.get('/tesouraria/overview/closings', { params });
   return res.data;
 }
+
+// Bancos: each bank account with its balance today
+export async function listBankPositions() {
+  const res = await apiClient.get('/tesouraria/banks');
+  return res.data;
+}
+
+// The statement of one bank account: { account, opening, total_in, total_out, closing, lines }
+export async function getBankStatement(accountId, { dateFrom, dateTo } = {}) {
+  const params = {};
+  if (dateFrom) params.date_from = dateFrom;
+  if (dateTo) params.date_to = dateTo;
+  const res = await apiClient.get(`/tesouraria/banks/${accountId}/statement`, { params });
+  return res.data;
+}
+
+// The bank statement's balance on the day the company starts following the account here
+export async function setBankOpeningBalance(accountId, amount, openingDate) {
+  const res = await apiClient.put(`/tesouraria/banks/${accountId}/opening`, { amount, opening_date: openingDate });
+  return res.data;
+}

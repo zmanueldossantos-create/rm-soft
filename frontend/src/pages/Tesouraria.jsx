@@ -1,22 +1,26 @@
 import { useState, useEffect, useMemo } from 'react';
-import { PiggyBank, Loader2, Wallet, ArrowLeftRight, Lock, FileText, RefreshCw, ArrowRight } from 'lucide-react';
+import { PiggyBank, Loader2, Wallet, ArrowLeftRight, Lock, FileText, RefreshCw, ArrowRight, Landmark, Pencil } from 'lucide-react';
 import DateInput from '../components/DateInput';
 import Select from '../components/Select';
 import Modal from '../components/Modal';
 import { formatKz } from '../utils/format';
 import { extractErrorMessage } from '../utils/errors';
-import { getTreasuryPosition, listTreasuryMovements, listTreasuryClosings } from '../api/tesouraria';
+import { getTreasuryPosition, listTreasuryMovements, listTreasuryClosings, listBankPositions, getBankStatement, setBankOpeningBalance } from '../api/tesouraria';
+import { useCan } from '../utils/permissions';
 import { fetchClosingReportPdfBlob } from '../api/pos';
 import { useToastState } from '../components/Toaster';
+import { toast } from '../store/toastStore';
 
-// Tesouraria - the manager's view of the company's cash (treasury_overview_service): every till now, the movements
-// and the closings of a period. A read only: transfers, entradas and saídas are made at the Caixa.
+// Tesouraria - the manager's view of the company's money: every till now, the movements and the closings of a period
+// (treasury_overview_service), and each bank account's balance and statement (bank_treasury_service). A read only,
+// but for a bank's opening balance: transfers, entradas and saídas are made at the Caixa.
 const TYPE_LABELS = { TRANSFERENCIA: 'Transferência', ENTRADA_EXTERNA: 'Entrada externa', SAIDA_EXTERNA: 'Saída externa' };
 const STATUS_LABELS = { PENDENTE: 'Em trânsito', RECEBIDO: 'Recebido' };
 const TABS = [
   { key: 'position', label: 'Posição', icon: Wallet },
   { key: 'movements', label: 'Movimentos', icon: ArrowLeftRight },
   { key: 'closings', label: 'Fechos', icon: Lock },
+  { key: 'banks', label: 'Bancos', icon: Landmark },
 ];
 
 const inputCls = 'bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors';
@@ -216,7 +220,101 @@ function Closings({ closings, onReport }) {
   );
 }
 
+function bankLabel(b) {
+  return b.bank + ' · ' + b.account_number;
+}
+
+// Bancos: a card per account (balance today, its opening balance), the statement of the one picked over the period.
+function Banks({ banks, selectedId, onSelect, statement, onEditOpening }) {
+  if (banks.length === 0) {
+    return <p className="text-text-muted text-[13px] text-center py-12">Nenhuma conta bancária - crie-as em Administração › Empresa › Coordenadas Bancárias</p>;
+  }
+  return (
+    <>
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 mb-6">
+        {banks.map((b) => (
+          <button
+            key={b.id}
+            type="button"
+            onClick={() => onSelect(b.id)}
+            className={'text-left bg-bg-elevated border rounded-lg px-5 py-4 flex flex-col gap-1.5 transition-colors cursor-pointer ' + (selectedId === b.id ? 'border-accent' : 'border-border hover:border-accent/60')}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <p className="font-display font-semibold text-text-primary truncate">{bankLabel(b)}</p>
+              {!b.is_active && <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-bg-inset text-text-muted">Inativa</span>}
+            </div>
+            <p className="text-[12px] text-text-muted truncate">{b.bank_name} · IBAN {b.iban}</p>
+            <p className={'font-mono font-semibold text-xl ' + (b.balance < 0 ? 'text-danger' : 'text-text-primary')}>{formatKz(b.balance)} {b.currency === 'AOA' ? 'Kz' : b.currency}</p>
+            <div className="flex items-center justify-between gap-2 text-[12px]">
+              <span className={b.opening_date ? 'text-text-muted' : 'text-accent'}>
+                {b.opening_date ? `Saldo inicial ${formatKz(b.opening_balance)} em ${day(b.opening_date)}` : 'Saldo inicial por definir'}
+              </span>
+              {onEditOpening && (
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={(e) => { e.stopPropagation(); onEditOpening(b); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); onEditOpening(b); } }}
+                  title="Definir o saldo inicial"
+                  className="w-7 h-7 inline-flex items-center justify-center rounded-md border border-border text-text-muted hover:text-accent hover:border-accent transition-colors"
+                >
+                  <Pencil size={13} />
+                </span>
+              )}
+            </div>
+          </button>
+        ))}
+      </div>
+
+      {statement && (
+        <>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+            <Kpi label="Saldo anterior" value={formatKz(statement.opening) + ' Kz'} />
+            <Kpi label="Entradas" value={formatKz(statement.total_in) + ' Kz'} tone="text-success" />
+            <Kpi label="Saídas" value={formatKz(statement.total_out) + ' Kz'} tone="text-danger" />
+            <Kpi label="Saldo final" value={formatKz(statement.closing) + ' Kz'} tone={statement.closing < 0 ? 'text-danger' : 'text-text-primary'} />
+          </div>
+          <div className="bg-bg-elevated border border-border rounded-lg overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-[11px] uppercase tracking-wide text-text-muted">
+                  <th className={th + ' text-left'}>Data</th>
+                  <th className={th + ' text-left'}>Documento</th>
+                  <th className={th + ' text-left'}>Descrição</th>
+                  <th className={th + ' text-right'}>Entrada</th>
+                  <th className={th + ' text-right'}>Saída</th>
+                  <th className={th + ' text-right'}>Saldo</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border-b border-border bg-bg-inset/40">
+                  <td className={th + ' text-[12px] text-text-muted'} colSpan={5}>Saldo anterior</td>
+                  <td className={th + ' text-right font-mono text-[13px] text-text-primary whitespace-nowrap'}>{formatKz(statement.opening)} Kz</td>
+                </tr>
+                {statement.lines.length === 0 && (
+                  <tr><td colSpan={6} className="text-text-muted text-[13px] text-center py-10">Nenhum movimento neste período</td></tr>
+                )}
+                {statement.lines.map((l, i) => (
+                  <tr key={i} className="border-b border-border last:border-0">
+                    <td className={th + ' font-mono text-[12px] text-text-muted whitespace-nowrap'}>{day(l.date)}</td>
+                    <td className={th + ' font-mono text-[12px] text-text-primary whitespace-nowrap'}>{l.document}</td>
+                    <td className={th + ' text-[12px] text-text-muted'}>{l.description || '-'}</td>
+                    <td className={th + ' text-right font-mono text-[13px] text-success whitespace-nowrap'}>{l.amount_in ? formatKz(l.amount_in) + ' Kz' : ''}</td>
+                    <td className={th + ' text-right font-mono text-[13px] text-danger whitespace-nowrap'}>{l.amount_out ? formatKz(l.amount_out) + ' Kz' : ''}</td>
+                    <td className={th + ' text-right font-mono text-[13px] text-text-primary whitespace-nowrap'}>{formatKz(l.balance)} Kz</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
 export default function Tesouraria() {
+  const can = useCan();
   const [tab, setTab] = useState('position');
   const [position, setPosition] = useState(null);
   const [movements, setMovements] = useState([]);
@@ -230,6 +328,11 @@ export default function Tesouraria() {
   const [status, setStatus] = useState('');
   const [reload, setReload] = useState(0);
   const [pdf, setPdf] = useState(null); // { url, title }
+  const [banks, setBanks] = useState([]);
+  const [bankId, setBankId] = useState('');
+  const [statement, setStatement] = useState(null);
+  const [opening, setOpening] = useState(null); // { bank, amount, date } - the opening balance being set
+  const [openingSaving, setOpeningSaving] = useState(false);
 
   // the tills of the filters come from the position (every active till, named with its activity)
   useEffect(() => {
@@ -247,12 +350,36 @@ export default function Tesouraria() {
     const filters = { dateFrom, dateTo, posId };
     const request = tab === 'movements'
       ? listTreasuryMovements({ ...filters, movementType, status }).then((data) => { if (!cancelled) setMovements(data); })
-      : listTreasuryClosings(filters).then((data) => { if (!cancelled) setClosings(data); });
+      : tab === 'banks'
+        ? listBankPositions().then(async (data) => {
+          if (cancelled) return;
+          setBanks(data);
+          // the account picked stays picked; else the first one
+          const picked = data.some((b) => b.id === bankId) ? bankId : (data[0]?.id || '');
+          setBankId(picked);
+          const st = picked ? await getBankStatement(picked, { dateFrom, dateTo }) : null;
+          if (!cancelled) setStatement(st);
+        })
+        : listTreasuryClosings(filters).then((data) => { if (!cancelled) setClosings(data); });
     request
       .catch((err) => { if (!cancelled) setError(extractErrorMessage(err, 'Erro ao carregar')); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [tab, dateFrom, dateTo, posId, movementType, status, reload]);
+  }, [tab, dateFrom, dateTo, posId, movementType, status, reload, bankId]);
+
+  async function saveOpening() {
+    setOpeningSaving(true);
+    try {
+      await setBankOpeningBalance(opening.bank.id, Number(opening.amount || 0), opening.date);
+      toast.success('Saldo inicial de ' + bankLabel(opening.bank) + ' guardado');
+      setOpening(null);
+      setReload((n) => n + 1);
+    } catch (err) {
+      setError(extractErrorMessage(err, 'Erro ao guardar o saldo inicial'));
+    } finally {
+      setOpeningSaving(false);
+    }
+  }
 
   async function openReport(closing) {
     try {
@@ -277,7 +404,7 @@ export default function Tesouraria() {
             <PiggyBank size={22} className="text-accent" />
             Tesouraria
           </h2>
-          <p className="text-text-muted text-sm">O dinheiro de todas as caixas - as transferências, entradas e saídas fazem-se no ecrã Caixa</p>
+          <p className="text-text-muted text-sm">O dinheiro das caixas e das contas bancárias - as transferências, entradas e saídas fazem-se no ecrã Caixa</p>
         </div>
         <button
           onClick={() => { setPosition(null); setReload((n) => n + 1); }}
@@ -309,10 +436,12 @@ export default function Tesouraria() {
             <label className={labelCls}>Até</label>
             <DateInput value={dateTo} min={dateFrom || undefined} onChange={(e) => setDateTo(e.target.value)} className={inputCls} />
           </div>
-          <div className="w-64">
-            <label className={labelCls}>Caixa</label>
-            <Select value={posId} onChange={setPosId} options={tillOptions} placeholder="Todas as caixas" />
-          </div>
+          {tab !== 'banks' && (
+            <div className="w-64">
+              <label className={labelCls}>Caixa</label>
+              <Select value={posId} onChange={setPosId} options={tillOptions} placeholder="Todas as caixas" />
+            </div>
+          )}
           {tab === 'movements' && (
             <>
               <div className="w-48">
@@ -339,9 +468,31 @@ export default function Tesouraria() {
         <Position position={position} />
       ) : tab === 'movements' ? (
         <Movements movements={movements} />
+      ) : tab === 'banks' ? (
+        <Banks banks={banks} selectedId={bankId} onSelect={setBankId} statement={statement}
+          onEditOpening={can('tesouraria:banks_manage') ? (b) => setOpening({ bank: b, amount: String(b.opening_balance || ''), date: b.opening_date || todayIso() }) : null} />
       ) : (
         <Closings closings={closings} onReport={openReport} />
       )}
+
+      <Modal open={!!opening} onClose={() => setOpening(null)} title={'Saldo inicial' + (opening ? ' - ' + bankLabel(opening.bank) : '')} maxWidthClass="max-w-md">
+        {opening && (
+          <form onSubmit={(e) => { e.preventDefault(); saveOpening(); }} className="flex flex-col gap-4">
+            <p className="text-text-muted text-[13px]">O saldo do extrato do banco no dia em que a empresa começa a seguir esta conta no RM Soft. Os movimentos anteriores a esse dia já estão neste saldo e não são contados.</p>
+            <div>
+              <label className={labelCls}>Saldo no extrato ({opening.bank.currency}) *</label>
+              <input type="number" step="0.01" required value={opening.amount} onChange={(e) => setOpening((o) => ({ ...o, amount: e.target.value }))} className={inputCls + ' w-full font-mono'} />
+            </div>
+            <div>
+              <label className={labelCls}>Data do saldo *</label>
+              <DateInput value={opening.date} max={todayIso()} required onChange={(e) => setOpening((o) => ({ ...o, date: e.target.value }))} className={inputCls + ' w-full'} />
+            </div>
+            <button type="submit" disabled={openingSaving} className="bg-accent hover:bg-accent-hover disabled:opacity-60 text-white font-semibold text-sm rounded-md py-3 transition-colors cursor-pointer">
+              {openingSaving ? 'A guardar...' : 'Guardar saldo inicial'}
+            </button>
+          </form>
+        )}
+      </Modal>
 
       <Modal open={!!pdf} onClose={closeReport} title={pdf?.title || ''} maxWidthClass="max-w-3xl">
         {pdf && (

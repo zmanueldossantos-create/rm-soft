@@ -173,3 +173,54 @@ class TreasuryClosing(BaseModel):
     counted: float | None
     difference: float | None
     notes: str | None
+
+
+# ---------- Bancos: each bank account's balance and statement (bank_treasury_service) ----------
+
+class BankPosition(BaseModel):
+    id: uuid.UUID
+    bank: str
+    bank_name: str
+    account_number: str
+    iban: str
+    currency: str
+    is_active: bool
+    opening_balance: float
+    opening_date: date | None
+    balance: float
+    movements: int
+
+
+class BankStatementLine(BaseModel):
+    date: date
+    document: str
+    description: str
+    amount_in: float
+    amount_out: float
+    balance: float
+
+
+class BankStatementAccount(BaseModel):
+    id: uuid.UUID
+    bank: str
+    bank_name: str
+    account_number: str
+    iban: str
+    currency: str
+    is_active: bool
+    opening_balance: float
+    opening_date: date | None
+
+
+class BankStatement(BaseModel):
+    account: BankStatementAccount
+    opening: float
+    total_in: float
+    total_out: float
+    closing: float
+    lines: list[BankStatementLine]
+
+
+class BankOpeningBalanceRequest(BaseModel):
+    amount: float
+    opening_date: date

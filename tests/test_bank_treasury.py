@@ -1,0 +1,75 @@
+"""
+Tesouraria - Bancos: a bank account's balance and statement read from the documents that name it (a receipt
+collected on it, a supplier payment made from it and its cancellation), from its opening balance on.
+"""
+from datetime import date, timedelta
+
+import pytest
+
+from app.models.bank import Bank
+from app.models.company_bank_account import CompanyBankAccount
+from app.models.currency import Currency
+from app.services.bank_treasury_service import (
+    InvalidOpeningBalanceError, get_bank_statement, list_bank_positions, set_opening_balance,
+)
+from app.services.invoice_service import create_receipt
+from app.services.supplier_payment_service import cancel_supplier_payment, create_supplier_payment
+from tests.test_credit_note_restock_and_caps import _ids, _sold_product
+from tests.test_supplier_payments import _setup
+
+
+async def _account(db, company_id):
+    bank, currency = Bank(acronym="BAI", full_name="Banco Angolano de Investimentos"), Currency(code="AOX", name="Kwanza teste")
+    db.add_all([bank, currency])
+    await db.flush()
+    account = CompanyBankAccount(company_id=company_id, bank_id=bank.id, account_number="0001", iban="000600001",
+                                 currency_id=currency.id)
+    db.add(account)
+    await db.commit()
+    return account.id
+
+
+@pytest.mark.asyncio
+async def test_the_statement_follows_receipts_and_supplier_payments(db, company_with_essentials):
+    ctx = company_with_essentials
+    ctx["pm_mb"].uses_bank_account = True  # Multicaixa lands on a bank account
+    await db.commit()
+    company_id, user = ctx["company"].id, ctx["gestor"]
+    account_id = await _account(db, company_id)
+    await set_opening_balance(db, company_id, account_id, 5000, date.today())
+
+    ids = _ids(ctx)
+    _product_id, invoice_id = await _sold_product(db, ids)
+    await create_receipt(db, ids["company"], ids["activity"], reference_invoice_id=invoice_id, amount=1000.0,
+                         payment_method_id=ctx["pm_mb"].id, bank_account_id=account_id)
+    _company, supplier_id, ft1, *_rest = await _setup(db, ctx)
+    payment = await create_supplier_payment(db, company_id, user, supplier_id, [{"purchase_invoice_id": ft1, "amount": 1140}],
+                                            ctx["pm_mb"].id, bank_account_id=account_id)
+
+    [position] = await list_bank_positions(db, company_id)
+    assert (position["bank"], position["balance"], position["movements"]) == ("BAI", 4860.0, 2)  # 5000 + 1000 - 1140
+
+    await cancel_supplier_payment(db, company_id, payment.id, user, "Erro de valor")
+    statement = await get_bank_statement(db, company_id, account_id)
+    assert statement["opening"] == 5000.0 and statement["closing"] == 6000.0
+    assert [(line["amount_in"], line["amount_out"]) for line in statement["lines"]] == [(1000.0, 0.0), (0.0, 1140.0), (1140.0, 0.0)]
+    assert statement["lines"][-1]["balance"] == 6000.0 and "Anulação" in statement["lines"][-1]["description"]
+
+
+@pytest.mark.asyncio
+async def test_movements_before_the_opening_day_are_inside_the_opening_balance(db, company_with_essentials):
+    ctx = company_with_essentials
+    ctx["pm_mb"].uses_bank_account = True
+    await db.commit()
+    account_id = await _account(db, ctx["company"].id)
+    ids = _ids(ctx)
+    _product_id, invoice_id = await _sold_product(db, ids)
+    await create_receipt(db, ids["company"], ids["activity"], reference_invoice_id=invoice_id, amount=500.0,
+                         payment_method_id=ctx["pm_mb"].id, bank_account_id=account_id)
+    account = await db.get(CompanyBankAccount, account_id)
+    account.opening_date, account.opening_balance = date.today() + timedelta(days=1), 800  # set directly: a later start
+    await db.commit()
+    statement = await get_bank_statement(db, ctx["company"].id, account_id)
+    assert statement["lines"] == [] and statement["closing"] == 800.0
+    with pytest.raises(InvalidOpeningBalanceError):
+        await set_opening_balance(db, ctx["company"].id, account_id, 100, date.today() + timedelta(days=1))

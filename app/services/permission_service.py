@@ -115,6 +115,7 @@ PERMISSION_CATALOG: list[tuple[str, str, str, list[str]]] = [
     ("tesouraria:reasons_manage", "Criar, editar e ativar/desativar motivos de movimento de caixa", "Tesouraria", []),
     ("tesouraria:view", "Ver movimentos de tesouraria e pendentes", "Tesouraria", ["CAIXA"]),
     ("tesouraria:overview", "Ver a vista da tesouraria (posição, movimentos e fechos de todas as caixas)", "Tesouraria", []),
+    ("tesouraria:banks_manage", "Definir o saldo inicial das contas bancárias", "Tesouraria", []),
     ("tesouraria:record", "Registar movimentos de tesouraria", "Tesouraria", ["CAIXA"]),
     ("tesouraria:receive", "Receber movimentos de tesouraria pendentes", "Tesouraria", ["CAIXA"]),
     ("tesouraria:cancel_movement", "Cancelar movimentos de tesouraria", "Tesouraria", ["CAIXA"]),

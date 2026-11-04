@@ -92,6 +92,10 @@ from app.services.point_of_sale_service import PosNotFoundError
 from app.utils.cash_report_pdf import generate_movements_report_pdf
 
 from app.services.treasury_overview_service import get_treasury_position, list_closings, list_treasury_movements
+from app.schemas.tesouraria import BankOpeningBalanceRequest, BankPosition, BankStatement
+from app.services.bank_treasury_service import (
+    BankAccountNotFoundError, InvalidOpeningBalanceError, get_bank_statement, list_bank_positions, set_opening_balance,
+)
 
 router = APIRouter(prefix="/api/v1/tesouraria", tags=["tesouraria"])
 
@@ -431,3 +435,40 @@ async def get_overview_closings(
     current_user: User = Depends(require_permission("tesouraria:overview")),
 ):
     return await list_closings(db, current_user.company_id, date_from, date_to, pos_id)
+
+
+# ---------- Bancos: the balance and the statement of each bank account (Tesouraria, with or without accounting) ----------
+
+@router.get("/banks", response_model=list[BankPosition])
+async def get_banks(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("tesouraria:overview")),
+):
+    return await list_bank_positions(db, current_user.company_id)
+
+
+@router.get("/banks/{account_id}/statement", response_model=BankStatement)
+async def get_bank_account_statement(
+    account_id: uuid.UUID, date_from: date | None = None, date_to: date | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("tesouraria:overview")),
+):
+    try:
+        return await get_bank_statement(db, current_user.company_id, account_id, date_from, date_to)
+    except BankAccountNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.put("/banks/{account_id}/opening", response_model=BankPosition)
+async def put_bank_opening_balance(
+    account_id: uuid.UUID, payload: BankOpeningBalanceRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("tesouraria:banks_manage")),
+):
+    try:
+        await set_opening_balance(db, current_user.company_id, account_id, payload.amount, payload.opening_date)
+    except BankAccountNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except InvalidOpeningBalanceError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    return next(b for b in await list_bank_positions(db, current_user.company_id) if b["id"] == account_id)
