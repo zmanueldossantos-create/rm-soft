@@ -8,6 +8,7 @@ import { extractErrorMessage } from '../utils/errors';
 import { getTreasuryPosition, listTreasuryMovements, listTreasuryClosings, listBankPositions, getBankStatement, setBankOpeningBalance } from '../api/tesouraria';
 import { useCan } from '../utils/permissions';
 import { fetchClosingReportPdfBlob } from '../api/pos';
+import { getCurrentPeriod } from '../api/fiscal';
 import { useToastState } from '../components/Toaster';
 import { toast } from '../store/toastStore';
 
@@ -333,6 +334,19 @@ export default function Tesouraria() {
   const [statement, setStatement] = useState(null);
   const [opening, setOpening] = useState(null); // { bank, amount, date } - the opening balance being set
   const [openingSaving, setOpeningSaving] = useState(false);
+
+  // the period's dates follow the active fiscal period (Outubro 2026: 01/10 - 31/10, or today if sooner), not the
+  // calendar month - operations of a month still open are counted in it
+  useEffect(() => {
+    getCurrentPeriod().then((p) => {
+      if (!p?.year || !p?.month) return;
+      const mm = String(p.month).padStart(2, '0');
+      const last = new Date(p.year, p.month, 0).getDate();
+      const end = p.year + '-' + mm + '-' + String(last).padStart(2, '0');
+      setDateFrom(p.year + '-' + mm + '-01');
+      setDateTo(end < todayIso() ? end : todayIso());
+    }).catch(() => {});
+  }, []);
 
   // the tills of the filters come from the position (every active till, named with its activity)
   useEffect(() => {

@@ -177,7 +177,7 @@ export default function Layout() {
         .then((data) => { setPeriodLabel(data.label); setPartialLabel(data.partial_label || null); })
         .catch(() => setPeriodLabel(null));
     }
-  }, [user?.role]);
+  }, [user?.role, location.pathname]); // read again on every screen: a period opened or closed shows at once
 
   // this user's permission codes, once per session (Layout mounts after login)
   useLoadPermissions();

@@ -308,6 +308,8 @@ async def get_period_overview(db: AsyncSession, company_id: uuid.UUID) -> dict:
     return {
         "label": f"{MONTH_NAMES_PT[active[0].month]} {active[1]}" if active else None,
         "partial_label": f"{MONTH_NAMES_PT[partial[0].month]} {partial[1]}" if partial else None,
+        # the screens' default dates follow the active period, not the calendar month
+        "year": active[1] if active else None, "month": active[0].month if active else None,
     }
 
 

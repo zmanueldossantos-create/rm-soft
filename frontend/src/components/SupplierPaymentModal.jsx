@@ -9,6 +9,8 @@ import { paymentMethodsApi, banksApi } from '../api/catalogs';
 import { getMyCompanyBankAccounts } from '../api/company';
 import { getOpenCashPoints } from '../api/invoices';
 import { createSupplierPayment } from '../api/supplierPayments';
+import { listBankPositions } from '../api/tesouraria';
+import BankBalanceWarning, { bankShortfall } from './BankBalanceWarning';
 import { useToastState } from './Toaster';
 
 // Pagar fornecedor (supplier_payment_service): one payment for invoices (FT) of one supplier - each with what it settles
@@ -27,6 +29,8 @@ export default function SupplierPaymentModal({ invoices, onClose, onPaid }) {
   const [accounts, setAccounts] = useState([]);
   const [banks, setBanks] = useState([]);
   const [tills, setTills] = useState([]);
+  const [bankPositions, setBankPositions] = useState([]); // the balances, to warn before an account goes negative
+  const [negativeOk, setNegativeOk] = useState(false);
   const [amounts, setAmounts] = useState({});
   const [form, setForm] = useState({ methodId: '', bankAccountId: '', posId: '', date: todayIso(), reference: '', notes: '' });
   const [error, setError] = useToastState('error');
@@ -41,6 +45,8 @@ export default function SupplierPaymentModal({ invoices, onClose, onPaid }) {
     getMyCompanyBankAccounts().then((d) => setAccounts(d.filter((a) => a.is_active))).catch(() => setAccounts([]));
     banksApi.list().then(setBanks).catch(() => setBanks([]));
     getOpenCashPoints().then(setTills).catch(() => setTills([]));
+    listBankPositions().then(setBankPositions).catch(() => setBankPositions([])); // without the Tesouraria view: no warning
+    setNegativeOk(false);
   }, [invoices]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!open) return null;
@@ -48,7 +54,9 @@ export default function SupplierPaymentModal({ invoices, onClose, onPaid }) {
   const set = (patch) => setForm((f) => ({ ...f, ...patch }));
   const total = round2(invoices.reduce((s, i) => s + (parseFloat(amounts[i.id]) || 0), 0));
   const over = invoices.find((i) => (parseFloat(amounts[i.id]) || 0) > i.amount_due + 0.005);
-  const valid = total > 0 && !over && method && (!method.uses_bank_account || form.bankAccountId) && (!method.is_cash || form.posId) && form.date;
+  const shortfall = method?.uses_bank_account ? bankShortfall(bankPositions, form.bankAccountId, total) : null;
+  const valid = total > 0 && !over && method && (!method.uses_bank_account || form.bankAccountId) && (!method.is_cash || form.posId) && form.date
+    && (!shortfall || negativeOk);
   const bankLabel = (a) => (banks.find((b) => b.id === a.bank_id)?.acronym || '?') + ' - ' + a.account_number;
 
   async function submit() {
@@ -136,6 +144,7 @@ export default function SupplierPaymentModal({ invoices, onClose, onPaid }) {
             <input value={form.notes} onChange={(e) => set({ notes: e.target.value })} placeholder="Opcional" className={inputCls} />
           </div>
         </div>
+        <BankBalanceWarning shortfall={shortfall} confirmed={negativeOk} onConfirm={setNegativeOk} />
         <p className="text-[12px] text-text-muted">
           {method?.is_cash ? 'O numerário sai hoje da caixa escolhida (uma saída automática «Pagamento a fornecedor»).' : 'O pagamento fica registado; as faturas pagas deixam de estar em dívida.'}
           {over ? ' O valor a pagar de ' + over.supplier_document + ' excede o que está em dívida.' : ''}
