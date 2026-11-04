@@ -7,18 +7,22 @@
 // Activities/POS screens instead of a dedicated endpoint here.
 import apiClient from './client';
 
-export async function listCashMovementReasons(direction) {
-  const res = await apiClient.get('/tesouraria/reasons', { params: direction ? { direction } : {} });
+// usage: 'CAIXA' (the tills' entradas / saídas) or 'BANCO' (the bank accounts' own movements); empty = all
+export async function listCashMovementReasons(direction, usage) {
+  const params = {};
+  if (direction) params.direction = direction;
+  if (usage) params.usage = usage;
+  const res = await apiClient.get('/tesouraria/reasons', { params });
   return res.data;
 }
 
-export async function createCashMovementReason(name, direction) {
-  const res = await apiClient.post('/tesouraria/reasons', { name, direction });
+export async function createCashMovementReason(name, direction, forCash = true, forBank = false) {
+  const res = await apiClient.post('/tesouraria/reasons', { name, direction, for_cash: forCash, for_bank: forBank });
   return res.data;
 }
 
-export async function updateCashMovementReason(reasonId, name, direction) {
-  const res = await apiClient.patch('/tesouraria/reasons/' + reasonId, { name, direction });
+export async function updateCashMovementReason(reasonId, name, direction, forCash = true, forBank = false) {
+  const res = await apiClient.patch('/tesouraria/reasons/' + reasonId, { name, direction, for_cash: forCash, for_bank: forBank });
   return res.data;
 }
 
@@ -171,5 +175,17 @@ export async function getBankStatement(accountId, { dateFrom, dateTo } = {}) {
 // The bank statement's balance on the day the company starts following the account here
 export async function setBankOpeningBalance(accountId, amount, openingDate) {
   const res = await apiClient.put(`/tesouraria/banks/${accountId}/opening`, { amount, opening_date: openingDate });
+  return res.data;
+}
+
+// A movement typed on a bank account (its reason says entrada or saída): { reason_id, amount, movement_date, reference, description }
+export async function createBankMovement(accountId, payload) {
+  const res = await apiClient.post(`/tesouraria/banks/${accountId}/movements`, payload);
+  return res.data;
+}
+
+// Cancels a typed bank movement - kept on the statement with its cancellation
+export async function cancelBankMovement(movementId, reason) {
+  const res = await apiClient.post(`/tesouraria/bank-movements/${movementId}/cancel`, { reason });
   return res.data;
 }

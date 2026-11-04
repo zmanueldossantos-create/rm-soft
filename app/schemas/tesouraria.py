@@ -14,6 +14,8 @@ from app.schemas.moedeiro import DenominationCountLineInput
 class CashMovementReasonCreateRequest(BaseModel):
     name: str
     direction: Literal["ENTRADA", "SAIDA"]
+    for_cash: bool = True   # used by the tills' entradas / saídas
+    for_bank: bool = False  # used by the bank accounts' own movements
 
 
 class CashMovementReasonResponse(BaseModel):
@@ -21,6 +23,8 @@ class CashMovementReasonResponse(BaseModel):
     company_id: uuid.UUID
     name: str
     direction: str
+    for_cash: bool
+    for_bank: bool
     is_active: bool
 
     class Config:
@@ -198,6 +202,7 @@ class BankStatementLine(BaseModel):
     amount_in: float
     amount_out: float
     balance: float
+    movement_id: uuid.UUID | None = None  # a typed movement still registered: «Anular»
 
 
 class BankStatementAccount(BaseModel):
@@ -224,3 +229,29 @@ class BankStatement(BaseModel):
 class BankOpeningBalanceRequest(BaseModel):
     amount: float
     opening_date: date
+
+
+class BankMovementCreateRequest(BaseModel):
+    reason_id: uuid.UUID
+    amount: float
+    movement_date: date
+    reference: str | None = None
+    description: str | None = None
+
+
+class BankMovementCancelRequest(BaseModel):
+    reason: str
+
+
+class BankMovementResponse(BaseModel):
+    id: uuid.UUID
+    bank_account_id: uuid.UUID
+    series: str
+    number: int
+    direction: str
+    movement_date: date
+    amount: float
+    status: str
+
+    class Config:
+        from_attributes = True

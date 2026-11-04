@@ -29,6 +29,9 @@ class CashMovementReason(Base):
     company_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("companies.id"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)  # e.g. "Deposito bancario", "Eletricidade"
     direction: Mapped[MovementDirection] = mapped_column(Enum(MovementDirection), nullable=False)
+    # Where the reason is used (Tesouraria): the tills' entradas/saídas, the bank accounts' own movements, or both
+    for_cash: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
+    for_bank: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

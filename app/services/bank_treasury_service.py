@@ -6,7 +6,9 @@ A bank account's movements are read from the documents that already name it - no
     (uses_bank_account: transfer, card, Multicaixa...) and whose document names this account; a refund of a credit
     note (a negative payment) leaves it;
   - the money paid from it: the supplier payments made from this account; a cancelled one comes back on its
-    cancellation day, so the statement keeps both.
+    cancellation day, so the statement keeps both;
+  - the movements typed on the account in the Tesouraria (BankMovement: bank fees, a capital entry...), each with a
+    reason of the catalog used for the banks; cancelled the same way.
 The starting point is the account's opening balance: the bank statement's balance on the day the company starts
 following the account here (opening_date) - the movements before that day are inside that balance and not counted.
 Documents of Modo formação never move money.
@@ -16,8 +18,15 @@ from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.bank_movement import BankMovement, BankMovementStatus
+from app.models.cash_movement_reason import CashMovementReason
+from app.models.fiscal_period import FiscalPeriod
+from app.models.fiscal_year import FiscalYear
+from app.models.movement_type import MovementDirection
+from app.models.user import User
 
 from app.models.bank import Bank
 from app.models.company_bank_account import CompanyBankAccount
@@ -41,6 +50,14 @@ class InvalidOpeningBalanceError(Exception):
     pass
 
 
+class BankMovementError(Exception):
+    """A typed bank movement refused (its reason, amount, date or period) - 422."""
+
+
+class BankMovementNotFoundError(Exception):
+    pass
+
+
 @dataclass
 class _Line:
     day: date
@@ -48,6 +65,7 @@ class _Line:
     document: str
     description: str
     amount: float  # > 0 in, < 0 out
+    movement_id: uuid.UUID | None = None  # a typed movement still registered: it may be cancelled
 
 
 async def _account_or_raise(db: AsyncSession, company_id: uuid.UUID, account_id: uuid.UUID) -> CompanyBankAccount:
@@ -98,6 +116,27 @@ async def _lines(db: AsyncSession, company_id: uuid.UUID, account: CompanyBankAc
                 day=payment.cancelled_at.astimezone(LUANDA).date(), at=payment.cancelled_at, document=document,
                 description=" · ".join(filter(None, [supplier_name, "Anulação", payment.cancel_reason])),
                 amount=float(payment.amount),
+            ))
+
+    typed = (await db.execute(
+        select(BankMovement, CashMovementReason.name)
+        .join(CashMovementReason, CashMovementReason.id == BankMovement.reason_id)
+        .where(BankMovement.company_id == company_id, BankMovement.bank_account_id == account.id)
+    )).all()
+    for movement, reason_name in typed:
+        document = f"{movement.series}/{movement.number}"
+        sign = 1 if movement.direction == MovementDirection.ENTRADA else -1
+        lines.append(_Line(
+            day=movement.movement_date, at=movement.created_at, document=document,
+            description=" · ".join(filter(None, [reason_name, movement.description, movement.reference])),
+            amount=sign * float(movement.amount),
+            movement_id=movement.id if movement.status == BankMovementStatus.REGISTADO else None,
+        ))
+        if movement.status == BankMovementStatus.ANULADO and movement.cancelled_at is not None:
+            lines.append(_Line(
+                day=movement.cancelled_at.astimezone(LUANDA).date(), at=movement.cancelled_at, document=document,
+                description=" · ".join(filter(None, [reason_name, "Anulação", movement.cancel_reason])),
+                amount=-sign * float(movement.amount),
             ))
 
     if account.opening_date is not None:
@@ -161,7 +200,7 @@ async def get_bank_statement(
             "date": line.day, "document": line.document, "description": line.description,
             "amount_in": round(line.amount, 2) if line.amount > 0 else 0.0,
             "amount_out": round(-line.amount, 2) if line.amount < 0 else 0.0,
-            "balance": round(balance, 2),
+            "balance": round(balance, 2), "movement_id": line.movement_id,
         })
     return {
         "account": _describe(account, acronym, full_name, currency),
@@ -185,3 +224,79 @@ async def set_opening_balance(
     await db.commit()
     await db.refresh(account)
     return account
+
+
+async def _check_date_open(db: AsyncSession, company_id: uuid.UUID, movement_date: date) -> None:
+    """A typed bank movement is an internal entry: its date falls in the active period or in the soft-closed one."""
+    status = (await db.execute(
+        select(FiscalPeriod.status).join(FiscalYear, FiscalYear.id == FiscalPeriod.fiscal_year_id).where(
+            FiscalPeriod.company_id == company_id, FiscalYear.year == movement_date.year,
+            FiscalPeriod.month == movement_date.month,
+        )
+    )).scalar_one_or_none()
+    value = status.value if hasattr(status, "value") else status
+    if value not in ("ABERTO", "FECHO_PARCIAL"):
+        raise BankMovementError(f"O período de {movement_date.strftime('%m/%Y')} não está aberto - escolha uma data do "
+                                "período ativo ou do período em fecho parcial")
+
+
+async def create_bank_movement(
+    db: AsyncSession, company_id: uuid.UUID, user: User, account_id: uuid.UUID, reason_id: uuid.UUID, amount: float,
+    movement_date: date, reference: str | None = None, description: str | None = None,
+) -> BankMovement:
+    """A movement typed on a bank account: its reason (one used for the banks) says entrada or saída. The account may
+    go below zero - the screen warns, the bank decides."""
+    account = await _account_or_raise(db, company_id, account_id)
+    if not account.is_active:
+        raise BankMovementError("Esta conta bancária está inativa")
+    reason = (await db.execute(select(CashMovementReason).where(
+        CashMovementReason.id == reason_id, CashMovementReason.company_id == company_id))).scalar_one_or_none()
+    if reason is None or not reason.is_active or not reason.for_bank:
+        raise BankMovementError("Escolha um motivo ativo dos movimentos bancários")
+    amount = round(float(amount), 2)
+    if amount <= 0:
+        raise BankMovementError("O valor tem de ser maior que zero")
+    if movement_date > date.today():
+        raise BankMovementError("A data não pode ser futura")
+    if account.opening_date is not None and movement_date < account.opening_date:
+        raise BankMovementError(f"A data é anterior ao saldo inicial da conta ({account.opening_date.strftime('%d/%m/%Y')}) "
+                                "- esse movimento já está no saldo inicial")
+    await _check_date_open(db, company_id, movement_date)
+    series = f"BCO{movement_date.year}"
+    # one numbering at a time per company and year: two movements typed at once never get the same number
+    await db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:key))"), {"key": f"bankmov:{company_id}:{series}"})
+    last = (await db.execute(select(func.max(BankMovement.number)).where(
+        BankMovement.company_id == company_id, BankMovement.series == series))).scalar_one()
+    movement = BankMovement(
+        company_id=company_id, bank_account_id=account.id, reason_id=reason.id, direction=reason.direction,
+        series=series, number=(last or 0) + 1, movement_date=movement_date, amount=amount,
+        reference=(reference or "").strip() or None, description=(description or "").strip() or None,
+        status=BankMovementStatus.REGISTADO, created_by_user_id=user.id,
+    )
+    db.add(movement)
+    await db.commit()
+    await db.refresh(movement)
+    return movement
+
+
+async def cancel_bank_movement(
+    db: AsyncSession, company_id: uuid.UUID, movement_id: uuid.UUID, user: User, reason: str,
+) -> BankMovement:
+    """Cancels a typed movement - never deleted: the statement keeps it and its cancellation (today)."""
+    movement = (await db.execute(select(BankMovement).where(
+        BankMovement.id == movement_id, BankMovement.company_id == company_id).with_for_update())).scalar_one_or_none()
+    if movement is None:
+        raise BankMovementNotFoundError("Movimento bancário não encontrado")
+    if movement.status == BankMovementStatus.ANULADO:
+        raise BankMovementError("Este movimento já está anulado")
+    reason = (reason or "").strip()
+    if not reason:
+        raise BankMovementError("Indique o motivo da anulação")
+    await _check_date_open(db, company_id, datetime.now(LUANDA).date())
+    movement.status = BankMovementStatus.ANULADO
+    movement.cancel_reason = reason[:300]
+    movement.cancelled_at = datetime.now(timezone.utc)
+    movement.cancelled_by_user_id = user.id
+    await db.commit()
+    await db.refresh(movement)
+    return movement

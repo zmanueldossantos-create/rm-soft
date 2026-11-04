@@ -28,10 +28,10 @@ const inputClass = "w-full bg-bg-inset border border-border rounded-md px-3.5 py
 const CATALOGS = [
   { key: 'product_categories', label: 'Categorias de Produto', icon: Tags, api: { list: listProductCategories, create: createProductCategory, update: updateProductCategory, toggle: toggleProductCategoryStatus } },
   { key: 'service_types', label: 'Tipos de Serviço', icon: Wrench, api: { list: listServiceTypes, create: createServiceType, update: updateServiceType, toggle: toggleServiceTypeStatus } },
-  { key: 'cash_movement_reasons', label: 'Motivos de Movimento de Caixa', icon: PiggyBank, api: {
+  { key: 'cash_movement_reasons', label: 'Motivos de Tesouraria', icon: PiggyBank, api: {
     list: () => listCashMovementReasons(),
-    create: (p) => createCashMovementReason(p.name, p.direction),
-    update: (id, p) => updateCashMovementReason(id, p.name, p.direction),
+    create: (p) => createCashMovementReason(p.name, p.direction, p.for_cash, p.for_bank),
+    update: (id, p) => updateCashMovementReason(id, p.name, p.direction, p.for_cash, p.for_bank),
     toggle: (id) => toggleCashMovementReasonStatus(id),
   } },
   { key: 'resource_types', label: 'Tipos de Recurso', icon: Boxes, api: {
@@ -70,7 +70,7 @@ const NAME_ONLY = ['consumption_reasons', 'pharmaceutical_forms'];
 
 const emptyForm = { name: '', not_available_sales: false, activity_ids: [] };
 const emptyNameOnlyForm = { name: '', requires_service: false, default_start_time: '', default_end_time: '' };
-const emptyReasonForm = { name: '', direction: 'SAIDA' };
+const emptyReasonForm = { name: '', direction: 'SAIDA', for_cash: true, for_bank: false };
 
 export default function Categorias() {
   const can = useCan();
@@ -224,7 +224,7 @@ export default function Categorias() {
   function openEditForm(item) {
     setEditingId(item.id);
     if (activeCatalog?.key === 'cash_movement_reasons') {
-      setForm({ name: item.name, direction: item.direction });
+      setForm({ name: item.name, direction: item.direction, for_cash: item.for_cash, for_bank: item.for_bank });
     } else if (activeCatalog?.key === 'resource_types') {
       setForm({ name: item.name, requires_service: item.requires_service, default_start_time: (item.default_start_time || '').slice(0, 5), default_end_time: (item.default_end_time || '').slice(0, 5) });
     } else if (NAME_ONLY.includes(activeCatalog?.key)) {
@@ -415,6 +415,18 @@ export default function Categorias() {
                   onChange={(v) => updateField('direction', v)}
                   options={[{ value: 'ENTRADA', label: 'Entrada' }, { value: 'SAIDA', label: 'Saída' }]}
                 />
+                <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mt-4 mb-1.5 block">Usado em *</label>
+                <div className="flex items-center gap-5">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input type="checkbox" checked={!!form.for_cash} onChange={(e) => updateField('for_cash', e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
+                    <span className="text-sm text-text-primary">Caixa</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input type="checkbox" checked={!!form.for_bank} onChange={(e) => updateField('for_bank', e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
+                    <span className="text-sm text-text-primary">Banco</span>
+                  </label>
+                </div>
+                <p className="text-[12px] text-text-muted mt-1.5">Caixa: entradas e saídas no ecrã Caixa. Banco: movimentos das contas bancárias (Tesouraria › Bancos) - comissões, entrada de capital...</p>
               </div>
             ) : activeCatalog?.key === 'resource_types' ? (
               <div className="flex flex-col gap-3">

@@ -1,11 +1,12 @@
 import { useState, useEffect, useMemo } from 'react';
-import { PiggyBank, Loader2, Wallet, ArrowLeftRight, Lock, FileText, RefreshCw, ArrowRight, Landmark, Pencil } from 'lucide-react';
+import { PiggyBank, Loader2, Wallet, ArrowLeftRight, Lock, FileText, RefreshCw, ArrowRight, Landmark, Pencil, Plus, Ban } from 'lucide-react';
 import DateInput from '../components/DateInput';
 import Select from '../components/Select';
 import Modal from '../components/Modal';
 import { formatKz } from '../utils/format';
 import { extractErrorMessage } from '../utils/errors';
-import { getTreasuryPosition, listTreasuryMovements, listTreasuryClosings, listBankPositions, getBankStatement, setBankOpeningBalance } from '../api/tesouraria';
+import { getTreasuryPosition, listTreasuryMovements, listTreasuryClosings, listBankPositions, getBankStatement, setBankOpeningBalance, listCashMovementReasons, createBankMovement, cancelBankMovement } from '../api/tesouraria';
+import BankBalanceWarning, { bankShortfall } from '../components/BankBalanceWarning';
 import { useCan } from '../utils/permissions';
 import { fetchClosingReportPdfBlob } from '../api/pos';
 import { getCurrentPeriod } from '../api/fiscal';
@@ -226,7 +227,7 @@ function bankLabel(b) {
 }
 
 // Bancos: a card per account (balance today, its opening balance), the statement of the one picked over the period.
-function Banks({ banks, selectedId, onSelect, statement, onEditOpening }) {
+function Banks({ banks, selectedId, onSelect, statement, onEditOpening, onNewMovement, onCancelMovement }) {
   if (banks.length === 0) {
     return <p className="text-text-muted text-[13px] text-center py-12">Nenhuma conta bancária - crie-as em Administração › Empresa › Coordenadas Bancárias</p>;
   }
@@ -269,6 +270,17 @@ function Banks({ banks, selectedId, onSelect, statement, onEditOpening }) {
 
       {statement && (
         <>
+          {onNewMovement && (
+            <div className="flex justify-end mb-3">
+              <button
+                type="button"
+                onClick={onNewMovement}
+                className="flex items-center gap-1.5 bg-accent hover:bg-accent-hover text-white text-[13px] font-semibold px-3.5 py-2 rounded-md transition-colors cursor-pointer"
+              >
+                <Plus size={15} /> Novo movimento em {bankLabel(statement.account)}
+              </button>
+            </div>
+          )}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
             <Kpi label="Saldo anterior" value={formatKz(statement.opening) + ' Kz'} />
             <Kpi label="Entradas" value={formatKz(statement.total_in) + ' Kz'} tone="text-success" />
@@ -285,15 +297,17 @@ function Banks({ banks, selectedId, onSelect, statement, onEditOpening }) {
                   <th className={th + ' text-right'}>Entrada</th>
                   <th className={th + ' text-right'}>Saída</th>
                   <th className={th + ' text-right'}>Saldo</th>
+                  {onCancelMovement && <th className={th}></th>}
                 </tr>
               </thead>
               <tbody>
                 <tr className="border-b border-border bg-bg-inset/40">
                   <td className={th + ' text-[12px] text-text-muted'} colSpan={5}>Saldo anterior</td>
                   <td className={th + ' text-right font-mono text-[13px] text-text-primary whitespace-nowrap'}>{formatKz(statement.opening)} Kz</td>
+                  {onCancelMovement && <td className={th}></td>}
                 </tr>
                 {statement.lines.length === 0 && (
-                  <tr><td colSpan={6} className="text-text-muted text-[13px] text-center py-10">Nenhum movimento neste período</td></tr>
+                  <tr><td colSpan={onCancelMovement ? 7 : 6} className="text-text-muted text-[13px] text-center py-10">Nenhum movimento neste período</td></tr>
                 )}
                 {statement.lines.map((l, i) => (
                   <tr key={i} className="border-b border-border last:border-0">
@@ -303,6 +317,20 @@ function Banks({ banks, selectedId, onSelect, statement, onEditOpening }) {
                     <td className={th + ' text-right font-mono text-[13px] text-success whitespace-nowrap'}>{l.amount_in ? formatKz(l.amount_in) + ' Kz' : ''}</td>
                     <td className={th + ' text-right font-mono text-[13px] text-danger whitespace-nowrap'}>{l.amount_out ? formatKz(l.amount_out) + ' Kz' : ''}</td>
                     <td className={th + ' text-right font-mono text-[13px] text-text-primary whitespace-nowrap'}>{formatKz(l.balance)} Kz</td>
+                    {onCancelMovement && (
+                      <td className={th + ' text-right'}>
+                        {l.movement_id && (
+                          <button
+                            type="button"
+                            onClick={() => onCancelMovement(l)}
+                            title="Anular este movimento"
+                            className="w-8 h-8 inline-flex items-center justify-center rounded-md border border-border text-text-muted hover:text-danger hover:border-danger transition-colors cursor-pointer"
+                          >
+                            <Ban size={14} />
+                          </button>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -334,6 +362,10 @@ export default function Tesouraria() {
   const [statement, setStatement] = useState(null);
   const [opening, setOpening] = useState(null); // { bank, amount, date } - the opening balance being set
   const [openingSaving, setOpeningSaving] = useState(false);
+  const [bankReasons, setBankReasons] = useState([]);
+  const [newMovement, setNewMovement] = useState(null); // { reasonId, amount, date, reference, description, negativeOk }
+  const [cancelling, setCancelling] = useState(null); // { line, reason }
+  const [movementSaving, setMovementSaving] = useState(false);
 
   // the period's dates follow the active fiscal period (Outubro 2026: 01/10 - 31/10, or today if sooner), not the
   // calendar month - operations of a month still open are counted in it
@@ -380,6 +412,48 @@ export default function Tesouraria() {
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [tab, dateFrom, dateTo, posId, movementType, status, reload, bankId]);
+
+  // the reasons of the bank movements (Motivos de Tesouraria used for the banks), for the new movement form
+  useEffect(() => {
+    if (tab !== 'banks' || !can('tesouraria:bank_movements')) return;
+    listCashMovementReasons(null, 'BANCO').then((data) => setBankReasons(data.filter((r) => r.is_active))).catch(() => setBankReasons([]));
+  }, [tab, reload]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const selectedBank = banks.find((b) => b.id === bankId);
+  const movementReason = newMovement ? bankReasons.find((r) => r.id === newMovement.reasonId) : null;
+  const movementShortfall = newMovement && movementReason?.direction === 'SAIDA'
+    ? bankShortfall(banks, bankId, Number(newMovement.amount || 0)) : null;
+
+  async function saveMovement() {
+    setMovementSaving(true);
+    try {
+      const m = await createBankMovement(bankId, {
+        reason_id: newMovement.reasonId, amount: Number(newMovement.amount), movement_date: newMovement.date,
+        reference: newMovement.reference || null, description: newMovement.description || null,
+      });
+      toast.success('Movimento ' + m.series + '/' + m.number + ' registado em ' + bankLabel(selectedBank));
+      setNewMovement(null);
+      setReload((n) => n + 1);
+    } catch (err) {
+      setError(extractErrorMessage(err, 'Erro ao registar o movimento'));
+    } finally {
+      setMovementSaving(false);
+    }
+  }
+
+  async function saveCancel() {
+    setMovementSaving(true);
+    try {
+      await cancelBankMovement(cancelling.line.movement_id, cancelling.reason);
+      toast.success('Movimento ' + cancelling.line.document + ' anulado');
+      setCancelling(null);
+      setReload((n) => n + 1);
+    } catch (err) {
+      setError(extractErrorMessage(err, 'Erro ao anular o movimento'));
+    } finally {
+      setMovementSaving(false);
+    }
+  }
 
   async function saveOpening() {
     setOpeningSaving(true);
@@ -484,7 +558,9 @@ export default function Tesouraria() {
         <Movements movements={movements} />
       ) : tab === 'banks' ? (
         <Banks banks={banks} selectedId={bankId} onSelect={setBankId} statement={statement}
-          onEditOpening={can('tesouraria:banks_manage') ? (b) => setOpening({ bank: b, amount: String(b.opening_balance || ''), date: b.opening_date || todayIso() }) : null} />
+          onEditOpening={can('tesouraria:banks_manage') ? (b) => setOpening({ bank: b, amount: String(b.opening_balance || ''), date: b.opening_date || todayIso() }) : null}
+          onNewMovement={can('tesouraria:bank_movements') && selectedBank?.is_active ? () => setNewMovement({ reasonId: '', amount: '', date: todayIso(), reference: '', description: '', negativeOk: false }) : null}
+          onCancelMovement={can('tesouraria:bank_movements') ? (line) => setCancelling({ line, reason: '' }) : null} />
       ) : (
         <Closings closings={closings} onReport={openReport} />
       )}
@@ -503,6 +579,59 @@ export default function Tesouraria() {
             </div>
             <button type="submit" disabled={openingSaving} className="bg-accent hover:bg-accent-hover disabled:opacity-60 text-white font-semibold text-sm rounded-md py-3 transition-colors cursor-pointer">
               {openingSaving ? 'A guardar...' : 'Guardar saldo inicial'}
+            </button>
+          </form>
+        )}
+      </Modal>
+
+      <Modal open={!!newMovement} onClose={() => setNewMovement(null)} title={'Novo movimento' + (selectedBank ? ' - ' + bankLabel(selectedBank) : '')} maxWidthClass="max-w-lg">
+        {newMovement && (
+          <form onSubmit={(e) => { e.preventDefault(); saveMovement(); }} className="flex flex-col gap-4">
+            <p className="text-text-muted text-[13px]">Os movimentos que nenhum documento faz: comissões bancárias, entrada de capital, um imposto pago por transferência... Um pagamento a fornecedor faz-se em Faturas de compra.</p>
+            <div>
+              <label className={labelCls}>Motivo *</label>
+              {bankReasons.length === 0
+                ? <p className="text-[12px] text-danger py-2">Nenhum motivo para bancos - crie-os em Administração › Catálogos › Motivos de Tesouraria, marcando «Banco».</p>
+                : <Select value={newMovement.reasonId} onChange={(v) => setNewMovement((m) => ({ ...m, reasonId: v, negativeOk: false }))} placeholder="Selecionar"
+                    options={bankReasons.map((r) => ({ value: r.id, label: (r.direction === 'ENTRADA' ? 'Entrada · ' : 'Saída · ') + r.name }))} />}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelCls}>Valor (Kz) *</label>
+                <input type="number" step="0.01" min="0.01" required value={newMovement.amount} onChange={(e) => setNewMovement((m) => ({ ...m, amount: e.target.value, negativeOk: false }))} className={inputCls + ' w-full font-mono'} />
+              </div>
+              <div>
+                <label className={labelCls}>Data *</label>
+                <DateInput value={newMovement.date} max={todayIso()} required onChange={(e) => setNewMovement((m) => ({ ...m, date: e.target.value }))} className={inputCls + ' w-full'} />
+              </div>
+            </div>
+            <div>
+              <label className={labelCls}>Referência</label>
+              <input value={newMovement.reference} maxLength={60} onChange={(e) => setNewMovement((m) => ({ ...m, reference: e.target.value }))} placeholder="Nº do extrato ou da operação" className={inputCls + ' w-full'} />
+            </div>
+            <div>
+              <label className={labelCls}>Descrição</label>
+              <input value={newMovement.description} maxLength={300} onChange={(e) => setNewMovement((m) => ({ ...m, description: e.target.value }))} placeholder="Opcional" className={inputCls + ' w-full'} />
+            </div>
+            <BankBalanceWarning shortfall={movementShortfall} confirmed={newMovement.negativeOk} onConfirm={(v) => setNewMovement((m) => ({ ...m, negativeOk: v }))} />
+            <button type="submit" disabled={movementSaving || !newMovement.reasonId || !(Number(newMovement.amount) > 0) || (movementShortfall && !newMovement.negativeOk)}
+              className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 transition-colors cursor-pointer">
+              {movementSaving ? 'A registar...' : 'Registar movimento'}
+            </button>
+          </form>
+        )}
+      </Modal>
+
+      <Modal open={!!cancelling} onClose={() => setCancelling(null)} title={'Anular ' + (cancelling?.line.document || '')} maxWidthClass="max-w-md">
+        {cancelling && (
+          <form onSubmit={(e) => { e.preventDefault(); saveCancel(); }} className="flex flex-col gap-4">
+            <p className="text-text-muted text-[13px]">O movimento não é apagado: o extrato mostra-o e mostra a anulação de hoje, em sentido contrário ({cancelling.line.amount_in ? 'saída' : 'entrada'} de {formatKz(cancelling.line.amount_in || cancelling.line.amount_out)} Kz).</p>
+            <div>
+              <label className={labelCls}>Motivo da anulação *</label>
+              <input value={cancelling.reason} required maxLength={300} onChange={(e) => setCancelling((c) => ({ ...c, reason: e.target.value }))} className={inputCls + ' w-full'} />
+            </div>
+            <button type="submit" disabled={movementSaving || !cancelling.reason.trim()} className="bg-danger hover:opacity-90 disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 transition-colors cursor-pointer">
+              {movementSaving ? 'A anular...' : 'Anular movimento'}
             </button>
           </form>
         )}

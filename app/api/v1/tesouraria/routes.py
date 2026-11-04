@@ -8,6 +8,7 @@ default POS (PointOfSale.is_default=True) now covers that role, managed
 through the normal Activities/POS screens, not a dedicated endpoint here.
 """
 import uuid
+from typing import Literal
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -92,9 +93,13 @@ from app.services.point_of_sale_service import PosNotFoundError
 from app.utils.cash_report_pdf import generate_movements_report_pdf
 
 from app.services.treasury_overview_service import get_treasury_position, list_closings, list_treasury_movements
-from app.schemas.tesouraria import BankOpeningBalanceRequest, BankPosition, BankStatement
+from app.schemas.tesouraria import (
+    BankMovementCancelRequest, BankMovementCreateRequest, BankMovementResponse, BankOpeningBalanceRequest, BankPosition,
+    BankStatement,
+)
 from app.services.bank_treasury_service import (
-    BankAccountNotFoundError, InvalidOpeningBalanceError, get_bank_statement, list_bank_positions, set_opening_balance,
+    BankAccountNotFoundError, BankMovementError, BankMovementNotFoundError, InvalidOpeningBalanceError,
+    cancel_bank_movement, create_bank_movement, get_bank_statement, list_bank_positions, set_opening_balance,
 )
 
 router = APIRouter(prefix="/api/v1/tesouraria", tags=["tesouraria"])
@@ -106,13 +111,14 @@ router = APIRouter(prefix="/api/v1/tesouraria", tags=["tesouraria"])
 @router.get("/reasons", response_model=list[CashMovementReasonResponse])
 async def get_cash_movement_reasons(
     direction: MovementDirection | None = None,
+    usage: Literal["CAIXA", "BANCO"] | None = None,
     db: AsyncSession = Depends(get_db),
     # SUPER_ADMIN is also allowed - read-only exception for this one route, so
     # Configuracoes.jsx's catalog screen can list reasons. SUPER_ADMIN has no
     # company grants, hence also_allow_roles instead of a role permission.
     current_user: User = Depends(require_permission("tesouraria:reasons_view", also_allow_roles=("SUPER_ADMIN",))),
 ):
-    return await list_cash_movement_reasons(db, current_user.company_id, direction)
+    return await list_cash_movement_reasons(db, current_user.company_id, direction, usage)
 
 
 @router.post("/reasons", response_model=CashMovementReasonResponse, status_code=status.HTTP_201_CREATED)
@@ -123,7 +129,7 @@ async def create_new_cash_movement_reason(
 ):
     try:
         return await create_cash_movement_reason(
-            db, current_user.company_id, payload.name, MovementDirection(payload.direction)
+            db, current_user.company_id, payload.name, MovementDirection(payload.direction), payload.for_cash, payload.for_bank,
         )
     except InvalidCashMovementError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
@@ -138,10 +144,13 @@ async def edit_cash_movement_reason(
 ):
     try:
         return await update_cash_movement_reason(
-            db, current_user.company_id, reason_id, payload.name, MovementDirection(payload.direction)
+            db, current_user.company_id, reason_id, payload.name, MovementDirection(payload.direction),
+            payload.for_cash, payload.for_bank,
         )
     except ReasonNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except InvalidCashMovementError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
 
 
 @router.patch("/reasons/{reason_id}/toggle-status", response_model=CashMovementReasonResponse)
@@ -472,3 +481,32 @@ async def put_bank_opening_balance(
     except InvalidOpeningBalanceError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     return next(b for b in await list_bank_positions(db, current_user.company_id) if b["id"] == account_id)
+
+
+@router.post("/banks/{account_id}/movements", response_model=BankMovementResponse, status_code=status.HTTP_201_CREATED)
+async def post_bank_movement(
+    account_id: uuid.UUID, payload: BankMovementCreateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("tesouraria:bank_movements")),
+):
+    try:
+        return await create_bank_movement(db, current_user.company_id, current_user, account_id, payload.reason_id,
+                                          payload.amount, payload.movement_date, payload.reference, payload.description)
+    except BankAccountNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BankMovementError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.post("/bank-movements/{movement_id}/cancel", response_model=BankMovementResponse)
+async def post_cancel_bank_movement(
+    movement_id: uuid.UUID, payload: BankMovementCancelRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("tesouraria:bank_movements")),
+):
+    try:
+        return await cancel_bank_movement(db, current_user.company_id, movement_id, current_user, payload.reason)
+    except BankMovementNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BankMovementError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))

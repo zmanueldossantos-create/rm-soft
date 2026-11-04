@@ -73,3 +73,44 @@ async def test_movements_before_the_opening_day_are_inside_the_opening_balance(d
     assert statement["lines"] == [] and statement["closing"] == 800.0
     with pytest.raises(InvalidOpeningBalanceError):
         await set_opening_balance(db, ctx["company"].id, account_id, 100, date.today() + timedelta(days=1))
+
+
+@pytest.mark.asyncio
+async def test_a_typed_bank_movement_and_its_cancellation(db, company_with_essentials):
+    from app.models.movement_type import MovementDirection
+    from app.services.bank_treasury_service import BankMovementError, cancel_bank_movement, create_bank_movement
+    from app.services.cash_movement_service import create_cash_movement_reason
+    ctx = company_with_essentials
+    company_id, user = ctx["company"].id, ctx["gestor"]
+    account_id = await _account(db, company_id)
+    await set_opening_balance(db, company_id, account_id, 10000, date.today())
+    fees = await create_cash_movement_reason(db, company_id, "Comissões bancárias", MovementDirection.SAIDA,
+                                             for_cash=False, for_bank=True)
+    till_only = await create_cash_movement_reason(db, company_id, "Fundo de maneio", MovementDirection.ENTRADA)
+
+    movement = await create_bank_movement(db, company_id, user, account_id, fees.id, 250, date.today(), "EXT-11")
+    assert (movement.series, movement.number) == (f"BCO{date.today().year}", 1)
+    statement = await get_bank_statement(db, company_id, account_id)
+    [line] = statement["lines"]
+    assert (line["amount_out"], line["balance"], line["movement_id"]) == (250.0, 9750.0, movement.id)
+
+    with pytest.raises(BankMovementError, match="motivo"):  # a reason of the tills only
+        await create_bank_movement(db, company_id, user, account_id, till_only.id, 100, date.today())
+    with pytest.raises(BankMovementError, match="saldo inicial"):  # before the opening day: already in that balance
+        await create_bank_movement(db, company_id, user, account_id, fees.id, 100, date.today() - timedelta(days=1))
+
+    await cancel_bank_movement(db, company_id, movement.id, user, "Comissão estornada pelo banco")
+    statement = await get_bank_statement(db, company_id, account_id)
+    assert [(l["amount_in"], l["amount_out"], l["movement_id"]) for l in statement["lines"]] == [(0.0, 250.0, None), (250.0, 0.0, None)]
+    assert statement["closing"] == 10000.0
+    with pytest.raises(BankMovementError, match="já está anulado"):
+        await cancel_bank_movement(db, company_id, movement.id, user, "de novo")
+
+
+@pytest.mark.asyncio
+async def test_a_bank_reason_is_refused_at_the_till(db, company_with_essentials):
+    from app.models.movement_type import MovementDirection
+    from app.services.cash_movement_service import InvalidCashMovementError, create_cash_movement_reason
+    ctx = company_with_essentials
+    with pytest.raises(InvalidCashMovementError, match="onde o motivo"):
+        await create_cash_movement_reason(db, ctx["company"].id, "Nada", MovementDirection.SAIDA, for_cash=False, for_bank=False)

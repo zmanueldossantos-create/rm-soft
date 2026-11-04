@@ -70,19 +70,31 @@ class SourcePosNotOpenError(Exception):
 # ---------- Reasons catalog ----------
 
 async def list_cash_movement_reasons(
-    db: AsyncSession, company_id: uuid.UUID, direction: MovementDirection | None = None,
+    db: AsyncSession, company_id: uuid.UUID, direction: MovementDirection | None = None, usage: str | None = None,
 ) -> list[CashMovementReason]:
+    """usage: "CAIXA" - the reasons of the tills' entradas/saídas, "BANCO" - those of the bank accounts' movements."""
     query = select(CashMovementReason).where(CashMovementReason.company_id == company_id)
     if direction is not None:
         query = query.where(CashMovementReason.direction == direction)
+    if usage == "CAIXA":
+        query = query.where(CashMovementReason.for_cash.is_(True))
+    elif usage == "BANCO":
+        query = query.where(CashMovementReason.for_bank.is_(True))
     query = query.order_by(CashMovementReason.name)
     result = await db.execute(query)
     return list(result.scalars().all())
 
 
+def _check_usage(for_cash: bool, for_bank: bool) -> None:
+    if not (for_cash or for_bank):
+        raise InvalidCashMovementError("Indique onde o motivo é usado: caixa, banco ou os dois")
+
+
 async def create_cash_movement_reason(
     db: AsyncSession, company_id: uuid.UUID, name: str, direction: MovementDirection,
+    for_cash: bool = True, for_bank: bool = False,
 ) -> CashMovementReason:
+    _check_usage(for_cash, for_bank)
     existing = await db.execute(
         select(CashMovementReason).where(
             CashMovementReason.company_id == company_id,
@@ -91,7 +103,7 @@ async def create_cash_movement_reason(
     )
     if existing.scalar_one_or_none() is not None:
         raise InvalidCashMovementError("Já existe um motivo com este nome")
-    reason = CashMovementReason(company_id=company_id, name=name, direction=direction)
+    reason = CashMovementReason(company_id=company_id, name=name, direction=direction, for_cash=for_cash, for_bank=for_bank)
     db.add(reason)
     await db.commit()
     await db.refresh(reason)
@@ -110,10 +122,13 @@ async def get_reason_or_raise(db: AsyncSession, company_id: uuid.UUID, reason_id
 
 async def update_cash_movement_reason(
     db: AsyncSession, company_id: uuid.UUID, reason_id: uuid.UUID, name: str, direction: MovementDirection,
+    for_cash: bool = True, for_bank: bool = False,
 ) -> CashMovementReason:
+    _check_usage(for_cash, for_bank)
     reason = await get_reason_or_raise(db, company_id, reason_id)
     reason.name = name
     reason.direction = direction
+    reason.for_cash, reason.for_bank = for_cash, for_bank
     await db.commit()
     await db.refresh(reason)
     return reason
@@ -192,6 +207,8 @@ async def create_cash_movement(
             MovementDirection.ENTRADA if movement_type == CashMovementType.ENTRADA_EXTERNA
             else MovementDirection.SAIDA
         )
+        if not reason.for_cash:
+            raise ReasonDirectionMismatchError(f"O motivo '{reason.name}' é dos movimentos bancários, não da caixa")
         if reason.direction != expected_direction:
             raise ReasonDirectionMismatchError(
                 f"O motivo '{reason.name}' e de {reason.direction.value}, incompatível com este tipo de movimento"

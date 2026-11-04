@@ -2507,7 +2507,7 @@ export default function Caixa() {
                   value={movementForm.reasonId}
                   onChange={(v) => setMovementForm((p) => ({ ...p, reasonId: v }))}
                   options={movementReasons
-                    .filter((r) => r.is_active && r.direction === (movementForm.movementType === 'ENTRADA_EXTERNA' ? 'ENTRADA' : 'SAIDA'))
+                    .filter((r) => r.is_active && r.for_cash !== false && r.direction === (movementForm.movementType === 'ENTRADA_EXTERNA' ? 'ENTRADA' : 'SAIDA'))
                     .map((r) => ({ value: r.id, label: r.name }))}
                   placeholder="Selecionar"
                 />
