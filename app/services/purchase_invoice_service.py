@@ -81,11 +81,15 @@ async def register_purchase_invoice(
     document_date: date, lines: list[dict], fiscal_period_id: uuid.UUID | None = None, due_date: date | None = None,
     description: str | None = None, stock_entry: bool = False, warehouse_id: uuid.UUID | None = None,
     purchase_type: str = "FT", supplier_hash: str | None = None, reference_invoice_id: uuid.UUID | None = None,
+    user: User | None = None, payment: dict | None = None,
 ) -> PurchaseInvoice:
     """
     lines: [{product_id | service_id | None, sale_unit_id, description, quantity, unit_price, legal_vat_rate_id,
     exemption_id}] - quantity and price in the line's unit (sale_unit_id: one of the product's; None: its base unit).
     stock_entry: its products enter warehouse_id (see the module docstring).
+    payment: a fatura-recibo / talão de venda (paid when issued) - how it was paid: {payment_method_id,
+    bank_account_id, pos_id, reference}. Its payment is recorded with it (PAG2026/n): the money leaves that bank account
+    or that till (cash: today), so the Tesouraria and the till see it. Nothing is kept if the payment fails.
     """
     supplier = (await db.execute(
         select(Supplier).where(Supplier.id == supplier_id, Supplier.company_id == company_id)
@@ -248,6 +252,24 @@ async def register_purchase_invoice(
             raise PurchaseInvoiceError(str(e))
         invoice.warehouse_id = warehouse.id
         invoice.stock_entry_document_id = document.id
+
+    if payment and purchase_type in ("FR", "TV"):  # paid when issued: where the money left from
+        from app.models.payment_method_catalog import PaymentMethodCatalog
+        from app.services.supplier_payment_service import SupplierPaymentError, record_payment
+        if user is None:
+            await db.rollback()
+            raise PurchaseInvoiceError("Utilizador em falta para registar o pagamento")
+        method = await db.get(PaymentMethodCatalog, payment.get("payment_method_id")) if payment.get("payment_method_id") else None
+        try:
+            await record_payment(
+                db, company_id, user, supplier, {invoice.id: _money(invoice.total)}, payment.get("payment_method_id"),
+                date.today() if method is not None and method.is_cash else document_date,  # cash leaves the till today
+                payment.get("bank_account_id"), payment.get("pos_id"), payment.get("reference"),
+                f"Pago na emissão - {invoice.series}/{invoice.number}",
+            )
+        except SupplierPaymentError as e:
+            await db.rollback()
+            raise PurchaseInvoiceError(str(e))
 
     await db.commit()
     await db.refresh(invoice)

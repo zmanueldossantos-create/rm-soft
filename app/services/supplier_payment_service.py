@@ -15,7 +15,7 @@ Pagamentos a fornecedores e conta corrente (point 3).
 import uuid
 from datetime import date, datetime, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.bank import Bank
@@ -112,49 +112,23 @@ async def _reason(db: AsyncSession, company_id: uuid.UUID, name: str, direction:
 
 
 async def _next_number(db: AsyncSession, company_id: uuid.UUID, series: str) -> int:
+    # one numbering at a time per company and series: two payments at once never get the same number
+    await db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:key))"), {"key": f"suppay:{company_id}:{series}"})
     last = (await db.execute(select(func.max(SupplierPayment.number)).where(
         SupplierPayment.company_id == company_id, SupplierPayment.series == series))).scalar_one()
     return (last or 0) + 1
 
 
-async def create_supplier_payment(
-    db: AsyncSession, company_id: uuid.UUID, user: User, supplier_id: uuid.UUID, allocations: list[dict],
-    payment_method_id: uuid.UUID, payment_date: date | None = None, bank_account_id: uuid.UUID | None = None,
-    pos_id: uuid.UUID | None = None, reference_text: str | None = None, notes: str | None = None,
+async def record_payment(
+    db: AsyncSession, company_id: uuid.UUID, user: User, supplier: Supplier, wanted: dict, payment_method_id: uuid.UUID,
+    payment_date: date, bank_account_id: uuid.UUID | None, pos_id: uuid.UUID | None, reference_text: str | None,
+    notes: str | None,
 ) -> SupplierPayment:
-    """allocations: [{purchase_invoice_id, amount}] - invoices (FT) of the supplier, each amount at most what is owed."""
+    """The payment itself, once what it settles is known (wanted: {purchase_invoice_id: amount}): its method, the bank
+    account or the till it leaves, its number, its allocations, and the cash leaving the till (that movement commits
+    everything already in the session - on its failure nothing is kept). The caller commits otherwise. Used by «Pagar»
+    and by a fatura-recibo / talão de venda paid when registered (purchase_invoice_service)."""
     today = date.today()
-    payment_date = payment_date or today
-    if payment_date > today:
-        raise SupplierPaymentError("A data do pagamento não pode ser futura")
-    supplier = (await db.execute(select(Supplier).where(
-        Supplier.id == supplier_id, Supplier.company_id == company_id))).scalar_one_or_none()
-    if supplier is None:
-        raise SupplierPaymentError("Escolha o fornecedor")
-    wanted: dict[uuid.UUID, float] = {}
-    for a in allocations or []:
-        amount = _money(a.get("amount") or 0)
-        if amount > 0:
-            key = uuid.UUID(str(a["purchase_invoice_id"]))
-            wanted[key] = _money(wanted.get(key, 0) + amount)
-    if not wanted:
-        raise SupplierPaymentError("Indique o valor a pagar de pelo menos uma fatura")
-    invoices = (await db.execute(select(PurchaseInvoice).where(
-        PurchaseInvoice.id.in_(list(wanted)), PurchaseInvoice.company_id == company_id).with_for_update())).scalars().all()
-    if len(invoices) != len(wanted):
-        raise SupplierPaymentError("Fatura de compra não encontrada")
-    balances = await invoice_balances(db, invoices)
-    for inv in invoices:
-        label = f"{inv.series}/{inv.number} ({inv.supplier_document})"
-        if inv.supplier_id != supplier.id:
-            raise SupplierPaymentError(f"A fatura {label} não é deste fornecedor")
-        if inv.status != PurchaseInvoiceStatus.REGISTADA:
-            raise SupplierPaymentError(f"A fatura {label} está anulada")
-        if inv.purchase_type != "FT":
-            raise SupplierPaymentError(f"O documento {label} não se paga: só uma fatura (FT) fica em dívida")
-        due = balances[inv.id]["due"]
-        if wanted[inv.id] > due + 0.005:
-            raise SupplierPaymentError(f"O valor da fatura {label} excede o que está em dívida ({due:,.2f} Kz)".replace(",", " "))
     amount = _money(sum(wanted.values()))
 
     method = (await db.execute(select(PaymentMethodCatalog).where(PaymentMethodCatalog.id == payment_method_id))).scalar_one_or_none()
@@ -206,6 +180,51 @@ async def create_supplier_payment(
                                                                    SupplierPayment.number == payment.number,
                                                                    SupplierPayment.company_id == company_id))).scalar_one()
         payment.cash_movement_id = movement.id
+    else:
+        await db.flush()
+    return payment
+
+
+async def create_supplier_payment(
+    db: AsyncSession, company_id: uuid.UUID, user: User, supplier_id: uuid.UUID, allocations: list[dict],
+    payment_method_id: uuid.UUID, payment_date: date | None = None, bank_account_id: uuid.UUID | None = None,
+    pos_id: uuid.UUID | None = None, reference_text: str | None = None, notes: str | None = None,
+) -> SupplierPayment:
+    """allocations: [{purchase_invoice_id, amount}] - invoices (FT) of the supplier, each amount at most what is owed."""
+    today = date.today()
+    payment_date = payment_date or today
+    if payment_date > today:
+        raise SupplierPaymentError("A data do pagamento não pode ser futura")
+    supplier = (await db.execute(select(Supplier).where(
+        Supplier.id == supplier_id, Supplier.company_id == company_id))).scalar_one_or_none()
+    if supplier is None:
+        raise SupplierPaymentError("Escolha o fornecedor")
+    wanted: dict[uuid.UUID, float] = {}
+    for a in allocations or []:
+        amount = _money(a.get("amount") or 0)
+        if amount > 0:
+            key = uuid.UUID(str(a["purchase_invoice_id"]))
+            wanted[key] = _money(wanted.get(key, 0) + amount)
+    if not wanted:
+        raise SupplierPaymentError("Indique o valor a pagar de pelo menos uma fatura")
+    invoices = (await db.execute(select(PurchaseInvoice).where(
+        PurchaseInvoice.id.in_(list(wanted)), PurchaseInvoice.company_id == company_id).with_for_update())).scalars().all()
+    if len(invoices) != len(wanted):
+        raise SupplierPaymentError("Fatura de compra não encontrada")
+    balances = await invoice_balances(db, invoices)
+    for inv in invoices:
+        label = f"{inv.series}/{inv.number} ({inv.supplier_document})"
+        if inv.supplier_id != supplier.id:
+            raise SupplierPaymentError(f"A fatura {label} não é deste fornecedor")
+        if inv.status != PurchaseInvoiceStatus.REGISTADA:
+            raise SupplierPaymentError(f"A fatura {label} está anulada")
+        if inv.purchase_type != "FT":
+            raise SupplierPaymentError(f"O documento {label} não se paga: só uma fatura (FT) fica em dívida")
+        due = balances[inv.id]["due"]
+        if wanted[inv.id] > due + 0.005:
+            raise SupplierPaymentError(f"O valor da fatura {label} excede o que está em dívida ({due:,.2f} Kz)".replace(",", " "))
+    payment = await record_payment(db, company_id, user, supplier, wanted, payment_method_id, payment_date, bank_account_id,
+                                   pos_id, reference_text, notes)
     await db.commit()
     await db.refresh(payment)
     return payment
@@ -345,6 +364,13 @@ async def supplier_statement(db: AsyncSession, company_id: uuid.UUID, supplier_i
     invoices = (await db.execute(select(PurchaseInvoice).where(
         PurchaseInvoice.company_id == company_id, PurchaseInvoice.supplier_id == supplier_id,
         PurchaseInvoice.status == PurchaseInvoiceStatus.REGISTADA))).scalars().all()
+    # a fatura-recibo / talão de venda registered with its payment (method, bank or till): that payment is its line
+    paid_on_issue_with_payment = set((await db.execute(
+        select(SupplierPaymentAllocation.purchase_invoice_id)
+        .join(SupplierPayment, SupplierPayment.id == SupplierPaymentAllocation.payment_id)
+        .where(SupplierPaymentAllocation.purchase_invoice_id.in_([i.id for i in invoices]),
+               SupplierPayment.status == SupplierPaymentStatus.REGISTADO)
+    )).scalars().all()) if invoices else set()
     for inv in invoices:
         doc = inv.supplier_document  # as printed by the supplier (FT A/123) - the type is in the description
         key = (inv.document_date, inv.created_at)
@@ -355,7 +381,7 @@ async def supplier_statement(db: AsyncSession, company_id: uuid.UUID, supplier_i
         entries.append({"date": inv.document_date, "sort": key, "document": doc, "internal": f"{inv.series}/{inv.number}",
                         "description": {"FT": "Fatura", "FR": "Fatura-recibo", "TV": "Talão de venda"}.get(inv.purchase_type, "Fatura"),
                         "debit": 0.0, "credit": float(inv.total)})
-        if inv.purchase_type in PAID_ON_ISSUE:
+        if inv.purchase_type in PAID_ON_ISSUE and inv.id not in paid_on_issue_with_payment:  # else its payment shows it
             entries.append({"date": inv.document_date, "sort": (inv.document_date, inv.created_at, 1), "document": doc,
                             "internal": f"{inv.series}/{inv.number}", "description": "Pago na emissão",
                             "debit": float(inv.total), "credit": 0.0})

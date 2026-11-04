@@ -13,7 +13,11 @@ import { listSuppliers } from '../api/suppliers';
 import { listProducts } from '../api/products';
 import { listServices } from '../api/services';
 import { listWarehouses } from '../api/stock';
-import { legalVatRatesApi, vatCodesApi } from '../api/catalogs';
+import { legalVatRatesApi, vatCodesApi, paymentMethodsApi, banksApi } from '../api/catalogs';
+import { getMyCompanyBankAccounts } from '../api/company';
+import { getOpenCashPoints } from '../api/invoices';
+import { listBankPositions } from '../api/tesouraria';
+import BankBalanceWarning, { bankShortfall } from '../components/BankBalanceWarning';
 import { listPurchaseInvoices, getPurchaseInvoice, registerPurchaseInvoice, cancelPurchaseInvoice } from '../api/purchases';
 import { useToastState } from '../components/Toaster';
 
@@ -132,11 +136,27 @@ export default function Compras() {
     listWarehouses().then(setWarehouses).catch(() => {});
   }, []);
 
+  // a fatura-recibo / talão de venda is paid when issued: how (the methods that pay), and from which bank or till
+  const [payMethods, setPayMethods] = useState([]);
+  const [payAccounts, setPayAccounts] = useState([]);
+  const [payBanks, setPayBanks] = useState([]);
+  const [payTills, setPayTills] = useState([]);
+  const [bankPositions, setBankPositions] = useState([]);
+  useEffect(() => {
+    if (!form || !['FR', 'TV'].includes(form.purchaseType)) return;
+    paymentMethodsApi.list().then((d) => setPayMethods(d.filter((m) => m.is_active && m.allows_payment))).catch(() => setPayMethods([]));
+    getMyCompanyBankAccounts().then((d) => setPayAccounts(d.filter((a) => a.is_active))).catch(() => setPayAccounts([]));
+    banksApi.list().then(setPayBanks).catch(() => setPayBanks([]));
+    getOpenCashPoints().then(setPayTills).catch(() => setPayTills([]));
+    listBankPositions().then(setBankPositions).catch(() => setBankPositions([])); // without the Tesouraria view: no warning
+  }, [form?.purchaseType]); // eslint-disable-line react-hooks/exhaustive-deps
+
   function openForm() {
     const normal = rates.find((r) => r.tax_category === 'NOR') || rates[0];
     // the goods enter the gestor's «Armazém por defeito» (none chosen: the central one, the first) unless another is
     // chosen - or not at all
     setForm({ supplierId: '', purchaseType: 'FT', supplierDocument: '', supplierHash: '', referenceInvoiceId: '', documentDate: todayIso(), dueDate: '', periodId: '', description: '',
+      payMethodId: '', payBankId: '', payPosId: '', payReference: '', payNegativeOk: false,
       stockEntry: can('stock:receive'), warehouseId: (warehouses.find((w) => w.is_default && w.is_active) || warehouses.find((w) => w.is_active))?.id || '',
       lines: [{ ...emptyLine(), rateId: normal?.id || '' }] });
     setFormError('');
@@ -300,6 +320,10 @@ export default function Compras() {
         stock_entry: stockEntry, warehouse_id: stockEntry ? form.warehouseId : null,
         purchase_type: form.purchaseType, supplier_hash: form.supplierHash.trim() || null,
         reference_invoice_id: form.purchaseType === 'NC' ? form.referenceInvoiceId : null,
+        payment_method_id: paidOnIssue ? form.payMethodId : null,
+        bank_account_id: paidOnIssue && payMethod?.uses_bank_account ? form.payBankId : null,
+        pos_id: paidOnIssue && payMethod?.is_cash ? form.payPosId : null,
+        payment_reference: paidOnIssue ? form.payReference.trim() || null : null,
         lines: form.lines.map((l) => ({
           product_id: l.kind === 'product' && l.itemId ? l.itemId : null,
           sale_unit_id: l.kind === 'product' && l.saleUnitId ? l.saleUnitId : null,
@@ -357,7 +381,12 @@ export default function Compras() {
   const hasProduct = !!form && form.lines.some((l) => l.kind === 'product' && l.itemId);
   const isCreditNote = !!form && form.purchaseType === 'NC';
   const stockEntry = !!form && form.stockEntry && hasProduct && !isCreditNote;
-  const formValid = form && form.supplierId && (!stockEntry || form.warehouseId) && (!isCreditNote || form.referenceInvoiceId) && form.supplierDocument.trim() && form.documentDate && (!periodRequired || form.periodId)
+  const paidOnIssue = !!form && ['FR', 'TV'].includes(form.purchaseType);
+  const payMethod = paidOnIssue ? payMethods.find((m) => m.id === form.payMethodId) : null;
+  const payShortfall = payMethod?.uses_bank_account ? bankShortfall(bankPositions, form.payBankId, totals.subtotal + totals.vat) : null;
+  const paymentValid = !paidOnIssue || (payMethod && (!payMethod.uses_bank_account || form.payBankId) && (!payMethod.is_cash || form.payPosId)
+    && (!payShortfall || form.payNegativeOk));
+  const formValid = form && paymentValid && form.supplierId && (!stockEntry || form.warehouseId) && (!isCreditNote || form.referenceInvoiceId) && form.supplierDocument.trim() && form.documentDate && (!periodRequired || form.periodId)
     && form.lines.length > 0 && form.lines.every((l, i) => (l.description.trim() || l.itemId) && parseFloat(l.quantity) > 0 && l.unitPrice !== '' && l.rateId && (!computed[i].exempt || l.exemptionId)
       && (!stockEntry || !lotRule(l) || ((!lotRule(l).batch || l.lotNumber.trim()) && (!lotRule(l).expiry || l.expiryDate))));
 
@@ -654,6 +683,40 @@ export default function Compras() {
                   <p className="text-[12px] text-text-muted">A mercadoria já entrou noutro documento - esta fatura não mexe no stock.</p>
                 )}
                 {form.stockEntry && <p className="text-[12px] text-text-muted basis-full">Cada produto entra ao seu custo (preço sem IVA + IVA não dedutível) - atualiza o custo médio.</p>}
+              </div>
+            )}
+
+            {paidOnIssue && (
+              <div className="flex flex-col gap-3 border border-border rounded-md px-4 py-3">
+                <p className="text-sm text-text-primary font-medium">Pagamento ({form.purchaseType === 'FR' ? 'fatura-recibo' : 'talão de venda'} - pago na emissão)</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div>
+                    <label className={labelCls}>Método de pagamento *</label>
+                    <Select value={form.payMethodId} onChange={(v) => setForm((f) => ({ ...f, payMethodId: v, payBankId: '', payPosId: '', payNegativeOk: false }))}
+                      placeholder="Selecionar" options={payMethods.map((m) => ({ value: m.id, label: m.name }))} />
+                  </div>
+                  {payMethod?.is_cash ? (
+                    <div>
+                      <label className={labelCls}>Caixa de saída *</label>
+                      {payTills.length === 0
+                        ? <p className="text-[12px] text-danger py-2">Nenhuma caixa com sessão aberta - abra uma caixa para pagar em numerário</p>
+                        : <Select value={form.payPosId} onChange={(v) => setForm((f) => ({ ...f, payPosId: v }))} placeholder="Selecionar" options={payTills.map((t) => ({ value: t.pos_id, label: t.name }))} />}
+                    </div>
+                  ) : (
+                    <div>
+                      <label className={labelCls}>Conta bancária{payMethod?.uses_bank_account ? ' *' : ''}</label>
+                      <Select value={form.payBankId} onChange={(v) => setForm((f) => ({ ...f, payBankId: v, payNegativeOk: false }))} disabled={!payMethod?.uses_bank_account}
+                        placeholder={payMethod?.uses_bank_account ? 'Selecionar' : 'Não aplicável'}
+                        options={payAccounts.map((a) => ({ value: a.id, label: (payBanks.find((b) => b.id === a.bank_id)?.acronym || '?') + ' - ' + a.account_number }))} />
+                    </div>
+                  )}
+                  <div>
+                    <label className={labelCls}>Referência</label>
+                    <input value={form.payReference} maxLength={60} onChange={(e) => setForm((f) => ({ ...f, payReference: e.target.value }))} placeholder="Nº do cheque ou da transferência" className={inputCls} />
+                  </div>
+                </div>
+                <BankBalanceWarning shortfall={payShortfall} confirmed={form.payNegativeOk} onConfirm={(v) => setForm((f) => ({ ...f, payNegativeOk: v }))} />
+                <p className="text-[12px] text-text-muted">{payMethod?.is_cash ? 'O numerário sai hoje da caixa escolhida.' : 'O pagamento fica registado (PAG) e o dinheiro sai da conta escolhida na data do documento.'}</p>
               </div>
             )}
 

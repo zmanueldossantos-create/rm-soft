@@ -32,6 +32,11 @@ class PurchaseInvoiceCreateRequest(BaseModel):
     supplier_hash: str | None = None  # the 4 characters printed on the supplier document
     reference_invoice_id: uuid.UUID | None = None  # a credit note: the invoice it corrects
     lines: list[PurchaseInvoiceLineInput]
+    # a fatura-recibo / talão de venda: how it was paid - the money leaves that bank account or till
+    payment_method_id: uuid.UUID | None = None
+    bank_account_id: uuid.UUID | None = None
+    pos_id: uuid.UUID | None = None
+    payment_reference: str | None = None
 
 
 class PurchaseInvoiceCancelRequest(BaseModel):

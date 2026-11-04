@@ -114,3 +114,31 @@ async def test_a_bank_reason_is_refused_at_the_till(db, company_with_essentials)
     ctx = company_with_essentials
     with pytest.raises(InvalidCashMovementError, match="onde o motivo"):
         await create_cash_movement_reason(db, ctx["company"].id, "Nada", MovementDirection.SAIDA, for_cash=False, for_bank=False)
+
+
+@pytest.mark.asyncio
+async def test_a_purchase_fatura_recibo_paid_from_the_bank(db, company_with_essentials):
+    from app.models.supplier import Supplier
+    from app.services.purchase_invoice_service import register_purchase_invoice
+    from app.services.supplier_payment_service import supplier_statement
+    from tests.test_purchase_invoices import _line, _rates
+    ctx = company_with_essentials
+    ctx["pm_mb"].uses_bank_account = True
+    company_id, user = ctx["company"].id, ctx["gestor"]
+    supplier = Supplier(company_id=company_id, name="Grossista do Kinaxixi", nif="5000333666")
+    db.add(supplier)
+    nor, _ = await _rates(db)
+    await db.commit()
+    supplier_id = supplier.id
+    account_id = await _account(db, company_id)
+    await set_opening_balance(db, company_id, account_id, 5000, date.today())
+    fr = await register_purchase_invoice(
+        db, company_id, user.id, supplier_id, "FR K/9", date.today(), [_line(nor)], purchase_type="FR", user=user,
+        payment={"payment_method_id": ctx["pm_mb"].id, "bank_account_id": account_id, "reference": "TRF-9"})
+    statement = await get_bank_statement(db, company_id, account_id)
+    [line] = statement["lines"]
+    assert line["amount_out"] == float(fr.total) and statement["closing"] == round(5000 - float(fr.total), 2)
+    assert "TRF-9" in line["description"]
+    # the supplier's account: the FR and its payment, never a second «Pago na emissão»
+    descriptions = [e["description"] for e in (await supplier_statement(db, company_id, supplier_id))["lines"]]
+    assert not any("Pago na emissão" in d for d in descriptions) and any(d.startswith("Pagamento") for d in descriptions)
