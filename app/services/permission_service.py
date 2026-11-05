@@ -132,6 +132,8 @@ PERMISSION_CATALOG: list[tuple[str, str, str, list[str]]] = [
     ("fiscal_periods:close", "Fechar exercicios e períodos fiscais", "Contabilidade", []),
     ("fiscal_periods:current", "Ver o período fiscal corrente", "Contabilidade", ["CAIXA", "ARMAZENISTA", "CONTABILISTA", "ATENDENTE", "COZINHA"]),
     ("saf_t:export", "Exportar SAF-T", "Contabilidade", []),
+    ("accounting:chart_view", "Ver o plano de contas", "Contabilidade", ["CONTABILISTA"]),
+    ("accounting:chart_manage", "Configurar o plano de contas (PGC, importação, contas)", "Contabilidade", ["CONTABILISTA"]),
     ("company:view", "Ver dados da empresa", "Empresa", []),
     ("company:manage", "Editar dados e logotipo da empresa", "Empresa", []),
     ("company:backup", "Gerir e descarregar as cópias de segurança da empresa", "Empresa", []),

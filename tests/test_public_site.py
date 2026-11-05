@@ -49,7 +49,7 @@ async def test_the_site_shows_the_plans_on_sale(db, client_for, monkeypatch):
     assert popular["limits"]["max_users"] == 3 and popular["limits"]["max_pos"] is None  # None: unlimited
     assert popular["options"] == ["GUIAS"]
     codes = {s["code"]: s for s in site["sectors"]}
-    assert codes["HOTEL"]["ready"] and not codes["CONTABILIDADE"]["ready"]
+    assert codes["HOTEL"]["ready"] and not codes["RH"]["ready"]
     assert site["contacts"] == {"whatsapp": None, "email": None} and site["agt_validation_number"] is None
 
 

@@ -33,6 +33,7 @@ from app.api.v1.purchases.routes import router as purchases_router
 from app.api.v1.guias.routes import router as guias_router
 from app.api.v1.supplier_payments.routes import router as supplier_payments_router
 from app.api.v1.vat_return.routes import router as vat_return_router
+from app.api.v1.accounting.routes import router as accounting_router
 from app.api.v1.permissions.routes import router as permissions_router
 from app.api.v1.pos.routes import router as pos_router
 from app.api.v1.catalogs.routes import router as catalogs_router
@@ -191,6 +192,7 @@ app.include_router(purchases_router)
 app.include_router(guias_router)
 app.include_router(supplier_payments_router)
 app.include_router(vat_return_router)
+app.include_router(accounting_router)
 app.include_router(permissions_router)
 app.include_router(pos_router)
 app.include_router(catalogs_router)

@@ -33,6 +33,7 @@ DATA_COUNT_SQL = {
     "HOTEL_STAY": "SELECT company_id, count(*) FROM open_accounts WHERE booking_id IS NOT NULL GROUP BY company_id",
     "KITCHEN": "SELECT company_id, count(*) FROM kitchen_orders GROUP BY company_id",
     "PHARMACY": "SELECT company_id, count(*) FROM products WHERE is_medicine GROUP BY company_id",
+    "ACCOUNTING": "SELECT company_id, count(*) FROM accounts GROUP BY company_id",
 }
 
 
@@ -78,13 +79,15 @@ async def seed_sector_catalog(db: AsyncSession) -> None:
         by_code[sector.code] = module
     await db.flush()
 
-    seeded = {row[0] for row in (await db.execute(select(ModuleCapability.module_id))).all()}
+    # one row per module and capability, written once: a capability added to the catalog later gets its row (with the
+    # sector's default) in every module, the rows the SUPER_ADMIN changed are kept
+    seeded = {(row[0], row[1]) for row in (await db.execute(
+        select(ModuleCapability.module_id, ModuleCapability.capability))).all()}
     for sector in SECTORS:
         module = by_code[sector.code]
-        if module.id in seeded:
-            continue
         for code in CAPABILITIES:
-            db.add(ModuleCapability(module_id=module.id, capability=code, is_enabled=code in sector.capabilities))
+            if (module.id, code) not in seeded:
+                db.add(ModuleCapability(module_id=module.id, capability=code, is_enabled=code in sector.capabilities))
     await db.commit()
 
 
