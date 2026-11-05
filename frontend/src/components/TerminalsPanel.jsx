@@ -133,7 +133,7 @@ export default function TerminalsPanel({ account, canManage }) {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className={labelCls}>Nome *</label>
-                <input required maxLength={60} value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="TPA Balcão" className={inputCls + ' w-full'} />
+                <input required maxLength={60} value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder={form.kind === 'EXPRESS' ? 'Express 923 000 000' : 'TPA Balcão'} className={inputCls + ' w-full'} />
               </div>
               <div>
                 <label className={labelCls}>Tipo *</label>

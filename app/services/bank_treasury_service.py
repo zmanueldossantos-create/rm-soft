@@ -9,7 +9,9 @@ A bank account's movements are read from the documents that already name it - no
   - the money paid from it: the supplier payments made from this account; a cancelled one comes back on its
     cancellation day, so the statement keeps both;
   - the movements typed on the account in the Tesouraria (BankMovement: bank fees, a capital entry...), each with a
-    reason of the catalog used for the banks; cancelled the same way.
+    reason of the catalog used for the banks; cancelled the same way;
+  - the transfers between the company's accounts (BankTransfer): out on their date, in on the day the funds are
+    available (the same day within one bank) - see app.services.bank_transfer_service.
 The starting point is the account's opening balance: the bank statement's balance on the day the company starts
 following the account here (opening_date) - the movements before that day are inside that balance and not counted.
 Documents of Modo formação never move money.
@@ -68,6 +70,8 @@ class _Line:
     description: str
     amount: float  # > 0 in, < 0 out
     movement_id: uuid.UUID | None = None  # a typed movement still registered: it may be cancelled
+    transfer_id: uuid.UUID | None = None  # a transfer not cancelled: it may be cancelled
+    in_transit: bool = False  # a transfer that left this account and is not yet on the other one
 
 
 async def _account_or_raise(db: AsyncSession, company_id: uuid.UUID, account_id: uuid.UUID) -> CompanyBankAccount:
@@ -142,6 +146,9 @@ async def _lines(db: AsyncSession, company_id: uuid.UUID, account: CompanyBankAc
                 amount=-sign * float(movement.amount),
             ))
 
+    from app.services.bank_transfer_service import transfer_lines  # the transfers between the company's accounts
+    lines.extend(await transfer_lines(db, company_id, account))
+
     if account.opening_date is not None:
         lines = [line for line in lines if line.day >= account.opening_date]
     epoch = datetime.min.replace(tzinfo=timezone.utc)
@@ -168,13 +175,16 @@ def _describe(account: CompanyBankAccount, acronym: str, full_name: str, currenc
 
 
 async def list_bank_positions(db: AsyncSession, company_id: uuid.UUID) -> list[dict]:
-    """Each bank account of the company with its balance today."""
+    """Each bank account of the company with its balance today, and the money on its way to it (em trânsito)."""
+    from app.services.bank_transfer_service import in_transit_by_account
+    in_transit = await in_transit_by_account(db, company_id)
     out = []
     for account, acronym, full_name, currency in await _accounts(db, company_id):
         lines = await _lines(db, company_id, account)
         row = _describe(account, acronym, full_name, currency)
         row["balance"] = round(row["opening_balance"] + sum(line.amount for line in lines), 2)
         row["movements"] = len(lines)
+        row["in_transit_in"] = in_transit.get(account.id, 0.0)
         out.append(row)
     return out
 
@@ -204,6 +214,7 @@ async def get_bank_statement(
             "amount_in": round(line.amount, 2) if line.amount > 0 else 0.0,
             "amount_out": round(-line.amount, 2) if line.amount < 0 else 0.0,
             "balance": round(balance, 2), "movement_id": line.movement_id,
+            "transfer_id": line.transfer_id, "in_transit": line.in_transit,
         })
     return {
         "account": _describe(account, acronym, full_name, currency),

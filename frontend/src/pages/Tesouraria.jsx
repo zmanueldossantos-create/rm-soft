@@ -5,9 +5,10 @@ import Select from '../components/Select';
 import Modal from '../components/Modal';
 import { formatKz } from '../utils/format';
 import { extractErrorMessage } from '../utils/errors';
-import { getTreasuryPosition, listTreasuryMovements, listTreasuryClosings, listBankPositions, getBankStatement, setBankOpeningBalance, listCashMovementReasons, createBankMovement, cancelBankMovement } from '../api/tesouraria';
+import { getTreasuryPosition, listTreasuryMovements, listTreasuryClosings, listBankPositions, getBankStatement, setBankOpeningBalance, listCashMovementReasons, createBankMovement, cancelBankMovement, cancelBankTransfer } from '../api/tesouraria';
 import BankBalanceWarning, { bankShortfall } from '../components/BankBalanceWarning';
 import TerminalsPanel from '../components/TerminalsPanel';
+import { TransferModal, InTransitPanel } from '../components/BankTransfers';
 import { useCan } from '../utils/permissions';
 import { fetchClosingReportPdfBlob } from '../api/pos';
 import { getCurrentPeriod } from '../api/fiscal';
@@ -228,7 +229,7 @@ function bankLabel(b) {
 }
 
 // Bancos: a card per account (balance today, its opening balance), the statement of the one picked over the period.
-function Banks({ banks, selectedId, onSelect, statement, onEditOpening, onNewMovement, onCancelMovement, children }) {
+function Banks({ banks, selectedId, onSelect, statement, onEditOpening, onNewMovement, onNewTransfer, onCancelMovement, children }) {
   if (banks.length === 0) {
     return <p className="text-text-muted text-[13px] text-center py-12">Nenhuma conta bancária - crie-as em Administração › Empresa › Coordenadas Bancárias</p>;
   }
@@ -248,6 +249,7 @@ function Banks({ banks, selectedId, onSelect, statement, onEditOpening, onNewMov
             </div>
             <p className="text-[12px] text-text-muted truncate">{b.bank_name} · IBAN {b.iban}</p>
             <p className={'font-mono font-semibold text-xl ' + (b.balance < 0 ? 'text-danger' : 'text-text-primary')}>{formatKz(b.balance)} {b.currency === 'AOA' ? 'Kz' : b.currency}</p>
+            {b.in_transit_in > 0 && <p className="text-[12px] text-accent">+ {formatKz(b.in_transit_in)} em trânsito (a chegar)</p>}
             <div className="flex items-center justify-between gap-2 text-[12px]">
               <span className={b.opening_date ? 'text-text-muted' : 'text-accent'}>
                 {b.opening_date ? `Saldo inicial ${formatKz(b.opening_balance)} em ${day(b.opening_date)}` : 'Saldo inicial por definir'}
@@ -273,15 +275,26 @@ function Banks({ banks, selectedId, onSelect, statement, onEditOpening, onNewMov
 
       {statement && (
         <>
-          {onNewMovement && (
-            <div className="flex justify-end mb-3">
-              <button
-                type="button"
-                onClick={onNewMovement}
-                className="flex items-center gap-1.5 bg-accent hover:bg-accent-hover text-white text-[13px] font-semibold px-3.5 py-2 rounded-md transition-colors cursor-pointer"
-              >
-                <Plus size={15} /> Novo movimento em {bankLabel(statement.account)}
-              </button>
+          {(onNewMovement || onNewTransfer) && (
+            <div className="flex justify-end flex-wrap gap-2 mb-3">
+              {onNewTransfer && (
+                <button
+                  type="button"
+                  onClick={onNewTransfer}
+                  className="flex items-center gap-1.5 border border-border hover:border-accent text-text-primary hover:text-accent text-[13px] font-semibold px-3.5 py-2 rounded-md transition-colors cursor-pointer"
+                >
+                  <ArrowLeftRight size={15} /> Transferência
+                </button>
+              )}
+              {onNewMovement && (
+                <button
+                  type="button"
+                  onClick={onNewMovement}
+                  className="flex items-center gap-1.5 bg-accent hover:bg-accent-hover text-white text-[13px] font-semibold px-3.5 py-2 rounded-md transition-colors cursor-pointer"
+                >
+                  <Plus size={15} /> Novo movimento em {bankLabel(statement.account)}
+                </button>
+              )}
             </div>
           )}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
@@ -316,17 +329,20 @@ function Banks({ banks, selectedId, onSelect, statement, onEditOpening, onNewMov
                   <tr key={i} className="border-b border-border last:border-0">
                     <td className={th + ' font-mono text-[12px] text-text-muted whitespace-nowrap'}>{day(l.date)}</td>
                     <td className={th + ' font-mono text-[12px] text-text-primary whitespace-nowrap'}>{l.document}</td>
-                    <td className={th + ' text-[12px] text-text-muted'}>{l.description || '-'}</td>
+                    <td className={th + ' text-[12px] text-text-muted'}>
+                      {l.description || '-'}
+                      {l.in_transit && <span className="ml-2 text-[11px] font-medium px-2 py-0.5 rounded-full bg-accent/10 text-accent whitespace-nowrap">Em trânsito</span>}
+                    </td>
                     <td className={th + ' text-right font-mono text-[13px] text-success whitespace-nowrap'}>{l.amount_in ? formatKz(l.amount_in) + ' Kz' : ''}</td>
                     <td className={th + ' text-right font-mono text-[13px] text-danger whitespace-nowrap'}>{l.amount_out ? formatKz(l.amount_out) + ' Kz' : ''}</td>
                     <td className={th + ' text-right font-mono text-[13px] text-text-primary whitespace-nowrap'}>{formatKz(l.balance)} Kz</td>
                     {onCancelMovement && (
                       <td className={th + ' text-right'}>
-                        {l.movement_id && (
+                        {(l.movement_id || l.transfer_id) && (
                           <button
                             type="button"
                             onClick={() => onCancelMovement(l)}
-                            title="Anular este movimento"
+                            title={l.transfer_id ? 'Anular esta transferência' : 'Anular este movimento'}
                             className="w-8 h-8 inline-flex items-center justify-center rounded-md border border-border text-text-muted hover:text-danger hover:border-danger transition-colors cursor-pointer"
                           >
                             <Ban size={14} />
@@ -369,6 +385,7 @@ export default function Tesouraria() {
   const [newMovement, setNewMovement] = useState(null); // { reasonId, amount, date, reference, description, negativeOk }
   const [cancelling, setCancelling] = useState(null); // { line, reason }
   const [movementSaving, setMovementSaving] = useState(false);
+  const [transferSource, setTransferSource] = useState(null); // the account a new transfer leaves
 
   // the period's dates follow the active fiscal period (Outubro 2026: 01/10 - 31/10, or today if sooner), not the
   // calendar month - operations of a month still open are counted in it
@@ -447,8 +464,9 @@ export default function Tesouraria() {
   async function saveCancel() {
     setMovementSaving(true);
     try {
-      await cancelBankMovement(cancelling.line.movement_id, cancelling.reason);
-      toast.success('Movimento ' + cancelling.line.document + ' anulado');
+      if (cancelling.line.transfer_id) await cancelBankTransfer(cancelling.line.transfer_id, cancelling.reason);
+      else await cancelBankMovement(cancelling.line.movement_id, cancelling.reason);
+      toast.success((cancelling.line.transfer_id ? 'Transferência ' : 'Movimento ') + cancelling.line.document + ' anulado');
       setCancelling(null);
       setReload((n) => n + 1);
     } catch (err) {
@@ -563,7 +581,9 @@ export default function Tesouraria() {
         <Banks banks={banks} selectedId={bankId} onSelect={setBankId} statement={statement}
           onEditOpening={can('tesouraria:banks_manage') ? (b) => setOpening({ bank: b, amount: String(b.opening_balance || ''), date: b.opening_date || todayIso() }) : null}
           onNewMovement={can('tesouraria:bank_movements') && selectedBank?.is_active ? () => setNewMovement({ reasonId: '', amount: '', date: todayIso(), reference: '', description: '', negativeOk: false }) : null}
+          onNewTransfer={can('tesouraria:bank_movements') && selectedBank?.is_active && banks.length > 1 ? () => setTransferSource(selectedBank) : null}
           onCancelMovement={can('tesouraria:bank_movements') ? (line) => setCancelling({ line, reason: '' }) : null}>
+          <InTransitPanel reload={reload} canManage={can('tesouraria:bank_movements')} onChange={() => setReload((n) => n + 1)} />
           {selectedBank && <TerminalsPanel key={selectedBank.id} account={selectedBank} canManage={can('tesouraria:banks_manage')} />}
         </Banks>
       ) : (
@@ -627,16 +647,23 @@ export default function Tesouraria() {
         )}
       </Modal>
 
+      <TransferModal source={transferSource} banks={banks} onClose={() => setTransferSource(null)}
+        onDone={() => { setTransferSource(null); setReload((n) => n + 1); }} />
+
       <Modal open={!!cancelling} onClose={() => setCancelling(null)} title={'Anular ' + (cancelling?.line.document || '')} maxWidthClass="max-w-md">
         {cancelling && (
           <form onSubmit={(e) => { e.preventDefault(); saveCancel(); }} className="flex flex-col gap-4">
-            <p className="text-text-muted text-[13px]">O movimento não é apagado: o extrato mostra-o e mostra a anulação de hoje, em sentido contrário ({cancelling.line.amount_in ? 'saída' : 'entrada'} de {formatKz(cancelling.line.amount_in || cancelling.line.amount_out)} Kz).</p>
+            <p className="text-text-muted text-[13px]">
+              {cancelling.line.transfer_id
+                ? 'A transferência não é apagada: os extratos das duas contas mostram-na e mostram a anulação de hoje - o dinheiro volta à conta de origem (e sai da conta de destino, se já tinha chegado).'
+                : `O movimento não é apagado: o extrato mostra-o e mostra a anulação de hoje, em sentido contrário (${cancelling.line.amount_in ? 'saída' : 'entrada'} de ${formatKz(cancelling.line.amount_in || cancelling.line.amount_out)} Kz).`}
+            </p>
             <div>
               <label className={labelCls}>Motivo da anulação *</label>
               <input value={cancelling.reason} required maxLength={300} onChange={(e) => setCancelling((c) => ({ ...c, reason: e.target.value }))} className={inputCls + ' w-full'} />
             </div>
             <button type="submit" disabled={movementSaving || !cancelling.reason.trim()} className="bg-danger hover:opacity-90 disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 transition-colors cursor-pointer">
-              {movementSaving ? 'A anular...' : 'Anular movimento'}
+              {movementSaving ? 'A anular...' : (cancelling.line.transfer_id ? 'Anular transferência' : 'Anular movimento')}
             </button>
           </form>
         )}

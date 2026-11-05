@@ -567,3 +567,68 @@ async def patch_toggle_terminal(
         return await toggle_terminal(db, current_user.company_id, terminal_id)
     except PaymentTerminalNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+# ---------- Transferências: between two bank accounts of the company (em trânsito between two banks) ----------
+
+from app.schemas.tesouraria import (  # noqa: E402
+    BankTransferConfirmRequest, BankTransferCreateRequest, BankTransferResponse,
+)
+from app.services.bank_transfer_service import (  # noqa: E402
+    BankTransferNotFoundError, cancel_bank_transfer, confirm_funds_available, create_bank_transfer,
+    describe_transfers, list_transfers_in_transit,
+)
+
+
+@router.get("/bank-transfers/in-transit", response_model=list[BankTransferResponse])
+async def get_transfers_in_transit(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("tesouraria:overview")),
+):
+    return await list_transfers_in_transit(db, current_user.company_id)
+
+
+@router.post("/banks/{account_id}/transfers", response_model=BankTransferResponse, status_code=status.HTTP_201_CREATED)
+async def post_bank_transfer(
+    account_id: uuid.UUID, payload: BankTransferCreateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("tesouraria:bank_movements")),
+):
+    try:
+        transfer = await create_bank_transfer(db, current_user.company_id, current_user, account_id, payload.to_account_id,
+                                              payload.amount, payload.transfer_date, payload.reference, payload.description)
+    except BankAccountNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BankMovementError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    return (await describe_transfers(db, [transfer]))[0]
+
+
+@router.post("/bank-transfers/{transfer_id}/available", response_model=BankTransferResponse)
+async def post_funds_available(
+    transfer_id: uuid.UUID, payload: BankTransferConfirmRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("tesouraria:bank_movements")),
+):
+    try:
+        transfer = await confirm_funds_available(db, current_user.company_id, transfer_id, current_user, payload.available_date)
+    except BankTransferNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BankMovementError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    return (await describe_transfers(db, [transfer]))[0]
+
+
+@router.post("/bank-transfers/{transfer_id}/cancel", response_model=BankTransferResponse)
+async def post_cancel_bank_transfer(
+    transfer_id: uuid.UUID, payload: BankMovementCancelRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("tesouraria:bank_movements")),
+):
+    try:
+        transfer = await cancel_bank_transfer(db, current_user.company_id, transfer_id, current_user, payload.reason)
+    except BankTransferNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BankMovementError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    return (await describe_transfers(db, [transfer]))[0]

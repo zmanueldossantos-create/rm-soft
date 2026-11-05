@@ -210,3 +210,25 @@ export async function toggleTerminal(terminalId) {
   const res = await apiClient.patch(`/tesouraria/terminals/${terminalId}/toggle-status`);
   return res.data;
 }
+
+// Transfers between two bank accounts of the company: { to_account_id, amount, transfer_date, reference, description }
+export async function createBankTransfer(fromAccountId, payload) {
+  const res = await apiClient.post(`/tesouraria/banks/${fromAccountId}/transfers`, payload);
+  return res.data;
+}
+
+// The transfers between two banks still on their way (waiting for «Fundos disponíveis»)
+export async function listTransfersInTransit() {
+  const res = await apiClient.get('/tesouraria/bank-transfers/in-transit');
+  return res.data;
+}
+
+export async function confirmFundsAvailable(transferId, availableDate) {
+  const res = await apiClient.post(`/tesouraria/bank-transfers/${transferId}/available`, { available_date: availableDate });
+  return res.data;
+}
+
+export async function cancelBankTransfer(transferId, reason) {
+  const res = await apiClient.post(`/tesouraria/bank-transfers/${transferId}/cancel`, { reason });
+  return res.data;
+}

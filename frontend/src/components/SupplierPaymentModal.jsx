@@ -151,7 +151,7 @@ export default function SupplierPaymentModal({ invoices, onClose, onPaid }) {
         {method?.code === 'TB' && (
           <p className={'text-[13px] px-3.5 py-2.5 rounded-md border ' + (supplierIban ? 'border-border bg-bg-inset text-text-primary' : 'border-amber-500/40 bg-amber-500/10 text-amber-500')}>
             {supplierIban
-              ? <>Transferir para o IBAN do fornecedor: <span className="font-mono">{supplierIban}</span></>
+              ? <>Transferir para o IBAN do fornecedor: <span className="font-mono">{supplierIban.replace(/(.{4})/g, '$1 ').trim()}</span></>
               : 'O fornecedor não tem IBAN - indique-o na ficha do fornecedor (Fornecedores), para o ter à mão na transferência.'}
           </p>
         )}

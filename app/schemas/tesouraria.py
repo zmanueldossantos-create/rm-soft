@@ -193,6 +193,7 @@ class BankPosition(BaseModel):
     opening_date: date | None
     balance: float
     movements: int
+    in_transit_in: float = 0  # transfers on their way to this account (em trânsito)
 
 
 class BankStatementLine(BaseModel):
@@ -203,6 +204,8 @@ class BankStatementLine(BaseModel):
     amount_out: float
     balance: float
     movement_id: uuid.UUID | None = None  # a typed movement still registered: «Anular»
+    transfer_id: uuid.UUID | None = None  # a transfer not cancelled: «Anular»
+    in_transit: bool = False  # a transfer out, not yet on the other account
 
 
 class BankStatementAccount(BaseModel):
@@ -277,3 +280,32 @@ class PaymentTerminalResponse(BaseModel):
     pos_name: str | None
     payment_method_ids: list[uuid.UUID]
     is_active: bool
+
+
+# ---------- Transferências entre contas bancárias da empresa ----------
+
+class BankTransferCreateRequest(BaseModel):
+    to_account_id: uuid.UUID
+    amount: float
+    transfer_date: date
+    reference: str | None = None
+    description: str | None = None
+
+
+class BankTransferConfirmRequest(BaseModel):
+    available_date: date
+
+
+class BankTransferResponse(BaseModel):
+    id: uuid.UUID
+    document: str
+    from_account_id: uuid.UUID
+    from_label: str
+    to_account_id: uuid.UUID
+    to_label: str
+    amount: float
+    transfer_date: date
+    available_date: date | None
+    status: str
+    reference: str | None
+    description: str | None
