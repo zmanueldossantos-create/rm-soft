@@ -45,6 +45,7 @@ import PrescriptionModal, { prescriptionNeedOf } from '../components/Prescriptio
 
 import { dueDateFor, isProntoTerm } from '../utils/paymentTerms';
 import { useToastState } from '../components/Toaster';
+import { toast } from '../store/toastStore';
 
 // What is still owed, from the server (credit notes, deposit, receipts and refunds counted) - never recomputed here.
 const balanceOf = (inv) => Number(inv.amount_due || 0);
@@ -119,7 +120,9 @@ export default function Caixa() {
   const [moedeiroSavedTotal, setMoedeiroSavedTotal] = useState(null);
 
   const [movementModalOpen, setMovementModalOpen] = useState(false);
-  const [movementForm, setMovementForm] = useState({ movementType: 'TRANSFERENCIA', amount: '', sourcePosId: '', otherPosId: '', reasonId: '', description: '' });
+  // movementType: TRANSFERENCIA, ENTRADA_EXTERNA, SAIDA_EXTERNA, or DEPOSITO / LEVANTAMENTO (a saída / entrada
+  // externa with a bank account of the company - no reason)
+  const [movementForm, setMovementForm] = useState({ movementType: 'TRANSFERENCIA', amount: '', sourcePosId: '', otherPosId: '', reasonId: '', description: '', bankAccountId: '' });
   const [movementReasons, setMovementReasons] = useState([]);
   const [movementSaving, setMovementSaving] = useState(false);
   const [movementFormError, setMovementFormError] = useToastState('error');
@@ -479,17 +482,24 @@ export default function Caixa() {
     setMovementFormError('');
     setMovementSaving(true);
     try {
+      const bankSide = movementForm.movementType === 'DEPOSITO' || movementForm.movementType === 'LEVANTAMENTO';
       const payload = {
-        movement_type: movementForm.movementType,
+        movement_type: movementForm.movementType === 'DEPOSITO' ? 'SAIDA_EXTERNA'
+          : movementForm.movementType === 'LEVANTAMENTO' ? 'ENTRADA_EXTERNA' : movementForm.movementType,
         amount: transferWithBilletage ? transferTotal : parseFloat(movementForm.amount || '0'),
-        reason_id: movementForm.reasonId || null,
+        reason_id: bankSide ? null : (movementForm.reasonId || null),
+        bank_account_id: bankSide ? movementForm.bankAccountId || null : null,
         description: movementForm.description || null,
       };
+      if (bankSide && !payload.bank_account_id) {
+        setMovementFormError('Escolha a conta bancária');
+        return;
+      }
       if (movementForm.movementType === 'TRANSFERENCIA') {
         payload.source_pos_id = movementForm.sourcePosId;
         payload.destination_pos_id = movementForm.otherPosId;
         if (transferWithBilletage) payload.denomination_lines = denominationLines(denominations, transferQuantities);
-      } else if (movementForm.movementType === 'ENTRADA_EXTERNA') {
+      } else if (payload.movement_type === 'ENTRADA_EXTERNA') {
         payload.destination_pos_id = selectedPosId;
       } else {
         payload.source_pos_id = selectedPosId;
@@ -499,7 +509,8 @@ export default function Caixa() {
       refreshPosStock(selectedPosId);
       loadPendingEmissionsList();
       loadPendingReceptionsList();
-      setMovementForm({ movementType: 'TRANSFERENCIA', amount: '', sourcePosId: selectedPosId, otherPosId: '', reasonId: '', description: '' });
+      toast.success(bankSide ? (movementForm.movementType === 'DEPOSITO' ? 'Depósito no banco registado' : 'Levantamento do banco registado') : 'Movimento registado');
+      setMovementForm({ movementType: 'TRANSFERENCIA', amount: '', sourcePosId: selectedPosId, otherPosId: '', reasonId: '', description: '', bankAccountId: '' });
       setTransferQuantities({});
     } catch (err) {
       setMovementFormError(extractErrorMessage(err, 'Erro ao registar movimento'));
@@ -2494,14 +2505,31 @@ export default function Caixa() {
               <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Tipo</label>
               <Select
                 value={movementForm.movementType}
-                onChange={(v) => setMovementForm((p) => ({ ...p, movementType: v, otherPosId: '', reasonId: '' }))}
+                onChange={(v) => setMovementForm((p) => ({ ...p, movementType: v, otherPosId: '', reasonId: '', bankAccountId: '' }))}
                 options={[
                   { value: 'TRANSFERENCIA', label: 'Transferência para outra caixa' },
+                  { value: 'DEPOSITO', label: 'Depósito no banco' },
+                  { value: 'LEVANTAMENTO', label: 'Levantamento do banco' },
                   { value: 'ENTRADA_EXTERNA', label: 'Entrada externa' },
                   { value: 'SAIDA_EXTERNA', label: 'Saída externa' },
                 ]}
               />
             </div>
+
+            {(movementForm.movementType === 'DEPOSITO' || movementForm.movementType === 'LEVANTAMENTO') && (
+              <div>
+                <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Conta bancária *</label>
+                {bankAccounts.length === 0
+                  ? <p className="text-[12px] text-danger py-2">A empresa não tem nenhuma conta bancária ativa.</p>
+                  : <Select value={movementForm.bankAccountId} onChange={(v) => setMovementForm((p) => ({ ...p, bankAccountId: v }))} placeholder="Selecionar"
+                      options={bankAccounts.map((b) => ({ value: b.id, label: (b.bank_acronym || 'Banco') + ' · ' + b.account_number }))} />}
+                <p className="text-[12px] text-text-muted mt-1.5">
+                  {movementForm.movementType === 'DEPOSITO'
+                    ? 'O dinheiro sai desta caixa e entra na conta bancária (Tesouraria › Bancos). Indique o nº do talão de depósito na descrição.'
+                    : 'O dinheiro sai da conta bancária e entra nesta caixa (fundo de maneio).'}
+                </p>
+              </div>
+            )}
 
             {movementForm.movementType === 'TRANSFERENCIA' && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -2526,7 +2554,7 @@ export default function Caixa() {
                 </div>
               </div>
             )}
-            {movementForm.movementType !== 'TRANSFERENCIA' && (
+            {(movementForm.movementType === 'ENTRADA_EXTERNA' || movementForm.movementType === 'SAIDA_EXTERNA') && (
               <div>
                 <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Motivo *</label>
                 <Select

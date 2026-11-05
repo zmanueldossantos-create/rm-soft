@@ -144,6 +144,32 @@ async def toggle_reason_status(db: AsyncSession, company_id: uuid.UUID, reason_i
 
 # ---------- Movements ----------
 
+async def _check_bank_side(
+    db: AsyncSession, company_id: uuid.UUID, movement_type: CashMovementType, bank_account_id: uuid.UUID,
+    movement_date: date, destination_pos_id: uuid.UUID | None,
+) -> None:
+    """A deposit or a withdrawal: an active account of the company, a date from its opening balance on, in an open
+    period; a withdrawal lands in a till (or the cofre) whose session is open - the cash is counted there."""
+    from app.models.company_bank_account import CompanyBankAccount
+    from app.services.bank_treasury_service import BankMovementError, _check_date_open
+    if movement_type == CashMovementType.TRANSFERENCIA:
+        raise InvalidCashMovementError("Uma transferência entre caixas não tem conta bancária")
+    account = (await db.execute(select(CompanyBankAccount).where(
+        CompanyBankAccount.id == bank_account_id, CompanyBankAccount.company_id == company_id))).scalar_one_or_none()
+    if account is None or not account.is_active:
+        raise InvalidCashMovementError("Conta bancária não encontrada ou inativa")
+    if account.opening_date is not None and movement_date < account.opening_date:
+        raise InvalidCashMovementError("A data é anterior ao saldo inicial da conta bancária "
+                                       f"({account.opening_date.strftime('%d/%m/%Y')})")
+    try:
+        await _check_date_open(db, company_id, movement_date)
+    except BankMovementError as e:
+        raise InvalidCashMovementError(str(e))
+    if movement_type == CashMovementType.ENTRADA_EXTERNA and destination_pos_id is not None:
+        if await get_open_session(db, company_id, destination_pos_id) is None:
+            raise DestinationPosNotOpenError("A caixa que recebe o levantamento não tem nenhuma sessão aberta - abra-a antes")
+
+
 async def create_cash_movement(
     db: AsyncSession,
     company_id: uuid.UUID,
@@ -156,11 +182,17 @@ async def create_cash_movement(
     movement_date: date | None = None,
     description: str | None = None,
     denomination_lines: list[dict] | None = None,
+    bank_account_id: uuid.UUID | None = None,
 ) -> CashMovement:
     """denomination_lines: the notes and coins sent ([{denomination_id, quantity}]) - required for a transfer from a
-    till with billetage, ignored otherwise."""
+    till with billetage, ignored otherwise.
+    bank_account_id: a deposit (SAIDA_EXTERNA) or a withdrawal (ENTRADA_EXTERNA) with a bank account of the company -
+    see the CashMovement docstring; no reason then."""
     if amount <= 0:
         raise InvalidCashMovementError("O valor do movimento deve ser maior que zero")
+    if bank_account_id is not None:
+        await _check_bank_side(db, company_id, movement_type, bank_account_id, movement_date or date.today(),
+                               destination_pos_id)
 
     if movement_type == CashMovementType.TRANSFERENCIA:
         if source_pos_id is None or destination_pos_id is None:
@@ -170,12 +202,12 @@ async def create_cash_movement(
     elif movement_type == CashMovementType.ENTRADA_EXTERNA:
         if source_pos_id is not None or destination_pos_id is None:
             raise InvalidCashMovementError("Uma entrada externa exige apenas um destino, sem origem")
-        if reason_id is None:
+        if reason_id is None and bank_account_id is None:
             raise InvalidCashMovementError("Uma entrada externa exige um motivo")
     elif movement_type == CashMovementType.SAIDA_EXTERNA:
         if destination_pos_id is not None or source_pos_id is None:
             raise InvalidCashMovementError("Uma saída externa exige apenas uma origem, sem destino")
-        if reason_id is None:
+        if reason_id is None and bank_account_id is None:
             raise InvalidCashMovementError("Uma saída externa exige um motivo")
 
     source_pos, open_session = None, None
@@ -221,6 +253,7 @@ async def create_cash_movement(
         source_pos_id=source_pos_id,
         destination_pos_id=destination_pos_id,
         reason_id=reason_id,
+        bank_account_id=bank_account_id,
         amount=amount,
         movement_date=movement_date or date.today(),
         description=description,

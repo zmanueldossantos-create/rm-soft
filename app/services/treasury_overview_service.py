@@ -117,6 +117,14 @@ async def list_treasury_movements(
         select(CashMovementReason.id, CashMovementReason.name).where(CashMovementReason.company_id == company_id)
     )).all())
     names = await _user_names(db, [m.created_by_user_id for m in movements] + [m.received_by_user_id for m in movements])
+    from app.services.bank_transfer_service import _labels as bank_account_labels
+    bank_labels = await bank_account_labels(db, {m.bank_account_id for m in movements if m.bank_account_id})
+
+    def reason_of(m):
+        if m.bank_account_id is not None:  # a deposit on, or a withdrawal from, a bank account
+            return ("Depósito no banco " if m.movement_type == CashMovementType.SAIDA_EXTERNA
+                    else "Levantamento do banco ") + bank_labels.get(m.bank_account_id, "")
+        return reasons.get(m.reason_id)
 
     def till(pos_id):
         return {"id": pos_id, "name": tills[pos_id][0].name, "activity_name": tills[pos_id][1]} if pos_id in tills else None
@@ -125,7 +133,7 @@ async def list_treasury_movements(
         "id": m.id, "movement_type": m.movement_type.value, "status": m.status.value,
         "movement_date": m.movement_date, "created_at": m.created_at, "amount": _money(m.amount),
         "source": till(m.source_pos_id), "destination": till(m.destination_pos_id),
-        "reason": reasons.get(m.reason_id), "description": m.description,
+        "reason": reason_of(m), "description": m.description,
         "created_by": names.get(m.created_by_user_id),
         # an entrada or saída is "received" at its creation by its own author: only a transfer has a receiver
         "received_by": names.get(m.received_by_user_id) if m.movement_type == CashMovementType.TRANSFERENCIA else None,

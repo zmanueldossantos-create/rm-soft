@@ -80,6 +80,7 @@ class BankAccountResponse(BaseModel):
     iban: str
     currency_id: uuid.UUID
     is_active: bool
+    bank_acronym: str | None = None  # «BAI» - for the screens that name the account (the till's deposit, withdrawal)
 
     class Config:
         from_attributes = True

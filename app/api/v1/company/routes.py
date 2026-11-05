@@ -50,7 +50,11 @@ async def get_my_company_bank_accounts(
     current_user: User = Depends(require_permission("company_bank_accounts:view")),
 ):
     """Read-only - GESTOR (and CAIXA, needed for the Caixa screen's FT payment block) see their own company's bank accounts; management stays SUPER_ADMIN-only."""
-    return await list_bank_accounts(db, current_user.company_id)
+    from sqlalchemy import select as _select
+    from app.models.bank import Bank
+    accounts = await list_bank_accounts(db, current_user.company_id)
+    acronyms = dict((await db.execute(_select(Bank.id, Bank.acronym))).all())
+    return [{**BankAccountResponse.model_validate(a).model_dump(), "bank_acronym": acronyms.get(a.bank_id)} for a in accounts]
 
 
 @router.get("/me/setup")

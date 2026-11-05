@@ -11,7 +11,9 @@ A bank account's movements are read from the documents that already name it - no
   - the movements typed on the account in the Tesouraria (BankMovement: bank fees, a capital entry...), each with a
     reason of the catalog used for the banks; cancelled the same way;
   - the transfers between the company's accounts (BankTransfer): out on their date, in on the day the funds are
-    available (the same day within one bank) - see app.services.bank_transfer_service.
+    available (the same day within one bank) - see app.services.bank_transfer_service;
+  - the cash of a till deposited on the account, and the cash withdrawn into a till or the cofre (CashMovement with
+    this bank account).
 The starting point is the account's opening balance: the bank statement's balance on the day the company starts
 following the account here (opening_date) - the movements before that day are inside that balance and not counted.
 Documents of Modo formação never move money.
@@ -148,6 +150,25 @@ async def _lines(db: AsyncSession, company_id: uuid.UUID, account: CompanyBankAc
 
     from app.services.bank_transfer_service import transfer_lines  # the transfers between the company's accounts
     lines.extend(await transfer_lines(db, company_id, account))
+
+    # the deposits of a till's cash, and the withdrawals into a till (or the cofre) - CashMovement with this account
+    from app.models.cash_movement import CashMovement, CashMovementType
+    from app.models.activity import Activity
+    from app.models.point_of_sale import PointOfSale
+    till = (await db.execute(
+        select(CashMovement, PointOfSale.name, Activity.name)
+        .join(PointOfSale, PointOfSale.id == func.coalesce(CashMovement.source_pos_id, CashMovement.destination_pos_id))
+        .join(Activity, Activity.id == PointOfSale.activity_id)
+        .where(CashMovement.company_id == company_id, CashMovement.bank_account_id == account.id)
+    )).all()
+    for movement, pos_name, activity_name in till:
+        deposit = movement.movement_type == CashMovementType.SAIDA_EXTERNA
+        lines.append(_Line(
+            day=movement.movement_date, at=movement.created_at, document="Depósito" if deposit else "Levantamento",
+            description=" · ".join(filter(None, [("De " if deposit else "Para ") + f"{pos_name} ({activity_name})",
+                                                 movement.description])),
+            amount=float(movement.amount) if deposit else -float(movement.amount),
+        ))
 
     if account.opening_date is not None:
         lines = [line for line in lines if line.day >= account.opening_date]

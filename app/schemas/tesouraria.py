@@ -41,6 +41,8 @@ class CashMovementCreateRequest(BaseModel):
     description: str | None = None
     # the notes and coins sent - a transfer from a till with billetage only
     denomination_lines: list[DenominationCountLineInput] | None = None
+    # a deposit (SAIDA_EXTERNA) or a withdrawal (ENTRADA_EXTERNA) with this bank account of the company
+    bank_account_id: uuid.UUID | None = None
 
     @field_validator("amount")
     @classmethod
@@ -70,6 +72,7 @@ class CashMovementResponse(BaseModel):
     source_pos_id: uuid.UUID | None
     destination_pos_id: uuid.UUID | None
     reason_id: uuid.UUID | None
+    bank_account_id: uuid.UUID | None = None
     amount: float
     movement_date: date
     description: str | None

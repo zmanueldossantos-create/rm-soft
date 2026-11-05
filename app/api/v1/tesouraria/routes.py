@@ -185,6 +185,7 @@ async def post_cash_movement(
             movement_date=payload.movement_date,
             description=payload.description,
             denomination_lines=_lines(payload.denomination_lines),
+            bank_account_id=payload.bank_account_id,
         )
     except tuple(BILLETAGE_ERRORS) as e:
         raise HTTPException(status_code=BILLETAGE_ERRORS[type(e)], detail=str(e))

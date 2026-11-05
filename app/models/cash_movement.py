@@ -18,7 +18,13 @@ movement_type meanings:
 - ENTRADA_EXTERNA: only destination_pos_id filled (funds coming from outside
   the system, e.g. owner's cash injection), reason_id IS required.
 - SAIDA_EXTERNA: only source_pos_id filled (funds leaving the system, e.g.
-  bank deposit, loss/theft), reason_id IS required.
+  loss/theft), reason_id IS required.
+
+bank_account_id - the money goes to or comes from a bank account of the company (Tesouraria):
+- a SAIDA_EXTERNA with a bank account is a «Depósito no banco»: out of the till, into the account;
+- an ENTRADA_EXTERNA with a bank account is a «Levantamento do banco»: out of the account, into the till (or the cofre).
+Neither needs a reason (the bank account says what it is); both appear on the account's statement
+(app.services.bank_treasury_service).
 
 Which side is required, and whether reason_id is mandatory, depends on
 movement_type and is validated in cash_movement_service, not here.
@@ -67,6 +73,7 @@ class CashMovement(Base):
     destination_pos_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("points_of_sale.id"), nullable=True, index=True)
 
     reason_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("cash_movement_reasons.id"), nullable=True, index=True)
+    bank_account_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("company_bank_accounts.id"), nullable=True, index=True)
     amount: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
     movement_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     description: Mapped[str | None] = mapped_column(String(300), nullable=True)

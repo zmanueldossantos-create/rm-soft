@@ -85,13 +85,19 @@ async def get_daily_report(
     pos_names = dict((await db.execute(
         select(PointOfSale.id, PointOfSale.name).where(PointOfSale.company_id == company_id)
     )).all())
-    for mov in movements_result.scalars().all():
+    from app.services.bank_transfer_service import _labels as bank_account_labels
+    movements = list(movements_result.scalars().all())
+    bank_labels = await bank_account_labels(db, {m.bank_account_id for m in movements if m.bank_account_id})
+    for mov in movements:
         is_outgoing = mov.source_pos_id == pos_id
         label = {
             CashMovementType.TRANSFERENCIA: "Transferência",
             CashMovementType.ENTRADA_EXTERNA: "Entrada externa",
             CashMovementType.SAIDA_EXTERNA: "Saída externa",
         }.get(mov.movement_type, str(mov.movement_type))
+        if mov.bank_account_id is not None:  # the cash deposited on, or withdrawn from, a bank account
+            label = ("Depósito no banco " if mov.movement_type == CashMovementType.SAIDA_EXTERNA
+                     else "Levantamento do banco ") + bank_labels.get(mov.bank_account_id, "")
         entries.append({
             "type": "movimento",
             "time": mov.created_at,
