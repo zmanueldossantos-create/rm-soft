@@ -8,7 +8,7 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.point_of_sale import PointOfSale
+from app.models.point_of_sale import PointOfSale, PosKind
 from app.services.activity_service import get_activity_or_raise
 
 
@@ -64,7 +64,7 @@ async def create_point_of_sale(
     billetage_enabled: bool = False,
     print_after_sale: bool = False, print_ticket: bool = True, print_a4: bool = False,
     accept_closing_difference: bool = True, print_closing_report: bool = False,
-    allow_price_levels: bool = False, allow_free_price: bool = False,
+    allow_price_levels: bool = False, allow_free_price: bool = False, kind: str = "CAIXA",
 ) -> PointOfSale:
     """Creates a POS under an Activity - the Activity must belong to the caller's company.
     is_default=True is only ever set internally by activity_service.create_activity, never
@@ -79,7 +79,8 @@ async def create_point_of_sale(
     pos = PointOfSale(company_id=company_id, activity_id=activity_id, name=name, is_default=is_default, billetage_enabled=billetage_enabled,
                       print_after_sale=print_after_sale, print_ticket=print_ticket, print_a4=print_a4,
                       accept_closing_difference=accept_closing_difference, print_closing_report=print_closing_report,
-                      allow_price_levels=allow_price_levels, allow_free_price=allow_free_price)
+                      allow_price_levels=allow_price_levels, allow_free_price=allow_free_price,
+                      kind=PosKind.CAIXA if is_default else PosKind(kind))
     db.add(pos)
     await db.commit()
     await db.refresh(pos)
@@ -98,9 +99,12 @@ async def update_point_of_sale(
     db: AsyncSession, company_id: uuid.UUID, pos_id: uuid.UUID, name: str, billetage_enabled: bool = False,
     print_after_sale: bool = False, print_ticket: bool = True, print_a4: bool = False,
     accept_closing_difference: bool = True, print_closing_report: bool = False,
-    allow_price_levels: bool = False, allow_free_price: bool = False,
+    allow_price_levels: bool = False, allow_free_price: bool = False, kind: str | None = None,
 ) -> PointOfSale:
     pos = await get_pos_or_raise(db, company_id, pos_id)
+    if kind is not None and PosKind(kind) != pos.kind:
+        await _check_kind_change(db, company_id, pos, PosKind(kind))
+        pos.kind = PosKind(kind)
     # Renaming the Activity's default POS is blocked (see error below), but
     # billetage_enabled is a normal operational toggle - even the default POS
     # can turn it on/off, so it's NOT gated by the same is_default check.
@@ -117,6 +121,16 @@ async def update_point_of_sale(
     await db.commit()
     await db.refresh(pos)
     return pos
+
+
+async def _check_kind_change(db: AsyncSession, company_id: uuid.UUID, pos: PointOfSale, kind: "PosKind") -> None:
+    """A till becomes the safe (or back) only when nothing is running there: never the activity's own till, never with
+    a session open."""
+    if pos.is_default:
+        raise DefaultPosNotModifiableError("A caixa por defeito da atividade é sempre uma caixa de venda")
+    from app.services.cash_session_service import get_open_session
+    if await get_open_session(db, company_id, pos.id) is not None:
+        raise DefaultPosNotModifiableError("Feche a sessão desta caixa antes de mudar o tipo")
 
 
 class PosStateError(Exception):

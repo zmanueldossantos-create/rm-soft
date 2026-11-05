@@ -183,7 +183,7 @@ export default function CompanySettings() {
   const [posLoadingActivityId, setPosLoadingActivityId] = useState(null);
   const [posModalOpen, setPosModalOpen] = useState(false);
   const [editingPosId, setEditingPosId] = useState(null);
-  const [posForm, setPosForm] = useState({ activityId: '', name: '', billetageEnabled: false, acceptClosingDifference: true, printClosingReport: false, printAfterSale: false, printTicket: true, printA4: false, allowPriceLevels: false, allowFreePrice: false });
+  const [posForm, setPosForm] = useState({ activityId: '', name: '', kind: 'CAIXA', billetageEnabled: false, acceptClosingDifference: true, printClosingReport: false, printAfterSale: false, printTicket: true, printA4: false, allowPriceLevels: false, allowFreePrice: false });
   const [posSaving, setPosSaving] = useState(false);
   const [posFormError, setPosFormError] = useToastState('error');
   const [assocByPos, setAssocByPos] = useState({});
@@ -409,14 +409,14 @@ export default function CompanySettings() {
 
   function openCreatePos(activityId) {
     setEditingPosId(null);
-    setPosForm({ activityId, name: '', billetageEnabled: false, acceptClosingDifference: true, printClosingReport: false, isDefault: false, printAfterSale: false, printTicket: true, printA4: false, allowPriceLevels: false, allowFreePrice: false });
+    setPosForm({ activityId, name: '', kind: 'CAIXA', billetageEnabled: false, acceptClosingDifference: true, printClosingReport: false, isDefault: false, printAfterSale: false, printTicket: true, printA4: false, allowPriceLevels: false, allowFreePrice: false });
     setPosFormError('');
     setPosModalOpen(true);
   }
 
   function openEditPos(pos) {
     setEditingPosId(pos.id);
-    setPosForm({ activityId: pos.activity_id, name: pos.name, billetageEnabled: pos.billetage_enabled || false, acceptClosingDifference: pos.accept_closing_difference !== false, printClosingReport: !!pos.print_closing_report, printAfterSale: !!pos.print_after_sale, printTicket: pos.print_ticket !== false, printA4: !!pos.print_a4, isDefault: !!pos.is_default, allowPriceLevels: !!pos.allow_price_levels, allowFreePrice: !!pos.allow_free_price });
+    setPosForm({ activityId: pos.activity_id, name: pos.name, kind: pos.kind || 'CAIXA', billetageEnabled: pos.billetage_enabled || false, acceptClosingDifference: pos.accept_closing_difference !== false, printClosingReport: !!pos.print_closing_report, printAfterSale: !!pos.print_after_sale, printTicket: pos.print_ticket !== false, printA4: !!pos.print_a4, isDefault: !!pos.is_default, allowPriceLevels: !!pos.allow_price_levels, allowFreePrice: !!pos.allow_free_price });
     setPosFormError('');
     setPosModalOpen(true);
   }
@@ -427,15 +427,15 @@ export default function CompanySettings() {
     setPosSaving(true);
     try {
       if (editingPosId) {
-        await updatePointOfSale(editingPosId, posForm.name, posForm.billetageEnabled, { print_after_sale: posForm.printAfterSale, print_ticket: posForm.printTicket, print_a4: posForm.printA4, accept_closing_difference: posForm.acceptClosingDifference, print_closing_report: posForm.printClosingReport, allow_price_levels: posForm.allowPriceLevels, allow_free_price: posForm.allowFreePrice });
+        await updatePointOfSale(editingPosId, posForm.name, posForm.billetageEnabled, { print_after_sale: posForm.printAfterSale, print_ticket: posForm.printTicket, print_a4: posForm.printA4, accept_closing_difference: posForm.acceptClosingDifference, print_closing_report: posForm.printClosingReport, allow_price_levels: posForm.allowPriceLevels, allow_free_price: posForm.allowFreePrice, kind: posForm.kind });
       } else {
-        await createPointOfSale(posForm.activityId, posForm.name, posForm.billetageEnabled, { print_after_sale: posForm.printAfterSale, print_ticket: posForm.printTicket, print_a4: posForm.printA4, accept_closing_difference: posForm.acceptClosingDifference, print_closing_report: posForm.printClosingReport, allow_price_levels: posForm.allowPriceLevels, allow_free_price: posForm.allowFreePrice });
+        await createPointOfSale(posForm.activityId, posForm.name, posForm.billetageEnabled, { print_after_sale: posForm.printAfterSale, print_ticket: posForm.printTicket, print_a4: posForm.printA4, accept_closing_difference: posForm.acceptClosingDifference, print_closing_report: posForm.printClosingReport, allow_price_levels: posForm.allowPriceLevels, allow_free_price: posForm.allowFreePrice, kind: posForm.kind });
       }
       setPosModalOpen(false);
-      toast.success(editingPosId ? 'Ponto de venda atualizado' : 'Ponto de venda criado');
+      toast.success(editingPosId ? 'Caixa atualizada' : 'Caixa criada');
       await loadPointsOfSale(posForm.activityId);
     } catch (err) {
-      setPosFormError(extractErrorMessage(err, 'Erro ao guardar ponto de venda'));
+      setPosFormError(extractErrorMessage(err, 'Erro ao guardar a caixa'));
     } finally {
       setPosSaving(false);
     }
@@ -445,10 +445,10 @@ export default function CompanySettings() {
     setPosTogglingId(posId);
     try {
       await togglePosStatus(posId);
-      toast.success('Estado do ponto de venda atualizado');
+      toast.success('Estado da caixa atualizado');
       await loadPointsOfSale(activityId);
     } catch (err) {
-      setError(extractErrorMessage(err, 'Erro ao atualizar estado do ponto de venda'));
+      setError(extractErrorMessage(err, 'Erro ao atualizar o estado da caixa'));
     } finally {
       setPosTogglingId(null);
     }
@@ -1084,17 +1084,18 @@ export default function CompanySettings() {
 
                       {(
                         <div className="border-t border-border px-4 py-3 bg-bg-inset/40">
-                          <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wide flex items-center gap-1.5 mb-2.5"><CreditCard size={12} />Pontos de venda</p>
+                          <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wide flex items-center gap-1.5 mb-2.5"><CreditCard size={12} />Caixas (pontos de venda)</p>
                           {posLoadingActivityId === a.id ? (
                             <div className="flex justify-center py-4"><Loader2 size={16} className="animate-spin text-accent" /></div>
                           ) : !posByActivity[a.id] || posByActivity[a.id].length === 0 ? (
-                            <p className="text-text-muted text-[12px] py-2">Nenhum ponto de venda configurado</p>
+                            <p className="text-text-muted text-[12px] py-2">Nenhuma caixa configurada</p>
                           ) : (
                             <div className="flex flex-col gap-1.5">
                               {posByActivity[a.id].map((p) => (
                                 <div key={p.id} className="flex items-center justify-between bg-bg-elevated border border-border rounded-lg px-3.5 py-3">
                                   <div className="flex items-center gap-3">
                                     <p className="text-sm font-medium text-text-primary">{p.name}</p>
+                                    {p.kind === 'COFRE' && <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded">Cofre</span>}
                                     {!p.is_active && <span className="text-[10px] font-semibold uppercase tracking-wide text-danger bg-danger/10 px-1.5 py-0.5 rounded">Inativo</span>}
                                     {canAssociate && (
                                       assocUserName(p.id) ? (
@@ -1112,7 +1113,7 @@ export default function CompanySettings() {
                                         <Link2 size={14} />
                                       </button>
                                     )}
-                                    <button onClick={() => openEditPos(p)} aria-label="Editar ponto de venda" className="inline-flex items-center justify-center w-7 h-7 rounded-md border border-border text-text-muted hover:text-text-primary hover:border-accent transition-colors cursor-pointer">
+                                    <button onClick={() => openEditPos(p)} aria-label="Editar caixa" className="inline-flex items-center justify-center w-7 h-7 rounded-md border border-border text-text-muted hover:text-text-primary hover:border-accent transition-colors cursor-pointer">
                                       <Pencil size={14} />
                                     </button>
                                     <span title={p.is_default ? 'A caixa por defeito da atividade não pode ser desativada' : undefined}><ToggleSwitch checked={p.is_active} disabled={posTogglingId === p.id || !!p.is_default} onChange={() => handleTogglePos(p.id, a.id)} /></span>
@@ -1123,7 +1124,7 @@ export default function CompanySettings() {
                           )}
                           <button type="button" onClick={() => openCreatePos(a.id)}
                             className="mt-2.5 flex items-center gap-1.5 border border-dashed border-accent/60 hover:border-accent hover:bg-accent/5 text-accent text-[13px] font-medium rounded-md px-3.5 py-2 transition-colors cursor-pointer">
-                            <Plus size={15} /> Ponto de venda
+                            <Plus size={15} /> Caixa
                           </button>
                         </div>
                       )}
@@ -1527,7 +1528,7 @@ export default function CompanySettings() {
         </div>
       </Modal>
 
-      <Modal open={posModalOpen} onClose={() => setPosModalOpen(false)} title={editingPosId ? 'Editar ponto de venda' : 'Novo ponto de venda'}>
+      <Modal open={posModalOpen} onClose={() => setPosModalOpen(false)} title={editingPosId ? 'Editar caixa' : 'Nova caixa'}>
         <form onSubmit={handlePosSubmit} className="flex flex-col gap-4">
           <div>
             <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Nome *</label>
@@ -1540,6 +1541,21 @@ export default function CompanySettings() {
               className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors"
             />
           </div>
+          {/* one point of sale = one cash drawer: a till that sells, or the company's safe (never sells) */}
+          <div>
+            <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Tipo *</label>
+            <div className="grid grid-cols-2 gap-2">
+              {[['CAIXA', 'Caixa de venda', 'Vende, abre e fecha a sessão'], ['COFRE', 'Cofre', 'Não vende: guarda o dinheiro entre as caixas e o banco']].map(([value, label, hint]) => (
+                <button key={value} type="button" disabled={posForm.isDefault}
+                  onClick={() => setPosForm((p) => ({ ...p, kind: value }))}
+                  className={'text-left rounded-md border px-3 py-2.5 transition-colors ' + (posForm.kind === value ? 'border-accent bg-accent/10' : 'border-border hover:border-accent/60') + (posForm.isDefault ? ' opacity-60 cursor-not-allowed' : ' cursor-pointer')}>
+                  <span className="block text-[13px] font-semibold text-text-primary">{label}</span>
+                  <span className="block text-[11px] text-text-muted">{hint}</span>
+                </button>
+              ))}
+            </div>
+            {posForm.isDefault && <p className="text-[11px] text-text-muted mt-1">A caixa por defeito da atividade é sempre uma caixa de venda.</p>}
+          </div>
           <label className="flex items-center gap-2.5 text-[13px] text-text-primary cursor-pointer">
             <input
               type="checkbox"
@@ -1550,6 +1566,7 @@ export default function CompanySettings() {
             Exigir billetagem no fecho de caixa
           </label>
           {/* the prices the cashier of this till may use (the gestor always may) */}
+          {posForm.kind !== 'COFRE' && <>
           <label className="flex items-center gap-2.5 text-[13px] text-text-primary cursor-pointer">
             <input type="checkbox" checked={posForm.allowPriceLevels} onChange={(e) => setPosForm((p) => ({ ...p, allowPriceLevels: e.target.checked }))} className="w-4 h-4 accent-accent cursor-pointer" />
             Permitir escolher o Preço 2 / Preço 3
@@ -1558,6 +1575,7 @@ export default function CompanySettings() {
             <input type="checkbox" checked={posForm.allowFreePrice} onChange={(e) => setPosForm((p) => ({ ...p, allowFreePrice: e.target.checked }))} className="w-4 h-4 accent-accent cursor-pointer" />
             Permitir alterar o preço (preço livre)
           </label>
+          </>}
             {/* closing: accept a difference (always with a reason) or refuse it; propose the A4 closing report */}
             <label className="flex items-center gap-2 text-[13px] text-text-secondary cursor-pointer">
               <input type="checkbox" checked={posForm.acceptClosingDifference} onChange={(e) => setPosForm((p) => ({ ...p, acceptClosingDifference: e.target.checked }))} />
@@ -1570,7 +1588,7 @@ export default function CompanySettings() {
               <input type="checkbox" checked={posForm.printClosingReport} onChange={(e) => setPosForm((p) => ({ ...p, printClosingReport: e.target.checked }))} />
               Propor a impressão do relatório de fecho (A4)
             </label>
-          <div className="rounded-md border border-border px-3.5 py-3 flex flex-col gap-2.5">
+          {posForm.kind !== 'COFRE' && <div className="rounded-md border border-border px-3.5 py-3 flex flex-col gap-2.5">
             <label className="flex items-center gap-2 text-[13px] text-text-primary cursor-pointer">
               <input type="checkbox" checked={posForm.printAfterSale} onChange={(e) => setPosForm((p) => ({ ...p, printAfterSale: e.target.checked }))} />
               {'Imprimir ap\u00f3s a venda'}
@@ -1593,14 +1611,14 @@ export default function CompanySettings() {
                   : posForm.printTicket || posForm.printA4 ? 'Imprime diretamente ap\u00f3s cada venda.'
                     : 'Escolha pelo menos um formato.'}
             </p>
-          </div>
+          </div>}
           <button
             type="submit"
             disabled={posSaving || !posForm.name.trim()}
             className="mt-1 bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors"
           >
             {posSaving ? <Loader2 size={17} className="animate-spin" /> : <Plus size={17} />}
-            {posSaving ? 'A guardar...' : editingPosId ? 'Guardar alterações' : 'Criar ponto de venda'}
+            {posSaving ? 'A guardar...' : editingPosId ? 'Guardar alterações' : 'Criar caixa'}
           </button>
         </form>
       </Modal>

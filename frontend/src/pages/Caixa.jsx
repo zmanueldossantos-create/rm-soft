@@ -1573,7 +1573,15 @@ export default function Caixa() {
             );
           })()}
 
-          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_440px] gap-5">
+          {/* the safe never sells: only its cash operations (side menu) - transfers, entries, exits */}
+          {allActivePos.find((p) => p.id === selectedPosId)?.kind === 'COFRE' && (
+            <div className="bg-bg-elevated border border-amber-500/40 rounded-lg p-8 text-center">
+              <Wallet size={26} className="text-amber-500 mx-auto mb-3" />
+              <p className="text-text-primary font-medium mb-1">Cofre - não vende</p>
+              <p className="text-text-muted text-sm">Use as Operações de Caixa (menu à esquerda): receber o dinheiro das caixas, transferir, entradas e saídas.</p>
+            </div>
+          )}
+          <div className={(allActivePos.find((p) => p.id === selectedPosId)?.kind === 'COFRE' ? 'hidden ' : '') + 'grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_440px] gap-5'}>
             <div className="min-w-0">
               <div className="relative mb-4">
                 <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" />

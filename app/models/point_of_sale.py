@@ -1,18 +1,26 @@
 """
-PointOfSale model - a physical/logical sales point within an Activity.
+PointOfSale model - a physical/logical sales point within an Activity - shown as a «Caixa»: one point of sale is one
+cash drawer (its session, its cashier, its balance, later its accounting account). kind: CAIXA sells; COFRE (the
+company's safe) never sells - it keeps the money between the tills and the bank.
 An Activity (e.g. "Bar", "Padaria") can have several POS (e.g. "Caixa 1",
 "Balcao Rua"), each opening its own CashSession independently - all POS
 under the same Activity share that Activity''s stock/warehouse (see
 Activity.warehouse_id), only the cash register itself is per-POS.
 """
+import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import String, Boolean, DateTime, ForeignKey, UniqueConstraint, func
+from sqlalchemy import String, Boolean, DateTime, Enum, ForeignKey, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import UUID
 
 from app.core.database import Base
+
+
+class PosKind(str, enum.Enum):
+    CAIXA = "CAIXA"  # a till: sells, opens and closes its sessions
+    COFRE = "COFRE"  # the safe: never sells - money kept between the tills and the bank
 
 
 class PointOfSale(Base):
@@ -25,6 +33,7 @@ class PointOfSale(Base):
     company_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("companies.id"), nullable=False, index=True)
     activity_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("activities.id"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)  # e.g. "Caixa 1", "Balcao Rua"
+    kind: Mapped[PosKind] = mapped_column(Enum(PosKind), nullable=False, default=PosKind.CAIXA, server_default="CAIXA")
     # Denomination breakdown (billetagem) on open/close - toggle per cash point,
     # same field also exists on CashOffice (see cash_office.py).
     billetage_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

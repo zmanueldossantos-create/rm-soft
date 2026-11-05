@@ -2,6 +2,7 @@
 Pydantic schemas for PointOfSale (POS) CRUD - nested under an Activity.
 """
 import uuid
+from typing import Literal
 
 from pydantic import BaseModel
 
@@ -9,6 +10,7 @@ from pydantic import BaseModel
 class PosCreateRequest(BaseModel):
     activity_id: uuid.UUID
     name: str
+    kind: Literal["CAIXA", "COFRE"] = "CAIXA"  # a till that sells, or the safe
     billetage_enabled: bool = False
     allow_price_levels: bool = False  # the cashier may choose «Preço 2 / Preço 3»
     allow_free_price: bool = False  # the cashier may type a free price
@@ -22,6 +24,7 @@ class PosCreateRequest(BaseModel):
 
 class PosUpdateRequest(BaseModel):
     name: str
+    kind: Literal["CAIXA", "COFRE"] | None = None  # None: unchanged
     billetage_enabled: bool = False
     allow_price_levels: bool = False  # the cashier may choose «Preço 2 / Preço 3»
     allow_free_price: bool = False  # the cashier may type a free price
@@ -38,6 +41,7 @@ class PointOfSaleResponse(BaseModel):
     company_id: uuid.UUID
     activity_id: uuid.UUID
     name: str
+    kind: str = "CAIXA"
     is_active: bool
     billetage_enabled: bool
     allow_price_levels: bool = False

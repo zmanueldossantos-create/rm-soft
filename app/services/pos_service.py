@@ -20,6 +20,18 @@ class NoOpenSessionError(Exception):
     pass
 
 
+class CofreSaleError(NoOpenSessionError):
+    """A sale at the safe (a point of sale of kind COFRE): the safe never sells. A NoOpenSessionError: every till route
+    already answers it with a 409 and its message."""
+
+
+async def _ensure_sells(db: AsyncSession, company_id: uuid.UUID, pos_id: uuid.UUID) -> None:
+    from app.models.point_of_sale import PointOfSale, PosKind
+    pos = await db.get(PointOfSale, pos_id)
+    if pos is not None and pos.company_id == company_id and pos.kind == PosKind.COFRE:
+        raise CofreSaleError(f"«{pos.name}» é um cofre - não vende. Venda numa caixa.")
+
+
 async def _ensure_sellable_at_pos(db: AsyncSession, company_id: uuid.UUID, lines_input: list[dict]) -> None:
     """THE Caixa guard - sale, pro-forma and open accounts (closed through checkout): an article marked 'nao disponivel
     POS' is never sold from a cash point. The screen hides it; the server refuses it."""
@@ -99,6 +111,7 @@ async def checkout(
     discount, same as the admin NovaFatura flow.
     """
     await require_cash_point_access(db, company_id, selling_user, pos_id)
+    await _ensure_sells(db, company_id, pos_id)
     session = await get_open_session(db, company_id, pos_id)
     if session is None:
         raise NoOpenSessionError("Não há nenhuma sessão de caixa aberta para este ponto de venda - abra a caixa antes de vender")
@@ -161,6 +174,7 @@ async def create_pro_forma_from_pos(
     linked to the session (cash_session_id is only meaningful for real sales).
     """
     await require_cash_point_access(db, company_id, selling_user, pos_id)
+    await _ensure_sells(db, company_id, pos_id)
     session = await get_open_session(db, company_id, pos_id)
     if session is None:
         raise NoOpenSessionError("Não há nenhuma sessão de caixa aberta para este ponto de venda - abra a caixa antes de gerar documentos")
@@ -192,6 +206,7 @@ async def liquidate_pending_invoice(
     fresh sale - so close_session's expected-amount calculation accounts
     for the cash collected here.
     """
+    await _ensure_sells(db, company_id, pos_id)
     session = await get_open_session(db, company_id, pos_id)
     if session is None:
         raise NoOpenSessionError("Não há nenhuma sessão de caixa aberta para este ponto de venda - abra a caixa antes de liquidar")
