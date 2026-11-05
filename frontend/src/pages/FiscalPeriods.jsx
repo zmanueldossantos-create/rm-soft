@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Calendar, CalendarDays, Plus, Loader2, Lock, LockOpen, CheckCircle2, Minus, X, Hourglass } from 'lucide-react';
 import ConfirmDialog from '../components/ConfirmDialog';
+import { listTransfersInTransit } from '../api/tesouraria';
+import { formatKz } from '../utils/format';
 import {
   getNextFiscalYear,
   listFiscalYears,
@@ -92,6 +94,12 @@ export default function FiscalPeriods() {
   const [error, setError] = useToastState('error');
   const [busy, setBusy] = useState(false);
   const [confirmAction, setConfirmAction] = useState(null);
+  // the bank transfers still em trânsito, read when a month is about to be closed (a warning, never a block)
+  const [inTransit, setInTransit] = useState([]);
+  useEffect(() => {
+    if (confirmAction !== 'partial-month' && confirmAction !== 'close-month') return;
+    listTransfersInTransit().then(setInTransit).catch(() => setInTransit([]));
+  }, [confirmAction]);
 
   async function loadYear(year) {
     if (!year) {
@@ -157,6 +165,18 @@ export default function FiscalPeriods() {
   const openPeriod = periods.find((p) => p.status === 'ABERTO');
   const partialPeriod = periods.find((p) => p.status === 'FECHO_PARCIAL');
   const finalTarget = partialPeriod || openPeriod; // a final close goes to the soft-closed month first
+  // The transfers that left by the end of the month being closed and are not confirmed yet: if their funds arrived in
+  // that month, «Fundos disponíveis» must be confirmed before its final close (no date of a closed month is accepted).
+  function transitWarning(period) {
+    if (!period || !activeYear) return '';
+    const last = new Date(activeYear.year, period.month, 0).getDate();
+    const end = activeYear.year + '-' + String(period.month).padStart(2, '0') + '-' + String(last).padStart(2, '0');
+    const pending = inTransit.filter((t) => t.transfer_date <= end);
+    if (pending.length === 0) return '';
+    const total = pending.reduce((s, t) => s + t.amount, 0);
+    return ' ⚠ Há ' + pending.length + ' transferência(s) bancária(s) em trânsito (' + formatKz(total) + ' Kz, Tesouraria › Bancos): '
+      + 'se os fundos já chegaram em ' + monthName(period) + ', confirme «Fundos disponíveis» antes de fechar.';
+  }
   const countOf = (status) => periods.filter((p) => p.status === status).length;
   const monthName = (p) => (p ? MONTH_NAMES[p.month - 1] : '');
 
@@ -365,7 +385,7 @@ export default function FiscalPeriods() {
       <ConfirmDialog
         open={confirmAction === 'partial-month'}
         title="Fechar parcialmente o período"
-        message={openPeriod ? 'Fechar parcialmente ' + monthName(openPeriod) + '? Vendas, faturas e caixas deixam de ser possíveis neste mês. Os lançamentos internos tardios (entradas de stock, transferências, perdas, ajustes) continuam possíveis até ao fecho definitivo. Depois, abra o mês seguinte.' : ''}
+        message={openPeriod ? 'Fechar parcialmente ' + monthName(openPeriod) + '? Vendas, faturas e caixas deixam de ser possíveis neste mês. Os lançamentos internos tardios (entradas de stock, transferências, perdas, ajustes) continuam possíveis até ao fecho definitivo. Depois, abra o mês seguinte.' + transitWarning(openPeriod) : ''}
         confirmLabel="Fechar parcialmente"
         onConfirm={() => run(() => partialCloseFiscalPeriod(openPeriod.id), 'Erro ao fechar parcialmente o período')}
         onCancel={() => setConfirmAction(null)}
@@ -373,7 +393,7 @@ export default function FiscalPeriods() {
       <ConfirmDialog
         open={confirmAction === 'close-month'}
         title="Fechar definitivamente o período"
-        message={finalTarget ? 'Fechar definitivamente ' + monthName(finalTarget) + '? Nenhuma operação poderá voltar a ser lançada neste mês. Esta ação não pode ser desfeita.' : ''}
+        message={finalTarget ? 'Fechar definitivamente ' + monthName(finalTarget) + '? Nenhuma operação poderá voltar a ser lançada neste mês. Esta ação não pode ser desfeita.' + transitWarning(finalTarget) : ''}
         confirmLabel="Fechar definitivamente"
         danger
         onConfirm={() => run(() => closeFiscalPeriod(finalTarget.id), 'Erro ao fechar período')}

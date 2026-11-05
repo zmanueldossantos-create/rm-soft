@@ -102,3 +102,19 @@ async def test_the_transfer_rules(db, company_with_essentials):
         await create_bank_transfer(db, company_id, user, bai1, bfa, 0, date.today())
     with pytest.raises(BankMovementError, match="saldo inicial"):
         await create_bank_transfer(db, company_id, user, bai1, bfa, 100, date.today() - timedelta(days=1))
+
+
+@pytest.mark.asyncio
+async def test_a_transfer_still_in_transit_after_two_days_is_reported_once(db, company_with_essentials):
+    from datetime import datetime, timezone
+    from app.models.bank_transfer import BankTransfer
+    from app.services.bank_transfer_service import check_stale
+    ctx = company_with_essentials
+    company_id, user = ctx["company"].id, ctx["gestor"]
+    bai1, _bai2, bfa, _usd = await _accounts(db, company_id)
+    transfer = await create_bank_transfer(db, company_id, user, bai1, bfa, 700, date.today())
+    now = datetime.now(timezone.utc)
+    assert await check_stale(db, now) == 0  # it left today
+    assert await check_stale(db, now + timedelta(days=2)) == 1  # two days later: reported
+    assert await check_stale(db, now + timedelta(days=3)) == 0  # once
+    assert (await db.get(BankTransfer, transfer.id)).stale_notified_at is not None

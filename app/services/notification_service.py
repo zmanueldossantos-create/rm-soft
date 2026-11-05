@@ -290,13 +290,23 @@ async def send_due(db: AsyncSession, deliver=None, now: datetime | None = None) 
     return len(rows)
 
 
+STALE_CHECK_EVERY = timedelta(minutes=10)
+
+
 async def notification_loop() -> None:
-    """Started with the server: every 10 seconds (at once after a new message), what is due."""
+    """Started with the server: every 10 seconds (at once after a new message), what is due; every 10 minutes, the
+    bank transfers still em trânsito for too long (bank_transfer_service.check_stale)."""
     from app.core.database import AsyncSessionLocal
+    stale_checked_at: datetime | None = None
     while True:
         _wake.clear()
         try:
             async with AsyncSessionLocal() as db:
+                now = datetime.now(timezone.utc)
+                if stale_checked_at is None or now - stale_checked_at >= STALE_CHECK_EVERY:
+                    stale_checked_at = now
+                    from app.services.bank_transfer_service import check_stale
+                    await check_stale(db, now)
                 await send_due(db)
         except Exception:  # noqa: BLE001 - the loop never stops on one failure
             log.exception("notification loop failed")

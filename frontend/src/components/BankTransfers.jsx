@@ -27,6 +27,14 @@ function day(value) {
 
 const accountLabel = (b) => b.bank + ' · ' + b.account_number;
 
+// days since a transfer left (calendar days); from STALE_DAYS on it is shown in orange (and the gestor is notified)
+const STALE_DAYS = 2;
+function daysSince(isoDate) {
+  const start = new Date(isoDate + 'T00:00:00');
+  const today = new Date(todayIso() + 'T00:00:00');
+  return Math.round((today - start) / 86400000);
+}
+
 // The new transfer from `source` (a BankPosition) to another active account of the same currency.
 export function TransferModal({ source, banks, onClose, onDone }) {
   const [form, setForm] = useState(null); // { toId, amount, date, reference, description, negativeOk }
@@ -146,7 +154,14 @@ export function InTransitPanel({ reload, canManage, onChange }) {
               <p className="text-[13px] text-text-primary flex items-center gap-1.5 flex-wrap">
                 <span className="font-mono text-text-muted">{t.document}</span> {t.from_label} <ArrowRight size={13} className="text-text-muted" /> {t.to_label}
               </p>
-              <p className="text-[12px] text-text-muted">Saiu em {day(t.transfer_date)}{t.reference ? ' · ' + t.reference : ''}</p>
+              <p className="text-[12px] text-text-muted">
+                Saiu em {day(t.transfer_date)}{t.reference ? ' · ' + t.reference : ''}
+                {(() => {
+                  const age = daysSince(t.transfer_date);
+                  if (age < 1) return null;
+                  return <span className={'ml-2 font-medium ' + (age >= STALE_DAYS ? 'text-amber-500' : 'text-text-muted')}>há {age} {age === 1 ? 'dia' : 'dias'}</span>;
+                })()}
+              </p>
             </div>
             <span className="font-mono text-[13px] text-text-primary whitespace-nowrap">{formatKz(t.amount)} Kz</span>
             {canManage && (

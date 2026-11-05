@@ -33,6 +33,8 @@ EVENTS: dict[str, Event] = {e.code: e for e in (
           "preço do catálogo e o aplicado, a caixa, quem vendeu"),
     Event("CAIXA_FECHADA", "Caixa fechada", "O fecho de uma caixa: esperado, contado e a diferença"),
     Event("STOCK_BAIXO", "Stock baixo", "Um produto abaixo do seu stock mínimo", "STOCK", by_others=False),
+    Event("TRANSFERENCIA_EM_TRANSITO", "Transferência bancária em trânsito", "Uma transferência entre bancos ainda sem "
+          "«Fundos disponíveis» 2 dias depois de sair (Tesouraria › Bancos)", by_others=False),
     Event("AGT_CONTINGENCIA", "AGT: contingência", "A AGT deixou de responder (entrada em contingência) ou voltou "
           "(saída) - Faturação Eletrónica", ELECTRONIC, by_others=False),
     Event("AGT_ATRASO", "AGT: documentos em atraso", "Documentos ainda não validados pela AGT 18 h depois de emitidos "

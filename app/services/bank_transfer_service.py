@@ -205,3 +205,34 @@ async def in_transit_by_account(db: AsyncSession, company_id: uuid.UUID) -> dict
         ).group_by(BankTransfer.to_account_id)
     )).all()
     return {row[0]: round(float(row[1]), 2) for row in rows}
+
+
+STALE_DAYS = 2  # calendar days a transfer may stay em trânsito before the gestor is told
+
+
+async def check_stale(db: AsyncSession, now: datetime | None = None) -> int:
+    """The transfers still em trânsito STALE_DAYS after they left: the gestor told once per transfer (one message per
+    company, notification TRANSFERENCIA_EM_TRANSITO). Returns how many transfers were reported."""
+    from datetime import timedelta
+    from app.services.notification_service import money, notify
+    now = now or datetime.now(timezone.utc)
+    limit = now.astimezone(LUANDA).date() - timedelta(days=STALE_DAYS)
+    rows = (await db.execute(select(BankTransfer).where(
+        BankTransfer.status == BankTransferStatus.EM_TRANSITO, BankTransfer.transfer_date <= limit,
+        BankTransfer.stale_notified_at.is_(None),
+    ).order_by(BankTransfer.transfer_date).limit(500).with_for_update(skip_locked=True))).scalars().all()
+    by_company: dict[uuid.UUID, list[BankTransfer]] = {}
+    for transfer in rows:
+        by_company.setdefault(transfer.company_id, []).append(transfer)
+    for company_id, transfers in by_company.items():
+        described = await describe_transfers(db, transfers)
+        text_lines = [f"{d['document']}: {d['from_label']} -> {d['to_label']}, {money(d['amount'])}, saiu em "
+                      f"{d['transfer_date'].strftime('%d/%m/%Y')}" for d in described]
+        await notify(db, company_id, "TRANSFERENCIA_EM_TRANSITO",
+                     f"{len(transfers)} transferência(s) bancária(s) ainda em trânsito há {STALE_DAYS} dias ou mais:\n"
+                     + "\n".join(text_lines)
+                     + "\nConfirme «Fundos disponíveis» em Tesouraria › Bancos quando o banco de destino mostrar o dinheiro.")
+        for transfer in transfers:
+            transfer.stale_notified_at = now
+    await db.commit()
+    return len(rows)
