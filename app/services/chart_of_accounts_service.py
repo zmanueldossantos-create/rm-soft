@@ -104,8 +104,19 @@ async def get_chart(db: AsyncSession, company_id: uuid.UUID) -> dict:
     }
 
 
-async def _add(db: AsyncSession, company_id: uuid.UUID, existing: dict[str, Account], code: str, name: str) -> Account:
+async def accounts_with_entries(db: AsyncSession, company_id: uuid.UUID) -> set[uuid.UUID]:
+    """The accounts that already have lines in the journal (draft or posted): they never get sub-accounts."""
+    from app.models.journal import JournalEntry, JournalEntryLine
+    return set((await db.execute(select(JournalEntryLine.account_id).join(
+        JournalEntry, JournalEntry.id == JournalEntryLine.entry_id).where(JournalEntry.company_id == company_id)
+        .distinct())).scalars().all())
+
+
+async def _add(db: AsyncSession, company_id: uuid.UUID, existing: dict[str, Account], code: str, name: str,
+               with_entries: set[uuid.UUID] | None = None) -> Account:
     parent = existing.get(parent_code(code)) if parent_code(code) else None
+    if parent is not None and with_entries and parent.id in with_entries:
+        raise ChartError(f"A conta {parent.code} já tem lançamentos - não pode ter subcontas")
     account = Account(company_id=company_id, code=code, name=name, parent_id=parent.id if parent else None,
                       level=level_of(code), is_active=True)
     db.add(account)
@@ -122,9 +133,13 @@ async def start_chart(db: AsyncSession, company_id: uuid.UUID, source: str) -> d
         raise ChartError("Escolha PGC, plano próprio ou vazio")
     existing = await _accounts_by_code(db, company_id)
     if source == "PGC":
+        with_entries = await accounts_with_entries(db, company_id)
         for code, name in sorted(PGC_ACCOUNTS, key=lambda row: sort_key(row[0])):
-            if code not in existing:
-                await _add(db, company_id, existing, code, name)
+            parent = parent_code(code)
+            # skipped: a PGC account under an account that has entries (and then its own sub-accounts)
+            if code in existing or (parent and (parent not in existing or existing[parent].id in with_entries)):
+                continue
+            await _add(db, company_id, existing, code, name)
     settings = await _settings(db, company_id)
     settings.chart_source = source
     settings.chart_started_at = datetime.now(timezone.utc)
@@ -132,6 +147,8 @@ async def start_chart(db: AsyncSession, company_id: uuid.UUID, source: str) -> d
         from app.services.account_mapping_service import apply_suggestions
         await db.flush()
         await apply_suggestions(db, company_id, commit=False)
+    from app.services.journal_service import ensure_default_journals
+    await ensure_default_journals(db, company_id)  # VND, CMP, CX, BCO, OD, ABE - for a company without journals
     await db.commit()
     from app.services.account_mapping_service import sync_subaccounts
     await sync_subaccounts(db, company_id)  # the sub-accounts of the banks, tills, customers and suppliers, at once
@@ -149,7 +166,7 @@ async def create_account(db: AsyncSession, company_id: uuid.UUID, code: str, nam
     parent = parent_code(code)
     if parent and parent not in existing:
         raise ChartError(f"Crie primeiro a conta {parent} (a conta-mãe de {code})")
-    account = await _add(db, company_id, existing, code, name[:200])
+    account = await _add(db, company_id, existing, code, name[:200], await accounts_with_entries(db, company_id))
     await db.commit()
     await db.refresh(account)
     return account
@@ -268,10 +285,13 @@ async def import_chart(db: AsyncSession, company_id: uuid.UUID, content: bytes) 
             continue
         seen[code] = index
         valid.append((index, code, name[:200]))
+    with_entries = await accounts_with_entries(db, company_id)
     for index, code, _name in valid:
         parent = parent_code(code)
         if parent and parent not in seen and parent not in existing:
             errors.append(f"Linha {index}: falta a conta-mãe {parent} de {code} (no ficheiro ou no sistema)")
+        elif code not in existing and parent in existing and existing[parent].id in with_entries:
+            errors.append(f"Linha {index}: a conta {parent} já tem lançamentos - não pode ter a subconta {code}")
     if errors:
         raise ChartImportError(errors[:200])
 
@@ -289,5 +309,7 @@ async def import_chart(db: AsyncSession, company_id: uuid.UUID, content: bytes) 
     settings = await _settings(db, company_id)
     if settings.chart_source is None:
         settings.chart_source, settings.chart_started_at = "PROPRIO", datetime.now(timezone.utc)
+    from app.services.journal_service import ensure_default_journals
+    await ensure_default_journals(db, company_id)
     await db.commit()
     return {"created": created, "renamed": renamed, "unchanged": unchanged}

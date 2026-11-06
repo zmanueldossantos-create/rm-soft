@@ -67,7 +67,7 @@ CAPABILITIES: dict[str, Capability] = {
         ),
         Capability(
             "ACCOUNTING", "Contabilidade", "Plano de contas, lançamentos, balancete e demonstrações financeiras", (),
-            ("accounting",), ("/contabilidade/plano-de-contas",),
+            ("accounting",), ("/contabilidade/plano-de-contas", "/contabilidade/lancamentos"),
         ),
     )
 }

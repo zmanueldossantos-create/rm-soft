@@ -161,3 +161,162 @@ async def post_sync_subaccounts(db: AsyncSession = Depends(get_db),
         return await sync_subaccounts(db, current_user.company_id)
     except ChartError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+# ---------- the journals (diários) and the entries (lançamentos) ----------
+
+from datetime import date  # noqa: E402
+from decimal import Decimal  # noqa: E402
+
+from fastapi import Query  # noqa: E402
+
+from app.services.journal_service import (  # noqa: E402
+    EntryNotFoundError, JournalError, JournalNotFoundError, create_journal, delete_entry, delete_journal, get_entry,
+    list_entries, list_journals, post_entry, reverse_entry, save_entry, update_journal,
+)
+
+
+class JournalCreateRequest(BaseModel):
+    code: str
+    name: str
+
+
+class JournalUpdateRequest(BaseModel):
+    name: str
+    is_active: bool = True
+
+
+class EntryLineRequest(BaseModel):
+    account_id: uuid.UUID | None = None
+    description: str | None = None
+    debit: Decimal = Decimal("0")
+    credit: Decimal = Decimal("0")
+
+
+class EntryRequest(BaseModel):
+    journal_id: uuid.UUID
+    entry_date: date
+    description: str
+    document_ref: str | None = None
+    lines: list[EntryLineRequest] = []
+    post: bool = False  # True: saved and posted in one step («Lançar»)
+
+
+class ReverseRequest(BaseModel):
+    entry_date: date
+
+
+def _journal_out(j) -> dict:
+    return {"id": j.id, "code": j.code, "name": j.name, "is_active": j.is_active}
+
+
+def _refused(e: Exception) -> HTTPException:
+    if isinstance(e, (JournalNotFoundError, EntryNotFoundError)):
+        return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    return HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+_ERRORS = (JournalError, JournalNotFoundError, EntryNotFoundError)
+
+
+@router.get("/journals")
+async def get_journals(db: AsyncSession = Depends(get_db),
+                       current_user: User = Depends(require_permission("accounting:entries_view"))):
+    return await list_journals(db, current_user.company_id)
+
+
+@router.post("/journals", status_code=status.HTTP_201_CREATED)
+async def post_journal(payload: JournalCreateRequest, db: AsyncSession = Depends(get_db),
+                       current_user: User = Depends(require_permission("accounting:journals_manage"))):
+    try:
+        return _journal_out(await create_journal(db, current_user.company_id, payload.code, payload.name))
+    except _ERRORS as e:
+        raise _refused(e)
+
+
+@router.put("/journals/{journal_id}")
+async def put_journal(journal_id: uuid.UUID, payload: JournalUpdateRequest, db: AsyncSession = Depends(get_db),
+                      current_user: User = Depends(require_permission("accounting:journals_manage"))):
+    try:
+        return _journal_out(await update_journal(db, current_user.company_id, journal_id, payload.name, payload.is_active))
+    except _ERRORS as e:
+        raise _refused(e)
+
+
+@router.delete("/journals/{journal_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_journal(journal_id: uuid.UUID, db: AsyncSession = Depends(get_db),
+                         current_user: User = Depends(require_permission("accounting:journals_manage"))):
+    try:
+        await delete_journal(db, current_user.company_id, journal_id)
+    except _ERRORS as e:
+        raise _refused(e)
+
+
+@router.get("/entries")
+async def get_entries(journal_id: uuid.UUID | None = None, status_filter: str | None = Query(None, alias="status"),
+                      date_from: date | None = None, date_to: date | None = None, q: str | None = None,
+                      db: AsyncSession = Depends(get_db),
+                      current_user: User = Depends(require_permission("accounting:entries_view"))):
+    return await list_entries(db, current_user.company_id, journal_id=journal_id, status=status_filter,
+                              date_from=date_from, date_to=date_to, search=q)
+
+
+@router.get("/entries/{entry_id}")
+async def get_one_entry(entry_id: uuid.UUID, db: AsyncSession = Depends(get_db),
+                        current_user: User = Depends(require_permission("accounting:entries_view"))):
+    try:
+        return await get_entry(db, current_user.company_id, entry_id)
+    except _ERRORS as e:
+        raise _refused(e)
+
+
+async def _save(db, current_user, entry_id, payload: EntryRequest) -> dict:
+    try:
+        entry = await save_entry(
+            db, current_user.company_id, current_user.id, entry_id=entry_id, journal_id=payload.journal_id,
+            entry_date=payload.entry_date, description=payload.description, document_ref=payload.document_ref,
+            lines=[l.model_dump() for l in payload.lines], post=payload.post)
+        return await get_entry(db, current_user.company_id, entry.id)
+    except _ERRORS as e:
+        raise _refused(e)
+
+
+@router.post("/entries", status_code=status.HTTP_201_CREATED)
+async def post_new_entry(payload: EntryRequest, db: AsyncSession = Depends(get_db),
+                         current_user: User = Depends(require_permission("accounting:entries_record"))):
+    return await _save(db, current_user, None, payload)
+
+
+@router.put("/entries/{entry_id}")
+async def put_entry(entry_id: uuid.UUID, payload: EntryRequest, db: AsyncSession = Depends(get_db),
+                    current_user: User = Depends(require_permission("accounting:entries_record"))):
+    return await _save(db, current_user, entry_id, payload)
+
+
+@router.post("/entries/{entry_id}/post")
+async def post_draft(entry_id: uuid.UUID, db: AsyncSession = Depends(get_db),
+                     current_user: User = Depends(require_permission("accounting:entries_record"))):
+    try:
+        entry = await post_entry(db, current_user.company_id, current_user.id, entry_id)
+        return await get_entry(db, current_user.company_id, entry.id)
+    except _ERRORS as e:
+        raise _refused(e)
+
+
+@router.post("/entries/{entry_id}/reverse")
+async def post_reverse(entry_id: uuid.UUID, payload: ReverseRequest, db: AsyncSession = Depends(get_db),
+                       current_user: User = Depends(require_permission("accounting:entries_record"))):
+    try:
+        entry = await reverse_entry(db, current_user.company_id, current_user.id, entry_id, payload.entry_date)
+        return await get_entry(db, current_user.company_id, entry.id)
+    except _ERRORS as e:
+        raise _refused(e)
+
+
+@router.delete("/entries/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_entry(entry_id: uuid.UUID, db: AsyncSession = Depends(get_db),
+                       current_user: User = Depends(require_permission("accounting:entries_record"))):
+    try:
+        await delete_entry(db, current_user.company_id, entry_id)
+    except _ERRORS as e:
+        raise _refused(e)

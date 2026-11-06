@@ -159,6 +159,8 @@ async def sync_subaccounts(db: AsyncSession, company_id: uuid.UUID) -> dict:
     linked = {(l.entity_kind, l.entity_id) for l in (await db.execute(
         select(AccountLink).where(AccountLink.company_id == company_id))).scalars().all()}
     used_codes = {a.code for a in accounts.values()}
+    from app.services.chart_of_accounts_service import accounts_with_entries
+    with_entries = await accounts_with_entries(db, company_id)
     created, missing = 0, set()
     for kind, entity_id, name, parent_op in await _entities(db, company_id, settings):
         if (kind, entity_id) in linked:
@@ -167,6 +169,9 @@ async def sync_subaccounts(db: AsyncSession, company_id: uuid.UUID) -> dict:
         parent = accounts.get(mapping.account_id) if mapping else None
         if parent is None:
             missing.add(OPERATIONS_BY_KEY[parent_op].label)
+            continue
+        if parent.id in with_entries:  # an account with entries never gets sub-accounts: choose another parent
+            missing.add(f"{OPERATIONS_BY_KEY[parent_op].label} (a conta {parent.code} já tem lançamentos)")
             continue
         last = max((int(c.rsplit(".", 1)[1]) for c in used_codes if c.startswith(parent.code + ".")
                     and c.count(".") == parent.code.count(".") + 1), default=0)
@@ -192,6 +197,9 @@ async def accounts_in_use(db: AsyncSession, company_id: uuid.UUID) -> dict[uuid.
     for link in (await db.execute(select(AccountLink).where(AccountLink.company_id == company_id))).scalars().all():
         used[link.account_id] = "é a subconta de " + {"BANK": "uma conta bancária", "TILL": "uma caixa",
                                                        "CUSTOMER": "um cliente", "SUPPLIER": "um fornecedor"}[link.entity_kind]
+    from app.services.chart_of_accounts_service import accounts_with_entries
+    for account_id in await accounts_with_entries(db, company_id):
+        used[account_id] = "tem lançamentos"
     return used
 
 

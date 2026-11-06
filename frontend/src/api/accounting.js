@@ -72,3 +72,53 @@ export async function syncSubaccounts() {
   const res = await apiClient.post('/accounting/subaccounts/sync');
   return res.data;
 }
+
+// ---------- Diários and lançamentos ----------
+
+export async function getJournals() {
+  const res = await apiClient.get('/accounting/journals');
+  return res.data;
+}
+
+export async function createJournal(code, name) {
+  const res = await apiClient.post('/accounting/journals', { code, name });
+  return res.data;
+}
+
+export async function updateJournal(journalId, name, isActive) {
+  const res = await apiClient.put('/accounting/journals/' + journalId, { name, is_active: isActive });
+  return res.data;
+}
+
+export async function deleteJournal(journalId) {
+  await apiClient.delete('/accounting/journals/' + journalId);
+}
+
+// filters: { journal_id, status, date_from, date_to, q } - empty ones are left out
+export async function getEntries(filters = {}) {
+  const params = Object.fromEntries(Object.entries(filters).filter(([, v]) => v));
+  const res = await apiClient.get('/accounting/entries', { params });
+  return res.data;
+}
+
+export async function getEntry(entryId) {
+  const res = await apiClient.get('/accounting/entries/' + entryId);
+  return res.data;
+}
+
+// payload: { journal_id, entry_date, description, document_ref, lines: [{account_id, description, debit, credit}], post }
+export async function saveEntry(entryId, payload) {
+  const res = entryId
+    ? await apiClient.put('/accounting/entries/' + entryId, payload)
+    : await apiClient.post('/accounting/entries', payload);
+  return res.data;
+}
+
+export async function deleteEntry(entryId) {
+  await apiClient.delete('/accounting/entries/' + entryId);
+}
+
+export async function reverseEntry(entryId, entryDate) {
+  const res = await apiClient.post('/accounting/entries/' + entryId + '/reverse', { entry_date: entryDate });
+  return res.data;
+}
