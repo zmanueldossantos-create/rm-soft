@@ -12,9 +12,9 @@ AccountMapping («Contas por operação») and AccountLink (the sub-account of a
 see app.services.account_mapping_service.
 """
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint, func
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -46,6 +46,9 @@ class AccountingSettings(Base):
     # one sub-account per customer / per supplier (the usual way), or all of them on the parent account itself
     subaccount_per_customer: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
     subaccount_per_supplier: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
+    # the documents posted by the system: those dated from this day on (set to the day the chart is started; the
+    # accountant moves it back to integrate older documents)
+    integration_start: Mapped[date | None] = mapped_column(Date, nullable=True)
 
 
 class AccountMapping(Base):

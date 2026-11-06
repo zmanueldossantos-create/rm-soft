@@ -206,11 +206,13 @@ async def _entry(db: AsyncSession, company_id: uuid.UUID, entry_id: uuid.UUID) -
 
 async def save_entry(db: AsyncSession, company_id: uuid.UUID, user_id: uuid.UUID | None, *, entry_id: uuid.UUID | None,
                      journal_id: uuid.UUID, entry_date: date, description: str, document_ref: str | None,
-                     lines: list[dict], post: bool = False, reversal_of_id: uuid.UUID | None = None) -> JournalEntry:
+                     lines: list[dict], post: bool = False, reversal_of_id: uuid.UUID | None = None,
+                     source: tuple[str, uuid.UUID] | None = None) -> JournalEntry:
     """Creates a draft (entry_id None) or changes one; post=True posts it in the same step - all or nothing: a refused
     posting saves nothing. Every check runs before anything is changed (a refusal leaves the session as it was)."""
     if entry_id is None:
-        entry = JournalEntry(company_id=company_id, status="RASCUNHO", created_by=user_id, reversal_of_id=reversal_of_id)
+        entry = JournalEntry(company_id=company_id, status="RASCUNHO", created_by=user_id, reversal_of_id=reversal_of_id,
+                             source_kind=source[0] if source else None, source_id=source[1] if source else None)
     else:
         entry = await _entry(db, company_id, entry_id)
         if entry.status != "RASCUNHO":
@@ -352,6 +354,7 @@ async def list_entries(db: AsyncSession, company_id: uuid.UUID, *, journal_id: u
         "entry_date": e.entry_date, "description": e.description, "document_ref": e.document_ref, "status": e.status,
         "debit": debit or Decimal("0"), "credit": credit or Decimal("0"), "lines": lines or 0,
         "reversal_of": original_label.get(e.reversal_of_id), "reversed_by": reversed_by.get(e.id),
+        "automatic": e.source_kind is not None,
     } for e, code, debit, credit, lines in rows]
 
 

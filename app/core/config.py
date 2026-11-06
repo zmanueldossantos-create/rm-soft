@@ -67,6 +67,7 @@ class Settings(BaseSettings):
 
     # --- Notificacoes (app/services/notification_service.py) : false = ce serveur n'envoie pas la file des notifications
     NOTIFICATION_LOOP: bool = True
+    ACCOUNTING_LOOP: bool = True  # the entries of the new documents, every minute (accounting_integration_service)
 
     # --- Licence (app/core/license.py) ---
     # Serveur d un client (installation locale) : LICENSE_REQUIRED=true - le plan, les limites et les dates viennent du

@@ -15,6 +15,7 @@ import io
 import re
 import uuid
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, PatternFill
@@ -23,6 +24,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.data.pgc_angola import PGC_ACCOUNTS
 from app.models.account import CHART_SOURCES, Account, AccountingSettings
+
+LUANDA = ZoneInfo("Africa/Luanda")
 
 CODE_RE = re.compile(r"^[1-9]$|^[1-9]\d(\.\d{1,4})*$")
 MAX_ROWS = 20000
@@ -143,6 +146,8 @@ async def start_chart(db: AsyncSession, company_id: uuid.UUID, source: str) -> d
     settings = await _settings(db, company_id)
     settings.chart_source = source
     settings.chart_started_at = datetime.now(timezone.utc)
+    if settings.integration_start is None:  # the documents of today on are posted by the system
+        settings.integration_start = datetime.now(LUANDA).date()
     if source == "PGC":  # «Contas por operação»: the PGC accounts suggested, where nothing is set yet
         from app.services.account_mapping_service import apply_suggestions
         await db.flush()
@@ -309,6 +314,7 @@ async def import_chart(db: AsyncSession, company_id: uuid.UUID, content: bytes) 
     settings = await _settings(db, company_id)
     if settings.chart_source is None:
         settings.chart_source, settings.chart_started_at = "PROPRIO", datetime.now(timezone.utc)
+        settings.integration_start = settings.integration_start or datetime.now(LUANDA).date()
     from app.services.journal_service import ensure_default_journals
     await ensure_default_journals(db, company_id)
     await db.commit()

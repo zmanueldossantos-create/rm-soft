@@ -140,6 +140,16 @@ async def start_relay_agent() -> None:
 
 
 @app.on_event("startup")
+async def start_accounting_loop() -> None:
+    """Contabilidade: the entries of the new documents, every minute (app/services/accounting_integration_service.py)."""
+    import asyncio
+    from app.core.singleton import run_singleton
+    from app.services.accounting_integration_service import integration_loop
+    if get_settings().ACCOUNTING_LOOP:
+        app.state.accounting_loop = asyncio.create_task(run_singleton("accounting-integration", integration_loop))
+
+
+@app.on_event("startup")
 async def start_notification_loop() -> None:
     """Notificações (app/services/notification_service.py): the messages waiting in the outbox are sent from here."""
     import asyncio

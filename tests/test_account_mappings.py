@@ -55,7 +55,8 @@ async def test_one_subaccount_per_bank_till_customer_and_supplier(db, company_wi
     codes = {a["code"]: a["name"] for a in (await get_chart(db, company_id))["accounts"]}
     assert codes["43.1.1"] == "BAI · 0001" and codes["31.1.2.1.1"] == "Hotel Atlântico (5000111999)"
     assert codes["32.1.2.1"].startswith("Moagem do Sul") and codes["45.1.1"].startswith(ctx["pos"].name)
-    assert not any(name.startswith("Consumidor final") for name in codes.values())
+    # one sub-account for every customer without its own (Consumidor final, no customer) - not one per final consumer
+    assert [code for code, name in codes.items() if name.startswith("Consumidor final")] == ["31.1.2.1.2"]
     assert (await sync_subaccounts(db, company_id))["created"] == 0  # made once
 
     await set_options(db, company_id, per_customer=False, per_supplier=True)
@@ -83,5 +84,6 @@ async def test_a_new_customer_supplier_or_till_gets_its_subaccount_at_once(db, c
     till = await create_point_of_sale(db, company_id, ctx["pos"].activity_id, "Balcão 2")
     assert customer.name == "Restaurante Ilha" and supplier.name == "Padaria Grossista" and till.name == "Balcão 2"
     names = {a["code"]: a["name"] for a in (await get_chart(db, company_id))["accounts"]}
-    assert names["31.1.2.1.1"].startswith("Restaurante Ilha") and names["32.1.2.1"].startswith("Padaria Grossista")
+    assert names["31.1.2.1.1"] == "Consumidor final"  # made with the chart, before any customer
+    assert names["31.1.2.1.2"].startswith("Restaurante Ilha") and names["32.1.2.1"].startswith("Padaria Grossista")
     assert names["45.1.2"].startswith("Balcão 2")

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { ListTree, Download, Upload, Plus, Pencil, Trash2, Loader2, Search, BookOpen, FileSpreadsheet, Square } from 'lucide-react';
 import Modal from '../components/Modal';
 import ContasPorOperacao from '../components/ContasPorOperacao';
@@ -25,7 +26,8 @@ export default function PlanoContas() {
   const [form, setForm] = useState(null); // { id?, code, name, isActive }
   const [toDelete, setToDelete] = useState(null);
   const [importErrors, setImportErrors] = useState(null);
-  const [view, setView] = useState('chart'); // chart | operations
+  const [searchParams] = useSearchParams();
+  const [view, setView] = useState(searchParams.get('tab') === 'operacoes' ? 'operations' : 'chart'); // chart | operations
   const fileRef = useRef(null);
 
   async function load() {

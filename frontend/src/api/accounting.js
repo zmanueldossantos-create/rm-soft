@@ -122,3 +122,20 @@ export async function reverseEntry(entryId, entryDate) {
   const res = await apiClient.post('/accounting/entries/' + entryId + '/reverse', { entry_date: entryDate });
   return res.data;
 }
+
+// ---------- the entries made by the system from the documents ----------
+
+export async function getIntegration() {
+  const res = await apiClient.get('/accounting/integration');
+  return res.data;
+}
+
+export async function runIntegration() {
+  const res = await apiClient.post('/accounting/integration/run');
+  return res.data;
+}
+
+export async function setIntegrationStart(integrationStart) {
+  const res = await apiClient.put('/accounting/integration/start', { integration_start: integrationStart });
+  return res.data;
+}

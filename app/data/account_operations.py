@@ -27,6 +27,7 @@ OPERATIONS: tuple[Operation, ...] = (
     Operation("PARENT_CUSTOMERS_FOREIGN", "Subcontas criadas pelo sistema", "Clientes estrangeiros", "31.1.2.2", "parent"),
     Operation("PARENT_SUPPLIERS", "Subcontas criadas pelo sistema", "Fornecedores", "32.1.2", "parent"),
     # sales
+    Operation("CUSTOMERS_GENERIC", "Vendas", "Consumidor final e vendas sem cliente (subconta criada pelo sistema)", ""),
     Operation("SALES_GOODS", "Vendas", "Vendas de mercadorias", "61.3.1"),
     Operation("SALES_PRODUCTS", "Vendas", "Vendas de produtos fabricados (produção própria)", "61.1.1"),
     Operation("SALES_SERVICES", "Vendas", "Prestações de serviços", "62.1.1"),
@@ -48,6 +49,7 @@ OPERATIONS: tuple[Operation, ...] = (
     # treasury
     Operation("BANK_TRANSIT", "Tesouraria", "Transferências bancárias em trânsito", "48"),
     Operation("BANK_FEES", "Tesouraria", "Comissões e serviços bancários", "76.7"),
+    Operation("OTHER_MEANS", "Tesouraria", "Outros meios de pagamento (nem numerário nem banco: vales, cheques por depositar...)", ""),
     Operation("CASH_SHORTAGE", "Tesouraria", "Falta de caixa (diferença no fecho)", ""),
     Operation("CASH_SURPLUS", "Tesouraria", "Sobra de caixa (diferença no fecho)", ""),
     Operation("CUSTOMER_ADVANCES", "Tesouraria", "Adiantamentos de clientes", "31.9.1"),

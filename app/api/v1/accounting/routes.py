@@ -320,3 +320,39 @@ async def remove_entry(entry_id: uuid.UUID, db: AsyncSession = Depends(get_db),
         await delete_entry(db, current_user.company_id, entry_id)
     except _ERRORS as e:
         raise _refused(e)
+
+
+# ---------- the entries made by the system from the documents (integração) ----------
+
+from app.services.accounting_integration_service import (  # noqa: E402
+    IntegrationError, integrate_company, integration_status, set_integration_start,
+)
+
+
+class IntegrationStartRequest(BaseModel):
+    integration_start: date
+
+
+@router.get("/integration")
+async def get_integration(db: AsyncSession = Depends(get_db),
+                          current_user: User = Depends(require_permission("accounting:entries_view"))):
+    """The day the integration starts from, how many documents wait for their entry, and those refused (and why)."""
+    return await integration_status(db, current_user.company_id)
+
+
+@router.post("/integration/run")
+async def post_integration_run(db: AsyncSession = Depends(get_db),
+                               current_user: User = Depends(require_permission("accounting:entries_record"))):
+    """At once, instead of waiting for the next round (every minute)."""
+    result = await integrate_company(db, current_user.company_id, limit=5000)
+    return {"posted": result["posted"], "refused": result["pending"], **await integration_status(db, current_user.company_id)}
+
+
+@router.put("/integration/start")
+async def put_integration_start(payload: IntegrationStartRequest, db: AsyncSession = Depends(get_db),
+                                current_user: User = Depends(require_permission("accounting:chart_manage"))):
+    try:
+        await set_integration_start(db, current_user.company_id, payload.integration_start)
+    except IntegrationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    return await integration_status(db, current_user.company_id)

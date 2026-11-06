@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { BookText, Plus, Trash2, Loader2, Search, Undo2, Pencil, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { BookText, Plus, Trash2, Loader2, Search, Undo2, Pencil, CheckCircle2, AlertTriangle, RefreshCw, Bot } from 'lucide-react';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
 import DateInput from '../components/DateInput';
 import ConfirmDialog from '../components/ConfirmDialog';
 import {
   getChart, getJournals, createJournal, updateJournal, deleteJournal, getEntries, getEntry, saveEntry, deleteEntry, reverseEntry,
+  getIntegration, runIntegration, setIntegrationStart,
 } from '../api/accounting';
 import { extractErrorMessage } from '../utils/errors';
 import { formatKz } from '../utils/format';
@@ -15,7 +17,8 @@ import { toast } from '../store/toastStore';
 // Contabilidade › Lançamentos: the entries typed in the journals (diários). A draft (rascunho) is changed freely; posted
 // («Lançar») it must balance (debit = credit), takes the next number of its journal for the year (OD 2026/0001) and
 // never changes again - it is corrected by its estorno. Lines go to last-level active accounts only. The «Diários» tab
-// sets the journals (the defaults VND, CMP, CX, BCO, OD, ABE are made with the chart).
+// sets the journals (the defaults VND, CMP, CX, BCO, OD, ABE are made with the chart). The sales documents are posted
+// by the system (every minute); «Por integrar» lists those waiting, with the reason, and the day the integration starts.
 
 const inputCls = 'bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors';
 const cellInputCls = 'bg-bg-inset border border-border rounded-md px-2.5 py-2 text-[13px] text-text-primary outline-none focus:border-accent transition-colors w-full';
@@ -34,7 +37,10 @@ export default function Lancamentos() {
   const can = useCan();
   const canRecord = can('accounting:entries_record');
   const canJournals = can('accounting:journals_manage');
-  const [view, setView] = useState('entries'); // entries | journals
+  const [view, setView] = useState('entries'); // entries | journals | integration
+  const canChart = can('accounting:chart_manage');
+  const [integration, setIntegration] = useState(null);
+  const [startDraft, setStartDraft] = useState('');
   const [journals, setJournals] = useState(null);
   const [accounts, setAccounts] = useState([]);
   const [entries, setEntries] = useState(null);
@@ -60,7 +66,17 @@ export default function Lancamentos() {
       toast.error(extractErrorMessage(err, 'Erro ao carregar os lançamentos'));
     }
   }
+  async function loadIntegration() {
+    try {
+      const data = await getIntegration();
+      setIntegration(data);
+      setStartDraft(data.integration_start || '');
+    } catch (err) {
+      toast.error(extractErrorMessage(err, 'Erro ao carregar a integração'));
+    }
+  }
   useEffect(() => {
+    loadIntegration();
     loadJournals();
     getChart().then((c) => setAccounts(c.accounts)).catch(() => {});
   }, []);
@@ -89,7 +105,7 @@ export default function Lancamentos() {
       const e = await getEntry(row.id);
       setForm({
         id: e.id, status: e.status, label: e.label, journal_id: e.journal_id, entry_date: e.entry_date, description: e.description,
-        document_ref: e.document_ref || '', reversal_of: e.reversal_of, reversed_by: e.reversed_by,
+        document_ref: e.document_ref || '', reversal_of: e.reversal_of, reversed_by: e.reversed_by, automatic: e.automatic,
         lines: e.lines.map((l) => ({ ...emptyLine(), account_id: l.account_id, account_label: l.account_code + ' · ' + l.account_name,
           description: l.description || '', debit: Number(l.debit) ? String(Number(l.debit)) : '', credit: Number(l.credit) ? String(Number(l.credit)) : '' })),
       });
@@ -179,10 +195,13 @@ export default function Lancamentos() {
       </div>
 
       <div className="flex gap-1 mb-5 border-b border-border">
-        {[['entries', 'Lançamentos'], ['journals', 'Diários']].map(([key, label]) => (
-          <button key={key} type="button" onClick={() => setView(key)}
-            className={'px-4 py-2.5 text-[13px] font-medium border-b-2 -mb-px transition-colors cursor-pointer ' + (view === key ? 'border-accent text-accent' : 'border-transparent text-text-muted hover:text-text-primary')}>
+        {[['entries', 'Lançamentos'], ['journals', 'Diários'], ['integration', 'Por integrar']].map(([key, label]) => (
+          <button key={key} type="button" onClick={() => { setView(key); if (key === 'integration') loadIntegration(); }}
+            className={'flex items-center gap-2 px-4 py-2.5 text-[13px] font-medium border-b-2 -mb-px transition-colors cursor-pointer ' + (view === key ? 'border-accent text-accent' : 'border-transparent text-text-muted hover:text-text-primary')}>
             {label}
+            {key === 'integration' && integration?.pending?.length > 0 && (
+              <span className="text-[10px] font-semibold bg-amber-500/15 text-amber-500 px-1.5 py-0.5 rounded-full">{integration.pending.length}</span>
+            )}
           </button>
         ))}
       </div>
@@ -261,10 +280,71 @@ export default function Lancamentos() {
         </div>
       )}
 
+      {view === 'integration' && integration && (
+        <div className="flex flex-col gap-4 max-w-5xl">
+          <div className="bg-bg-elevated border border-border rounded-lg p-5 flex flex-col gap-4">
+            <div className="flex items-start gap-3">
+              <Bot size={20} className="text-accent shrink-0 mt-0.5" />
+              <p className="text-[13px] text-text-muted">
+                Os documentos de venda (FT, FR, ND, NC, RC) são lançados pelo sistema a cada minuto, com as contas de{' '}
+                <Link to="/contabilidade/plano-de-contas?tab=operacoes" className="text-accent hover:underline">Contas por operação</Link>.
+                Os do Modo formação nunca entram na contabilidade. Um documento que não pode ser lançado fica aqui com o motivo:
+                corrija a causa e carregue em «Integrar agora».
+              </p>
+            </div>
+            <div className="flex items-end gap-3 flex-wrap">
+              <div>
+                <label className={labelCls}>Integrar os documentos a partir de</label>
+                <div className="flex items-center gap-2">
+                  <div className="w-44"><DateInput value={startDraft} readOnly={!canChart} onChange={(e) => setStartDraft(e.target.value)} className={inputCls + ' w-full'} /></div>
+                  {canChart && startDraft && startDraft !== integration.integration_start && (
+                    <button type="button" disabled={busy} className={btnGhost}
+                      onClick={() => run(() => setIntegrationStart(startDraft), 'Data de início guardada', (data) => setIntegration(data))}>Guardar</button>
+                  )}
+                </div>
+              </div>
+              <p className="text-[13px] text-text-muted pb-2.5 flex-1 min-w-[200px]">
+                {integration.waiting > 0 ? integration.waiting + ' documento(s) ainda sem lançamento' : 'Todos os documentos têm o seu lançamento'}
+              </p>
+              {canRecord && (
+                <button type="button" disabled={busy} className={btnPrimary}
+                  onClick={() => run(runIntegration, (r) => r.posted + ' lançamento(s) gerado(s)' + (r.refused ? ' · ' + r.refused + ' ainda por integrar' : ''),
+                    (data) => { setIntegration(data); loadEntries(); loadJournals(); })}>
+                  <RefreshCw size={15} /> Integrar agora
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="bg-bg-elevated border border-border rounded-lg overflow-x-auto">
+            <table className="w-full text-[13px]">
+              <thead>
+                <tr className="text-left text-[11px] uppercase tracking-wide text-text-muted border-b border-border">
+                  <th className="px-4 py-3 font-medium">Documento</th>
+                  <th className="px-4 py-3 font-medium">Data</th>
+                  <th className="px-4 py-3 font-medium">Motivo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {integration.pending.length === 0 && <tr><td colSpan={3} className="py-10 text-center text-text-muted">Nenhum documento à espera</td></tr>}
+                {integration.pending.map((p) => (
+                  <tr key={p.id} className="border-b border-border last:border-0">
+                    <td className="px-4 py-2.5 font-mono whitespace-nowrap text-text-primary">{p.document}</td>
+                    <td className="px-4 py-2.5 whitespace-nowrap text-text-muted">{fmtDate(p.document_date)}</td>
+                    <td className="px-4 py-2.5 text-amber-500">{p.reason}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* The entry: typed (a draft) or looked at (posted) */}
       <Modal open={!!form} onClose={() => setForm(null)} size="full" maxWidthClass="max-w-6xl"
         title={form?.id ? (form.status === 'LANCADO' ? 'Lançamento ' + form.label : 'Rascunho') : 'Novo lançamento'}
-        subtitle={form?.reversal_of ? 'Estorno de ' + form.reversal_of : form?.reversed_by ? 'Estornado por ' + form.reversed_by : editable ? 'Débito = crédito para lançar. Só contas de último nível.' : null}
+        subtitle={[form?.automatic ? 'Gerado pelo sistema a partir de ' + form.document_ref : null,
+          form?.reversal_of ? 'Estorno de ' + form.reversal_of : form?.reversed_by ? 'Estornado por ' + form.reversed_by : null,
+          editable ? 'Débito = crédito para lançar. Só contas de último nível.' : null].filter(Boolean).join(' · ') || null}
         footer={form && (
           <div className="flex items-center justify-between gap-3 px-6 py-4 flex-wrap">
             <div className="flex items-center gap-2">
@@ -442,6 +522,7 @@ function StatusBadge({ entry }) {
   return (
     <span className="flex items-center gap-1.5">
       <span className="text-[11px] font-semibold uppercase text-success bg-success/10 px-2 py-0.5 rounded">Lançado</span>
+      {entry.automatic && <span className="text-[11px] font-semibold uppercase text-accent bg-accent/10 px-2 py-0.5 rounded" title="Gerado pelo sistema a partir do documento">Automático</span>}
       {entry.reversed_by && <span className="text-[11px] text-text-muted">estornado por {entry.reversed_by}</span>}
       {entry.reversal_of && <span className="text-[11px] text-text-muted">estorno de {entry.reversal_of}</span>}
     </span>

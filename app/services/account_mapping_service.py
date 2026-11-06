@@ -150,6 +150,20 @@ async def _entities(db: AsyncSession, company_id: uuid.UUID, settings: Accountin
     return out
 
 
+async def _new_subaccount(db: AsyncSession, company_id: uuid.UUID, parent: Account, name: str, used_codes: set[str]) -> Account:
+    """The next sub-account of parent (43.1 -> 43.1.1, 43.1.2...) - flushed, its code added to used_codes."""
+    last = max((int(c.rsplit(".", 1)[1]) for c in used_codes if c.startswith(parent.code + ".")
+                and c.count(".") == parent.code.count(".") + 1), default=0)
+    if last >= 9999:
+        raise ChartError(f"A conta {parent.code} já tem 9999 subcontas")
+    code = f"{parent.code}.{last + 1}"
+    account = Account(company_id=company_id, code=code, name=name, parent_id=parent.id, level=level_of(code), is_active=True)
+    db.add(account)
+    await db.flush()
+    used_codes.add(code)
+    return account
+
+
 async def sync_subaccounts(db: AsyncSession, company_id: uuid.UUID) -> dict:
     """Creates the sub-accounts still missing - see the module docstring. Returns {created, missing_parent: [labels]}:
     the entities whose parent operation has no account yet are left for later."""
@@ -173,16 +187,17 @@ async def sync_subaccounts(db: AsyncSession, company_id: uuid.UUID) -> dict:
         if parent.id in with_entries:  # an account with entries never gets sub-accounts: choose another parent
             missing.add(f"{OPERATIONS_BY_KEY[parent_op].label} (a conta {parent.code} já tem lançamentos)")
             continue
-        last = max((int(c.rsplit(".", 1)[1]) for c in used_codes if c.startswith(parent.code + ".")
-                    and c.count(".") == parent.code.count(".") + 1), default=0)
-        if last >= 9999:
-            raise ChartError(f"A conta {parent.code} já tem 9999 subcontas")
-        code = f"{parent.code}.{last + 1}"
-        account = Account(company_id=company_id, code=code, name=name, parent_id=parent.id, level=level_of(code), is_active=True)
-        db.add(account)
-        await db.flush()
+        account = await _new_subaccount(db, company_id, parent, name, used_codes)
         db.add(AccountLink(company_id=company_id, entity_kind=kind, entity_id=entity_id, account_id=account.id))
-        used_codes.add(code)
+        created += 1
+    # the customers without a sub-account of their own (Consumidor final, sales without a customer): one sub-account
+    # «Consumidor final» under the national customers, set as their account - the accountant may choose another
+    national = mappings.get("PARENT_CUSTOMERS_NATIONAL")
+    national = accounts.get(national.account_id) if national else None
+    if (settings.subaccount_per_customer and "CUSTOMERS_GENERIC" not in mappings and national is not None
+            and national.id not in with_entries):
+        account = await _new_subaccount(db, company_id, national, "Consumidor final", used_codes)
+        db.add(AccountMapping(company_id=company_id, operation="CUSTOMERS_GENERIC", account_id=account.id))
         created += 1
     await db.commit()
     return {"created": created, "missing_parent": sorted(missing)}
