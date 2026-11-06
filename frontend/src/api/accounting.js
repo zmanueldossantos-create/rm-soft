@@ -44,3 +44,31 @@ export async function updateAccount(accountId, name, isActive) {
 export async function deleteAccount(accountId) {
   await apiClient.delete('/accounting/accounts/' + accountId);
 }
+
+// «Contas por operação»: { operations: [{ key, group, label, kind, suggestion, account_id, account_code, account_name }],
+// subaccount_per_customer, subaccount_per_supplier }
+export async function getMappings() {
+  const res = await apiClient.get('/accounting/mappings');
+  return res.data;
+}
+
+export async function setMapping(key, accountId) {
+  const res = await apiClient.put('/accounting/mappings/' + key, { account_id: accountId || null });
+  return res.data;
+}
+
+export async function setMappingOptions(perCustomer, perSupplier) {
+  const res = await apiClient.put('/accounting/mappings-options', { subaccount_per_customer: perCustomer, subaccount_per_supplier: perSupplier });
+  return res.data;
+}
+
+export async function applyMappingSuggestions() {
+  const res = await apiClient.post('/accounting/mappings/suggestions');
+  return res.data;
+}
+
+// The sub-accounts still missing (one per bank account, till, customer, supplier): { created, missing_parent }
+export async function syncSubaccounts() {
+  const res = await apiClient.post('/accounting/subaccounts/sync');
+  return res.data;
+}

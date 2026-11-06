@@ -39,7 +39,7 @@ async def test_the_pgc_then_an_account_at_a_time(db, company_with_essentials):
     with pytest.raises(ChartError, match="Crie primeiro a conta 47"):
         await create_account(db, company_id, "47.1", "Sem mãe")
     caixa = next(a for a in chart["accounts"] if a["code"] == "45.1")
-    sub = await create_account(db, company_id, "45.1.1", "Caixa sede")
+    sub = await create_account(db, company_id, "45.1.9", "Caixa sede")  # 45.1.1: the company's caixa, made by itself
     assert (sub.level, sub.parent_id) == (4, caixa["id"])
     with pytest.raises(ChartError, match="já existe"):
         await create_account(db, company_id, "45", "Outra")

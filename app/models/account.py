@@ -7,6 +7,9 @@ changes once created (the entries will point at it); the name may, and an accoun
 
 AccountingSettings: how the chart was started - the PGC (Plano Geral de Contabilidade de Angola, loaded from the
 system's reference list), the company's own chart (imported from the Excel model), or empty - and when.
+
+AccountMapping («Contas por operação») and AccountLink (the sub-account of a bank account, till, customer, supplier):
+see app.services.account_mapping_service.
 """
 import uuid
 from datetime import datetime
@@ -40,3 +43,33 @@ class AccountingSettings(Base):
     company_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("companies.id"), primary_key=True)
     chart_source: Mapped[str | None] = mapped_column(String(10), nullable=True)  # PGC, PROPRIO or VAZIO
     chart_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # one sub-account per customer / per supplier (the usual way), or all of them on the parent account itself
+    subaccount_per_customer: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
+    subaccount_per_supplier: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
+
+
+class AccountMapping(Base):
+    """«Contas por operação»: the account of the company's chart a kind of operation goes to (app.data.account_operations)."""
+    __tablename__ = "account_mappings"
+    __table_args__ = (UniqueConstraint("company_id", "operation", name="uq_account_mapping_operation"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    company_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("companies.id"), nullable=False, index=True)
+    operation: Mapped[str] = mapped_column(String(40), nullable=False)
+    account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("accounts.id"), nullable=False)
+
+
+ENTITY_KINDS = ("BANK", "TILL", "CUSTOMER", "SUPPLIER")
+
+
+class AccountLink(Base):
+    """The sub-account the system made for one bank account, till, customer or supplier - its own account in the
+    chart, where its movements will be posted."""
+    __tablename__ = "account_links"
+    __table_args__ = (UniqueConstraint("company_id", "entity_kind", "entity_id", name="uq_account_link_entity"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    company_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("companies.id"), nullable=False, index=True)
+    entity_kind: Mapped[str] = mapped_column(String(10), nullable=False)  # BANK, TILL, CUSTOMER, SUPPLIER
+    entity_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("accounts.id"), nullable=False, index=True)

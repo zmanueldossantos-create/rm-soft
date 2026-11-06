@@ -91,13 +91,15 @@ async def get_chart(db: AsyncSession, company_id: uuid.UUID) -> dict:
     """The chart, in the order of its codes, with how it was started."""
     accounts = sorted((await _accounts_by_code(db, company_id)).values(), key=lambda a: sort_key(a.code))
     with_children = {a.parent_id for a in accounts if a.parent_id is not None}
+    from app.services.account_mapping_service import accounts_in_use
+    in_use = await accounts_in_use(db, company_id)
     settings = await db.get(AccountingSettings, company_id)
     return {
         "source": settings.chart_source if settings else None,
         "started_at": settings.chart_started_at if settings else None,
         "accounts": [{
             "id": a.id, "code": a.code, "name": a.name, "parent_id": a.parent_id, "level": a.level,
-            "is_active": a.is_active, "has_children": a.id in with_children,
+            "is_active": a.is_active, "has_children": a.id in with_children, "in_use": in_use.get(a.id),
         } for a in accounts],
     }
 
@@ -126,7 +128,13 @@ async def start_chart(db: AsyncSession, company_id: uuid.UUID, source: str) -> d
     settings = await _settings(db, company_id)
     settings.chart_source = source
     settings.chart_started_at = datetime.now(timezone.utc)
+    if source == "PGC":  # «Contas por operação»: the PGC accounts suggested, where nothing is set yet
+        from app.services.account_mapping_service import apply_suggestions
+        await db.flush()
+        await apply_suggestions(db, company_id, commit=False)
     await db.commit()
+    from app.services.account_mapping_service import sync_subaccounts
+    await sync_subaccounts(db, company_id)  # the sub-accounts of the banks, tills, customers and suppliers, at once
     return await get_chart(db, company_id)
 
 
@@ -174,6 +182,10 @@ async def delete_account(db: AsyncSession, company_id: uuid.UUID, account_id: uu
     children = (await db.execute(select(func.count(Account.id)).where(Account.parent_id == account.id))).scalar_one()
     if children:
         raise ChartError(f"A conta {account.code} tem subcontas - apague-as primeiro, ou desative a conta")
+    from app.services.account_mapping_service import accounts_in_use
+    why = (await accounts_in_use(db, company_id)).get(account.id)
+    if why:
+        raise ChartError(f"A conta {account.code} {why} - não pode ser apagada")
     await db.delete(account)
     await db.commit()
 

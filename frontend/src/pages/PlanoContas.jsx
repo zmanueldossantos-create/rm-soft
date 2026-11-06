@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ListTree, Download, Upload, Plus, Pencil, Trash2, Loader2, Search, BookOpen, FileSpreadsheet, Square } from 'lucide-react';
 import Modal from '../components/Modal';
+import ContasPorOperacao from '../components/ContasPorOperacao';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { getChart, startChart, downloadChartTemplate, importChart, createAccount, updateAccount, deleteAccount } from '../api/accounting';
 import { extractErrorMessage } from '../utils/errors';
@@ -24,6 +25,7 @@ export default function PlanoContas() {
   const [form, setForm] = useState(null); // { id?, code, name, isActive }
   const [toDelete, setToDelete] = useState(null);
   const [importErrors, setImportErrors] = useState(null);
+  const [view, setView] = useState('chart'); // chart | operations
   const fileRef = useRef(null);
 
   async function load() {
@@ -120,7 +122,20 @@ export default function PlanoContas() {
         </div>
       </div>
 
-      {accounts.length === 0 ? (
+      {accounts.length > 0 && (
+        <div className="flex gap-1 mb-5 border-b border-border">
+          {[['chart', 'Plano de contas'], ['operations', 'Contas por operação']].map(([key, label]) => (
+            <button key={key} type="button" onClick={() => setView(key)}
+              className={'px-4 py-2.5 text-[13px] font-medium border-b-2 -mb-px transition-colors cursor-pointer ' + (view === key ? 'border-accent text-accent' : 'border-transparent text-text-muted hover:text-text-primary')}>
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {accounts.length > 0 && view === 'operations' ? (
+        <ContasPorOperacao accounts={accounts} canManage={canManage} onChartChanged={load} />
+      ) : accounts.length === 0 ? (
         <div className="bg-bg-elevated border border-border rounded-lg p-6">
           <p className="font-display font-semibold text-text-primary mb-1">Como quer começar o plano de contas?</p>
           <p className="text-text-muted text-[13px] mb-5">Pode mudar depois: o plano continua editável (importar, acrescentar, renomear, desativar).</p>
@@ -159,7 +174,11 @@ export default function PlanoContas() {
           <div className="bg-bg-elevated border border-border rounded-lg overflow-hidden">
             {shown.length === 0 && <p className="text-text-muted text-[13px] text-center py-10">Nenhuma conta encontrada</p>}
             {shown.map((a) => (
-              <div key={a.id} className={'flex items-center gap-3 px-4 py-2 border-b border-border last:border-0 ' + (a.level === 1 ? 'bg-bg-inset/60' : '') + (a.is_active ? '' : ' opacity-50')}>
+              <div key={a.id} className={'relative flex items-center gap-3 px-4 py-2 border-b border-border last:border-0 ' + (a.level === 1 ? 'bg-bg-inset/60' : '') + (a.is_active ? '' : ' opacity-50')}>
+                {/* Indentation guides: one vertical line per ancestor level, like an editor's */}
+                {Array.from({ length: a.level - 1 }, (_, i) => (
+                  <span key={i} aria-hidden="true" className="absolute -top-px -bottom-px w-px bg-text-muted/30" style={{ left: 22 + i * 18 }} />
+                ))}
                 <div className="flex-1 min-w-0 flex items-center gap-3" style={{ paddingLeft: (a.level - 1) * 18 }}>
                   <span className={'font-mono text-[13px] w-24 shrink-0 ' + (a.level <= 2 ? 'text-text-primary font-semibold' : 'text-text-muted')}>{a.code}</span>
                   <span className={'text-[13px] truncate ' + (a.level === 1 ? 'font-semibold text-text-primary uppercase tracking-wide' : 'text-text-primary')}>{a.name}</span>
@@ -171,7 +190,7 @@ export default function PlanoContas() {
                       className="w-7 h-7 inline-flex items-center justify-center rounded-md border border-border text-text-muted hover:text-accent hover:border-accent transition-colors cursor-pointer"><Plus size={13} /></button>
                     <button type="button" title="Editar" onClick={() => setForm({ id: a.id, code: a.code, name: a.name, isActive: a.is_active })}
                       className="w-7 h-7 inline-flex items-center justify-center rounded-md border border-border text-text-muted hover:text-accent hover:border-accent transition-colors cursor-pointer"><Pencil size={13} /></button>
-                    <button type="button" title={a.has_children ? 'Tem subcontas - não pode ser apagada' : 'Apagar'} disabled={a.has_children} onClick={() => setToDelete(a)}
+                    <button type="button" title={a.has_children ? 'Tem subcontas - não pode ser apagada' : a.in_use ? 'Em uso: ' + a.in_use : 'Apagar'} disabled={a.has_children || !!a.in_use} onClick={() => setToDelete(a)}
                       className="w-7 h-7 inline-flex items-center justify-center rounded-md border border-border text-text-muted hover:text-danger hover:border-danger transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"><Trash2 size={13} /></button>
                   </div>
                 )}

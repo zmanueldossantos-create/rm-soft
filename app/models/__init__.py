@@ -89,7 +89,7 @@ from app.models.supplier_payment import SupplierPayment, SupplierPaymentAllocati
 from app.models.bank_movement import BankMovement  # noqa: E402,F401 - Tesouraria: movements typed on a bank account
 from app.models.payment_terminal import PaymentTerminal  # noqa: E402,F401 - Tesouraria: TPA / Multicaixa Express
 from app.models.bank_transfer import BankTransfer  # noqa: E402,F401 - Tesouraria: transfers between bank accounts
-from app.models.account import Account, AccountingSettings  # noqa: E402,F401 - Contabilidade: plano de contas
+from app.models.account import Account, AccountingSettings, AccountMapping, AccountLink  # noqa: E402,F401 - Contabilidade: plano de contas
 from app.models.company_ai_settings import CompanyAiSettings  # noqa: E402,F401 - the AI assistant per company
 from app.models.ai_conversation import AiConversation, AiMessage  # noqa: E402,F401 - the AI assistant's conversations
 from app.models.ai_pending_action import AiPendingAction  # noqa: E402,F401 - actions prepared by the AI assistant

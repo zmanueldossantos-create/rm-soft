@@ -114,6 +114,8 @@ async def create_customer(
     db.add(customer)
     await db.commit()
     await db.refresh(customer)
+    from app.services.account_mapping_service import sync_after_create  # its sub-account (Contabilidade)
+    await sync_after_create(db, company_id, customer)
     return customer
 
 

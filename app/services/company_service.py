@@ -494,6 +494,8 @@ async def add_bank_account(
     db.add(account)
     await db.commit()
     await db.refresh(account)
+    from app.services.account_mapping_service import sync_after_create  # its sub-account (Contabilidade)
+    await sync_after_create(db, company_id, account)
     return account
 
 

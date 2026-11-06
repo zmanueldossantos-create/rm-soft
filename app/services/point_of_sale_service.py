@@ -84,6 +84,8 @@ async def create_point_of_sale(
     db.add(pos)
     await db.commit()
     await db.refresh(pos)
+    from app.services.account_mapping_service import sync_after_create  # its sub-account (Contabilidade)
+    await sync_after_create(db, company_id, pos)
     return pos
 
 

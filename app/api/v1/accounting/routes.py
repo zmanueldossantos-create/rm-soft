@@ -106,3 +106,58 @@ async def remove_account(account_id: uuid.UUID, db: AsyncSession = Depends(get_d
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ChartError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+# ---------- «Contas por operação» and the sub-accounts made by the system ----------
+
+from app.services.account_mapping_service import (  # noqa: E402
+    apply_suggestions, list_mappings, set_mapping, set_options, sync_subaccounts,
+)
+
+
+class MappingRequest(BaseModel):
+    account_id: uuid.UUID | None = None  # None: no account for this operation
+
+
+class MappingOptionsRequest(BaseModel):
+    subaccount_per_customer: bool
+    subaccount_per_supplier: bool
+
+
+@router.get("/mappings")
+async def get_mappings(db: AsyncSession = Depends(get_db),
+                       current_user: User = Depends(require_permission("accounting:chart_view"))):
+    return await list_mappings(db, current_user.company_id)
+
+
+@router.put("/mappings/{key}")
+async def put_mapping(key: str, payload: MappingRequest, db: AsyncSession = Depends(get_db),
+                      current_user: User = Depends(require_permission("accounting:chart_manage"))):
+    try:
+        await set_mapping(db, current_user.company_id, key, payload.account_id)
+    except ChartError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    return await list_mappings(db, current_user.company_id)
+
+
+@router.put("/mappings-options")
+async def put_mapping_options(payload: MappingOptionsRequest, db: AsyncSession = Depends(get_db),
+                              current_user: User = Depends(require_permission("accounting:chart_manage"))):
+    await set_options(db, current_user.company_id, payload.subaccount_per_customer, payload.subaccount_per_supplier)
+    return await list_mappings(db, current_user.company_id)
+
+
+@router.post("/mappings/suggestions")
+async def post_mapping_suggestions(db: AsyncSession = Depends(get_db),
+                                   current_user: User = Depends(require_permission("accounting:chart_manage"))):
+    applied = await apply_suggestions(db, current_user.company_id)
+    return {"applied": applied, **(await list_mappings(db, current_user.company_id))}
+
+
+@router.post("/subaccounts/sync")
+async def post_sync_subaccounts(db: AsyncSession = Depends(get_db),
+                                current_user: User = Depends(require_permission("accounting:chart_manage"))):
+    try:
+        return await sync_subaccounts(db, current_user.company_id)
+    except ChartError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
