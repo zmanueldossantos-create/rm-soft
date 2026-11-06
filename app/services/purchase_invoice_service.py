@@ -289,6 +289,49 @@ async def _get(db: AsyncSession, company_id: uuid.UUID, invoice_id: uuid.UUID) -
     return invoice
 
 
+async def _issue_payment(db: AsyncSession, invoice: PurchaseInvoice):
+    """The payment recorded when a fatura-recibo / talão de venda was registered (only for it, still registered) -
+    None for any other document or payment."""
+    if invoice.purchase_type not in ("FR", "TV"):
+        return None
+    from app.models.supplier_payment import SupplierPayment, SupplierPaymentAllocation, SupplierPaymentStatus
+    candidates = (await db.execute(
+        select(SupplierPayment).join(SupplierPaymentAllocation, SupplierPaymentAllocation.payment_id == SupplierPayment.id)
+        .where(SupplierPaymentAllocation.purchase_invoice_id == invoice.id,
+               SupplierPayment.status == SupplierPaymentStatus.REGISTADO,
+               SupplierPayment.notes == f"Pago na emissão - {invoice.series}/{invoice.number}")
+    )).scalars().all()
+    for payment in candidates:
+        others = (await db.execute(select(func.count(SupplierPaymentAllocation.id)).where(
+            SupplierPaymentAllocation.payment_id == payment.id,
+            SupplierPaymentAllocation.purchase_invoice_id != invoice.id))).scalar_one()
+        if not others:
+            return payment
+    return None
+
+
+async def _check_stock_still_there(db: AsyncSession, invoice: PurchaseInvoice) -> None:
+    """The products a purchase put in a warehouse are still there (unless it accepts a negative stock) - before
+    anything of its cancellation is done."""
+    if invoice.stock_entry_document_id is None:
+        return
+    from app.models.stock import Stock
+    warehouse = await db.get(Warehouse, invoice.warehouse_id)
+    if warehouse is None or warehouse.allow_negative_stock:
+        return
+    needed: dict[uuid.UUID, float] = {}
+    for line in (await db.execute(select(StockMovementDocumentLine).where(
+            StockMovementDocumentLine.document_id == invoice.stock_entry_document_id))).scalars().all():
+        needed[line.product_id] = needed.get(line.product_id, 0.0) + float(line.quantity) * float(line.unit_factor)
+    for product_id, quantity in needed.items():
+        held = (await db.execute(select(Stock.quantity).where(
+            Stock.product_id == product_id, Stock.warehouse_id == warehouse.id))).scalar_one_or_none()
+        if float(held or 0) + 1e-9 < quantity:
+            name = (await db.execute(select(Product.name).where(Product.id == product_id))).scalar_one()
+            raise PurchaseInvoiceError(f"Não é possível anular: {name} já não está todo no armazém "
+                                       f"({float(held or 0):g} de {quantity:g}) - foi vendido ou movimentado")
+
+
 async def cancel_purchase_invoice(db: AsyncSession, company_id: uuid.UUID, invoice_id: uuid.UUID, user_id: uuid.UUID,
                                   reason: str) -> PurchaseInvoice:
     invoice = await _get(db, company_id, invoice_id)
@@ -303,11 +346,24 @@ async def cancel_purchase_invoice(db: AsyncSession, company_id: uuid.UUID, invoi
     if credit_note is not None:
         raise PurchaseInvoiceError(f"Anule primeiro a nota de crédito {credit_note[0]}/{credit_note[1]} desta fatura")
     from app.models.supplier_payment import SupplierPayment, SupplierPaymentAllocation, SupplierPaymentStatus
+    issue_payment = await _issue_payment(db, invoice)
+    if issue_payment is not None:
+        # a fatura-recibo (or talão de venda) was paid when it was registered: that payment is part of the document and
+        # is cancelled with it - its money goes back to the till or the bank it left. Checked first: the products must
+        # still be in the warehouse, so that nothing is cancelled halfway.
+        await _check_stock_still_there(db, invoice)
+        from app.services.supplier_payment_service import SupplierPaymentError, cancel_supplier_payment
+        try:
+            await cancel_supplier_payment(db, company_id, issue_payment.id, await db.get(User, user_id),
+                                          f"Anulação da {invoice.series}/{invoice.number}: {reason}"[:300])
+        except SupplierPaymentError as e:
+            raise PurchaseInvoiceError(f"Não é possível anular o pagamento da emissão: {e}")
+        invoice = await _get(db, company_id, invoice_id)
     payment = (await db.execute(select(SupplierPayment.series, SupplierPayment.number)
                                 .join(SupplierPaymentAllocation, SupplierPaymentAllocation.payment_id == SupplierPayment.id)
                                 .where(SupplierPaymentAllocation.purchase_invoice_id == invoice.id,
                                        SupplierPayment.status == SupplierPaymentStatus.REGISTADO))).first()
-    if payment is not None:  # what was paid on it must be cancelled first
+    if payment is not None:  # what was paid on it later must be cancelled first
         raise PurchaseInvoiceError(f"Anule primeiro o pagamento {payment[0]}/{payment[1]} desta fatura")
     if invoice.stock_entry_document_id is not None:
         # its products leave the warehouse they entered - in the active period, today; refused if no longer there

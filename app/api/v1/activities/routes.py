@@ -1,7 +1,7 @@
 """
-Activity routes - business lines / points of sale within a Company.
-GESTOR configures these (CAIXA needs read access to select one when
-invoicing), but only for Modules the company has been granted by SUPER_ADMIN.
+Activity routes - business lines within a Company and their caixas. An activity is never created here: each granted
+module that sells gets its own by itself (activity_service.ensure_company_activities); the gestor renames it,
+(de)activates it and manages its caixas (Tesouraria › Caixas).
 """
 from app.services.point_of_sale_service import PosPrintError
 import uuid
@@ -12,17 +12,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.api.deps import require_permission
 from app.models.user import User
-from app.schemas.activity import ActivityCreateRequest, ActivityUpdateRequest, ActivityResponse
-from app.schemas.module import ModuleResponse
+from app.schemas.activity import ActivityUpdateRequest, ActivityResponse
 from app.services.activity_service import (
     list_activities,
-    create_activity,
     update_activity,
     toggle_activity_status,
     ActivityNotFoundError,
-    ModuleNotGrantedError,
 )
-from app.services.company_module_service import list_company_modules
 from app.schemas.pos import PosCreateRequest, PosUpdateRequest, PointOfSaleResponse
 from app.services.point_of_sale_service import (
     list_points_of_sale,
@@ -46,30 +42,6 @@ async def get_activities(
 ):
     """Lists the company's configured activities (e.g. Padaria, Bar, Hotel)."""
     return await list_activities(db, current_user.company_id)
-
-
-@router.get("/available-modules", response_model=list[ModuleResponse])
-async def get_available_modules(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("activities:manage")),
-):
-    """Lists the Modules the company has been granted by SUPER_ADMIN - to configure as Activities."""
-    return await list_company_modules(db, current_user.company_id)
-
-
-@router.post("", response_model=ActivityResponse, status_code=status.HTTP_201_CREATED)
-async def create_new_activity(
-    payload: ActivityCreateRequest,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("activities:manage")),
-):
-    """Configures a new activity for a Module the company has been granted."""
-    try:
-        return await create_activity(
-            db, current_user.company_id, payload.module_id, payload.name
-        )
-    except ModuleNotGrantedError as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
 
 
 @router.patch("/{activity_id}", response_model=ActivityResponse)

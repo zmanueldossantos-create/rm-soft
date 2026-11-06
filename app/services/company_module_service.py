@@ -49,6 +49,8 @@ async def set_company_modules(db: AsyncSession, company_id: uuid.UUID, module_id
             cm.is_enabled = False
 
     await db.commit()
+    from app.services.activity_service import ensure_company_activities  # a module that sells: its activity, now
+    await ensure_company_activities(db, company_id)
 
 
 async def is_module_granted(db: AsyncSession, company_id: uuid.UUID, module_id: uuid.UUID) -> bool:

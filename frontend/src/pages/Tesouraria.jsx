@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { PiggyBank, Loader2, Wallet, ArrowLeftRight, Lock, FileText, RefreshCw, ArrowRight, Landmark, Pencil, Plus, Ban } from 'lucide-react';
+import { PiggyBank, Loader2, Wallet, ArrowLeftRight, Lock, FileText, RefreshCw, ArrowRight, Landmark, Pencil, Plus, Ban, Store } from 'lucide-react';
 import DateInput from '../components/DateInput';
 import Select from '../components/Select';
 import Modal from '../components/Modal';
@@ -8,6 +8,8 @@ import { extractErrorMessage } from '../utils/errors';
 import { getTreasuryPosition, listTreasuryMovements, listTreasuryClosings, listBankPositions, getBankStatement, setBankOpeningBalance, listCashMovementReasons, createBankMovement, cancelBankMovement, cancelBankTransfer } from '../api/tesouraria';
 import BankBalanceWarning, { bankShortfall } from '../components/BankBalanceWarning';
 import TerminalsPanel from '../components/TerminalsPanel';
+import CaixasPanel from '../components/CaixasPanel';
+import { useSearchParams } from 'react-router-dom';
 import { TransferModal, InTransitPanel } from '../components/BankTransfers';
 import { useCan } from '../utils/permissions';
 import { fetchClosingReportPdfBlob } from '../api/pos';
@@ -25,6 +27,7 @@ const TABS = [
   { key: 'movements', label: 'Movimentos', icon: ArrowLeftRight },
   { key: 'closings', label: 'Fechos', icon: Lock },
   { key: 'banks', label: 'Bancos', icon: Landmark },
+  { key: 'caixas', label: 'Caixas', icon: Store },  // the caixas of each activity and the cofre: create, set up, associate
 ];
 
 const inputCls = 'bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors';
@@ -363,7 +366,8 @@ function Banks({ banks, selectedId, onSelect, statement, onEditOpening, onNewMov
 
 export default function Tesouraria() {
   const can = useCan();
-  const [tab, setTab] = useState('position');
+  const [searchParams] = useSearchParams();
+  const [tab, setTab] = useState(TABS.some((t) => t.key === searchParams.get('tab')) ? searchParams.get('tab') : 'position');
   const [position, setPosition] = useState(null);
   const [movements, setMovements] = useState([]);
   const [closings, setClosings] = useState([]);
@@ -406,8 +410,8 @@ export default function Tesouraria() {
   }, [reload]);
 
   useEffect(() => {
-    if (tab === 'position') {
-      setLoading(false);  // the position has its own request (above)
+    if (tab === 'position' || tab === 'caixas') {
+      setLoading(false);  // the position has its own request (above), the caixas their panel
       return undefined;
     }
     let cancelled = false;
@@ -535,7 +539,7 @@ export default function Tesouraria() {
         ))}
       </div>
 
-      {tab !== 'position' && (
+      {tab !== 'position' && tab !== 'caixas' && (
         <div className="flex items-end gap-2.5 mb-5 flex-wrap">
           <div>
             <label className={labelCls}>De</label>
@@ -569,7 +573,7 @@ export default function Tesouraria() {
       )}
 
 
-      {loading || (tab === 'position' && !position) ? (
+      {tab === 'caixas' ? <CaixasPanel key={reload} /> : loading || (tab === 'position' && !position) ? (
         <div className="flex items-center justify-center py-16 text-text-muted text-sm">
           <Loader2 size={18} className="animate-spin mr-2" /> A carregar...
         </div>

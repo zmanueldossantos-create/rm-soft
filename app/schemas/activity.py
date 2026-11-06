@@ -10,19 +10,6 @@ from pydantic import BaseModel, field_validator
 
 
 
-class ActivityCreateRequest(BaseModel):
-    module_id: uuid.UUID
-    name: str
-
-    @field_validator("name")
-    @classmethod
-    def validate_name(cls, v: str) -> str:
-        cleaned = " ".join(v.split())
-        if not cleaned:
-            raise ValueError("Nome da atividade não pode estar vazio")
-        return cleaned
-
-
 class ActivityUpdateRequest(BaseModel):
     name: str
 

@@ -245,8 +245,8 @@ async def create_company(
         db.add(CompanyPaymentMethodPreference(company_id=company.id, payment_method_id=numerario.id, available_at_pos=True))
 
 
-    # Grant the chosen Modules (Hotel/Padaria/Bar/Restaurante) - GESTOR will
-    # later configure the concrete Activity for each one (see activity_service).
+    # Grant the chosen Modules (Hotel/Padaria/Bar/Restaurante) - each one that sells gets its activity by itself
+    # once the company is saved (activity_service.ensure_company_activities).
     for module_id in (module_ids or []):
         db.add(CompanyModule(company_id=company.id, module_id=module_id, is_enabled=True))
 
@@ -299,6 +299,8 @@ async def create_company(
 
     await grant_default_role_permissions(db, company.id)
     await db.commit()
+    from app.services.activity_service import ensure_company_activities  # each module that sells: its activity
+    await ensure_company_activities(db, company.id)
     await db.refresh(company)
     if catalog_counts is not None:
         company.catalog_counts = catalog_counts  # shown once, after the creation (not stored)

@@ -104,7 +104,8 @@ export default function StockDashboard() {
 
       {!loading && !error && data && (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4 mb-6">
+          {/* two rows: the quantities (4 cards), then the values (3 cards) - one row of 7 cut the amounts in two lines */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
             <div className="bg-bg-elevated border border-border rounded-lg p-4">
               <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wide flex items-center gap-1.5 mb-1.5"><Package2 size={12} />Produtos ativos</p>
               <p className="font-display font-semibold text-2xl text-text-primary">{data.total_products}</p>
@@ -136,6 +137,8 @@ export default function StockDashboard() {
               <p className="font-display font-semibold text-2xl text-amber-500">{data.lots_expiring_count ?? 0}</p>
               {data.lots_expired_count > 0 && <p className="text-[11px] text-danger mt-1">{data.lots_expired_count} lote(s) expirado(s)</p>}
             </button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
             <div className="bg-bg-elevated border border-border rounded-lg p-4">
               <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wide flex items-center gap-1.5 mb-1.5"><Wallet size={12} />Valor em stock (custo médio)</p>
               <p className="font-display font-semibold text-2xl text-text-primary">{formatMoney(data.total_cost_value)}</p>

@@ -34,22 +34,24 @@ def test_codes():
 async def test_the_pgc_then_an_account_at_a_time(db, company_with_essentials):
     company_id = company_with_essentials["company"].id
     chart = await start_chart(db, company_id, "PGC")
-    assert chart["source"] == "PGC" and [a["code"] for a in chart["accounts"]][:3] == ["1", "2", "3"]
-    with pytest.raises(ChartError, match="Crie primeiro a conta 45"):
-        await create_account(db, company_id, "45.1", "Caixa sede")
-    caixa = await create_account(db, company_id, "45", "Caixa")
-    sub = await create_account(db, company_id, "45.1", "Caixa sede")
-    assert (caixa.level, sub.level, sub.parent_id) == (2, 3, caixa.id)
+    codes = [a["code"] for a in chart["accounts"]]
+    assert chart["source"] == "PGC" and codes[:3] == ["1", "11", "11.1"] and "34.5.3" in codes and "61.3" in codes
+    with pytest.raises(ChartError, match="Crie primeiro a conta 47"):
+        await create_account(db, company_id, "47.1", "Sem mãe")
+    caixa = next(a for a in chart["accounts"] if a["code"] == "45.1")
+    sub = await create_account(db, company_id, "45.1.1", "Caixa sede")
+    assert (sub.level, sub.parent_id) == (4, caixa["id"])
     with pytest.raises(ChartError, match="já existe"):
         await create_account(db, company_id, "45", "Outra")
+    caixa = next(a for a in chart["accounts"] if a["code"] == "45")
     with pytest.raises(ChartError, match="inválido"):
         await create_account(db, company_id, "450", "Três algarismos")
     with pytest.raises(ChartError, match="tem subcontas"):
-        await delete_account(db, company_id, caixa.id)
+        await delete_account(db, company_id, caixa["id"])
     await update_account(db, company_id, sub.id, "Caixa da sede", False)
     await delete_account(db, company_id, sub.id)
     again = await start_chart(db, company_id, "PGC")  # loaded again: nothing removed, nothing renamed
-    assert "45" in [a["code"] for a in again["accounts"]]
+    assert len(again["accounts"]) == len(chart["accounts"])
 
 
 @pytest.mark.asyncio
@@ -70,3 +72,17 @@ async def test_the_excel_import(db, company_with_essentials):
     assert chart["source"] == "PROPRIO" and [a["code"] for a in chart["accounts"]] == ["4", "45", "45.1", "45.10"]
     result = await import_chart(db, company_id, _xlsx([("45", "Caixa geral"), ("45.1", "Caixa sede")]))
     assert result == {"created": 0, "renamed": 1, "unchanged": 1}
+
+
+def test_the_pgc_reference_list_is_consistent():
+    """Every code of the PGC list is valid, appears once, and has its parent in the list."""
+    from app.data.pgc_angola import PGC_ACCOUNTS
+    from app.services.chart_of_accounts_service import check_code
+    codes = [code for code, _ in PGC_ACCOUNTS]
+    assert len(codes) == len(set(codes))
+    for code, name in PGC_ACCOUNTS:
+        check_code(code)
+        assert name.strip()
+        parent = parent_code(code)
+        assert parent is None or parent in codes, code
+    assert {c for c in codes if len(c) == 1} == {"1", "2", "3", "4", "5", "6", "7", "8"}

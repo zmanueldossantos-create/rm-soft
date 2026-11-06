@@ -1380,7 +1380,7 @@ export default function Caixa() {
         <div className="bg-bg-elevated border border-border rounded-lg p-10 text-center">
           <Wallet size={28} className="text-text-muted mx-auto mb-3" />
           <p className="text-text-primary font-medium mb-1">Nenhuma caixa associada</p>
-          <p className="text-text-muted text-sm">Peca ao gestor para associar uma caixa a este utilizador (Atividades, definicoes da empresa) antes de operar</p>
+          <p className="text-text-muted text-sm">Peça ao gestor para associar uma caixa a este utilizador (Finanças › Tesouraria › Caixas) antes de operar</p>
         </div>
       </main>
     );

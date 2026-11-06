@@ -213,3 +213,32 @@ async def test_a_supplier_credit_note_corrects_its_invoice_and_counts_against_th
         await cancel_purchase_invoice(db, company_id, invoice_id, user_id, "Erro")
     await cancel_purchase_invoice(db, company_id, credit_id, user_id, "Erro")
     await cancel_purchase_invoice(db, company_id, invoice_id, user_id, "Erro")
+
+
+@pytest.mark.asyncio
+async def test_a_fatura_recibo_is_cancelled_with_its_payment_and_its_stock(db, company_with_essentials):
+    """A FR paid when registered: cancelling it cancels that payment too (the money goes back), takes its products out
+    of the warehouse, and its supplier document may be registered again."""
+    from app.models.supplier_payment import SupplierPayment, SupplierPaymentStatus
+    ctx = company_with_essentials
+    company_id, user, warehouse_id = ctx["company"].id, ctx["gestor"], ctx["activity_warehouse"].id
+    supplier, nor, _ = await _setup(db, ctx, 100)
+    supplier_id, nor_id = supplier.id, nor.id
+    flour_id, sack_id = await _flour_in_sacks(db, ctx)
+    ctx["pm_mb"].uses_bank_account = False
+    await db.commit()
+    line = {"product_id": flour_id, "sale_unit_id": sack_id, "quantity": 2, "unit_price": 1000, "legal_vat_rate_id": nor_id}
+    fr = await register_purchase_invoice(db, company_id, user.id, supplier_id, "FR BM/1", date.today(), [line],
+                                         stock_entry=True, warehouse_id=warehouse_id, purchase_type="FR", user=user,
+                                         payment={"payment_method_id": ctx["pm_mb"].id})
+    fr_id = fr.id
+    assert await _quantity(db, flour_id) == 40.0
+
+    cancelled = await cancel_purchase_invoice(db, company_id, fr_id, user.id, "Lançada por engano")
+    assert cancelled.status.value == "ANULADA" and await _quantity(db, flour_id) == 0.0
+    payments = (await db.execute(select(SupplierPayment.status).where(SupplierPayment.supplier_id == supplier_id))).scalars().all()
+    assert payments == [SupplierPaymentStatus.ANULADO]
+    again = await register_purchase_invoice(db, company_id, user.id, supplier_id, "FR BM/1", date.today(), [line],
+                                            stock_entry=True, warehouse_id=warehouse_id, purchase_type="FR", user=user,
+                                            payment={"payment_method_id": ctx["pm_mb"].id})
+    assert again.status.value == "REGISTADA"

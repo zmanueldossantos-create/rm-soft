@@ -4,10 +4,6 @@ export async function listActivities() {
   const res = await apiClient.get('/activities');
   return res.data;
 }
-export async function createActivity(moduleId, name) {
-  const res = await apiClient.post('/activities', { module_id: moduleId, name });
-  return res.data;
-}
 export async function updateActivity(activityId, name) {
   const res = await apiClient.patch('/activities/' + activityId, { name });
   return res.data;

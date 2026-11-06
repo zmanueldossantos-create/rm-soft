@@ -35,14 +35,17 @@ async def list_activities(db: AsyncSession, company_id: uuid.UUID) -> list[Activ
 
 
 async def create_activity(
-    db: AsyncSession, company_id: uuid.UUID, module_id: uuid.UUID, name: str,
+    db: AsyncSession, company_id: uuid.UUID, module_id: uuid.UUID, name: str, check_plan: bool = True,
 ) -> Activity:
     """Creates an activity of a module the company was granted, with its own point-of-sale warehouse and default
-    cash point. Invoice numbering never depends on the activity: it goes through document_series."""
+    cash point. Invoice numbering never depends on the activity: it goes through document_series.
+    check_plan: False for the activity a granted module gets by itself (ensure_company_activities) - the plan already
+    counted the module."""
     if not await is_module_granted(db, company_id, module_id):
         raise ModuleNotGrantedError("A empresa não tem acesso a este modulo - contacte o administrador da plataforma")
-    from app.services.plan_service import check_limit
-    await check_limit(db, company_id, "max_pos")  # every activity comes with its own till
+    if check_plan:
+        from app.services.plan_service import check_limit
+        await check_limit(db, company_id, "max_pos")  # every activity comes with its own till
 
     # Stock is received centrally (Armazem Principal) and internally
     # transferred to this activity's own point-of-sale warehouse before
@@ -99,3 +102,25 @@ async def toggle_activity_status(db: AsyncSession, company_id: uuid.UUID, activi
     await db.commit()
     await db.refresh(activity)
     return activity
+
+
+async def ensure_company_activities(db: AsyncSession, company_id: uuid.UUID) -> list[Activity]:
+    """One activity per granted module that sells, made by itself - named after the module, with its warehouse and
+    its Caixa Geral - when the company has none of that module yet (granted at the company's creation, or later).
+    Idempotent: returns the activities it created. A module that does not sell (Contabilidade, RH) gets none."""
+    from app.core.capabilities import SECTORS_BY_CODE
+    from app.models.company_module import CompanyModule
+    from app.models.module import Module
+    granted = (await db.execute(
+        select(Module).join(CompanyModule, CompanyModule.module_id == Module.id)
+        .where(CompanyModule.company_id == company_id, CompanyModule.is_enabled.is_(True), Module.is_active.is_(True))
+    )).scalars().all()
+    existing = set((await db.execute(select(Activity.module_id).where(Activity.company_id == company_id))).scalars().all())
+    created = []
+    for module in granted:
+        sector = SECTORS_BY_CODE.get(module.code) if module.code else None
+        if module.id in existing or (sector is not None and not sector.sells):
+            continue
+        created.append(await create_activity(db, company_id, module.id, module.name, check_plan=False))
+        existing.add(module.id)
+    return created

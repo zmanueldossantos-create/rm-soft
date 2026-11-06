@@ -113,6 +113,9 @@ class Sector:
     capabilities: tuple[str, ...]
     ready: bool = True
     ready_note: str = ""
+    # a module that sells gets its activity (warehouse and Caixa Geral) by itself when granted; one that does not
+    # (Contabilidade, RH) has none - see activity_service.ensure_company_activities
+    sells: bool = True
 
 
 SECTORS: tuple[Sector, ...] = (
@@ -125,8 +128,8 @@ SECTORS: tuple[Sector, ...] = (
     Sector("SERVICOS", "Prestação de serviços", "Faturação de serviços", ()),
     Sector("FARMACIA", "Farmácia", "Venda e stock de medicamentos, por lote e validade", ("STOCK", "PHARMACY")),
     Sector("CONTABILIDADE", "Contabilidade", "Plano de contas, lançamentos, balancete e demonstrações financeiras",
-           ("ACCOUNTING",)),
-    Sector("RH", "Recursos Humanos", "Gestão de colaboradores e salários", (), False, "Em desenvolvimento"),
+           ("ACCOUNTING",), sells=False),
+    Sector("RH", "Recursos Humanos", "Gestão de colaboradores e salários", (), False, "Em desenvolvimento", sells=False),
     Sector("HOSPITAL", "Hospital", "Pacientes, consultas e faturação", (), False, "Em desenvolvimento"),
     Sector("ESCOLA", "Escola", "Alunos, matrículas e propinas", (), False, "Em desenvolvimento"),
 )

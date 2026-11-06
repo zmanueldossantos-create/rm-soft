@@ -49,8 +49,8 @@ MODULES = [
         "intro": "O dinheiro do dia: cada caixa abre a sua sessão, vende, faz as suas entradas, saídas e transferências, e "
                  "fecha contando a gaveta. O gestor acompanha todas as caixas na Tesouraria.",
         "steps": [
-            S(text="O gestor associa cada utilizador de caixa ao seu ponto de venda: separador Atividades, «Associar "
-                   "utilizador».", link="/company-settings?tab=atividades", perms=["tesouraria:associations_manage"]),
+            S(text="O gestor associa cada utilizador à sua caixa: Finanças → Tesouraria → Caixas, «Associar utilizador».",
+              link="/tesouraria?tab=caixas", perms=["tesouraria:associations_manage"]),
             S(text="O caixa abre a sessão com «Abrir caixa»: o fundo vem da sessão anterior.", link="/caixa"),
             S(text="Vende: Fatura/Recibo (paga no momento), Fatura (paga mais tarde, com recibo depois) ou Pro-forma."),
             S(text="Durante o dia, em Operações de Caixa (barra à esquerda): entradas e saídas externas com o seu motivo, e "
@@ -231,11 +231,12 @@ PAGES = [
                  "da Ajuda) mostra o que falta e marca cada passo sozinho quando estiver feito.",
         "steps": [
             "Complete os dados da empresa: Administração → Empresa → Dados da Empresa (morada, cidade, contactos, logótipo).",
-            "Verifique a atividade e os seus pontos de venda: separador Atividades. Cada atividade tem o seu armazém e a sua caixa.",
+            "Cada módulo de venda já tem a sua atividade, criada pelo sistema com o seu armazém e a Caixa Geral: veja-as em "
+            "Finanças → Tesouraria → Caixas (acrescente aí outras caixas e o Cofre).",
             "Confirme que o exercício e o período do mês estão abertos: Finanças → Períodos/Exercício.",
             "Registe o que vende: Catálogo → Produtos (e Serviços, se for o caso).",
-            "Crie as contas da equipa (Administração → Utilizadores) e associe cada utilizador de caixa ao seu ponto de "
-            "venda (Empresa → Atividades → Associar utilizador).",
+            "Crie as contas da equipa (Administração → Utilizadores) e associe cada utilizador à sua caixa "
+            "(Finanças → Tesouraria → Caixas → Associar utilizador).",
             "Para enviar faturas por email, configure o separador Email da empresa.",
         ],
         "errors": [("O registo comercial ou o regime fiscal não estão marcados", "São definidos pelo suporte: contacte-o.")],
@@ -261,8 +262,8 @@ PAGES = [
             "Passe o rato sobre «Numerário na gaveta» para ver tudo o que foi recebido na sessão, por forma de pagamento.",
         ],
         "errors": [
-            ("«Nenhuma caixa associada»", "O gestor associa o utilizador a um ponto de venda em Administração → Empresa → "
-             "Atividades → Associar utilizador."),
+            ("«Nenhuma caixa associada»", "O gestor associa o utilizador a uma caixa em Finanças → Tesouraria → Caixas → "
+             "Associar utilizador."),
             ("A venda é recusada por causa do período", "O período do mês tem de estar aberto: Finanças → Períodos/Exercício."),
             ("Stock insuficiente", "Receba o stock no armazém da atividade (Stock → Armazéns e Stock) ou transfira-o do "
              "armazém principal."),

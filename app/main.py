@@ -103,8 +103,10 @@ async def seed_permissions_on_startup() -> None:
         await seed_sector_catalog(db)
         await seed_permission_catalog(db)
         companies_result = await db.execute(sa_select(Company.id))
+        from app.services.activity_service import ensure_company_activities
         for (company_id,) in companies_result.all():
             await seed_default_role_permissions(db, company_id)
+            await ensure_company_activities(db, company_id)  # a granted module that sells without its activity
 
 
 @app.on_event("startup")

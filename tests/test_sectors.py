@@ -176,3 +176,22 @@ async def test_overview_flags_inactive_capabilities_that_still_have_data(db, com
     entry = next(x for x in company["capabilities"] if x["code"] == "OPEN_ACCOUNTS")
     assert entry["active"] is True and entry["via"] == ["Bar"] and entry["inactive_with_data"] is False
     assert not any(i["company_id"] == company_id and i["capability"] == "OPEN_ACCOUNTS" for i in overview["impact"])
+
+@pytest.mark.asyncio
+async def test_a_granted_module_that_sells_gets_its_activity_by_itself(db, company_with_essentials):
+    """Granting a module that sells makes its activity (named after it, with its Caixa Geral) - once; a module that does
+    not sell (Contabilidade) gets none."""
+    from app.models.activity import Activity
+    from app.models.point_of_sale import PointOfSale
+    from app.services.activity_service import ensure_company_activities
+    await seed_sector_catalog(db)
+    company_id = company_with_essentials["company"].id
+    bakery, accounting = await _module(db, "PADARIA"), await _module(db, "CONTABILIDADE")
+    bakery_id, accounting_id = bakery.id, accounting.id
+    await set_company_modules(db, company_id, [bakery_id, accounting_id])
+    activities = (await db.execute(select(Activity).where(Activity.company_id == company_id))).scalars().all()
+    mine = [a for a in activities if a.module_id in (bakery_id, accounting_id)]
+    assert [(a.module_id, a.name) for a in mine] == [(bakery_id, "Padaria")]
+    tills = (await db.execute(select(PointOfSale.name).where(PointOfSale.activity_id == mine[0].id))).scalars().all()
+    assert tills == ["Caixa Geral"]
+    assert await ensure_company_activities(db, company_id) == []  # idempotent

@@ -105,11 +105,7 @@ async def update_point_of_sale(
     if kind is not None and PosKind(kind) != pos.kind:
         await _check_kind_change(db, company_id, pos, PosKind(kind))
         pos.kind = PosKind(kind)
-    # Renaming the Activity's default POS is blocked (see error below), but
-    # billetage_enabled is a normal operational toggle - even the default POS
-    # can turn it on/off, so it's NOT gated by the same is_default check.
-    if pos.is_default and name != pos.name:
-        raise DefaultPosNotModifiableError("A caixa por defeito da atividade não pode ser renomeada")
+    # the activity's own till may be renamed like any other (it stays the activity's: never deactivated)
     if name != pos.name:
         await _check_name_available(db, pos.activity_id, name, exclude_id=pos_id)
     pos.name = name

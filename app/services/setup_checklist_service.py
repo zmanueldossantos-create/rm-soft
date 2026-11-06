@@ -57,9 +57,10 @@ async def get_setup_checklist(db: AsyncSession, company_id: uuid.UUID) -> dict:
 
     # 2. Where the company sells
     activities = await _count(db, Activity, Activity.company_id == company_id, Activity.is_active.is_(True))
-    items.append(_item("atividade", "Atividade criada", activities > 0,
-                       f"{activities} atividade(s) ativa(s)" if activities else "Crie pelo menos uma (ex.: Loja, Bar, Hotel)",
-                       "/company-settings?tab=atividades"))
+    items.append(_item("atividade", "Atividade de venda", activities > 0,
+                       f"{activities} atividade(s) ativa(s)" if activities
+                       else "Criada pelo sistema com um módulo de venda - peça o módulo à plataforma",
+                       "/tesouraria?tab=caixas"))
     electronic = company.issuance_mode == "ELETRONICA"
     if electronic:
         establishments = await _count(db, Establishment, Establishment.company_id == company_id,
@@ -104,7 +105,7 @@ async def get_setup_checklist(db: AsyncSession, company_id: uuid.UUID) -> dict:
     tills = await _count(db, UserCashPointAccess, UserCashPointAccess.company_id == company_id)
     items.append(_item("caixas", "Utilizadores associados às caixas", tills > 0,
                        f"{tills} associação(ões)" if tills else "Sem associação, só o gestor pode vender na caixa",
-                       "/company-settings?tab=atividades", required=False))
+                       "/tesouraria?tab=caixas", required=False))
     banks = await _count(db, CompanyBankAccount, CompanyBankAccount.company_id == company_id,
                          CompanyBankAccount.is_active.is_(True))
     items.append(_item("bancarias", "Coordenadas bancárias", banks > 0,
