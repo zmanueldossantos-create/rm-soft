@@ -17,7 +17,7 @@ import { toast } from '../store/toastStore';
 // Contabilidade › Lançamentos: the entries typed in the journals (diários). A draft (rascunho) is changed freely; posted
 // («Lançar») it must balance (debit = credit), takes the next number of its journal for the year (OD 2026/0001) and
 // never changes again - it is corrected by its estorno. Lines go to last-level active accounts only. The «Diários» tab
-// sets the journals (the defaults VND, CMP, CX, BCO, OD, ABE are made with the chart). The sales documents are posted
+// sets the journals (the defaults VND, CMP, CX, BCO, OD, ABE are made with the chart). Sales, purchases and supplier payments are posted
 // by the system (every minute); «Por integrar» lists those waiting, with the reason, and the day the integration starts.
 
 const inputCls = 'bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors';
@@ -286,7 +286,8 @@ export default function Lancamentos() {
             <div className="flex items-start gap-3">
               <Bot size={20} className="text-accent shrink-0 mt-0.5" />
               <p className="text-[13px] text-text-muted">
-                Os documentos de venda (FT, FR, ND, NC, RC) são lançados pelo sistema a cada minuto, com as contas de{' '}
+                As vendas (FT, FR, ND, NC, RC), as compras e os pagamentos a fornecedores são lançados pelo sistema a cada minuto
+                (uma compra ou um pagamento anulado depois recebe o seu estorno), com as contas de{' '}
                 <Link to="/contabilidade/plano-de-contas?tab=operacoes" className="text-accent hover:underline">Contas por operação</Link>.
                 Os do Modo formação nunca entram na contabilidade. Um documento que não pode ser lançado fica aqui com o motivo:
                 corrija a causa e carregue em «Integrar agora».

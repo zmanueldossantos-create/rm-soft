@@ -40,6 +40,8 @@ OPERATIONS: tuple[Operation, ...] = (
     # purchases and stock
     Operation("PURCHASES_GOODS", "Compras e existências", "Compras de mercadorias", "21.2"),
     Operation("PURCHASES_MATERIALS", "Compras e existências", "Compras de matérias-primas e de consumo", "21.1"),
+    Operation("PURCHASES_SERVICES", "Compras e existências", "Fornecimentos e serviços de terceiros (serviços, consumíveis)", "75.2"),
+    Operation("PURCHASES_FIXED_ASSETS", "Compras e existências", "Compras de imobilizado (meios fixos)", ""),
     Operation("STOCK_GOODS", "Compras e existências", "Existências - mercadorias", "26"),
     Operation("STOCK_MATERIALS", "Compras e existências", "Existências - matérias-primas", "22.1"),
     Operation("STOCK_PRODUCTS", "Compras e existências", "Existências - produtos acabados", "24.1"),
