@@ -356,3 +356,18 @@ async def put_integration_start(payload: IntegrationStartRequest, db: AsyncSessi
     except IntegrationError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     return await integration_status(db, current_user.company_id)
+
+
+# ---------- the account of each treasury reason ----------
+
+from app.services.account_mapping_service import set_reason_account  # noqa: E402
+
+
+@router.put("/reason-accounts/{reason_id}")
+async def put_reason_account(reason_id: uuid.UUID, payload: MappingRequest, db: AsyncSession = Depends(get_db),
+                             current_user: User = Depends(require_permission("accounting:chart_manage"))):
+    try:
+        await set_reason_account(db, current_user.company_id, reason_id, payload.account_id)
+    except ChartError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    return await list_mappings(db, current_user.company_id)

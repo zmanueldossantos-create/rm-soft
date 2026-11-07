@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Loader2, Wand2, GitBranchPlus } from 'lucide-react';
 import Select from './Select';
-import { getMappings, setMapping, setMappingOptions, applyMappingSuggestions, syncSubaccounts } from '../api/accounting';
+import { getMappings, setMapping, setMappingOptions, applyMappingSuggestions, syncSubaccounts, setReasonAccount } from '../api/accounting';
 import { extractErrorMessage } from '../utils/errors';
 import { toast } from '../store/toastStore';
 
 // Contabilidade › Contas por operação: which account of the chart each kind of operation goes to (sales, VAT, stock,
 // treasury...), and the parents under which the system makes one sub-account per bank account, till, customer and
-// supplier. The PGC accounts are suggested; the company (or its accountant) changes any of them.
+// supplier. The PGC accounts are suggested; the company (or its accountant) changes any of them. «Motivos de
+// tesouraria»: the account of each reason of the tills' and banks' movements (the other side of the till or bank).
 
 export default function ContasPorOperacao({ accounts, canManage, onChartChanged }) {
   const [data, setData] = useState(null);
@@ -108,6 +109,27 @@ export default function ContasPorOperacao({ accounts, canManage, onChartChanged 
             ))}
           </div>
         ))}
+
+        {data.reasons?.length > 0 && (
+          <div className="bg-bg-elevated border border-border rounded-lg">
+            <div className="px-5 py-3 border-b border-border">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">Motivos de tesouraria</p>
+              <p className="text-[12px] text-text-muted mt-1">A conta de cada motivo das entradas e saídas das caixas e dos bancos (o outro lado da caixa ou do banco). Sem conta, os movimentos ficam por integrar.</p>
+            </div>
+            {data.reasons.map((r) => (
+              <div key={r.id} className={'grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] gap-2 md:gap-4 items-center px-5 py-2.5 border-b border-border last:border-0' + (r.is_active ? '' : ' opacity-50')}>
+                <div>
+                  <p className="text-[13px] text-text-primary">{r.name}</p>
+                  <p className="text-[11px] text-text-muted">
+                    {r.direction === 'ENTRADA' ? 'Entrada' : 'Saída'} · {[r.for_cash && 'caixa', r.for_bank && 'banco'].filter(Boolean).join(' e ')}{r.is_active ? '' : ' · inativo'}
+                  </p>
+                </div>
+                <Select value={r.account_id || ''} disabled={!canManage || busy} options={options} placeholder="— Nenhuma —"
+                  onChange={(v) => run(() => setReasonAccount(r.id, v), 'Conta guardada')} />
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </>
   );

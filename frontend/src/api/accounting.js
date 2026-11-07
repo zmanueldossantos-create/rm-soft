@@ -139,3 +139,9 @@ export async function setIntegrationStart(integrationStart) {
   const res = await apiClient.put('/accounting/integration/start', { integration_start: integrationStart });
   return res.data;
 }
+
+// the account of a treasury reason (motivo de tesouraria) - null: none
+export async function setReasonAccount(reasonId, accountId) {
+  const res = await apiClient.put('/accounting/reason-accounts/' + reasonId, { account_id: accountId || null });
+  return res.data;
+}

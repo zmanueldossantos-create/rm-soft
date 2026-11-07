@@ -286,8 +286,9 @@ export default function Lancamentos() {
             <div className="flex items-start gap-3">
               <Bot size={20} className="text-accent shrink-0 mt-0.5" />
               <p className="text-[13px] text-text-muted">
-                As vendas (FT, FR, ND, NC, RC), as compras e os pagamentos a fornecedores são lançados pelo sistema a cada minuto
-                (uma compra ou um pagamento anulado depois recebe o seu estorno), com as contas de{' '}
+                As vendas (FT, FR, ND, NC, RC), as compras, os pagamentos a fornecedores e a tesouraria (movimentos das caixas e dos
+                bancos, depósitos, transferências, diferenças de fecho) são lançados pelo sistema a cada minuto - um documento anulado
+                depois recebe o seu estorno -, com as contas de{' '}
                 <Link to="/contabilidade/plano-de-contas?tab=operacoes" className="text-accent hover:underline">Contas por operação</Link>.
                 Os do Modo formação nunca entram na contabilidade. Um documento que não pode ser lançado fica aqui com o motivo:
                 corrija a causa e carregue em «Integrar agora».

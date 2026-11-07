@@ -16,7 +16,16 @@ Purchases (journal CMP), from their document date (or the first day of the perio
     «IVA dedutível»; a supplier's credit note: the same reversed.
 Supplier payments (journal CX in cash, BCO otherwise): the supplier debited, the till or the bank credited. A FR / TV
 of a supplier is paid on issue: its payment is one of these, posted as such.
-A purchase or a payment cancelled after its entry: the estorno of that entry, on the cancellation day.
+Treasury (journal CX for the tills, BCO for the banks):
+  - between two tills, once received: the receiving till debited, the sending one credited;
+  - a deposit: the bank debited, the till credited; a withdrawal the other way;
+  - a till's or a bank's entry or exit with a reason: the till or bank and the reason's account (set per reason in
+    Contas por operação); the till side of a supplier payment is left out (posted with the payment);
+  - a transfer between two banks: «em trânsito» (48) debited and the first account credited when it leaves, the second
+    account debited and 48 credited when the funds are available; within one bank, straight from one to the other;
+  - the difference found at a till's closing: «Falta de caixa» or «Sobra de caixa» against the till.
+A purchase, a supplier payment, a bank movement or a bank transfer cancelled after its entry: the estorno of that
+entry, on the cancellation day.
 
 The customer: its sub-account; a final consumer or no customer: «Consumidor final»; the company keeping no
 sub-account per customer: the parent account (national or foreign) itself. The supplier: its sub-account, or the
@@ -41,7 +50,12 @@ from sqlalchemy.orm import aliased
 
 from app.data.account_operations import OPERATIONS_BY_KEY
 from app.models.account import Account, AccountingSettings, AccountLink, AccountMapping
-from app.models.cash_session import CashSession
+from app.models.bank_movement import BankMovement, BankMovementStatus
+from app.models.bank_transfer import BankTransfer, BankTransferStatus
+from app.models.cash_movement import CashMovement, CashMovementStatus, CashMovementType
+from app.models.cash_movement_reason import CashMovementReason
+from app.models.cash_session import CashSession, CashSessionStatus
+from app.models.company_bank_account import CompanyBankAccount
 from app.models.country import Country
 from app.models.customer import Customer
 from app.models.invoice import Invoice, InvoiceType
@@ -65,6 +79,11 @@ log = logging.getLogger(__name__)
 SOURCE_INVOICE = "INVOICE"
 SOURCE_PURCHASE = "PURCHASE"
 SOURCE_SUPPLIER_PAYMENT = "SUPPLIER_PAYMENT"
+SOURCE_CASH_MOVEMENT = "CASH_MOVEMENT"
+SOURCE_BANK_MOVEMENT = "BANK_MOVEMENT"
+SOURCE_BANK_TRANSFER = "BANK_TRANSFER"  # its leaving the first account (or the whole transfer within one bank)
+SOURCE_BANK_TRANSFER_IN = "BANK_TRANSFER_IN"  # its arrival on the second account («Fundos disponíveis»)
+SOURCE_CASH_CLOSING = "CASH_CLOSING"
 LUANDA = ZoneInfo("Africa/Luanda")
 POSTED_TYPES = (InvoiceType.FACTURA, InvoiceType.FACTURA_RECIBO, InvoiceType.NOTA_DEBITO, InvoiceType.NOTA_CREDITO,
                 InvoiceType.RECIBO)
@@ -316,6 +335,108 @@ async def build_supplier_payment_entry(db: AsyncSession, ctx: _Context, payment:
     return ("CX" if method.is_cash else "BCO"), lines
 
 
+# ---------- treasury ----------
+
+def _bank(ctx: _Context, bank_account_id: uuid.UUID) -> Account:
+    account = ctx.links.get(("BANK", bank_account_id))
+    if account is None:
+        raise IntegrationError("A conta bancária ainda não tem subconta - defina a conta-mãe dos bancos em Contas por operação")
+    return account
+
+
+async def _reason_account(db: AsyncSession, ctx: _Context, reason_id: uuid.UUID | None) -> tuple[Account, str]:
+    reason = await db.get(CashMovementReason, reason_id) if reason_id else None
+    if reason is None:
+        raise IntegrationError("O movimento não tem motivo")
+    account = ctx.accounts.get(reason.account_id) if reason.account_id else None
+    if account is None:
+        raise IntegrationError(f"Defina a conta do motivo «{reason.name}» em Contas por operação › Motivos de tesouraria")
+    return account, reason.name
+
+
+async def build_cash_movement_entry(db: AsyncSession, ctx: _Context, movement: CashMovement) -> tuple[str, list[dict]]:
+    """Between two tills: the receiving one debited, the sending one credited. A deposit: the bank debited, the till
+    credited; a withdrawal the other way. An entry or exit with a reason: the till and the reason's account."""
+    lines: list[dict] = []
+    add = _adder(lines)
+    amount = Decimal(str(movement.amount))
+    kind = movement.movement_type
+    if kind == CashMovementType.TRANSFERENCIA:
+        add(_till(ctx, movement.destination_pos_id), "Transferência recebida", amount, debit=True)
+        add(_till(ctx, movement.source_pos_id), "Transferência enviada", amount, debit=False)
+    elif movement.bank_account_id is not None:
+        deposit = kind == CashMovementType.SAIDA_EXTERNA
+        till = _till(ctx, movement.source_pos_id if deposit else movement.destination_pos_id)
+        add(_bank(ctx, movement.bank_account_id), "Depósito" if deposit else "Levantamento", amount, debit=deposit)
+        add(till, "Depósito" if deposit else "Levantamento", amount, debit=not deposit)
+    else:
+        other, name = await _reason_account(db, ctx, movement.reason_id)
+        entry = kind == CashMovementType.ENTRADA_EXTERNA
+        till = _till(ctx, movement.destination_pos_id if entry else movement.source_pos_id)
+        add(till, name, amount, debit=entry)
+        add(other, name, amount, debit=not entry)
+    return "CX", lines
+
+
+async def build_bank_movement_entry(db: AsyncSession, ctx: _Context, movement: BankMovement) -> tuple[str, list[dict]]:
+    """A movement typed on a bank account: the bank and its reason's account."""
+    other, name = await _reason_account(db, ctx, movement.reason_id)
+    lines: list[dict] = []
+    add = _adder(lines)
+    amount = Decimal(str(movement.amount))
+    incoming = movement.direction.value == "ENTRADA"
+    add(_bank(ctx, movement.bank_account_id), name, amount, debit=incoming)
+    add(other, name, amount, debit=not incoming)
+    return "BCO", lines
+
+
+async def _same_bank(db: AsyncSession, transfer: BankTransfer) -> bool:
+    banks = (await db.execute(select(CompanyBankAccount.id, CompanyBankAccount.bank_id).where(
+        CompanyBankAccount.id.in_([transfer.from_account_id, transfer.to_account_id])))).all()
+    return len({bank_id for _, bank_id in banks}) == 1
+
+
+async def build_bank_transfer_entry(db: AsyncSession, ctx: _Context, transfer: BankTransfer) -> tuple[str, list[dict]]:
+    """Leaving the first account: «em trânsito» debited, the first account credited - within one bank, straight to
+    the second account."""
+    lines: list[dict] = []
+    add = _adder(lines)
+    amount = Decimal(str(transfer.amount))
+    target = _bank(ctx, transfer.to_account_id) if await _same_bank(db, transfer) else _mapped(ctx, "BANK_TRANSIT")
+    add(target, "Transferência bancária", amount, debit=True)
+    add(_bank(ctx, transfer.from_account_id), "Transferência bancária", amount, debit=False)
+    return "BCO", lines
+
+
+async def build_bank_transfer_in_entry(db: AsyncSession, ctx: _Context, transfer: BankTransfer) -> tuple[str, list[dict]]:
+    """The funds available on the second account: that account debited, «em trânsito» credited."""
+    lines: list[dict] = []
+    add = _adder(lines)
+    amount = Decimal(str(transfer.amount))
+    add(_bank(ctx, transfer.to_account_id), "Fundos disponíveis", amount, debit=True)
+    add(_mapped(ctx, "BANK_TRANSIT"), "Fundos disponíveis", amount, debit=False)
+    return "BCO", lines
+
+
+async def build_cash_closing_entry(db: AsyncSession, ctx: _Context, session: CashSession) -> tuple[str, list[dict]]:
+    """The difference found at a till's closing: a shortage to «Falta de caixa», a surplus to «Sobra de caixa»."""
+    lines: list[dict] = []
+    add = _adder(lines)
+    difference = Decimal(str(session.closing_difference))
+    till = _till(ctx, session.pos_id)
+    if difference < 0:
+        add(_mapped(ctx, "CASH_SHORTAGE"), "Falta de caixa", -difference, debit=True)
+        add(till, "Falta de caixa", -difference, debit=False)
+    else:
+        add(till, "Sobra de caixa", difference, debit=True)
+        add(_mapped(ctx, "CASH_SURPLUS"), "Sobra de caixa", difference, debit=False)
+    return "CX", lines
+
+
+def _local_day(moment, default: date) -> date:
+    return moment.astimezone(LUANDA).date() if moment else default
+
+
 # ---------- the sources: what is posted, from what, on which day ----------
 
 @dataclass
@@ -338,13 +459,44 @@ async def _describe(db: AsyncSession, kind: str, source_id: uuid.UUID):
         name = {"FT": "Fatura de compra", "FR": "Fatura-recibo de compra", "TV": "Talão de compra",
                 "NC": "Nota de crédito de fornecedor"}.get(invoice.purchase_type, "Compra")
         return _Document(kind, invoice.id, label, await _purchase_date(db, invoice), name), invoice
-    payment = await db.get(SupplierPayment, source_id)
-    return _Document(kind, payment.id, f"{payment.series}/{payment.number}", payment.payment_date,
-                     "Pagamento a fornecedor"), payment
+    if kind == SOURCE_SUPPLIER_PAYMENT:
+        payment = await db.get(SupplierPayment, source_id)
+        return _Document(kind, payment.id, f"{payment.series}/{payment.number}", payment.payment_date,
+                         "Pagamento a fornecedor"), payment
+    if kind == SOURCE_CASH_MOVEMENT:
+        movement = await db.get(CashMovement, source_id)
+        name = {CashMovementType.TRANSFERENCIA: "Transferência entre caixas"}.get(movement.movement_type)
+        if name is None and movement.bank_account_id:
+            name = "Depósito no banco" if movement.movement_type == CashMovementType.SAIDA_EXTERNA else "Levantamento do banco"
+        if name is None:
+            reason = await db.get(CashMovementReason, movement.reason_id) if movement.reason_id else None
+            name = ("Entrada de caixa" if movement.movement_type == CashMovementType.ENTRADA_EXTERNA else "Saída de caixa") + \
+                (f" - {reason.name}" if reason else "")
+        day = _local_day(movement.received_at, movement.movement_date) \
+            if movement.movement_type == CashMovementType.TRANSFERENCIA else movement.movement_date
+        return _Document(kind, movement.id, f"{name} {day.strftime('%d/%m')}"[:60], day, name), movement
+    if kind == SOURCE_BANK_MOVEMENT:
+        movement = await db.get(BankMovement, source_id)
+        name = "Entrada no banco" if movement.direction.value == "ENTRADA" else "Saída do banco"
+        return _Document(kind, movement.id, f"{movement.series}/{movement.number}", movement.movement_date, name), movement
+    if kind in (SOURCE_BANK_TRANSFER, SOURCE_BANK_TRANSFER_IN):
+        transfer = await db.get(BankTransfer, source_id)
+        label = f"{transfer.series}/{transfer.number}"
+        if kind == SOURCE_BANK_TRANSFER_IN:
+            return _Document(kind, transfer.id, label + " (chegada)", transfer.available_date or transfer.transfer_date,
+                             "Transferência bancária - fundos disponíveis"), transfer
+        return _Document(kind, transfer.id, label, transfer.transfer_date, "Transferência bancária"), transfer
+    session = await db.get(CashSession, source_id)
+    pos_name = (await db.execute(select(PointOfSale.name).where(PointOfSale.id == session.pos_id))).scalar_one()
+    day = _local_day(session.closed_at, session.business_date)
+    return _Document(kind, session.id, f"Fecho {pos_name} {session.business_date.strftime('%d/%m')}"[:60], day,
+                     f"Diferença no fecho de caixa - {pos_name}"), session
 
 
 BUILDERS = {SOURCE_INVOICE: build_invoice_entry, SOURCE_PURCHASE: build_purchase_entry,
-            SOURCE_SUPPLIER_PAYMENT: build_supplier_payment_entry}
+            SOURCE_SUPPLIER_PAYMENT: build_supplier_payment_entry, SOURCE_CASH_MOVEMENT: build_cash_movement_entry,
+            SOURCE_BANK_MOVEMENT: build_bank_movement_entry, SOURCE_BANK_TRANSFER: build_bank_transfer_entry,
+            SOURCE_BANK_TRANSFER_IN: build_bank_transfer_in_entry, SOURCE_CASH_CLOSING: build_cash_closing_entry}
 
 
 def _posted(kind: str, column):
@@ -353,6 +505,7 @@ def _posted(kind: str, column):
 
 def _waiting_queries(company_id: uuid.UUID, start: date) -> dict:
     """Per kind: the ids of the documents still without their entry, oldest first."""
+    from_account, to_account = aliased(CompanyBankAccount), aliased(CompanyBankAccount)
     return {
         SOURCE_INVOICE: select(Invoice.id).where(
             Invoice.company_id == company_id, Invoice.invoice_type.in_(POSTED_TYPES), Invoice.issuance_mode != TRAINING,
@@ -367,12 +520,40 @@ def _waiting_queries(company_id: uuid.UUID, start: date) -> dict:
             SupplierPayment.payment_date >= start, SupplierPayment.amount != 0,
             ~_posted(SOURCE_SUPPLIER_PAYMENT, SupplierPayment.id),
         ).order_by(SupplierPayment.payment_date, SupplierPayment.created_at),
+        SOURCE_CASH_MOVEMENT: select(CashMovement.id).where(
+            CashMovement.company_id == company_id, CashMovement.status == CashMovementStatus.RECEBIDO,
+            CashMovement.movement_date >= start, CashMovement.amount != 0, ~_posted(SOURCE_CASH_MOVEMENT, CashMovement.id),
+            # the till's side of a supplier payment (and of its cancellation): posted with the payment
+            ~exists().where(SupplierPayment.cash_movement_id == CashMovement.id),
+            ~exists().where(SupplierPayment.reversal_movement_id == CashMovement.id),
+        ).order_by(CashMovement.movement_date, CashMovement.created_at),
+        SOURCE_BANK_MOVEMENT: select(BankMovement.id).where(
+            BankMovement.company_id == company_id, BankMovement.status == BankMovementStatus.REGISTADO,
+            BankMovement.movement_date >= start, ~_posted(SOURCE_BANK_MOVEMENT, BankMovement.id),
+        ).order_by(BankMovement.movement_date, BankMovement.created_at),
+        SOURCE_BANK_TRANSFER: select(BankTransfer.id).where(
+            BankTransfer.company_id == company_id, BankTransfer.status != BankTransferStatus.ANULADO,
+            BankTransfer.transfer_date >= start, ~_posted(SOURCE_BANK_TRANSFER, BankTransfer.id),
+        ).order_by(BankTransfer.transfer_date, BankTransfer.created_at),
+        SOURCE_BANK_TRANSFER_IN: select(BankTransfer.id)
+        .join(from_account, from_account.id == BankTransfer.from_account_id)
+        .join(to_account, to_account.id == BankTransfer.to_account_id).where(
+            BankTransfer.company_id == company_id, BankTransfer.status == BankTransferStatus.DISPONIVEL,
+            from_account.bank_id != to_account.bank_id,  # within one bank: no arrival of its own
+            BankTransfer.transfer_date >= start, _posted(SOURCE_BANK_TRANSFER, BankTransfer.id),  # after its leaving
+            ~_posted(SOURCE_BANK_TRANSFER_IN, BankTransfer.id),
+        ).order_by(BankTransfer.available_date, BankTransfer.created_at),
+        SOURCE_CASH_CLOSING: select(CashSession.id).where(
+            CashSession.company_id == company_id, CashSession.status == CashSessionStatus.FECHADA,
+            CashSession.business_date >= start, CashSession.closing_difference.is_not(None),
+            CashSession.closing_difference != 0, ~_posted(SOURCE_CASH_CLOSING, CashSession.id),
+        ).order_by(CashSession.business_date, CashSession.closed_at),
     }
 
 
 def _to_reverse(company_id: uuid.UUID):
-    """The entries of purchases and supplier payments cancelled since, still without their estorno: (entry id, kind,
-    document id, cancellation time)."""
+    """The entries of the documents cancelled since (purchases, supplier payments, bank movements and transfers), still
+    without their estorno: (entry id, kind, document id, cancellation time)."""
     estorno = aliased(JournalEntry)
     reversed_ = exists().where(estorno.reversal_of_id == JournalEntry.id)
     base = select(JournalEntry.id, JournalEntry.source_kind, JournalEntry.source_id).where(
@@ -384,6 +565,13 @@ def _to_reverse(company_id: uuid.UUID):
         base.add_columns(SupplierPayment.cancelled_at).join(SupplierPayment, and_(
             JournalEntry.source_kind == SOURCE_SUPPLIER_PAYMENT, SupplierPayment.id == JournalEntry.source_id))
         .where(SupplierPayment.status == SupplierPaymentStatus.ANULADO),
+        base.add_columns(BankMovement.cancelled_at).join(BankMovement, and_(
+            JournalEntry.source_kind == SOURCE_BANK_MOVEMENT, BankMovement.id == JournalEntry.source_id))
+        .where(BankMovement.status == BankMovementStatus.ANULADO),
+        base.add_columns(BankTransfer.cancelled_at).join(BankTransfer, and_(
+            JournalEntry.source_kind.in_([SOURCE_BANK_TRANSFER, SOURCE_BANK_TRANSFER_IN]),
+            BankTransfer.id == JournalEntry.source_id))
+        .where(BankTransfer.status == BankTransferStatus.ANULADO),
     ]
 
 
@@ -417,7 +605,7 @@ def _party_accounts(ctx: _Context) -> set[uuid.UUID]:
 
 async def _reverse_cancelled(db: AsyncSession, company_id: uuid.UUID, entry_id: uuid.UUID, kind: str,
                              source_id: uuid.UUID, cancelled_at) -> bool:
-    """The estorno of the entry of a cancelled purchase or payment, on its cancellation day."""
+    """The estorno of the entry of a cancelled document, on its cancellation day."""
     from app.services.journal_service import reverse_entry
     entry = await db.get(JournalEntry, entry_id)
     day = max(cancelled_at.astimezone(LUANDA).date() if cancelled_at else date.today(), entry.entry_date)
@@ -461,33 +649,35 @@ async def integrate_company(db: AsyncSession, company_id: uuid.UUID, limit: int 
     await db.execute(delete(PendingIntegration).where(
         PendingIntegration.company_id == company_id, PendingIntegration.document_date < start))
     await db.commit()
-    work = []
-    for kind, query in _waiting_queries(company_id, start).items():
-        work += [("post", kind, source_id) for source_id in (await db.execute(query.limit(limit))).scalars().all()]
-    for query in _to_reverse(company_id):
-        work += [("reverse", kind, (entry_id, source_id, cancelled_at))
-                 for entry_id, kind, source_id, cancelled_at in (await db.execute(query.limit(limit))).all()]
-    if not work:
-        return {"posted": 0, "pending": 0}
-    from app.services.account_mapping_service import sync_subaccounts
-    await sync_subaccounts(db, company_id)  # a sub-account still missing (a customer created before the chart...)
-    ctx = None
-    posted = pending = 0
-    for action, kind, target in work:
-        if ctx is None:
-            ctx = await _context(db, company_id, await db.get(AccountingSettings, company_id))
+    state = {"ctx": None, "synced": False, "posted": 0, "pending": 0}
+
+    async def run(action: str, kind: str, target) -> None:
+        if not state["synced"]:  # a sub-account still missing (a customer created before the chart...)
+            from app.services.account_mapping_service import sync_subaccounts
+            await sync_subaccounts(db, company_id)
+            state["synced"] = True
+        if state["ctx"] is None:
+            state["ctx"] = await _context(db, company_id, await db.get(AccountingSettings, company_id))
         try:
             if action == "post":
-                done = await integrate_document(db, company_id, ctx, kind, target)
+                done = await integrate_document(db, company_id, state["ctx"], kind, target)
             else:
                 done = await _reverse_cancelled(db, company_id, target[0], kind, target[1], target[2])
         except Exception:  # noqa: BLE001 - one document never stops the others
             log.exception("%s %s %s not integrated", action, kind, target)
             await db.rollback()
-            ctx = None  # the rollback expired what was read: read it again
+            state["ctx"] = None  # the rollback expired what was read: read it again
             done = False
-        posted, pending = posted + done, pending + (not done)
-    return {"posted": posted, "pending": pending}
+        state["posted" if done else "pending"] += 1
+
+    # kind after kind, each query run once the previous kinds are posted (a transfer's arrival after its leaving)
+    for kind, query in _waiting_queries(company_id, start).items():
+        for source_id in (await db.execute(query.limit(limit))).scalars().all():
+            await run("post", kind, source_id)
+    for query in _to_reverse(company_id):
+        for entry_id, kind, source_id, cancelled_at in (await db.execute(query.limit(limit))).all():
+            await run("reverse", kind, (entry_id, source_id, cancelled_at))
+    return {"posted": state["posted"], "pending": state["pending"]}
 
 
 async def list_pending(db: AsyncSession, company_id: uuid.UUID) -> list[dict]:

@@ -55,8 +55,18 @@ async def list_mappings(db: AsyncSession, company_id: uuid.UUID) -> dict:
             "account_id": account.id if account else None,
             "account_code": account.code if account else None, "account_name": account.name if account else None,
         })
+    from app.models.cash_movement_reason import CashMovementReason
+    from app.services.supplier_payment_service import PAYMENT_REASON, REVERSAL_REASON
+    reasons = (await db.execute(select(CashMovementReason).where(
+        CashMovementReason.company_id == company_id, CashMovementReason.name.not_in([PAYMENT_REASON, REVERSAL_REASON]))
+        .order_by(CashMovementReason.direction, CashMovementReason.name))).scalars().all()
     return {
         "operations": rows,
+        # the treasury reasons (the supplier payments' own are posted with the payment): the account of each one
+        "reasons": [{
+            "id": r.id, "name": r.name, "direction": r.direction.value, "for_cash": r.for_cash, "for_bank": r.for_bank,
+            "is_active": r.is_active, "account_id": r.account_id if r.account_id in accounts else None,
+        } for r in reasons],
         "subaccount_per_customer": settings.subaccount_per_customer if settings else True,
         "subaccount_per_supplier": settings.subaccount_per_supplier if settings else True,
     }
@@ -82,6 +92,22 @@ async def set_mapping(db: AsyncSession, company_id: uuid.UUID, key: str, account
     await db.commit()
     if OPERATIONS_BY_KEY[key].kind == "parent":  # a parent now set: the sub-accounts waiting for it
         await sync_subaccounts(db, company_id)
+
+
+async def set_reason_account(db: AsyncSession, company_id: uuid.UUID, reason_id: uuid.UUID, account_id: uuid.UUID | None) -> None:
+    """The account a treasury reason's movements go to (None: none yet - its movements wait in «Por integrar»)."""
+    from app.models.cash_movement_reason import CashMovementReason
+    reason = (await db.execute(select(CashMovementReason).where(
+        CashMovementReason.id == reason_id, CashMovementReason.company_id == company_id))).scalar_one_or_none()
+    if reason is None:
+        raise ChartError("Motivo não encontrado")
+    if account_id is not None:
+        account = (await db.execute(select(Account).where(
+            Account.id == account_id, Account.company_id == company_id))).scalar_one_or_none()
+        if account is None or not account.is_active:
+            raise ChartError("Conta não encontrada ou inativa")
+    reason.account_id = account_id
+    await db.commit()
 
 
 async def set_options(db: AsyncSession, company_id: uuid.UUID, per_customer: bool, per_supplier: bool) -> None:
@@ -212,6 +238,10 @@ async def accounts_in_use(db: AsyncSession, company_id: uuid.UUID) -> dict[uuid.
     for link in (await db.execute(select(AccountLink).where(AccountLink.company_id == company_id))).scalars().all():
         used[link.account_id] = "é a subconta de " + {"BANK": "uma conta bancária", "TILL": "uma caixa",
                                                        "CUSTOMER": "um cliente", "SUPPLIER": "um fornecedor"}[link.entity_kind]
+    from app.models.cash_movement_reason import CashMovementReason
+    for reason_name, account_id in (await db.execute(select(CashMovementReason.name, CashMovementReason.account_id).where(
+            CashMovementReason.company_id == company_id, CashMovementReason.account_id.is_not(None)))).all():
+        used[account_id] = f"é a conta do motivo de tesouraria «{reason_name}»"
     from app.services.chart_of_accounts_service import accounts_with_entries
     for account_id in await accounts_with_entries(db, company_id):
         used[account_id] = "tem lançamentos"

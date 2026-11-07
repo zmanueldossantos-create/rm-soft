@@ -7,6 +7,9 @@ an internal TRANSFERENCIA between two cash points (see CashMovement).
 
 Reuses MovementDirection (ENTRADA/SAIDA) from movement_type.py rather than
 defining a duplicate enum with identical meaning.
+
+account_id: the account of the chart its movements go to (Contabilidade › Contas por operação, set by the accountant):
+the other side of the till or bank in the system's entries - see accounting_integration_service.
 """
 import uuid
 from datetime import datetime
@@ -33,6 +36,7 @@ class CashMovementReason(Base):
     for_cash: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
     for_bank: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    account_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("accounts.id"), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
