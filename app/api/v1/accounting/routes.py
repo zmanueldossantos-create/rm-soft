@@ -371,3 +371,75 @@ async def put_reason_account(reason_id: uuid.UUID, payload: MappingRequest, db: 
     except ChartError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     return await list_mappings(db, current_user.company_id)
+
+
+# ---------- the reports: balancete and extrato de conta ----------
+
+from app.services.accounting_reports_service import (  # noqa: E402
+    ReportError, account_ledger, trial_balance, trial_balance_excel,
+)
+
+
+async def _company(db: AsyncSession, company_id: uuid.UUID) -> dict:
+    from app.models.company import Company
+    from app.services.cash_report_service import _company_dict
+    return _company_dict(await db.get(Company, company_id))
+
+
+async def _trial_balance(db, company_id, date_from, date_to, max_level, all_accounts):
+    try:
+        return await trial_balance(db, company_id, date_from, date_to, max_level, all_accounts)
+    except ReportError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.get("/trial-balance")
+async def get_trial_balance(date_from: date, date_to: date, max_level: int | None = None, all_accounts: bool = False,
+                            db: AsyncSession = Depends(get_db),
+                            current_user: User = Depends(require_permission("accounting:entries_view"))):
+    return await _trial_balance(db, current_user.company_id, date_from, date_to, max_level, all_accounts)
+
+
+@router.get("/trial-balance/excel")
+async def get_trial_balance_excel(date_from: date, date_to: date, max_level: int | None = None, all_accounts: bool = False,
+                                  db: AsyncSession = Depends(get_db),
+                                  current_user: User = Depends(require_permission("accounting:entries_view"))):
+    data = await _trial_balance(db, current_user.company_id, date_from, date_to, max_level, all_accounts)
+    company = await _company(db, current_user.company_id)
+    return Response(content=trial_balance_excel(data, company["name"]),
+                    media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": f'attachment; filename="balancete_{date_from}_{date_to}.xlsx"'})
+
+
+@router.get("/trial-balance/pdf")
+async def get_trial_balance_pdf(date_from: date, date_to: date, max_level: int | None = None, all_accounts: bool = False,
+                                db: AsyncSession = Depends(get_db),
+                                current_user: User = Depends(require_permission("accounting:entries_view"))):
+    from app.utils.accounting_pdf import generate_trial_balance_pdf
+    data = await _trial_balance(db, current_user.company_id, date_from, date_to, max_level, all_accounts)
+    pdf = generate_trial_balance_pdf(data, await _company(db, current_user.company_id))
+    return Response(content=pdf, media_type="application/pdf",
+                    headers={"Content-Disposition": f'inline; filename="balancete_{date_from}_{date_to}.pdf"'})
+
+
+async def _ledger(db, company_id, account_id, date_from, date_to):
+    try:
+        return await account_ledger(db, company_id, account_id, date_from, date_to)
+    except ReportError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.get("/ledger/{account_id}")
+async def get_account_ledger(account_id: uuid.UUID, date_from: date, date_to: date, db: AsyncSession = Depends(get_db),
+                             current_user: User = Depends(require_permission("accounting:entries_view"))):
+    return await _ledger(db, current_user.company_id, account_id, date_from, date_to)
+
+
+@router.get("/ledger/{account_id}/pdf")
+async def get_account_ledger_pdf(account_id: uuid.UUID, date_from: date, date_to: date, db: AsyncSession = Depends(get_db),
+                                 current_user: User = Depends(require_permission("accounting:entries_view"))):
+    from app.utils.accounting_pdf import generate_account_ledger_pdf
+    data = await _ledger(db, current_user.company_id, account_id, date_from, date_to)
+    pdf = generate_account_ledger_pdf(data, await _company(db, current_user.company_id))
+    return Response(content=pdf, media_type="application/pdf",
+                    headers={"Content-Disposition": f'inline; filename="extrato_{data["account"]["code"]}.pdf"'})

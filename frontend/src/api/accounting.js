@@ -145,3 +145,36 @@ export async function setReasonAccount(reasonId, accountId) {
   const res = await apiClient.put('/accounting/reason-accounts/' + reasonId, { account_id: accountId || null });
   return res.data;
 }
+
+// ---------- reports: balancete and extrato de conta ----------
+
+// filters: { date_from, date_to, max_level, all_accounts }
+export async function getTrialBalance(filters) {
+  const res = await apiClient.get('/accounting/trial-balance', { params: _params(filters) });
+  return res.data;
+}
+
+export async function getAccountLedger(accountId, dateFrom, dateTo) {
+  const res = await apiClient.get('/accounting/ledger/' + accountId, { params: { date_from: dateFrom, date_to: dateTo } });
+  return res.data;
+}
+
+// a file of the reports, saved by the browser (Excel) or opened in a new tab (PDF)
+export async function downloadAccountingFile(path, params, filename, open = false) {
+  const res = await apiClient.get(path, { params: _params(params), responseType: 'blob' });
+  const url = URL.createObjectURL(res.data);
+  if (open) {
+    window.open(url, '_blank');
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function _params(filters) {
+  return Object.fromEntries(Object.entries(filters || {}).filter(([, v]) => v !== '' && v !== null && v !== undefined && v !== false));
+}
