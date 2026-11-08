@@ -26,6 +26,15 @@ Treasury (journal CX for the tills, BCO for the banks):
   - the difference found at a till's closing: «Falta de caixa» or «Sobra de caixa» against the till.
 A purchase, a supplier payment, a bank movement or a bank transfer cancelled after its entry: the estorno of that
 entry, on the cancellation day.
+Stock (inventário permanente - AccountingSettings.inventory_system; nothing in the intermitente; journal OD), at the
+cost of each movement:
+  - a stock document (EA, SA, Oferta...): the stock of each product (goods 26, raw materials 22.1, products made 24.1)
+    and the other side - the purchases (21) for the system's own documents (a purchase's goods in, a cancelled
+    purchase's out), the account chosen for the document's type otherwise;
+  - the other movements of one warehouse, one entry per day once the day is over: the sales and guides to customers
+    to «Custo das existências vendidas» (their returns back), the internal consumption, the losses and inventory
+    differences, the production (the ingredients consumed into the products made). A movement without a known cost
+    is left out.
 
 The customer: its sub-account; a final consumer or no customer: «Consumidor final»; the company keeping no
 sub-account per customer: the parent account (national or foreign) itself. The supplier: its sub-account, or the
@@ -40,11 +49,11 @@ import asyncio
 import logging
 import uuid
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import and_, delete, exists, select
+from sqlalchemy import and_, delete, exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -56,6 +65,11 @@ from app.models.cash_movement import CashMovement, CashMovementStatus, CashMovem
 from app.models.cash_movement_reason import CashMovementReason
 from app.models.cash_session import CashSession, CashSessionStatus
 from app.models.company_bank_account import CompanyBankAccount
+from app.models.account import StockTypeAccount
+from app.models.movement_type import MovementDirection, MovementType as StockTypeCatalog
+from app.models.stock_movement import MovementType as LedgerType, StockMovement
+from app.models.stock_movement_document import StockMovementDocument
+from app.models.warehouse import Warehouse
 from app.models.country import Country
 from app.models.customer import Customer
 from app.models.invoice import Invoice, InvoiceType
@@ -84,6 +98,9 @@ SOURCE_BANK_MOVEMENT = "BANK_MOVEMENT"
 SOURCE_BANK_TRANSFER = "BANK_TRANSFER"  # its leaving the first account (or the whole transfer within one bank)
 SOURCE_BANK_TRANSFER_IN = "BANK_TRANSFER_IN"  # its arrival on the second account («Fundos disponíveis»)
 SOURCE_CASH_CLOSING = "CASH_CLOSING"
+SOURCE_STOCK_DOCUMENT = "STOCK_DOCUMENT"  # a stock entry or exit document (EA, SA, Oferta...)
+SOURCE_STOCK_DAY = "STOCK_DAY"  # the other stock movements of one warehouse on one day (the sales' cost...)
+STOCK_DAY_NAMESPACE = uuid.UUID("6f1d5a52-3c1e-4e43-9d7a-5b0f6f0a2c11")
 LUANDA = ZoneInfo("Africa/Luanda")
 POSTED_TYPES = (InvoiceType.FACTURA, InvoiceType.FACTURA_RECIBO, InvoiceType.NOTA_DEBITO, InvoiceType.NOTA_CREDITO,
                 InvoiceType.RECIBO)
@@ -433,6 +450,139 @@ async def build_cash_closing_entry(db: AsyncSession, ctx: _Context, session: Cas
     return "CX", lines
 
 
+# ---------- stock (inventário permanente) ----------
+
+async def _stock_accounts(db: AsyncSession, ctx: _Context, product_ids) -> dict[uuid.UUID, tuple[str, str]]:
+    """Per product: (its stock operation, its purchases operation) - raw materials, products made by the company (a
+    recipe), goods."""
+    ids = list(set(product_ids))
+    raw = set((await db.execute(select(Product.id).where(Product.id.in_(ids), Product.is_raw_material.is_(True)))).scalars().all())
+    made = set((await db.execute(select(RecipeIngredient.finished_product_id).where(
+        RecipeIngredient.finished_product_id.in_(ids)))).scalars().all())
+    return {pid: ("STOCK_MATERIALS", "PURCHASES_MATERIALS") if pid in raw else
+            ("STOCK_PRODUCTS", "PURCHASES_GOODS") if pid in made else ("STOCK_GOODS", "PURCHASES_GOODS") for pid in ids}
+
+
+def _value(row: StockMovement) -> Decimal:
+    return (abs(Decimal(str(row.quantity))) * Decimal(str(row.unit_cost))).quantize(Decimal("0.01"))
+
+
+def _pairs_to_lines(ctx: _Context, pairs: list[tuple[str, str, str, Decimal]]) -> list[dict]:
+    """[(debit operation, credit operation, label, value)] -> the lines, summed per account and side."""
+    debit: dict[tuple[str, str], Decimal] = {}
+    credit: dict[tuple[str, str], Decimal] = {}
+    for d, c, label, value in pairs:
+        debit[(d, label)] = debit.get((d, label), ZERO) + value
+        credit[(c, label)] = credit.get((c, label), ZERO) + value
+    lines: list[dict] = []
+    add = _adder(lines)
+    for (key, label), value in debit.items():
+        add(ctx.accounts[key] if isinstance(key, uuid.UUID) else _mapped(ctx, key), label, value, debit=True)
+    for (key, label), value in credit.items():
+        add(ctx.accounts[key] if isinstance(key, uuid.UUID) else _mapped(ctx, key), label, value, debit=False)
+    return lines
+
+
+def _document_ref(document: StockMovementDocument) -> str:
+    return f"{document.series}/{document.number}"
+
+
+async def build_stock_document_entry(db: AsyncSession, ctx: _Context, document: StockMovementDocument) -> tuple[str, list[dict]]:
+    """A stock document at the cost of its lines: the stock of each product and the other side - the purchases for the
+    system's own entries and exits (a purchase's goods in, a cancelled purchase's out), the account chosen for its type
+    otherwise. An entry debits the stock, an exit credits it."""
+    kind = await db.get(StockTypeCatalog, document.movement_type_id)
+    rows = (await db.execute(select(StockMovement).where(
+        StockMovement.company_id == document.company_id, StockMovement.reference == _document_ref(document),
+        StockMovement.warehouse_id == document.warehouse_id, StockMovement.unit_cost.is_not(None)))).scalars().all()
+    entry = kind.direction == MovementDirection.ENTRADA
+    other_account = None
+    if not kind.is_auto:
+        other_account = (await db.execute(select(StockTypeAccount.account_id).where(
+            StockTypeAccount.company_id == document.company_id, StockTypeAccount.movement_type_id == kind.id))).scalar_one_or_none()
+        if other_account not in ctx.accounts:
+            raise IntegrationError(f"Defina a conta do tipo de movimento «{kind.name}» em Contas por operação")
+    accounts = await _stock_accounts(db, ctx, [r.product_id for r in rows])
+    pairs = []
+    for row in rows:
+        stock_op, purchases_op = accounts[row.product_id]
+        other = other_account or purchases_op
+        value = _value(row)
+        pairs.append((stock_op, other, kind.name, value) if entry else (other, stock_op, kind.name, value))
+    return "OD", _pairs_to_lines(ctx, pairs)
+
+
+def _document_refs(company_id: uuid.UUID):
+    """The references the stock documents write on their ledger rows («EA2026/3»)."""
+    return select(func.concat(StockMovementDocument.series, "/", StockMovementDocument.number)).where(
+        StockMovementDocument.company_id == company_id)
+
+
+def _day_of(column):
+    return func.date(func.timezone("Africa/Luanda", column))
+
+
+async def build_stock_day_entry(db: AsyncSession, ctx: _Context, target: tuple) -> tuple[str, list[dict]]:
+    """The stock movements of one warehouse on one day that have no document of their own, at their cost: the sales
+    (and the guides to customers) to «Custo das existências vendidas», their returns back; the internal consumption;
+    the losses and the inventory differences; the production (the ingredients consumed into the products made)."""
+    company_id, warehouse_id, day = target
+    rows = (await db.execute(select(StockMovement).where(
+        StockMovement.company_id == company_id, StockMovement.warehouse_id == warehouse_id,
+        _day_of(StockMovement.created_at) == day, StockMovement.movement_type != LedgerType.TRANSFERENCIA,
+        StockMovement.unit_cost.is_not(None), StockMovement.unit_cost != 0,
+        func.coalesce(StockMovement.reference, "").not_in(_document_refs(company_id)),
+    ).order_by(StockMovement.created_at))).scalars().all()
+    accounts = await _stock_accounts(db, ctx, [r.product_id for r in rows])
+    pairs = []
+    for row in rows:
+        stock_op = accounts[row.product_id][0]
+        value = _value(row)
+        kind = row.movement_type
+        if kind == LedgerType.SAIDA:
+            if (row.reference or "").startswith("Consumo interno"):
+                pairs.append(("STOCK_INTERNAL_USE", stock_op, "Consumo interno", value))
+            else:
+                pairs.append(("COST_OF_SALES", stock_op, "Custo das vendas", value))
+        elif kind == LedgerType.RECEPCAO:  # goods back from a credit note or a cancelled guide
+            pairs.append((stock_op, "COST_OF_SALES", "Devoluções", value))
+        elif kind == LedgerType.PERDA:
+            pairs.append(("STOCK_LOSSES", stock_op, "Quebras", value))
+        elif kind == LedgerType.AJUSTE:
+            if Decimal(str(row.quantity)) > 0:
+                pairs.append((stock_op, "STOCK_GAINS", "Sobras", value))
+            else:
+                pairs.append(("STOCK_LOSSES", stock_op, "Quebras", value))
+        elif kind == LedgerType.PRODUCAO and not row.is_production_output:  # the product made carries what it consumed
+            pairs.append(("STOCK_PRODUCTS", stock_op, "Produção", value))
+    return "OD", _pairs_to_lines(ctx, pairs)
+
+
+def _today() -> date:
+    """Today in Luanda: a day's stock is posted once it is over."""
+    return datetime.now(LUANDA).date()
+
+
+async def _stock_days(db: AsyncSession, company_id: uuid.UUID, start: date) -> list[tuple[uuid.UUID, tuple]]:
+    """The (warehouse, day) still without their stock entry: the days before today with a movement at a cost."""
+    today = _today()
+    day = _day_of(StockMovement.created_at)
+    pairs = (await db.execute(select(StockMovement.warehouse_id, day).where(
+        StockMovement.company_id == company_id, day >= start, day < today,
+        StockMovement.movement_type != LedgerType.TRANSFERENCIA,
+        StockMovement.unit_cost.is_not(None), StockMovement.unit_cost != 0,
+        func.coalesce(StockMovement.reference, "").not_in(_document_refs(company_id)),
+    ).group_by(StockMovement.warehouse_id, day).order_by(day))).all()
+    posted = set((await db.execute(select(JournalEntry.source_id).where(
+        JournalEntry.company_id == company_id, JournalEntry.source_kind == SOURCE_STOCK_DAY))).scalars().all())
+    out = []
+    for warehouse_id, d in pairs:
+        source_id = uuid.uuid5(STOCK_DAY_NAMESPACE, f"{company_id}:{warehouse_id}:{d.isoformat()}")
+        if source_id not in posted:
+            out.append((source_id, (company_id, warehouse_id, d)))
+    return out
+
+
 def _local_day(moment, default: date) -> date:
     return moment.astimezone(LUANDA).date() if moment else default
 
@@ -448,7 +598,7 @@ class _Document:
     description: str
 
 
-async def _describe(db: AsyncSession, kind: str, source_id: uuid.UUID):
+async def _describe(db: AsyncSession, kind: str, source_id: uuid.UUID, extra=None):
     """(document, object) of one source document."""
     if kind == SOURCE_INVOICE:
         invoice = await db.get(Invoice, source_id)
@@ -486,6 +636,20 @@ async def _describe(db: AsyncSession, kind: str, source_id: uuid.UUID):
             return _Document(kind, transfer.id, label + " (chegada)", transfer.available_date or transfer.transfer_date,
                              "Transferência bancária - fundos disponíveis"), transfer
         return _Document(kind, transfer.id, label, transfer.transfer_date, "Transferência bancária"), transfer
+    if kind == SOURCE_STOCK_DOCUMENT:
+        document = await db.get(StockMovementDocument, source_id)
+        type_name = (await db.execute(select(StockTypeCatalog.name).where(StockTypeCatalog.id == document.movement_type_id))).scalar_one()
+        day = document.movement_date
+        if document.fiscal_period_id:  # booked in another month (a late one): the first day of that period
+            month, year = (await db.execute(select(FiscalPeriod.month, FiscalYear.year).join(
+                FiscalYear, FiscalYear.id == FiscalPeriod.fiscal_year_id).where(FiscalPeriod.id == document.fiscal_period_id))).one()
+            day = day if (day.year, day.month) == (year, month) else date(year, month, 1)
+        return _Document(kind, document.id, _document_ref(document), day, type_name), document
+    if kind == SOURCE_STOCK_DAY:
+        company_id, warehouse_id, day = extra
+        name = (await db.execute(select(Warehouse.name).where(Warehouse.id == warehouse_id))).scalar_one()
+        return _Document(kind, source_id, f"Stock {day.strftime('%d/%m')} - {name}"[:60], day,
+                         f"Movimentos de stock do dia - {name}"), extra
     session = await db.get(CashSession, source_id)
     pos_name = (await db.execute(select(PointOfSale.name).where(PointOfSale.id == session.pos_id))).scalar_one()
     day = _local_day(session.closed_at, session.business_date)
@@ -496,17 +660,26 @@ async def _describe(db: AsyncSession, kind: str, source_id: uuid.UUID):
 BUILDERS = {SOURCE_INVOICE: build_invoice_entry, SOURCE_PURCHASE: build_purchase_entry,
             SOURCE_SUPPLIER_PAYMENT: build_supplier_payment_entry, SOURCE_CASH_MOVEMENT: build_cash_movement_entry,
             SOURCE_BANK_MOVEMENT: build_bank_movement_entry, SOURCE_BANK_TRANSFER: build_bank_transfer_entry,
-            SOURCE_BANK_TRANSFER_IN: build_bank_transfer_in_entry, SOURCE_CASH_CLOSING: build_cash_closing_entry}
+            SOURCE_BANK_TRANSFER_IN: build_bank_transfer_in_entry, SOURCE_CASH_CLOSING: build_cash_closing_entry,
+            SOURCE_STOCK_DOCUMENT: build_stock_document_entry, SOURCE_STOCK_DAY: build_stock_day_entry}
 
 
 def _posted(kind: str, column):
     return exists().where(and_(JournalEntry.source_kind == kind, JournalEntry.source_id == column))
 
 
-def _waiting_queries(company_id: uuid.UUID, start: date) -> dict:
-    """Per kind: the ids of the documents still without their entry, oldest first."""
+def _waiting_queries(company_id: uuid.UUID, start: date, permanent: bool = True) -> dict:
+    """Per kind: the ids of the documents still without their entry, oldest first (the stock ones in the inventário
+    permanente only; the stock days: _stock_days)."""
     from_account, to_account = aliased(CompanyBankAccount), aliased(CompanyBankAccount)
-    return {
+    stock = {SOURCE_STOCK_DOCUMENT: select(StockMovementDocument.id).where(
+        StockMovementDocument.company_id == company_id, StockMovementDocument.movement_date >= start,
+        ~_posted(SOURCE_STOCK_DOCUMENT, StockMovementDocument.id),
+        exists().where(and_(StockMovement.company_id == company_id,  # at least one line at a cost
+                            StockMovement.reference == func.concat(StockMovementDocument.series, "/", StockMovementDocument.number),
+                            StockMovement.unit_cost.is_not(None), StockMovement.unit_cost != 0)),
+    ).order_by(StockMovementDocument.movement_date, StockMovementDocument.created_at)} if permanent else {}
+    return {**stock, 
         SOURCE_INVOICE: select(Invoice.id).where(
             Invoice.company_id == company_id, Invoice.invoice_type.in_(POSTED_TYPES), Invoice.issuance_mode != TRAINING,
             Invoice.business_date >= start, Invoice.total != 0, ~_posted(SOURCE_INVOICE, Invoice.id),
@@ -575,14 +748,17 @@ def _to_reverse(company_id: uuid.UUID):
     ]
 
 
-async def integrate_document(db: AsyncSession, company_id: uuid.UUID, ctx: _Context, kind: str, source_id: uuid.UUID) -> bool:
+async def integrate_document(db: AsyncSession, company_id: uuid.UUID, ctx: _Context, kind: str, source_id: uuid.UUID,
+                             extra=None) -> bool:
     """Posts the entry of one document, or keeps it in «Por integrar» with the reason. True when posted."""
-    document, obj = await _describe(db, kind, source_id)
+    document, obj = await _describe(db, kind, source_id, extra)
     try:
         code, lines = await BUILDERS[kind](db, ctx, obj)
         journal = ctx.journals.get(code)
         if journal is None:
             raise IntegrationError(f"O diário {code} não existe - crie-o em Lançamentos › Diários")
+        if not lines:
+            raise IntegrationError("Nada a lançar: sem valor")
         party = lines[0]["description"] if kind == SOURCE_INVOICE else next(
             (l["description"] for l in lines if l["account_id"] in _party_accounts(ctx)), "")
         await save_entry(db, company_id, None, entry_id=None, journal_id=journal.id, entry_date=document.day,
@@ -661,6 +837,8 @@ async def integrate_company(db: AsyncSession, company_id: uuid.UUID, limit: int 
         try:
             if action == "post":
                 done = await integrate_document(db, company_id, state["ctx"], kind, target)
+            elif action == "day":
+                done = await integrate_document(db, company_id, state["ctx"], kind, target[0], target[1])
             else:
                 done = await _reverse_cancelled(db, company_id, target[0], kind, target[1], target[2])
         except Exception:  # noqa: BLE001 - one document never stops the others
@@ -671,9 +849,13 @@ async def integrate_company(db: AsyncSession, company_id: uuid.UUID, limit: int 
         state["posted" if done else "pending"] += 1
 
     # kind after kind, each query run once the previous kinds are posted (a transfer's arrival after its leaving)
-    for kind, query in _waiting_queries(company_id, start).items():
+    permanent = settings.inventory_system == "PERMANENTE"
+    for kind, query in _waiting_queries(company_id, start, permanent).items():
         for source_id in (await db.execute(query.limit(limit))).scalars().all():
             await run("post", kind, source_id)
+    if permanent:
+        for source_id, target in (await _stock_days(db, company_id, start))[:limit]:
+            await run("day", SOURCE_STOCK_DAY, (source_id, target))
     for query in _to_reverse(company_id):
         for entry_id, kind, source_id, cancelled_at in (await db.execute(query.limit(limit))).all():
             await run("reverse", kind, (entry_id, source_id, cancelled_at))
@@ -700,9 +882,11 @@ async def integration_status(db: AsyncSession, company_id: uuid.UUID) -> dict:
     start = settings.integration_start if settings else None
     waiting = 0
     if start is not None:
-        from sqlalchemy import func
-        for query in _waiting_queries(company_id, start).values():
+        permanent = settings.inventory_system == "PERMANENTE"
+        for query in _waiting_queries(company_id, start, permanent).values():
             waiting += (await db.execute(select(func.count()).select_from(query.subquery()))).scalar_one()
+        if permanent:
+            waiting += len(await _stock_days(db, company_id, start))
     return {"integration_start": start, "waiting": waiting, "pending": await list_pending(db, company_id)}
 
 

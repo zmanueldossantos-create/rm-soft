@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Loader2, Wand2, GitBranchPlus } from 'lucide-react';
 import Select from './Select';
-import { getMappings, setMapping, setMappingOptions, applyMappingSuggestions, syncSubaccounts, setReasonAccount } from '../api/accounting';
+import { getMappings, setMapping, setMappingOptions, applyMappingSuggestions, syncSubaccounts, setReasonAccount, setStockTypeAccount, setInventorySystem } from '../api/accounting';
 import { extractErrorMessage } from '../utils/errors';
 import { toast } from '../store/toastStore';
 
@@ -9,6 +9,7 @@ import { toast } from '../store/toastStore';
 // treasury...), and the parents under which the system makes one sub-account per bank account, till, customer and
 // supplier. The PGC accounts are suggested; the company (or its accountant) changes any of them. «Motivos de
 // tesouraria»: the account of each reason of the tills' and banks' movements (the other side of the till or bank).
+// The inventory system (permanente / intermitente) and the account of each stock movement type typed by hand.
 
 export default function ContasPorOperacao({ accounts, canManage, onChartChanged }) {
   const [data, setData] = useState(null);
@@ -82,6 +83,23 @@ export default function ContasPorOperacao({ accounts, canManage, onChartChanged 
         {groups.map((g) => (
           <div key={g.name} className="bg-bg-elevated border border-border rounded-lg">
             <p className="px-5 py-3 border-b border-border text-[11px] font-semibold uppercase tracking-wide text-text-muted">{g.name}</p>
+            {g.name === 'Compras e existências' && (
+              <div className="px-5 py-3 border-b border-border flex items-center gap-5 flex-wrap text-[13px] text-text-primary">
+                <span className="text-text-muted">Sistema de inventário:</span>
+                {[['PERMANENTE', 'Permanente'], ['INTERMITENTE', 'Intermitente']].map(([value, label]) => (
+                  <label key={value} className="flex items-center gap-2 cursor-pointer">
+                    <input type="radio" name="inventory_system" checked={data.inventory_system === value} disabled={!canManage || busy}
+                      onChange={() => run(() => setInventorySystem(value), 'Sistema de inventário guardado')} className="w-4 h-4 accent-accent" />
+                    {label}
+                  </label>
+                ))}
+                <span className="text-[12px] text-text-muted">
+                  {data.inventory_system === 'PERMANENTE'
+                    ? 'Cada movimento de stock é lançado ao custo (o custo das vendas, um lançamento por dia e armazém).'
+                    : 'Nenhum movimento de stock é lançado: o contabilista regulariza as existências no fim do período.'}
+                </span>
+              </div>
+            )}
             {g.name === 'Subcontas criadas pelo sistema' && (
               <div className="px-5 py-3 border-b border-border flex items-center gap-5 flex-wrap text-[13px] text-text-primary">
                 <label className="flex items-center gap-2 cursor-pointer">
@@ -109,6 +127,25 @@ export default function ContasPorOperacao({ accounts, canManage, onChartChanged 
             ))}
           </div>
         ))}
+
+        {data.inventory_system === 'PERMANENTE' && data.stock_types?.length > 0 && (
+          <div className="bg-bg-elevated border border-border rounded-lg">
+            <div className="px-5 py-3 border-b border-border">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">Tipos de movimento de stock</p>
+              <p className="text-[12px] text-text-muted mt-1">A conta de cada tipo de entrada e saída de stock feita à mão (o outro lado das existências). As entradas e saídas automáticas das compras vão para as contas de compras.</p>
+            </div>
+            {data.stock_types.map((t) => (
+              <div key={t.id} className={'grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] gap-2 md:gap-4 items-center px-5 py-2.5 border-b border-border last:border-0' + (t.is_active ? '' : ' opacity-50')}>
+                <div>
+                  <p className="text-[13px] text-text-primary">{t.code} · {t.name}</p>
+                  <p className="text-[11px] text-text-muted">{t.direction === 'ENTRADA' ? 'Entrada' : 'Saída'}{t.is_active ? '' : ' · inativo'}</p>
+                </div>
+                <Select value={t.account_id || ''} disabled={!canManage || busy} options={options} placeholder="— Nenhuma —"
+                  onChange={(v) => run(() => setStockTypeAccount(t.id, v), 'Conta guardada')} />
+              </div>
+            ))}
+          </div>
+        )}
 
         {data.reasons?.length > 0 && (
           <div className="bg-bg-elevated border border-border rounded-lg">

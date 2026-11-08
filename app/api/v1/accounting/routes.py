@@ -443,3 +443,32 @@ async def get_account_ledger_pdf(account_id: uuid.UUID, date_from: date, date_to
     pdf = generate_account_ledger_pdf(data, await _company(db, current_user.company_id))
     return Response(content=pdf, media_type="application/pdf",
                     headers={"Content-Disposition": f'inline; filename="extrato_{data["account"]["code"]}.pdf"'})
+
+
+# ---------- the stock in the accounting ----------
+
+from app.services.account_mapping_service import set_inventory_system, set_stock_type_account  # noqa: E402
+
+
+class InventorySystemRequest(BaseModel):
+    inventory_system: str  # PERMANENTE or INTERMITENTE
+
+
+@router.put("/stock-type-accounts/{movement_type_id}")
+async def put_stock_type_account(movement_type_id: uuid.UUID, payload: MappingRequest, db: AsyncSession = Depends(get_db),
+                                 current_user: User = Depends(require_permission("accounting:chart_manage"))):
+    try:
+        await set_stock_type_account(db, current_user.company_id, movement_type_id, payload.account_id)
+    except ChartError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    return await list_mappings(db, current_user.company_id)
+
+
+@router.put("/inventory-system")
+async def put_inventory_system(payload: InventorySystemRequest, db: AsyncSession = Depends(get_db),
+                               current_user: User = Depends(require_permission("accounting:chart_manage"))):
+    try:
+        await set_inventory_system(db, current_user.company_id, payload.inventory_system)
+    except ChartError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    return await list_mappings(db, current_user.company_id)

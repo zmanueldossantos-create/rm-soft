@@ -178,3 +178,15 @@ export async function downloadAccountingFile(path, params, filename, open = fals
 function _params(filters) {
   return Object.fromEntries(Object.entries(filters || {}).filter(([, v]) => v !== '' && v !== null && v !== undefined && v !== false));
 }
+
+// the account of a stock movement type (the other side of the stock) - null: none
+export async function setStockTypeAccount(movementTypeId, accountId) {
+  const res = await apiClient.put('/accounting/stock-type-accounts/' + movementTypeId, { account_id: accountId || null });
+  return res.data;
+}
+
+// 'PERMANENTE' (every stock movement posted at its cost) or 'INTERMITENTE' (none)
+export async function setInventorySystem(system) {
+  const res = await apiClient.put('/accounting/inventory-system', { inventory_system: system });
+  return res.data;
+}

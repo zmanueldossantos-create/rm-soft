@@ -60,8 +60,20 @@ async def list_mappings(db: AsyncSession, company_id: uuid.UUID) -> dict:
     reasons = (await db.execute(select(CashMovementReason).where(
         CashMovementReason.company_id == company_id, CashMovementReason.name.not_in([PAYMENT_REASON, REVERSAL_REASON]))
         .order_by(CashMovementReason.direction, CashMovementReason.name))).scalars().all()
+    from app.models.account import StockTypeAccount
+    from app.models.movement_type import MovementType as StockMovementTypeCatalog
+    type_accounts = {t.movement_type_id: t.account_id for t in (await db.execute(
+        select(StockTypeAccount).where(StockTypeAccount.company_id == company_id))).scalars().all()}
+    stock_types = (await db.execute(select(StockMovementTypeCatalog).where(StockMovementTypeCatalog.is_auto.is_(False))
+                                    .order_by(StockMovementTypeCatalog.direction, StockMovementTypeCatalog.code))).scalars().all()
     return {
         "operations": rows,
+        "inventory_system": settings.inventory_system if settings else "PERMANENTE",
+        # the stock movement types typed by hand: the other side of the stock (the automatic ones follow the purchases)
+        "stock_types": [{
+            "id": t.id, "code": t.code, "name": t.name, "direction": t.direction.value, "is_active": t.is_active,
+            "account_id": type_accounts.get(t.id) if type_accounts.get(t.id) in accounts else None,
+        } for t in stock_types],
         # the treasury reasons (the supplier payments' own are posted with the payment): the account of each one
         "reasons": [{
             "id": r.id, "name": r.name, "direction": r.direction.value, "for_cash": r.for_cash, "for_bank": r.for_bank,
@@ -107,6 +119,38 @@ async def set_reason_account(db: AsyncSession, company_id: uuid.UUID, reason_id:
         if account is None or not account.is_active:
             raise ChartError("Conta não encontrada ou inativa")
     reason.account_id = account_id
+    await db.commit()
+
+
+async def set_stock_type_account(db: AsyncSession, company_id: uuid.UUID, movement_type_id: uuid.UUID,
+                                 account_id: uuid.UUID | None) -> None:
+    """The account a stock movement type's documents go to (None: none - they wait in «Por integrar»)."""
+    from app.models.account import StockTypeAccount
+    from app.models.movement_type import MovementType as StockMovementTypeCatalog
+    if await db.get(StockMovementTypeCatalog, movement_type_id) is None:
+        raise ChartError("Tipo de movimento não encontrado")
+    row = (await db.execute(select(StockTypeAccount).where(
+        StockTypeAccount.company_id == company_id, StockTypeAccount.movement_type_id == movement_type_id))).scalar_one_or_none()
+    if account_id is None:
+        if row is not None:
+            await db.delete(row)
+        await db.commit()
+        return
+    account = (await db.execute(select(Account).where(Account.id == account_id, Account.company_id == company_id))).scalar_one_or_none()
+    if account is None or not account.is_active:
+        raise ChartError("Conta não encontrada ou inativa")
+    if row is None:
+        db.add(StockTypeAccount(company_id=company_id, movement_type_id=movement_type_id, account_id=account.id))
+    else:
+        row.account_id = account.id
+    await db.commit()
+
+
+async def set_inventory_system(db: AsyncSession, company_id: uuid.UUID, system: str) -> None:
+    if system not in ("PERMANENTE", "INTERMITENTE"):
+        raise ChartError("Escolha o inventário permanente ou intermitente")
+    settings = await _settings(db, company_id)
+    settings.inventory_system = system
     await db.commit()
 
 
@@ -242,6 +286,10 @@ async def accounts_in_use(db: AsyncSession, company_id: uuid.UUID) -> dict[uuid.
     for reason_name, account_id in (await db.execute(select(CashMovementReason.name, CashMovementReason.account_id).where(
             CashMovementReason.company_id == company_id, CashMovementReason.account_id.is_not(None)))).all():
         used[account_id] = f"é a conta do motivo de tesouraria «{reason_name}»"
+    from app.models.account import StockTypeAccount
+    for account_id in (await db.execute(select(StockTypeAccount.account_id).where(
+            StockTypeAccount.company_id == company_id))).scalars().all():
+        used[account_id] = "é a conta de um tipo de movimento de stock"
     from app.services.chart_of_accounts_service import accounts_with_entries
     for account_id in await accounts_with_entries(db, company_id):
         used[account_id] = "tem lançamentos"

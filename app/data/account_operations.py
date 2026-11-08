@@ -46,6 +46,7 @@ OPERATIONS: tuple[Operation, ...] = (
     Operation("STOCK_MATERIALS", "Compras e existências", "Existências - matérias-primas", "22.1"),
     Operation("STOCK_PRODUCTS", "Compras e existências", "Existências - produtos acabados", "24.1"),
     Operation("COST_OF_SALES", "Compras e existências", "Custo das existências vendidas", "71"),
+    Operation("STOCK_INTERNAL_USE", "Compras e existências", "Consumo interno de existências", ""),
     Operation("STOCK_LOSSES", "Compras e existências", "Quebras de existências", "78.4.1"),
     Operation("STOCK_GAINS", "Compras e existências", "Sobras de existências", "68.4.1"),
     # treasury

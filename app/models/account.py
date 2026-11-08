@@ -49,6 +49,9 @@ class AccountingSettings(Base):
     # the documents posted by the system: those dated from this day on (set to the day the chart is started; the
     # accountant moves it back to integrate older documents)
     integration_start: Mapped[date | None] = mapped_column(Date, nullable=True)
+    # PERMANENTE: every stock movement is posted at its cost (the sales' cost per day and warehouse); INTERMITENTE:
+    # none - the accountant regularises the stock at the period's end
+    inventory_system: Mapped[str] = mapped_column(String(12), default="PERMANENTE", server_default="PERMANENTE", nullable=False)
 
 
 class AccountMapping(Base):
@@ -76,3 +79,15 @@ class AccountLink(Base):
     entity_kind: Mapped[str] = mapped_column(String(10), nullable=False)  # BANK, TILL, CUSTOMER, SUPPLIER
     entity_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("accounts.id"), nullable=False, index=True)
+
+
+class StockTypeAccount(Base):
+    """The account a (non automatic) stock movement type's documents go to - the other side of the stock: a
+    company's own choice for each type of the platform's catalog (Entrada inicial, Oferta...)."""
+    __tablename__ = "stock_type_accounts"
+    __table_args__ = (UniqueConstraint("company_id", "movement_type_id", name="uq_stock_type_account"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    company_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("companies.id"), nullable=False, index=True)
+    movement_type_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("movement_types.id"), nullable=False)
+    account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("accounts.id"), nullable=False)
