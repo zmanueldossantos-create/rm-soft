@@ -281,10 +281,17 @@ async def delete_entry(db: AsyncSession, company_id: uuid.UUID, entry_id: uuid.U
     await db.commit()
 
 
+YEAR_END_SOURCES = ("CLOSING", "OPENING")  # the apuramento and the abertura - see year_closing_service
+
+
 async def reverse_entry(db: AsyncSession, company_id: uuid.UUID, user_id: uuid.UUID | None, entry_id: uuid.UUID,
-                        entry_date: date) -> JournalEntry:
-    """The estorno of a posted entry: posted at once, in the same journal, the debits and credits swapped."""
+                        entry_date: date, year_end: bool = False) -> JournalEntry:
+    """The estorno of a posted entry: posted at once, in the same journal, the debits and credits swapped.
+    The apuramento and the abertura of a year are cancelled from the Fecho do exercício only (year_end): their estorno
+    keeps their kind, so the Demonstração de resultados leaves it out as it leaves them out."""
     entry = await _entry(db, company_id, entry_id)
+    if entry.source_kind in YEAR_END_SOURCES and not year_end:
+        raise JournalError("Este lançamento é do fecho do exercício - anule-o em Demonstrações financeiras › Fecho do exercício")
     if entry.status != "LANCADO":
         raise JournalError("Só um lançamento lançado tem estorno - um rascunho apaga-se")
     if entry.reversal_of_id is not None:
@@ -297,7 +304,8 @@ async def reverse_entry(db: AsyncSession, company_id: uuid.UUID, user_id: uuid.U
     lines = [{**l, "debit": l["credit"], "credit": l["debit"]} for l in await _lines_of(db, entry.id)]
     reversal = await save_entry(db, company_id, user_id, entry_id=None, journal_id=entry.journal_id,
                                 entry_date=entry_date, description=f"Estorno de {await _label(db, entry)}",
-                                document_ref=entry.document_ref, lines=lines, post=True, reversal_of_id=entry.id)
+                                document_ref=entry.document_ref, lines=lines, post=True, reversal_of_id=entry.id,
+                                source=(entry.source_kind, uuid.uuid4()) if entry.source_kind in YEAR_END_SOURCES else None)
     return reversal
 
 

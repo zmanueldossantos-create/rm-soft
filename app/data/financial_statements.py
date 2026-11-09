@@ -92,3 +92,17 @@ INCOME_STATEMENT: tuple[Line, ...] = (
     Line("R_IMPOSTO_EXTRA", "Imposto sobre o rendimento (resultados extraordinários)", _net("87.2")),
     Line("T_LIQUIDO", "Resultado líquido do exercício", kind="total", sums=("T_CORRENTES", "R_EXTRA", "R_IMPOSTO_EXTRA")),
 )
+
+
+# ---------- the closing of the year (apuramento de resultados) ----------
+
+# each account of the classes 6 and 7 is closed into the result account of its kind (by its 2 first digits)
+CLOSING_TARGETS: dict[str, str] = {
+    "61": "82.1", "62": "82.2", "63": "82.3", "64": "82.4", "65": "82.5",
+    "71": "82.6", "72": "82.7", "73": "82.8", "75": "82.9",
+    "66": "83.1", "76": "83.2", "67": "84.1", "77": "84.2", "68": "85.1", "78": "85.2", "69": "86.1", "79": "86.2",
+}
+# then each result account (82 to 87) is moved into the net result through its transfer account
+RESULT_TRANSFERS: dict[str, str] = {"82": "82.19", "83": "83.9", "84": "84.9", "85": "85.9", "86": "86.9", "87": "87.9"}
+NET_RESULT = ("88.1", "Resultado líquido do exercício", "88")  # code, name, parent: made when the chart lacks it
+RETAINED_EARNINGS = "81"  # Resultados transitados: the result of the year, at the opening of the next one

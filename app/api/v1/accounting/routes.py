@@ -510,3 +510,37 @@ async def get_financial_statements_pdf(date_from: date, date_to: date, which: st
     pdf = generate_statements_pdf(data, await _company(db, current_user.company_id), which if which in ("balance", "income") else "both")
     return Response(content=pdf, media_type="application/pdf",
                     headers={"Content-Disposition": f'inline; filename="demonstracoes_{date_to}.pdf"'})
+
+
+# ---------- the closing of the year ----------
+
+from app.services.year_closing_service import (  # noqa: E402
+    CLOSING, OPENING, YearClosingError, cancel, close_year, open_next_year, year_status,
+)
+
+
+@router.get("/year-closing/{year}")
+async def get_year_closing(year: int, db: AsyncSession = Depends(get_db),
+                           current_user: User = Depends(require_permission("accounting:entries_view"))):
+    return await year_status(db, current_user.company_id, year)
+
+
+@router.post("/year-closing/{year}/{action}")
+async def post_year_closing(year: int, action: str, db: AsyncSession = Depends(get_db),
+                            current_user: User = Depends(require_permission("accounting:year_close"))):
+    """action: close (apuramento), open (abertura do ano seguinte), cancel-close, cancel-open."""
+    company_id, user_id = current_user.company_id, current_user.id
+    try:
+        if action == "close":
+            await close_year(db, company_id, user_id, year)
+        elif action == "open":
+            await open_next_year(db, company_id, user_id, year)
+        elif action == "cancel-close":
+            await cancel(db, company_id, user_id, year, CLOSING)
+        elif action == "cancel-open":
+            await cancel(db, company_id, user_id, year, OPENING)
+        else:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ação desconhecida")
+    except YearClosingError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    return await year_status(db, company_id, year)

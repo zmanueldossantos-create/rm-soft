@@ -1,15 +1,18 @@
 import { useEffect, useState } from 'react';
-import { Landmark, Loader2, FileSpreadsheet, FileText, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Landmark, Loader2, FileSpreadsheet, FileText, CheckCircle2, AlertTriangle, Lock, Unlock, Undo2, CircleDashed } from 'lucide-react';
+import ConfirmDialog from '../components/ConfirmDialog';
+import { useCan } from '../utils/permissions';
 import Select from '../components/Select';
 import DateInput from '../components/DateInput';
-import { getFinancialStatements, downloadAccountingFile } from '../api/accounting';
+import { getFinancialStatements, downloadAccountingFile, getYearClosing, runYearClosing } from '../api/accounting';
 import { extractErrorMessage } from '../utils/errors';
 import { formatKz } from '../utils/format';
 import { toast } from '../store/toastStore';
 
 // Contabilidade › Demonstrações financeiras: the Balanço at a date and the Demonstração de resultados por natureza of
 // the year up to that date, in the format of the PGC de Angola, with the figures of one year before (N-1). A cost and a
-// negative figure in parentheses, as on the statements.
+// negative figure in parentheses, as on the statements. «Fecho do exercício»: the apuramento de resultados (31/12) and
+// the abertura of the next year (the result into Resultados transitados), with what still stops them.
 
 const inputCls = 'bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors';
 const labelCls = 'text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block';
@@ -48,6 +51,89 @@ function Statement({ title, rows, columns }) {
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+const ACTIONS = {
+  close: ['Apurar o exercício', 'Fecha as contas das classes 6 e 7 nas contas de resultados e passa o resultado líquido para 88.1, com data de 31/12.'],
+  open: ['Abrir o ano seguinte', 'Passa o resultado líquido para 81 Resultados transitados, com data de 01/01 do ano seguinte.'],
+  'cancel-close': ['Anular o apuramento', 'É lançado o estorno do apuramento: as contas das classes 6 e 7 voltam a ter os seus saldos.'],
+  'cancel-open': ['Anular a abertura', 'É lançado o estorno da abertura: o resultado volta para 88.1.'],
+};
+
+function YearClosing({ year }) {
+  const can = useCan();
+  const canClose = can('accounting:year_close');
+  const [status, setStatus] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [confirm, setConfirm] = useState(null); // an action of ACTIONS
+
+  useEffect(() => {
+    setStatus(null);
+    getYearClosing(year).then(setStatus).catch((err) => toast.error(extractErrorMessage(err, 'Erro ao carregar o fecho')));
+  }, [year]);
+
+  async function run(action) {
+    setConfirm(null);
+    setBusy(true);
+    try {
+      setStatus(await runYearClosing(year, action));
+      toast.success({ close: 'Exercício apurado', open: 'Ano seguinte aberto', 'cancel-close': 'Apuramento anulado', 'cancel-open': 'Abertura anulada' }[action]);
+    } catch (err) {
+      toast.error(extractErrorMessage(err, 'Operação recusada'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!status) return <div className="flex justify-center py-12"><Loader2 className="animate-spin text-accent" /></div>;
+  const result = Number(status.result);
+  const step = (done, title, text, entry, doAction, undoAction, enabled) => (
+    <div className="bg-bg-elevated border border-border rounded-lg p-5 flex items-start gap-4">
+      {done ? <Lock size={20} className="text-success shrink-0 mt-0.5" /> : <CircleDashed size={20} className="text-text-muted shrink-0 mt-0.5" />}
+      <div className="flex-1 min-w-0">
+        <p className="font-display font-semibold text-text-primary">{title}</p>
+        <p className="text-[13px] text-text-muted mt-0.5">{text}</p>
+        {entry && <p className="text-[13px] text-success mt-2">Feito: {entry.label} de {fmtDate(entry.date)}</p>}
+      </div>
+      {canClose && (done
+        ? <button type="button" disabled={busy || !undoAction.enabled} onClick={() => setConfirm(undoAction.key)} className={btnGhost}
+            title={undoAction.enabled ? '' : undoAction.why}><Undo2 size={15} /> Anular</button>
+        : <button type="button" disabled={busy || !enabled} onClick={() => setConfirm(doAction)}
+            className="flex items-center gap-1.5 bg-accent hover:bg-accent-hover text-white text-[13px] font-semibold px-3.5 py-2 rounded-md transition-colors cursor-pointer disabled:opacity-50">
+            {doAction === 'close' ? <Lock size={15} /> : <Unlock size={15} />} {ACTIONS[doAction][0]}
+          </button>)}
+    </div>
+  );
+
+  return (
+    <div className="flex flex-col gap-4 max-w-4xl">
+      <div className="bg-bg-elevated border border-border rounded-lg p-5 flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <p className="text-[11px] uppercase tracking-wide text-text-muted">Resultado líquido do exercício {year}</p>
+          <p className={'font-mono text-2xl font-semibold mt-1 ' + (result >= 0 ? 'text-success' : 'text-danger')}>{signed(result)}</p>
+        </div>
+        <p className="text-[13px] text-text-muted max-w-md">Os saldos do balanço continuam de um ano para o outro: o fecho só apura o resultado e passa-o para resultados transitados.</p>
+      </div>
+      {!status.closing && (
+        <div className="bg-bg-elevated border border-border rounded-lg p-5 flex flex-col gap-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted mb-1">Antes do apuramento</p>
+          {status.checks.map((c) => (
+            <p key={c.label} className={'flex items-center gap-2 text-[13px] ' + (c.ok ? 'text-text-primary' : 'text-amber-500')}>
+              {c.ok ? <CheckCircle2 size={15} className="text-success" /> : <AlertTriangle size={15} />} {c.label}
+            </p>
+          ))}
+        </div>
+      )}
+      {step(!!status.closing, '1. Apuramento de resultados', 'As contas das classes 6 e 7 fechadas nas contas de resultados (82 a 86), e o resultado líquido em 88.1 - em 31/12/' + year + '.',
+        status.closing, 'close', { key: 'cancel-close', enabled: !status.opening, why: 'Anule primeiro a abertura do ano seguinte' }, status.can_close)}
+      {step(!!status.opening, '2. Abertura do ano seguinte', 'O resultado líquido passa para 81 Resultados transitados - em 01/01/' + (year + 1) + '. A aplicação do resultado (reservas, dividendos) é um lançamento do contabilista.',
+        status.opening, 'open', { key: 'cancel-open', enabled: true }, status.can_open)}
+
+      <ConfirmDialog open={!!confirm} title={confirm ? ACTIONS[confirm][0] : ''} danger={confirm?.startsWith('cancel')}
+        confirmLabel={confirm ? ACTIONS[confirm][0] : ''} message={confirm ? ACTIONS[confirm][1] : ''}
+        onCancel={() => setConfirm(null)} onConfirm={() => run(confirm)} />
     </div>
   );
 }
@@ -108,7 +194,7 @@ export default function Demonstracoes() {
       </div>
 
       <div className="flex gap-1 mb-5 border-b border-border">
-        {[['balance', 'Balanço'], ['income', 'Demonstração de resultados']].map(([key, label]) => (
+        {[['balance', 'Balanço'], ['income', 'Demonstração de resultados'], ['closing', 'Fecho do exercício']].map(([key, label]) => (
           <button key={key} type="button" onClick={() => setView(key)}
             className={'px-4 py-2.5 text-[13px] font-medium border-b-2 -mb-px transition-colors cursor-pointer ' + (view === key ? 'border-accent text-accent' : 'border-transparent text-text-muted hover:text-text-primary')}>
             {label}
@@ -116,7 +202,9 @@ export default function Demonstracoes() {
         ))}
       </div>
 
-      {!data && <div className="flex justify-center py-12"><Loader2 className="animate-spin text-accent" /></div>}
+      {view === 'closing' && <YearClosing year={Number(year)} />}
+
+      {view !== 'closing' && !data && <div className="flex justify-center py-12"><Loader2 className="animate-spin text-accent" /></div>}
 
       {data && view === 'balance' && (
         <div className="flex flex-col gap-4">

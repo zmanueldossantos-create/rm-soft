@@ -197,3 +197,16 @@ export async function getFinancialStatements(dateFrom, dateTo) {
   const res = await apiClient.get('/accounting/financial-statements', { params: { date_from: dateFrom, date_to: dateTo } });
   return res.data;
 }
+
+// ---------- Fecho do exercício ----------
+
+export async function getYearClosing(year) {
+  const res = await apiClient.get('/accounting/year-closing/' + year);
+  return res.data;
+}
+
+// action: close | open | cancel-close | cancel-open - the year's status back
+export async function runYearClosing(year, action) {
+  const res = await apiClient.post('/accounting/year-closing/' + year + '/' + action);
+  return res.data;
+}

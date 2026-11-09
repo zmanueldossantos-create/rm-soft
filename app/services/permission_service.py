@@ -137,6 +137,7 @@ PERMISSION_CATALOG: list[tuple[str, str, str, list[str]]] = [
     ("accounting:entries_view", "Ver os lançamentos contabilísticos e os diários", "Contabilidade", ["CONTABILISTA"]),
     ("accounting:entries_record", "Registar, lançar e estornar lançamentos contabilísticos", "Contabilidade", ["CONTABILISTA"]),
     ("accounting:journals_manage", "Configurar os diários (criar, renomear, desativar)", "Contabilidade", ["CONTABILISTA"]),
+    ("accounting:year_close", "Fazer e anular o fecho do exercício (apuramento de resultados, abertura do ano seguinte)", "Contabilidade", ["CONTABILISTA"]),
     ("company:view", "Ver dados da empresa", "Empresa", []),
     ("company:manage", "Editar dados e logotipo da empresa", "Empresa", []),
     ("company:backup", "Gerir e descarregar as cópias de segurança da empresa", "Empresa", []),
