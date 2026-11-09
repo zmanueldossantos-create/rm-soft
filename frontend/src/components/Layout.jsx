@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { ChefHat, History as KitchenHistoryIcon } from 'lucide-react';
 import { Link, useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { createPortal } from 'react-dom';
-import { Building2, LogOut, LayoutDashboard, Sun, Moon, Package, Users, Calendar, Receipt, Settings, Package2, UserCog, History, FileText, Landmark, LayoutGrid, Store, Wheat, Factory, Wallet, SlidersHorizontal, Tags, Wrench, ChevronDown, Cog, Plus, ArrowLeftRight, Calculator, ClipboardList, Gauge, PiggyBank, CreditCard, Boxes, CalendarClock, Wallet2, PackageMinus, Truck, ShieldCheck, FileInput, Send, HandCoins, Bot, HelpCircle, LifeBuoy, BookOpen, Layers, Inbox, ListTree, BookText, Scale } from 'lucide-react';
+import { Building2, LogOut, LayoutDashboard, Sun, Moon, Package, Users, Calendar, Receipt, Settings, Package2, UserCog, History, FileText, Landmark, LayoutGrid, Store, Wheat, Factory, Wallet, SlidersHorizontal, Tags, Wrench, ChevronDown, Cog, Plus, ArrowLeftRight, Calculator, ClipboardList, Gauge, PiggyBank, CreditCard, Boxes, CalendarClock, Wallet2, PackageMinus, Truck, ShieldCheck, FileInput, Send, HandCoins, Bot, HelpCircle, LifeBuoy, BookOpen, Layers, Inbox, ListTree, BookText, Scale, FileBarChart } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import apiClient from '../api/client';
 import { useThemeStore } from '../store/themeStore';
@@ -300,6 +300,7 @@ export default function Layout() {
         { to: '/contabilidade/plano-de-contas', icon: ListTree, label: 'Plano de contas', show: can('accounting:chart_view') },
         { to: '/contabilidade/lancamentos', icon: BookText, label: 'Lançamentos', show: can('accounting:entries_view') },
         { to: '/contabilidade/balancete', icon: Scale, label: 'Balancete', show: can('accounting:entries_view') },
+        { to: '/contabilidade/demonstracoes', icon: FileBarChart, label: 'Demonstrações financeiras', show: can('accounting:entries_view') },
         { to: '/apuramento-iva', icon: Calculator, label: 'Apuramento do IVA', show: can('vat:return') },
         { to: '/saf-t', icon: FileText, label: 'SAF-T', show: can('saf_t:export') },
       ]),

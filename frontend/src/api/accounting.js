@@ -190,3 +190,10 @@ export async function setInventorySystem(system) {
   const res = await apiClient.put('/accounting/inventory-system', { inventory_system: system });
   return res.data;
 }
+
+// ---------- Balanço and Demonstração de resultados ----------
+
+export async function getFinancialStatements(dateFrom, dateTo) {
+  const res = await apiClient.get('/accounting/financial-statements', { params: { date_from: dateFrom, date_to: dateTo } });
+  return res.data;
+}

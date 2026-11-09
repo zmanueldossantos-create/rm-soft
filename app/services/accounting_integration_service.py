@@ -679,7 +679,7 @@ def _waiting_queries(company_id: uuid.UUID, start: date, permanent: bool = True)
                             StockMovement.reference == func.concat(StockMovementDocument.series, "/", StockMovementDocument.number),
                             StockMovement.unit_cost.is_not(None), StockMovement.unit_cost != 0)),
     ).order_by(StockMovementDocument.movement_date, StockMovementDocument.created_at)} if permanent else {}
-    return {**stock, 
+    return {**stock,
         SOURCE_INVOICE: select(Invoice.id).where(
             Invoice.company_id == company_id, Invoice.invoice_type.in_(POSTED_TYPES), Invoice.issuance_mode != TRAINING,
             Invoice.business_date >= start, Invoice.total != 0, ~_posted(SOURCE_INVOICE, Invoice.id),

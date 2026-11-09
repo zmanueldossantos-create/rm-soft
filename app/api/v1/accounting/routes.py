@@ -472,3 +472,41 @@ async def put_inventory_system(payload: InventorySystemRequest, db: AsyncSession
     except ChartError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     return await list_mappings(db, current_user.company_id)
+
+
+# ---------- the financial statements (Balanço, Demonstração de resultados) ----------
+
+from app.services.financial_statements_service import StatementError, financial_statements, statements_excel  # noqa: E402
+
+
+async def _statements(db, company_id, date_from, date_to):
+    try:
+        return await financial_statements(db, company_id, date_from, date_to)
+    except StatementError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.get("/financial-statements")
+async def get_financial_statements(date_from: date, date_to: date, db: AsyncSession = Depends(get_db),
+                                   current_user: User = Depends(require_permission("accounting:entries_view"))):
+    return await _statements(db, current_user.company_id, date_from, date_to)
+
+
+@router.get("/financial-statements/excel")
+async def get_financial_statements_excel(date_from: date, date_to: date, db: AsyncSession = Depends(get_db),
+                                         current_user: User = Depends(require_permission("accounting:entries_view"))):
+    data = await _statements(db, current_user.company_id, date_from, date_to)
+    company = await _company(db, current_user.company_id)
+    return Response(content=statements_excel(data, company["name"]),
+                    media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": f'attachment; filename="demonstracoes_{date_to}.xlsx"'})
+
+
+@router.get("/financial-statements/pdf")
+async def get_financial_statements_pdf(date_from: date, date_to: date, which: str = "both", db: AsyncSession = Depends(get_db),
+                                       current_user: User = Depends(require_permission("accounting:entries_view"))):
+    from app.utils.accounting_pdf import generate_statements_pdf
+    data = await _statements(db, current_user.company_id, date_from, date_to)
+    pdf = generate_statements_pdf(data, await _company(db, current_user.company_id), which if which in ("balance", "income") else "both")
+    return Response(content=pdf, media_type="application/pdf",
+                    headers={"Content-Disposition": f'inline; filename="demonstracoes_{date_to}.pdf"'})

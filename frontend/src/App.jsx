@@ -24,6 +24,7 @@ import FiscalPeriods from './pages/FiscalPeriods';
 import PlanoContas from './pages/PlanoContas';
 import Lancamentos from './pages/Lancamentos';
 import Balancete from './pages/Balancete';
+import Demonstracoes from './pages/Demonstracoes';
 import SaftExport from './pages/SaftExport';
 import Invoices from './pages/Invoices';
 import CompanySettings from './pages/CompanySettings';
@@ -112,6 +113,7 @@ export default function App() {
           <Route path="/contabilidade/plano-de-contas" element={<RequirePermission perm="accounting:chart_view"><PlanoContas /></RequirePermission>} />
           <Route path="/contabilidade/lancamentos" element={<RequirePermission perm="accounting:entries_view"><Lancamentos /></RequirePermission>} />
           <Route path="/contabilidade/balancete" element={<RequirePermission perm="accounting:entries_view"><Balancete /></RequirePermission>} />
+          <Route path="/contabilidade/demonstracoes" element={<RequirePermission perm="accounting:entries_view"><Demonstracoes /></RequirePermission>} />
           <Route path="/saf-t" element={<RequirePermission perm="saf_t:export"><SaftExport /></RequirePermission>} />
           <Route path="/invoices" element={<RequirePermission perm="invoices:view"><Invoices /></RequirePermission>} />
           <Route path="/company-settings" element={<RequirePermission perm="company:view"><CompanySettings /></RequirePermission>} />
