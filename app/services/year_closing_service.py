@@ -219,6 +219,6 @@ async def cancel(db: AsyncSession, company_id: uuid.UUID, user_id: uuid.UUID | N
     if target is None:
         raise YearClosingError("Nada a anular")
     try:
-        return await reverse_entry(db, company_id, user_id, target["id"], day, year_end=True)
+        return await reverse_entry(db, company_id, user_id, target["id"], day, system=True)
     except JournalError as e:
         raise YearClosingError(str(e))

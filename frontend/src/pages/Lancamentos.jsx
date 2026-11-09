@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BookText, Plus, Trash2, Loader2, Search, Undo2, Pencil, CheckCircle2, AlertTriangle, RefreshCw, Bot } from 'lucide-react';
+import { BookText, Plus, Trash2, Loader2, Search, Undo2, Pencil, CheckCircle2, AlertTriangle, RefreshCw, Bot, Download, Upload } from 'lucide-react';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
 import DateInput from '../components/DateInput';
@@ -8,6 +8,7 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import {
   getChart, getJournals, createJournal, updateJournal, deleteJournal, getEntries, getEntry, saveEntry, deleteEntry, reverseEntry,
   getIntegration, runIntegration, setIntegrationStart,
+  getOpeningBalances, importOpeningBalances, cancelOpeningBalances, downloadAccountingFile,
 } from '../api/accounting';
 import { extractErrorMessage } from '../utils/errors';
 import { formatKz } from '../utils/format';
@@ -19,6 +20,7 @@ import { toast } from '../store/toastStore';
 // never changes again - it is corrected by its estorno. Lines go to last-level active accounts only. The «Diários» tab
 // sets the journals (the defaults VND, CMP, CX, BCO, OD, ABE are made with the chart). Sales, purchases and supplier payments are posted
 // by the system (every minute); «Por integrar» lists those waiting, with the reason, and the day the integration starts.
+// «Saldos iniciais»: the opening balances of a company coming from another program, imported from the Excel model.
 
 const inputCls = 'bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors';
 const cellInputCls = 'bg-bg-inset border border-border rounded-md px-2.5 py-2 text-[13px] text-text-primary outline-none focus:border-accent transition-colors w-full';
@@ -37,7 +39,12 @@ export default function Lancamentos() {
   const can = useCan();
   const canRecord = can('accounting:entries_record');
   const canJournals = can('accounting:journals_manage');
-  const [view, setView] = useState('entries'); // entries | journals | integration
+  const [view, setView] = useState('entries'); // entries | journals | integration | opening
+  const [opening, setOpening] = useState(null);
+  const [openingDate, setOpeningDate] = useState('');
+  const [openingErrors, setOpeningErrors] = useState(null);
+  const [cancelOpening, setCancelOpening] = useState(false);
+  const fileRef = useRef(null);
   const canChart = can('accounting:chart_manage');
   const [integration, setIntegration] = useState(null);
   const [startDraft, setStartDraft] = useState('');
@@ -66,6 +73,35 @@ export default function Lancamentos() {
       toast.error(extractErrorMessage(err, 'Erro ao carregar os lançamentos'));
     }
   }
+  async function loadOpening() {
+    try {
+      const data = await getOpeningBalances();
+      setOpening(data);
+      setOpeningDate((d) => d || data.entry?.date || data.suggested_date || new Date().toISOString().slice(0, 10));
+    } catch (err) {
+      toast.error(extractErrorMessage(err, 'Erro ao carregar os saldos iniciais'));
+    }
+  }
+
+  async function onOpeningFile(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setOpeningErrors(null);
+    setBusy(true);
+    try {
+      setOpening(await importOpeningBalances(file, openingDate));
+      toast.success('Saldos iniciais importados');
+      loadEntries();
+      loadJournals();
+    } catch (err) {
+      if (err?.response?.data?.errors?.length) setOpeningErrors(err.response.data.errors);
+      toast.error(extractErrorMessage(err, 'Importação recusada'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function loadIntegration() {
     try {
       const data = await getIntegration();
@@ -195,8 +231,8 @@ export default function Lancamentos() {
       </div>
 
       <div className="flex gap-1 mb-5 border-b border-border">
-        {[['entries', 'Lançamentos'], ['journals', 'Diários'], ['integration', 'Por integrar']].map(([key, label]) => (
-          <button key={key} type="button" onClick={() => { setView(key); if (key === 'integration') loadIntegration(); }}
+        {[['entries', 'Lançamentos'], ['journals', 'Diários'], ['integration', 'Por integrar'], ['opening', 'Saldos iniciais']].map(([key, label]) => (
+          <button key={key} type="button" onClick={() => { setView(key); if (key === 'integration') loadIntegration(); if (key === 'opening') loadOpening(); }}
             className={'flex items-center gap-2 px-4 py-2.5 text-[13px] font-medium border-b-2 -mb-px transition-colors cursor-pointer ' + (view === key ? 'border-accent text-accent' : 'border-transparent text-text-muted hover:text-text-primary')}>
             {label}
             {key === 'integration' && integration?.pending?.length > 0 && (
@@ -341,6 +377,79 @@ export default function Lancamentos() {
           </div>
         </div>
       )}
+
+      {view === 'opening' && opening && (
+        <div className="flex flex-col gap-4 max-w-5xl">
+          <div className="bg-bg-elevated border border-border rounded-lg p-5 flex flex-col gap-4">
+            <p className="text-[13px] text-text-muted">
+              Para uma empresa que vem de outro programa: os saldos das contas no dia do início (a balança do programa anterior), num
+              lançamento do diário ABE. Descarregue o modelo, preencha uma linha por conta de último nível (Débito ou Crédito) e importe-o.
+              Tudo ou nada: o total do débito tem de ser igual ao do crédito. Importar de novo anula a importação anterior. As quantidades em
+              stock entram no Stock; aqui só o seu valor.
+            </p>
+            <div className="flex items-end gap-3 flex-wrap">
+              <div>
+                <label className={labelCls}>Data dos saldos</label>
+                <div className="w-44"><DateInput value={openingDate} onChange={(e) => setOpeningDate(e.target.value)} className={inputCls + ' w-full'} /></div>
+              </div>
+              <button type="button" className={btnGhost}
+                onClick={() => downloadAccountingFile('/accounting/opening-balances/template', {}, 'saldos_iniciais_modelo.xlsx').catch(() => toast.error('Erro ao descarregar o modelo'))}>
+                <Download size={15} /> Modelo Excel
+              </button>
+              {canRecord && (
+                <button type="button" disabled={busy || !openingDate} onClick={() => fileRef.current?.click()} className={btnPrimary}>
+                  <Upload size={15} /> {opening.entry ? 'Importar de novo' : 'Importar o ficheiro'}
+                </button>
+              )}
+              <input ref={fileRef} type="file" accept=".xlsx" onChange={onOpeningFile} className="hidden" />
+            </div>
+          </div>
+          {opening.entry ? (
+            <div className="bg-bg-elevated border border-border rounded-lg overflow-x-auto">
+              <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border flex-wrap">
+                <p className="text-[13px] text-text-primary">
+                  <span className="font-mono font-semibold">{opening.entry.label}</span> de {fmtDate(opening.entry.date)} · {opening.entry.lines.length} conta(s) · total {formatKz(opening.entry.total)}
+                </p>
+                {canRecord && <button type="button" disabled={busy} onClick={() => setCancelOpening(true)} className={btnGhost + ' hover:!border-danger hover:!text-danger'}><Undo2 size={15} /> Anular</button>}
+              </div>
+              <table className="w-full text-[13px]">
+                <thead>
+                  <tr className="text-left text-[11px] uppercase tracking-wide text-text-muted border-b border-border">
+                    <th className="px-4 py-2.5 font-medium">Conta</th>
+                    <th className="px-4 py-2.5 font-medium text-right">Débito</th>
+                    <th className="px-4 py-2.5 font-medium text-right">Crédito</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {opening.entry.lines.map((l) => (
+                    <tr key={l.code} className="border-b border-border last:border-0">
+                      <td className="px-4 py-2"><span className="font-mono text-text-muted mr-3">{l.code}</span>{l.name}</td>
+                      <td className="px-4 py-2 text-right font-mono">{Number(l.debit) ? formatKz(l.debit) : ''}</td>
+                      <td className="px-4 py-2 text-right font-mono">{Number(l.credit) ? formatKz(l.credit) : ''}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : <p className="text-[13px] text-text-muted text-center py-8 bg-bg-elevated border border-border rounded-lg">Nenhum saldo inicial importado</p>}
+        </div>
+      )}
+
+      <Modal open={!!openingErrors} onClose={() => setOpeningErrors(null)} title="Linhas a corrigir no ficheiro" maxWidthClass="max-w-xl">
+        {openingErrors && (
+          <div className="flex flex-col gap-3">
+            <p className="text-[13px] text-text-muted">Nada foi importado. Corrija estas linhas no Excel e importe de novo.</p>
+            <ul className="max-h-[50vh] overflow-y-auto flex flex-col gap-1 text-[13px] text-danger">
+              {openingErrors.map((e, i) => <li key={i}>{e}</li>)}
+            </ul>
+          </div>
+        )}
+      </Modal>
+
+      <ConfirmDialog open={cancelOpening} title="Anular os saldos iniciais" danger confirmLabel="Anular"
+        message="É lançado o estorno da importação: as contas voltam aos saldos sem os saldos iniciais."
+        onCancel={() => setCancelOpening(false)}
+        onConfirm={() => { setCancelOpening(false); run(cancelOpeningBalances, 'Saldos iniciais anulados', (data) => { setOpening(data); loadEntries(); }); }} />
 
       {/* The entry: typed (a draft) or looked at (posted) */}
       <Modal open={!!form} onClose={() => setForm(null)} size="full" maxWidthClass="max-w-6xl"

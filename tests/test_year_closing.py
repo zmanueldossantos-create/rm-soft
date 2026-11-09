@@ -75,7 +75,7 @@ async def test_the_closing_and_the_opening(db, company_with_essentials):
     data = await financial_statements(db, company_id, date(year, 1, 1), end)
     assert next(r["value"] for r in data["income_statement"] if r["key"] == "T_LIQUIDO") == Decimal(70_000)  # unchanged
     assert next(r["value"] for r in data["balance_sheet"]["equity_liabilities"] if r["key"] == "C_RESULTADO") == Decimal(70_000)
-    with pytest.raises(JournalError, match="fecho do exercício"):  # never from the Lançamentos screen
+    with pytest.raises(JournalError, match="Fecho do exercício"):  # never from the Lançamentos screen
         await reverse_entry(db, company_id, None, closing_id, end)
     with pytest.raises(YearClosingError, match="já está apurado"):
         await close_year(db, company_id, None, year)

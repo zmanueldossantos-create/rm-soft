@@ -210,3 +210,24 @@ export async function runYearClosing(year, action) {
   const res = await apiClient.post('/accounting/year-closing/' + year + '/' + action);
   return res.data;
 }
+
+// ---------- Saldos iniciais ----------
+
+export async function getOpeningBalances() {
+  const res = await apiClient.get('/accounting/opening-balances');
+  return res.data;
+}
+
+// The filled model, posted on entryDate - or a 422 with { detail, errors: [every wrong row] }
+export async function importOpeningBalances(file, entryDate) {
+  const form = new FormData();
+  form.append('file', file);
+  form.append('entry_date', entryDate);
+  const res = await apiClient.post('/accounting/opening-balances/import', form, { headers: { 'Content-Type': 'multipart/form-data' } });
+  return res.data;
+}
+
+export async function cancelOpeningBalances() {
+  const res = await apiClient.post('/accounting/opening-balances/cancel');
+  return res.data;
+}

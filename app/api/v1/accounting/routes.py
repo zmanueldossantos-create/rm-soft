@@ -544,3 +544,49 @@ async def post_year_closing(year: int, action: str, db: AsyncSession = Depends(g
     except YearClosingError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     return await year_status(db, company_id, year)
+
+
+# ---------- the opening balances (saldos iniciais) ----------
+
+from fastapi import Form  # noqa: E402
+
+from app.services.opening_balances_service import (  # noqa: E402
+    OpeningBalancesError, cancel_opening_balances, import_opening_balances, opening_balances,
+)
+from app.services.opening_balances_service import excel_template as opening_template  # noqa: E402
+
+
+@router.get("/opening-balances")
+async def get_opening_balances(db: AsyncSession = Depends(get_db),
+                               current_user: User = Depends(require_permission("accounting:entries_view"))):
+    return await opening_balances(db, current_user.company_id)
+
+
+@router.get("/opening-balances/template")
+async def get_opening_balances_template(current_user: User = Depends(require_permission("accounting:entries_view"))):
+    return Response(content=opening_template(),
+                    media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": 'attachment; filename="saldos_iniciais_modelo.xlsx"'})
+
+
+@router.post("/opening-balances/import")
+async def post_opening_balances(entry_date: date = Form(...), file: UploadFile = File(...), db: AsyncSession = Depends(get_db),
+                                current_user: User = Depends(require_permission("accounting:entries_record"))):
+    content = await file.read(MAX_UPLOAD + 1)
+    if len(content) > MAX_UPLOAD:
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Ficheiro demasiado grande (máximo 5 MB)")
+    try:
+        await import_opening_balances(db, current_user.company_id, current_user.id, content, entry_date)
+    except OpeningBalancesError as e:
+        return JSONResponse(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, content={"detail": str(e), "errors": e.errors})
+    return await opening_balances(db, current_user.company_id)
+
+
+@router.post("/opening-balances/cancel")
+async def post_cancel_opening_balances(db: AsyncSession = Depends(get_db),
+                                       current_user: User = Depends(require_permission("accounting:entries_record"))):
+    try:
+        await cancel_opening_balances(db, current_user.company_id, current_user.id)
+    except OpeningBalancesError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    return await opening_balances(db, current_user.company_id)
