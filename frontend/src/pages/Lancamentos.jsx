@@ -7,7 +7,7 @@ import DateInput from '../components/DateInput';
 import ConfirmDialog from '../components/ConfirmDialog';
 import {
   getChart, getJournals, createJournal, updateJournal, deleteJournal, getEntries, getEntry, saveEntry, deleteEntry, reverseEntry,
-  getIntegration, runIntegration, setIntegrationStart,
+  getIntegration, runIntegration, setIntegrationStart, setIncludeTraining,
   getOpeningBalances, importOpeningBalances, cancelOpeningBalances, downloadAccountingFile,
 } from '../api/accounting';
 import { extractErrorMessage } from '../utils/errors';
@@ -327,10 +327,21 @@ export default function Lancamentos() {
                 das vendas, quebras, sobras e produção num lançamento por dia e armazém, depois do dia acabar) são lançados pelo sistema a cada minuto - um documento anulado
                 depois recebe o seu estorno -, com as contas de{' '}
                 <Link to="/contabilidade/plano-de-contas?tab=operacoes" className="text-accent hover:underline">Contas por operação</Link>.
-                Os do Modo formação nunca entram na contabilidade. Um documento que não pode ser lançado fica aqui com o motivo:
+                Os do Modo formação só entram na contabilidade se o pedir abaixo (demonstração). Um documento que não pode ser lançado fica aqui com o motivo:
                 corrija a causa e carregue em «Integrar agora».
               </p>
             </div>
+            {integration.training_mode && (
+              <label className="flex items-start gap-2.5 text-[13px] text-text-primary cursor-pointer bg-amber-500/10 border border-amber-500/30 rounded-md px-3.5 py-3">
+                <input type="checkbox" checked={integration.include_training} disabled={!canChart || busy} className="w-4 h-4 accent-accent mt-0.5"
+                  onChange={(e) => run(() => setIncludeTraining(e.target.checked), e.target.checked ? 'Documentos de formação incluídos' : 'Documentos de formação retirados',
+                    (data) => { setIntegration(data); loadEntries(); })} />
+                <span>
+                  Incluir os documentos do Modo formação na contabilidade
+                  <span className="block text-[12px] text-text-muted mt-0.5">Para uma demonstração ou uma formação. Ao desligar, ou quando a empresa sair do Modo formação, os seus lançamentos são estornados.</span>
+                </span>
+              </label>
+            )}
             <div className="flex items-end gap-3 flex-wrap">
               <div>
                 <label className={labelCls}>Integrar os documentos a partir de</label>

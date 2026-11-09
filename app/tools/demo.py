@@ -7,9 +7,11 @@ and for showing RM SOFT to a prospect.
                                           up to today
 
 What it holds: 25 articles with a picture (bread, pastries, snacks, drinks, groceries), the stock produced or bought from
-2 suppliers (purchase invoices), 5 customers, about 30 days of sales (Faturas-Recibo at the counter, some Faturas to
-customers - a few still unpaid), and today a till open with its first sales. Every document goes through the same
-services as the screens (numbering, VAT, stock, AGT queue) - nothing is written around them.
+2 suppliers (purchase invoices), 5 customers, about 30 days of sales (Faturas-Recibo at the counter - cash, or Multicaixa
+onto the BAI account -, some Faturas to customers - a few still unpaid), and today a till open with its first sales.
+Every document goes through the same services as the screens (numbering, VAT, stock, AGT queue) - nothing is written
+around them. The accounting runs from the first day: the PGC, the opening balances imported (the bank, the till, the
+stock made by the bakery, the capital), the documents of Modo formação included, each month posted before it closes.
 
 Accounts (password Demo@2026): GESTOR +244923999001, CAIXA +244923999002. In SaaS mode: demo.<domain>.
 Run it on a development machine or the RM SOFT platform - never on a client's server.
@@ -171,6 +173,57 @@ async def _delete_all(db, company_id) -> None:
 
 # ----------------------------------------------------------------------------------------------------------- build it
 
+async def _accounting(db, cid, start: date) -> None:
+    """The chart (PGC) with the accounts the PGC leaves to the accountant, the documents of Modo formação in the
+    accounting, from the first day."""
+    from app.models.account import AccountingSettings
+    from app.services.account_mapping_service import set_mapping
+    from app.services.accounting_integration_service import set_include_training
+    from app.services.chart_of_accounts_service import create_account, start_chart
+    chart = await start_chart(db, cid, "PGC")
+    code = {a["code"]: a["id"] for a in chart["accounts"]}
+    # 26 and 71 have sub-accounts in the PGC: a last-level account of each, as an accountant would make
+    code["26.1"] = (await create_account(db, cid, "26.1", "Mercadorias em armazém")).id
+    code["71.6"] = (await create_account(db, cid, "71.6", "Mercadorias")).id
+    for operation, account in (("STOCK_GOODS", "26.1"), ("COST_OF_SALES", "71.6"), ("STOCK_INTERNAL_USE", "75.2"),
+                               ("CASH_SHORTAGE", "75.8"), ("CASH_SURPLUS", "63.8"), ("WITHHOLDING_SUFFERED", "34.1")):
+        await set_mapping(db, cid, operation, code[account])
+    settings = await db.get(AccountingSettings, cid)
+    settings.integration_start = start
+    await db.commit()
+    await set_include_training(db, cid, True)
+
+
+async def _opening_balances(db, cid, start: date, bank_id, stock_value: float) -> None:
+    """The balances the bakery starts with, imported as a client coming from another program would: the bank, the
+    till's fund, the stock it made, against the capital."""
+    import io
+    from openpyxl import Workbook
+    from app.models.account import AccountLink
+    from app.services.opening_balances_service import import_opening_balances
+    links = {(l.entity_kind, l.entity_id): l.account_id for l in (await db.execute(
+        select(AccountLink).where(AccountLink.company_id == cid))).scalars().all()}
+    from app.models.account import Account
+    codes = {a.id: a.code for a in (await db.execute(select(Account).where(Account.company_id == cid))).scalars().all()}
+    from app.models.point_of_sale import PointOfSale
+    till = (await db.execute(select(PointOfSale.id).where(PointOfSale.company_id == cid, PointOfSale.is_default.is_(True)))).scalars().first()
+    bank_balance, till_balance, stock_value = 2_500_000, 50_000, round(stock_value, 2)
+    rows = [(codes[links[("TILL", till)]], "Caixa", till_balance, None), ("26.1", "Mercadorias (produção da padaria)", stock_value, None)]
+    if bank_id is not None:
+        rows.insert(0, (codes[links[("BANK", bank_id)]], "BAI", bank_balance, None))
+    capital = sum(r[2] for r in rows)
+    rows.append(("51", "Capital", None, capital))
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Saldos iniciais"
+    ws.append(("Código", "Descrição", "Débito", "Crédito"))
+    for row in rows:
+        ws.append(row)
+    out = io.BytesIO()
+    wb.save(out)
+    await import_opening_balances(db, cid, None, out.getvalue(), start)
+
+
 async def build(db, today: date) -> dict:
     from app.models.company_payment_method_preference import CompanyPaymentMethodPreference
     from app.models.fiscal_period import FiscalPeriod
@@ -178,6 +231,7 @@ async def build(db, today: date) -> dict:
     from app.models.product import Product
     from app.models.user import User
     from app.models.vat import VAT
+    from app.services.accounting_integration_service import integrate_company
     from app.services.activity_service import create_activity
     from app.services.auth_service import create_user
     from app.services.cash_session_service import open_session
@@ -211,7 +265,10 @@ async def build(db, today: date) -> dict:
     shutil.copyfile(IMAGES / "logo.png", logo / f"{cid}.png")
     company.logo_path = f"/uploads/logos/{cid}.png"
     gestor = (await db.execute(select(User).where(User.company_id == cid))).scalar_one()
-    activity = await create_activity(db, cid, module.id, "Padaria")
+    # the company's activity, made with it for its module (one per selling module)
+    from app.models.activity import Activity
+    activity = (await db.execute(select(Activity).where(Activity.company_id == cid, Activity.module_id == module.id))).scalars().first() \
+        or await create_activity(db, cid, module.id, "Padaria")
     pos = (await list_points_of_sale(db, cid, activity.id))[0]
     caixa = await create_user(db, cid, CAIXA[0], CAIXA[1], PASSWORD, "CAIXA")
     await assign_user_to_cash_point(db, cid, caixa.id, pos.id)
@@ -219,6 +276,15 @@ async def build(db, today: date) -> dict:
     if card is not None:  # Multicaixa at the till, next to cash
         db.add(CompanyPaymentMethodPreference(company_id=cid, payment_method_id=card.id, available_at_pos=True))
     vats = {v.tax_category: v for v in (await db.execute(select(VAT).where(VAT.company_id == cid))).scalars().all()}
+    from app.models.bank import Bank
+    from app.models.currency import Currency
+    from app.services.company_service import add_bank_account
+    bai = (await db.execute(select(Bank).where(Bank.acronym == "BAI"))).scalars().first()
+    kwanza = (await db.execute(select(Currency).where(Currency.code == "AOA"))).scalars().first()
+    bank = None
+    if bai is not None and kwanza is not None:  # the account the Multicaixa payments land on
+        bank = await add_bank_account(db, cid, bank_id=bai.id, account_number="0001 2345 6789", iban="AO06004000012345678910154",
+                                      currency_id=kwanza.id)
 
     # the months of the history: the first one opened directly (a company starting then), each closed in turn
     start = max(today - timedelta(days=HISTORY_DAYS), date(today.year, 1, 1))
@@ -227,6 +293,7 @@ async def build(db, today: date) -> dict:
     await db.flush()
     db.add(FiscalPeriod(company_id=cid, fiscal_year_id=year.id, month=start.month, status="ABERTO"))
     await db.commit()
+    await _accounting(db, cid, start)
 
     say("2/7 Artigos")
     categories = {}
@@ -272,7 +339,8 @@ async def build(db, today: date) -> dict:
             for code, qty in basket.items():
                 sold[code] += qty
 
-    say("3/7 Stock: produção e compras")
+    say("3/7 Stock: produção e compras, saldos iniciais")
+    made_value = 0.0
     for art in ARTICLES:
         if not art.stock or art.bought:
             continue
@@ -280,6 +348,8 @@ async def build(db, today: date) -> dict:
         quantity = sold[art.code] + _left_over(art, rnd)
         await update_average_cost(db, cid, product, quantity, art.cost)
         await receive_stock(db, cid, product.id, quantity, reason="Produção da padaria", warehouse_id=activity.warehouse_id)
+        made_value += quantity * art.cost
+    await _opening_balances(db, cid, start, bank.id if bank is not None else None, made_value)
     suppliers = {}
     for category, (name, nif) in SUPPLIERS.items():
         suppliers[category] = await create_supplier(db, cid, name, nif=nif, phone_number=None)
@@ -303,7 +373,8 @@ async def build(db, today: date) -> dict:
     issued = 0
     current_month = start.month
     for day, basket, customer, method, kind in plan_sales:
-        if day.month != current_month:  # a new month: the previous one is closed, the next one opened
+        if day.month != current_month:  # a new month: posted, then the previous one closed and the next one opened
+            await integrate_company(db, cid, limit=5000)
             previous = (await db.execute(select(FiscalPeriod).where(
                 FiscalPeriod.fiscal_year_id == year.id, FiscalPeriod.month == current_month))).scalar_one()
             await close_fiscal_period(db, cid, previous.id)
@@ -316,17 +387,20 @@ async def build(db, today: date) -> dict:
             db, cid, activity.id, customers[customer].id if customer is not None else None, kind,
             [{"product_id": products[code].id, "quantity": qty} for code, qty in basket],
             business_date=day, payment_method_id=methods[method].id,
+            bank_account_id=bank.id if bank is not None and method == "CD" else None,
             cash_session_id=session.id if session is not None and kind == "FACTURA_RECIBO" else None,
             due_date=day + timedelta(days=30) if kind == "FACTURA" else None,
         )
         issued += 1
 
+    await integrate_company(db, cid, limit=5000)  # the accounting up to now (today's stock: once the day is over)
     say("7/7 Pronto")
     return {"company": company, "invoices": issued, "start": start}
 
 
 async def main() -> None:
-    from app.core.database import AsyncSessionLocal
+    from app.core.database import AsyncSessionLocal, engine
+    engine.echo = False  # with DEBUG=true every query would be printed: the demo issues thousands, it would crawl
     recreate = "--recriar" in sys.argv
     async with AsyncSessionLocal() as db:
         from app.models.company import Company

@@ -2,7 +2,8 @@
 Contabilidade - the entries the system makes from the documents (integração contabilística), with the accounts of
 «Contas por operação» and the sub-accounts it made (app.services.account_mapping_service).
 
-Sales documents (FT, FR, ND, NC, RC), dated from AccountingSettings.integration_start on, Modo formação left out:
+Sales documents (FT, FR, ND, NC, RC), dated from AccountingSettings.integration_start on, Modo formação left out
+(unless include_training, for a company still in Modo formação: a demonstration - their entries reversed once not):
   - FT / ND (journal VND): the customer debited with the total; the sales credited net of VAT - goods, products made by
     the company (a product with a recipe) or services, each to its account -; the VAT to «IVA liquidado»;
   - NC: the same reversed, the net on «Devoluções»;
@@ -31,7 +32,8 @@ cost of each movement:
   - a stock document (EA, SA, Oferta...): the stock of each product (goods 26, raw materials 22.1, products made 24.1)
     and the other side - the purchases (21) for the system's own documents (a purchase's goods in, a cancelled
     purchase's out), the account chosen for the document's type otherwise;
-  - the other movements of one warehouse, one entry per day once the day is over: the sales and guides to customers
+  - the other movements of one warehouse, one entry per day once the day is over (the day of the sales document a
+    movement comes from, else the day it was written): the sales and guides to customers
     to «Custo das existências vendidas» (their returns back), the internal consumption, the losses and inventory
     differences, the production (the ingredients consumed into the products made). A movement without a known cost
     is left out.
@@ -53,7 +55,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import and_, delete, exists, func, select
+from sqlalchemy import and_, case, delete, exists, func, null, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -522,14 +524,28 @@ def _day_of(column):
     return func.date(func.timezone("Africa/Luanda", column))
 
 
+def _with_day(query, company_id: uuid.UUID):
+    """The query of stock rows with the day each one belongs to: the date of the sales document it comes from (a sale,
+    a credit note's return - its reference is the document's «FT A2026/12»), the day it was written otherwise."""
+    invoice = aliased(Invoice)
+    code = case(*((invoice.invoice_type == kind, label) for kind, label in DOC_CODE_BY_INVOICE_TYPE.items()
+                  if kind in {t.value for t in InvoiceType}), else_="")
+    day = func.coalesce(invoice.business_date, _day_of(StockMovement.created_at))
+    joined = query.outerjoin(invoice, and_(
+        invoice.company_id == company_id,
+        StockMovement.reference == func.concat(code, " ", invoice.series, "/", invoice.number)))
+    return joined, day
+
+
 async def build_stock_day_entry(db: AsyncSession, ctx: _Context, target: tuple) -> tuple[str, list[dict]]:
     """The stock movements of one warehouse on one day that have no document of their own, at their cost: the sales
     (and the guides to customers) to «Custo das existências vendidas», their returns back; the internal consumption;
     the losses and the inventory differences; the production (the ingredients consumed into the products made)."""
     company_id, warehouse_id, day = target
-    rows = (await db.execute(select(StockMovement).where(
+    query, row_day = _with_day(select(StockMovement), company_id)
+    rows = (await db.execute(query.where(
         StockMovement.company_id == company_id, StockMovement.warehouse_id == warehouse_id,
-        _day_of(StockMovement.created_at) == day, StockMovement.movement_type != LedgerType.TRANSFERENCIA,
+        row_day == day, StockMovement.movement_type != LedgerType.TRANSFERENCIA,
         StockMovement.unit_cost.is_not(None), StockMovement.unit_cost != 0,
         func.coalesce(StockMovement.reference, "").not_in(_document_refs(company_id)),
     ).order_by(StockMovement.created_at))).scalars().all()
@@ -566,8 +582,9 @@ def _today() -> date:
 async def _stock_days(db: AsyncSession, company_id: uuid.UUID, start: date) -> list[tuple[uuid.UUID, tuple]]:
     """The (warehouse, day) still without their stock entry: the days before today with a movement at a cost."""
     today = _today()
-    day = _day_of(StockMovement.created_at)
-    pairs = (await db.execute(select(StockMovement.warehouse_id, day).where(
+    query, day = _with_day(select(StockMovement.warehouse_id), company_id)
+    query = query.add_columns(day)
+    pairs = (await db.execute(query.where(
         StockMovement.company_id == company_id, day >= start, day < today,
         StockMovement.movement_type != LedgerType.TRANSFERENCIA,
         StockMovement.unit_cost.is_not(None), StockMovement.unit_cost != 0,
@@ -668,7 +685,15 @@ def _posted(kind: str, column):
     return exists().where(and_(JournalEntry.source_kind == kind, JournalEntry.source_id == column))
 
 
-def _waiting_queries(company_id: uuid.UUID, start: date, permanent: bool = True) -> dict:
+async def _with_training(db: AsyncSession, company_id: uuid.UUID, settings: AccountingSettings) -> bool:
+    """The Modo formação documents in the accounting: asked for, and the company still in Modo formação."""
+    if not settings.include_training:
+        return False
+    from app.models.company import Company
+    return bool((await db.execute(select(Company.training_mode).where(Company.id == company_id))).scalar_one())
+
+
+def _waiting_queries(company_id: uuid.UUID, start: date, permanent: bool = True, training: bool = False) -> dict:
     """Per kind: the ids of the documents still without their entry, oldest first (the stock ones in the inventário
     permanente only; the stock days: _stock_days)."""
     from_account, to_account = aliased(CompanyBankAccount), aliased(CompanyBankAccount)
@@ -681,7 +706,8 @@ def _waiting_queries(company_id: uuid.UUID, start: date, permanent: bool = True)
     ).order_by(StockMovementDocument.movement_date, StockMovementDocument.created_at)} if permanent else {}
     return {**stock,
         SOURCE_INVOICE: select(Invoice.id).where(
-            Invoice.company_id == company_id, Invoice.invoice_type.in_(POSTED_TYPES), Invoice.issuance_mode != TRAINING,
+            Invoice.company_id == company_id, Invoice.invoice_type.in_(POSTED_TYPES),
+            true() if training else Invoice.issuance_mode != TRAINING,
             Invoice.business_date >= start, Invoice.total != 0, ~_posted(SOURCE_INVOICE, Invoice.id),
         ).order_by(Invoice.business_date, Invoice.created_at),
         SOURCE_PURCHASE: select(PurchaseInvoice.id).where(
@@ -724,9 +750,10 @@ def _waiting_queries(company_id: uuid.UUID, start: date, permanent: bool = True)
     }
 
 
-def _to_reverse(company_id: uuid.UUID):
-    """The entries of the documents cancelled since (purchases, supplier payments, bank movements and transfers), still
-    without their estorno: (entry id, kind, document id, cancellation time)."""
+def _to_reverse(company_id: uuid.UUID, training: bool = False):
+    """The entries of the documents cancelled since (purchases, supplier payments, bank movements and transfers) - and
+    of the Modo formação documents when they are no longer in the accounting -, still without their estorno: (entry
+    id, kind, document id, cancellation time)."""
     estorno = aliased(JournalEntry)
     reversed_ = exists().where(estorno.reversal_of_id == JournalEntry.id)
     base = select(JournalEntry.id, JournalEntry.source_kind, JournalEntry.source_id).where(
@@ -745,7 +772,11 @@ def _to_reverse(company_id: uuid.UUID):
             JournalEntry.source_kind.in_([SOURCE_BANK_TRANSFER, SOURCE_BANK_TRANSFER_IN]),
             BankTransfer.id == JournalEntry.source_id))
         .where(BankTransfer.status == BankTransferStatus.ANULADO),
-    ]
+    ] + ([] if training else [
+        base.add_columns(null()).join(Invoice, and_(
+            JournalEntry.source_kind == SOURCE_INVOICE, Invoice.id == JournalEntry.source_id))
+        .where(Invoice.issuance_mode == TRAINING),
+    ])
 
 
 async def integrate_document(db: AsyncSession, company_id: uuid.UUID, ctx: _Context, kind: str, source_id: uuid.UUID,
@@ -850,13 +881,14 @@ async def integrate_company(db: AsyncSession, company_id: uuid.UUID, limit: int 
 
     # kind after kind, each query run once the previous kinds are posted (a transfer's arrival after its leaving)
     permanent = settings.inventory_system == "PERMANENTE"
-    for kind, query in _waiting_queries(company_id, start, permanent).items():
+    training = await _with_training(db, company_id, settings)
+    for kind, query in _waiting_queries(company_id, start, permanent, training).items():
         for source_id in (await db.execute(query.limit(limit))).scalars().all():
             await run("post", kind, source_id)
     if permanent:
         for source_id, target in (await _stock_days(db, company_id, start))[:limit]:
             await run("day", SOURCE_STOCK_DAY, (source_id, target))
-    for query in _to_reverse(company_id):
+    for query in _to_reverse(company_id, training):
         for entry_id, kind, source_id, cancelled_at in (await db.execute(query.limit(limit))).all():
             await run("reverse", kind, (entry_id, source_id, cancelled_at))
     return {"posted": state["posted"], "pending": state["pending"]}
@@ -883,11 +915,26 @@ async def integration_status(db: AsyncSession, company_id: uuid.UUID) -> dict:
     waiting = 0
     if start is not None:
         permanent = settings.inventory_system == "PERMANENTE"
-        for query in _waiting_queries(company_id, start, permanent).values():
+        for query in _waiting_queries(company_id, start, permanent, await _with_training(db, company_id, settings)).values():
             waiting += (await db.execute(select(func.count()).select_from(query.subquery()))).scalar_one()
         if permanent:
             waiting += len(await _stock_days(db, company_id, start))
-    return {"integration_start": start, "waiting": waiting, "pending": await list_pending(db, company_id)}
+    from app.models.company import Company
+    training_mode = bool((await db.execute(select(Company.training_mode).where(Company.id == company_id))).scalar_one())
+    return {"integration_start": start, "waiting": waiting, "pending": await list_pending(db, company_id),
+            "training_mode": training_mode, "include_training": bool(settings and settings.include_training)}
+
+
+async def set_include_training(db: AsyncSession, company_id: uuid.UUID, include: bool) -> None:
+    """The Modo formação documents in the accounting (or no longer: their entries get their estorno next round)."""
+    settings = await db.get(AccountingSettings, company_id)
+    if settings is None or settings.chart_source is None:
+        raise IntegrationError("Comece primeiro o plano de contas")
+    from app.models.company import Company
+    if include and not (await db.execute(select(Company.training_mode).where(Company.id == company_id))).scalar_one():
+        raise IntegrationError("Só uma empresa em Modo formação pode incluir os documentos de formação")
+    settings.include_training = include
+    await db.commit()
 
 
 async def integration_loop() -> None:

@@ -231,3 +231,9 @@ export async function cancelOpeningBalances() {
   const res = await apiClient.post('/accounting/opening-balances/cancel');
   return res.data;
 }
+
+// Modo formação: its documents in the accounting too (a demonstration) - the integration status back
+export async function setIncludeTraining(include) {
+  const res = await apiClient.put('/accounting/integration/training', { include_training: include });
+  return res.data;
+}

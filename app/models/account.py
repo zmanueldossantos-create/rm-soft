@@ -52,6 +52,9 @@ class AccountingSettings(Base):
     # PERMANENTE: every stock movement is posted at its cost (the sales' cost per day and warehouse); INTERMITENTE:
     # none - the accountant regularises the stock at the period's end
     inventory_system: Mapped[str] = mapped_column(String(12), default="PERMANENTE", server_default="PERMANENTE", nullable=False)
+    # a company in Modo formação (a demonstration, a training): its documents posted too, to show the accounting - only
+    # while it is in Modo formação; switched off (or the company out of it), their entries get their estorno
+    include_training: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
 
 
 class AccountMapping(Base):

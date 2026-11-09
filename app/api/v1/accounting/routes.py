@@ -325,8 +325,12 @@ async def remove_entry(entry_id: uuid.UUID, db: AsyncSession = Depends(get_db),
 # ---------- the entries made by the system from the documents (integração) ----------
 
 from app.services.accounting_integration_service import (  # noqa: E402
-    IntegrationError, integrate_company, integration_status, set_integration_start,
+    IntegrationError, integrate_company, integration_status, set_include_training, set_integration_start,
 )
+
+
+class IncludeTrainingRequest(BaseModel):
+    include_training: bool
 
 
 class IntegrationStartRequest(BaseModel):
@@ -590,3 +594,14 @@ async def post_cancel_opening_balances(db: AsyncSession = Depends(get_db),
     except OpeningBalancesError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     return await opening_balances(db, current_user.company_id)
+
+
+@router.put("/integration/training")
+async def put_integration_training(payload: IncludeTrainingRequest, db: AsyncSession = Depends(get_db),
+                                   current_user: User = Depends(require_permission("accounting:chart_manage"))):
+    """Modo formação: its documents in the accounting too (a demonstration, a training) - or no longer."""
+    try:
+        await set_include_training(db, current_user.company_id, payload.include_training)
+    except IntegrationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    return await integration_status(db, current_user.company_id)

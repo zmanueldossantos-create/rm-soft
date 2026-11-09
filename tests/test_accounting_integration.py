@@ -163,3 +163,33 @@ async def test_the_withholding_kept_by_the_customer(db, company_with_essentials)
     assert lines == [(sub, 2280.0, 0.0), ("62.1.1", 0.0, 2000.0), ("34.5.3", 0.0, 280.0), ("45.1.1", 2150.0, 0.0),
                      (sub, 0.0, 2150.0), ("34.1", 130.0, 0.0), (sub, 0.0, 130.0)]
     assert sum(Decimal(str(l[1])) for l in lines) == sum(Decimal(str(l[2])) for l in lines)
+
+
+@pytest.mark.asyncio
+async def test_the_training_documents_in_a_demonstration(db, company_with_essentials):
+    """A company in Modo formação may have its documents in the accounting; once they are no longer in it (the option
+    off, or the company out of Modo formação), their entries get their estorno."""
+    from app.models.company import Company
+    from app.services.accounting_integration_service import IntegrationError, set_include_training
+    ctx = company_with_essentials
+    ids = await _setup(db, ctx)
+    company_id = ids["company"]
+    with pytest.raises(IntegrationError, match="Modo formação"):
+        await set_include_training(db, company_id, True)
+    (await db.get(Company, company_id)).training_mode = True
+    await db.commit()
+    ft = await create_invoice(db, company_id, ids["activity"], customer_id=None, invoice_type="FACTURA",
+                              lines_input=[{"product_id": ids["product"], "quantity": 1}])
+    ft_id = ft.id
+    assert (await db.get(Invoice, ft_id)).issuance_mode == "FORMACAO"
+    assert (await integrate_company(db, company_id))["posted"] == 0  # not asked: left out
+    await set_include_training(db, company_id, True)
+    assert (await integrate_company(db, company_id))["posted"] == 1
+    entry_id = (await db.execute(select(JournalEntry.id).where(JournalEntry.source_id == ft_id))).scalar_one()
+
+    (await db.get(Company, company_id)).training_mode = False  # the company starts for real
+    await db.commit()
+    assert (await integrate_company(db, company_id))["posted"] == 1  # the estorno
+    estorno = (await db.execute(select(JournalEntry).where(JournalEntry.reversal_of_id == entry_id))).scalar_one()
+    assert estorno.description.startswith("Estorno de VND")
+    assert (await integrate_company(db, company_id))["posted"] == 0
