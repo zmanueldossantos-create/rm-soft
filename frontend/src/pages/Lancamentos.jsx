@@ -295,7 +295,7 @@ export default function Lancamentos() {
       )}
 
       {view === 'journals' && (
-        <div className="bg-bg-elevated border border-border rounded-lg overflow-hidden max-w-3xl">
+        <div className="bg-bg-elevated border border-border rounded-lg overflow-hidden">
           {journals.length === 0 && <p className="text-text-muted text-[13px] text-center py-10">Os diários são criados ao começar o plano de contas</p>}
           {journals.map((j) => (
             <div key={j.id} className={'flex items-center gap-3 px-4 py-2.5 border-b border-border last:border-0' + (j.is_active ? '' : ' opacity-50')}>
@@ -317,14 +317,14 @@ export default function Lancamentos() {
       )}
 
       {view === 'integration' && integration && (
-        <div className="flex flex-col gap-4 max-w-5xl">
+        <div className="flex flex-col gap-4">
           <div className="bg-bg-elevated border border-border rounded-lg p-5 flex flex-col gap-4">
             <div className="flex items-start gap-3">
               <Bot size={20} className="text-accent shrink-0 mt-0.5" />
               <p className="text-[13px] text-text-muted">
                 As vendas (FT, FR, ND, NC, RC), as compras, os pagamentos a fornecedores e a tesouraria (movimentos das caixas e dos
                 bancos, depósitos, transferências, diferenças de fecho) e o stock (inventário permanente: os documentos de stock, e o custo
-                das vendas, quebras, sobras e produção num lançamento por dia e armazém, depois do dia acabar) são lançados pelo sistema a cada minuto - um documento anulado
+                das vendas, quebras, sobras e produção num lançamento por dia e armazém, depois do dia acabar - ou já, com «Integrar o dia de hoje») são lançados pelo sistema a cada minuto - um documento anulado
                 depois recebe o seu estorno -, com as contas de{' '}
                 <Link to="/contabilidade/plano-de-contas?tab=operacoes" className="text-accent hover:underline">Contas por operação</Link>.
                 Os do Modo formação só entram na contabilidade se o pedir abaixo (demonstração). Um documento que não pode ser lançado fica aqui com o motivo:
@@ -356,9 +356,9 @@ export default function Lancamentos() {
               <p className="text-[13px] text-text-muted pb-2.5 flex-1 min-w-[200px]">
                 {integration.waiting > 0 ? integration.waiting + ' documento(s) ainda sem lançamento' : 'Todos os documentos têm o seu lançamento'}
               </p>
-              {canRecord && integration.training_mode && (
+              {canRecord && (
                 <button type="button" disabled={busy} className={btnGhost}
-                  title="Modo formação: lança já o stock de hoje (custo das vendas, produção, perdas, consumo interno) - o que acontecer depois lança-se quando o dia terminar"
+                  title="Lança já o stock de hoje (custo das vendas, produção, perdas, consumo interno) - o que acontecer depois lança-se quando o dia terminar, num lançamento à parte"
                   onClick={() => run(runIntegrationToday, (r) => r.posted + ' lançamento(s) gerado(s), o dia de hoje incluído' + (r.refused ? ' · ' + r.refused + ' ainda por integrar' : ''),
                     (data) => { setIntegration(data); loadEntries(); loadJournals(); })}>
                   <CalendarCheck size={15} /> Integrar o dia de hoje
@@ -398,7 +398,7 @@ export default function Lancamentos() {
       )}
 
       {view === 'opening' && opening && (
-        <div className="flex flex-col gap-4 max-w-5xl">
+        <div className="flex flex-col gap-4">
           <div className="bg-bg-elevated border border-border rounded-lg p-5 flex flex-col gap-4">
             <p className="text-[13px] text-text-muted">
               Para uma empresa que vem de outro programa: os saldos das contas no dia do início (a balança do programa anterior), num

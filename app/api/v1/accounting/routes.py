@@ -355,7 +355,7 @@ async def post_integration_run(db: AsyncSession = Depends(get_db),
 @router.post("/integration/today")
 async def post_integration_today(db: AsyncSession = Depends(get_db),
                                  current_user: User = Depends(require_permission("accounting:entries_record"))):
-    """Modo formação: everything now, today's stock too (the cost of today's sales...) - a demonstration in one go."""
+    """Everything now, today's stock too (the cost of today's sales...) - the rest of the day once it is over."""
     try:
         result = await integrate_today(db, current_user.company_id)
     except IntegrationError as e:

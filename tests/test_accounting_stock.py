@@ -108,15 +108,13 @@ async def test_a_sale_written_after_its_day_was_posted_gets_an_entry_of_its_own(
 
 
 @pytest.mark.asyncio
-async def test_today_in_modo_formacao_and_its_estorno_once_left_out(db, company_with_essentials, monkeypatch):
-    """A demonstration in one go: today's stock posted at once (Modo formação only), the rest of the day once it is
-    over; the Modo formação documents no longer in the accounting: the day's entry reversed."""
+async def test_today_at_once_and_its_estorno_once_the_training_is_left_out(db, company_with_essentials, monkeypatch):
+    """A demonstration in one go: today's stock posted at once, the rest of the day once it is over; the Modo formação
+    documents no longer in the accounting: the day's entry reversed."""
     from app.models.company import Company
     ctx = company_with_essentials
     company_id, water_id, _warehouse = await _setup(db, ctx, monkeypatch)
     monkeypatch.setattr(integration, "_today", lambda: date.today())  # today is not over
-    with pytest.raises(integration.IntegrationError, match="Modo formação"):
-        await integration.integrate_today(db, company_id)
     (await db.get(Company, company_id)).training_mode = True
     await db.commit()
     await integration.set_include_training(db, company_id, True)

@@ -34,8 +34,8 @@ cost of each movement:
     purchase's out), the account chosen for the document's type otherwise;
   - the other movements of one warehouse, one entry per day once the day is over (the day of the sales document a
     movement comes from, else the day it was written) - each row carried by one entry only (JournalStockRow): a row
-    written after its day was posted (a sale with an earlier date) gets an entry of its own; in Modo formação the day
-    may be posted before it is over (integrate_today), its rest once it is: the sales and guides to customers
+    written after its day was posted (a sale with an earlier date) gets an entry of its own; the day may be posted
+    before it is over (integrate_today, from the screen), its rest once it is: the sales and guides to customers
     to «Custo das existências vendidas» (their returns back), the internal consumption, the losses and inventory
     differences, the production (the ingredients consumed into the products made). A movement without a known cost
     is left out.
@@ -964,11 +964,9 @@ async def integration_status(db: AsyncSession, company_id: uuid.UUID) -> dict:
 
 
 async def integrate_today(db: AsyncSession, company_id: uuid.UUID) -> dict:
-    """Modo formação only (a demonstration shown in one go): everything now, today's stock too - the cost of today's
-    sales, the production, the losses. What happens later today gets its entry once the day is over."""
-    from app.models.company import Company
-    if not (await db.execute(select(Company.training_mode).where(Company.id == company_id))).scalar_one():
-        raise IntegrationError("Só em Modo formação: numa empresa real, o stock do dia é lançado quando o dia termina")
+    """Everything now, today's stock too - the cost of today's sales, the production, the losses (a demonstration
+    shown in one go, a result wanted before the day's end). What happens later today gets an entry of its own once
+    the day is over: each stock row is carried by one entry only."""
     return await integrate_company(db, company_id, limit=5000, with_today=True)
 
 
