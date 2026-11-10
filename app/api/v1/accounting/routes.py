@@ -578,8 +578,9 @@ async def get_opening_balances(db: AsyncSession = Depends(get_db),
 
 
 @router.get("/opening-balances/template")
-async def get_opening_balances_template(current_user: User = Depends(require_permission("accounting:entries_view"))):
-    return Response(content=opening_template(),
+async def get_opening_balances_template(db: AsyncSession = Depends(get_db),
+                                        current_user: User = Depends(require_permission("accounting:entries_view"))):
+    return Response(content=await opening_template(db, current_user.company_id),
                     media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     headers={"Content-Disposition": 'attachment; filename="saldos_iniciais_modelo.xlsx"'})
 

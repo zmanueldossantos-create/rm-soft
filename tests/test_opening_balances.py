@@ -33,7 +33,7 @@ def _xlsx(rows) -> bytes:
 async def test_the_import_of_the_opening_balances(db, company_with_essentials):
     company_id = company_with_essentials["company"].id
     today = date.today()
-    assert load_workbook(io.BytesIO(excel_template())).sheetnames == ["Saldos iniciais", "Instruções"]
+    assert load_workbook(io.BytesIO(await excel_template(db, company_id))).sheetnames == ["Saldos iniciais", "Instruções"]
     with pytest.raises(OpeningBalancesError, match="plano de contas"):
         await import_opening_balances(db, company_id, None, _xlsx([("43.1", "", 10, None)]), today)
     await start_chart(db, company_id, "PGC")
@@ -89,6 +89,14 @@ async def test_a_bank_row_is_also_its_opening_balance_in_tesouraria(db, company_
     account_id = account.id
     await start_chart(db, company_id, "PGC")
     await sync_subaccounts(db, company_id)  # BAI -> 43.1.1
+    # the model lists the company's banks, tills and the capital, amounts empty (nothing posted if imported unchanged)
+    sheet = load_workbook(io.BytesIO(await excel_template(db, company_id)))["Saldos iniciais"]
+    rows = [r for r in sheet.iter_rows(min_row=2, values_only=True) if r[0]]
+    assert ("43.1.1", "BAI · 0001", None, None) in rows and rows[-1][0] == "51" and all(r[2] is None for r in rows)
+    with pytest.raises(OpeningBalancesError, match="não tem saldos"):
+        out = io.BytesIO()
+        sheet.parent.save(out)
+        await import_opening_balances(db, company_id, None, out.getvalue(), today)
 
     await import_opening_balances(db, company_id, None, _xlsx([("43.1.1", "BAI", 500_000, None), ("51", "", None, 500_000)]), today)
     [position] = await list_bank_positions(db, company_id)

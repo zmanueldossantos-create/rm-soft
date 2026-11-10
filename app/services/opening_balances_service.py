@@ -42,7 +42,14 @@ class OpeningBalancesError(Exception):
         self.errors = errors or []
 
 
-def excel_template() -> bytes:
+async def excel_template(db: AsyncSession, company_id: uuid.UUID) -> bytes:
+    """The model to fill: the company's own bank and till sub-accounts and the capital already listed, amounts empty
+    (no example figures in the rows - a model imported unchanged would post them); the example is in «Instruções»."""
+    links = (await db.execute(select(Account.code, Account.name).join(AccountLink, AccountLink.account_id == Account.id)
+                              .where(AccountLink.company_id == company_id, AccountLink.entity_kind.in_(("BANK", "TILL")))
+                              .order_by(Account.code))).all()
+    capital = (await db.execute(select(Account.code, Account.name).where(
+        Account.company_id == company_id, Account.code == "51"))).first()
     wb = Workbook()
     ws = wb.active
     ws.title = SHEET
@@ -50,9 +57,8 @@ def excel_template() -> bytes:
     for cell in ws[1]:
         cell.font = Font(bold=True, color="FFFFFF")
         cell.fill = PatternFill("solid", fgColor="1F4E79")
-    for row in (("43.1.1", "BAI - conta à ordem", 2500000, None), ("45.1.1", "Caixa", 150000, None),
-                ("26.1", "Mercadorias", 800000, None), ("51", "Capital", None, 3000000), ("81", "Resultados transitados", None, 450000)):
-        ws.append(row)
+    for code, name in [*links, *([capital] if capital else [])]:
+        ws.append((code, name, None, None))
     for cells in ws.iter_rows(min_row=1, max_row=MAX_ROWS, min_col=1, max_col=1):
         for cell in cells:
             cell.number_format = "@"  # 45.10 stays 45.10
@@ -71,6 +77,10 @@ def excel_template() -> bytes:
         "Clientes e fornecedores: use as subcontas de cada um (ex.: 31.1.2.1.5) para ter o saldo de cada um.",
         "Existências: aqui só o valor contabilístico; as quantidades entram no Stock (entrada inicial).",
         "Importar de novo anula a importação anterior e lança o novo ficheiro.",
+        "As contas dos bancos e das caixas e o capital já estão na folha: preencha os montantes e acrescente as outras.",
+        "Uma linha sem montante é ignorada.",
+        "Exemplo: 43.1.1 BAI Débito 2 500 000 · 45.1.1 Caixa Débito 150 000 · 26.1 Mercadorias Débito 800 000 · "
+        "51 Capital Crédito 3 000 000 · 81 Resultados transitados Crédito 450 000.",
     ):
         notes.append((line,))
     notes.column_dimensions["A"].width = 120
