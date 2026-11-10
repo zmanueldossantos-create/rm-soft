@@ -41,11 +41,31 @@ async def _settings(db: AsyncSession, company_id: uuid.UUID) -> AccountingSettin
     return settings
 
 
+async def _with_children(db: AsyncSession, company_id: uuid.UUID) -> set[uuid.UUID]:
+    """The accounts that have sub-accounts (an entry never lands on them)."""
+    return set((await db.execute(select(Account.parent_id).where(
+        Account.company_id == company_id, Account.parent_id.is_not(None)).distinct())).scalars().all())
+
+
+async def _postable(db: AsyncSession, company_id: uuid.UUID, account_id: uuid.UUID) -> Account:
+    """An active last-level account of the company: the one the entries of an operation, a reason or a stock type
+    land on (a parent account is refused here rather than every entry waiting in «Por integrar»)."""
+    account = (await db.execute(select(Account).where(
+        Account.id == account_id, Account.company_id == company_id))).scalar_one_or_none()
+    if account is None or not account.is_active:
+        raise ChartError("Conta não encontrada ou inativa")
+    if account.id in await _with_children(db, company_id):
+        raise ChartError(f"A conta {account.code} tem subcontas - escolha uma conta de último nível "
+                         "(crie uma subconta no Plano de contas, se preciso)")
+    return account
+
+
 async def list_mappings(db: AsyncSession, company_id: uuid.UUID) -> dict:
     """Every operation with its account (or none), its suggestion, and the sub-account options."""
     accounts = await _accounts(db, company_id)
     mappings = await _mappings(db, company_id)
     settings = await db.get(AccountingSettings, company_id)
+    parents = await _with_children(db, company_id)
     rows = []
     for op in OPERATIONS:
         mapping = mappings.get(op.key)
@@ -54,6 +74,8 @@ async def list_mappings(db: AsyncSession, company_id: uuid.UUID) -> dict:
             "key": op.key, "group": op.group, "label": op.label, "kind": op.kind, "suggestion": op.suggestion,
             "account_id": account.id if account else None,
             "account_code": account.code if account else None, "account_name": account.name if account else None,
+            # set on an account with sub-accounts (an older choice): its entries would wait - to be changed
+            "not_last_level": bool(account and op.kind != "parent" and account.id in parents),
         })
     from app.models.cash_movement_reason import CashMovementReason
     from app.services.supplier_payment_service import PAYMENT_REASON, REVERSAL_REASON
@@ -93,10 +115,13 @@ async def set_mapping(db: AsyncSession, company_id: uuid.UUID, key: str, account
             await db.delete(mappings[key])
         await db.commit()
         return
-    account = (await db.execute(select(Account).where(
-        Account.id == account_id, Account.company_id == company_id))).scalar_one_or_none()
-    if account is None or not account.is_active:
-        raise ChartError("Conta não encontrada ou inativa")
+    if OPERATIONS_BY_KEY[key].kind == "parent":  # the parent of the sub-accounts the system makes
+        account = (await db.execute(select(Account).where(
+            Account.id == account_id, Account.company_id == company_id))).scalar_one_or_none()
+        if account is None or not account.is_active:
+            raise ChartError("Conta não encontrada ou inativa")
+    else:
+        account = await _postable(db, company_id, account_id)
     if key in mappings:
         mappings[key].account_id = account.id
     else:
@@ -114,10 +139,7 @@ async def set_reason_account(db: AsyncSession, company_id: uuid.UUID, reason_id:
     if reason is None:
         raise ChartError("Motivo não encontrado")
     if account_id is not None:
-        account = (await db.execute(select(Account).where(
-            Account.id == account_id, Account.company_id == company_id))).scalar_one_or_none()
-        if account is None or not account.is_active:
-            raise ChartError("Conta não encontrada ou inativa")
+        await _postable(db, company_id, account_id)
     reason.account_id = account_id
     await db.commit()
 
@@ -136,9 +158,7 @@ async def set_stock_type_account(db: AsyncSession, company_id: uuid.UUID, moveme
             await db.delete(row)
         await db.commit()
         return
-    account = (await db.execute(select(Account).where(Account.id == account_id, Account.company_id == company_id))).scalar_one_or_none()
-    if account is None or not account.is_active:
-        raise ChartError("Conta não encontrada ou inativa")
+    account = await _postable(db, company_id, account_id)
     if row is None:
         db.add(StockTypeAccount(company_id=company_id, movement_type_id=movement_type_id, account_id=account.id))
     else:
@@ -162,13 +182,17 @@ async def set_options(db: AsyncSession, company_id: uuid.UUID, per_customer: boo
 
 
 async def apply_suggestions(db: AsyncSession, company_id: uuid.UUID, commit: bool = True) -> int:
-    """The suggested PGC account for every operation still without one, when the chart has that code. Returns how many
-    operations were set."""
+    """The suggested PGC account for every operation still without one, when the chart has that code - and, but for
+    the parents of the system's sub-accounts, when it is a last-level one (26 in the PGC has 26.9: the accountant
+    creates and chooses 26.1). Returns how many operations were set."""
     by_code = {a.code: a for a in (await _accounts(db, company_id)).values() if a.is_active}
+    parents = await _with_children(db, company_id)
     mappings = await _mappings(db, company_id)
     done = 0
     for op in OPERATIONS:
         if op.key in mappings or not op.suggestion or op.suggestion not in by_code:
+            continue
+        if op.kind != "parent" and by_code[op.suggestion].id in parents:
             continue
         db.add(AccountMapping(company_id=company_id, operation=op.key, account_id=by_code[op.suggestion].id))
         done += 1

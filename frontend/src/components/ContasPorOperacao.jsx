@@ -17,8 +17,17 @@ export default function ContasPorOperacao({ accounts, canManage, onChartChanged 
 
   useEffect(() => { getMappings().then(setData).catch((err) => toast.error(extractErrorMessage(err, 'Erro ao carregar'))); }, []);
 
+  // the parents of the system's sub-accounts take any account; everything else a last-level one (an entry never lands
+  // on an account with sub-accounts) - an older choice of such an account stays shown, to be changed
   const options = useMemo(() => [{ value: '', label: '— Nenhuma —' },
     ...accounts.filter((a) => a.is_active).map((a) => ({ value: a.id, label: a.code + ' · ' + a.name }))], [accounts]);
+  const leafOptions = useMemo(() => [{ value: '', label: '— Nenhuma —' },
+    ...accounts.filter((a) => a.is_active && !a.has_children).map((a) => ({ value: a.id, label: a.code + ' · ' + a.name }))], [accounts]);
+  const optionsFor = (kind, current) => {
+    if (kind === 'parent') return options;
+    const stale = current && !leafOptions.some((o) => o.value === current) && options.find((o) => o.value === current);
+    return stale ? [...leafOptions, { ...stale, label: stale.label + ' (tem subcontas)' }] : leafOptions;
+  };
   const groups = useMemo(() => {
     const out = [];
     (data?.operations || []).forEach((op) => {
@@ -54,7 +63,7 @@ export default function ContasPorOperacao({ accounts, canManage, onChartChanged 
   }
 
   if (!data) return <div className="flex justify-center py-12"><Loader2 className="animate-spin text-accent" /></div>;
-  const missing = data.operations.filter((o) => !o.account_id).length;
+  const missing = data.operations.filter((o) => !o.account_id || o.not_last_level).length;
 
   return (
     <>
@@ -120,8 +129,9 @@ export default function ContasPorOperacao({ accounts, canManage, onChartChanged 
                 <div>
                   <p className="text-[13px] text-text-primary">{op.label}{op.kind === 'parent' && <span className="text-text-muted"> · conta-mãe</span>}</p>
                   <p className="text-[11px] text-text-muted">{op.suggestion ? 'Sugestão PGC: ' + op.suggestion : 'Sem sugestão - decide o contabilista'}</p>
+                  {op.not_last_level && <p className="text-[11px] text-amber-500">A conta {op.account_code} tem subcontas: escolha uma de último nível</p>}
                 </div>
-                <Select value={op.account_id || ''} disabled={!canManage || busy} options={options} placeholder="— Nenhuma —"
+                <Select value={op.account_id || ''} disabled={!canManage || busy} options={optionsFor(op.kind, op.account_id)} placeholder="— Nenhuma —"
                   onChange={(v) => run(() => setMapping(op.key, v), 'Conta guardada')} />
               </div>
             ))}
@@ -140,7 +150,7 @@ export default function ContasPorOperacao({ accounts, canManage, onChartChanged 
                   <p className="text-[13px] text-text-primary">{t.code} · {t.name}</p>
                   <p className="text-[11px] text-text-muted">{t.direction === 'ENTRADA' ? 'Entrada' : 'Saída'}{t.is_active ? '' : ' · inativo'}</p>
                 </div>
-                <Select value={t.account_id || ''} disabled={!canManage || busy} options={options} placeholder="— Nenhuma —"
+                <Select value={t.account_id || ''} disabled={!canManage || busy} options={optionsFor('', t.account_id)} placeholder="— Nenhuma —"
                   onChange={(v) => run(() => setStockTypeAccount(t.id, v), 'Conta guardada')} />
               </div>
             ))}
@@ -161,7 +171,7 @@ export default function ContasPorOperacao({ accounts, canManage, onChartChanged 
                     {r.direction === 'ENTRADA' ? 'Entrada' : 'Saída'} · {[r.for_cash && 'caixa', r.for_bank && 'banco'].filter(Boolean).join(' e ')}{r.is_active ? '' : ' · inativo'}
                   </p>
                 </div>
-                <Select value={r.account_id || ''} disabled={!canManage || busy} options={options} placeholder="— Nenhuma —"
+                <Select value={r.account_id || ''} disabled={!canManage || busy} options={optionsFor('', r.account_id)} placeholder="— Nenhuma —"
                   onChange={(v) => run(() => setReasonAccount(r.id, v), 'Conta guardada')} />
               </div>
             ))}

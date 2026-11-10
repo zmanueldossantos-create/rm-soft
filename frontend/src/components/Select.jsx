@@ -9,10 +9,12 @@ import { ChevronDown, Check, Search } from 'lucide-react';
 // scrollable/overflow-clipped containers (e.g. a table with overflow-x-auto).
 // The closed field always shows its value on one line, left-aligned, cut with an ellipsis (full label on hover);
 // singleLine only applies the same to the options of the open list.
+const PANEL_HEIGHT = 270; // the search field and a list of max-h-52, with their borders
+
 export default function Select({ value, onChange, options, placeholder, compact = false, singleLine = false, disabled = false }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const [coords, setCoords] = useState({ top: 0, left: 0, width: 0 });
+  const [coords, setCoords] = useState({ top: 0, left: 0, width: 0 }); // or { bottom } when it opens upwards
   const containerRef = useRef(null);
   const panelRef = useRef(null);
   const searchRef = useRef(null);
@@ -40,7 +42,13 @@ export default function Select({ value, onChange, options, placeholder, compact 
   function updateCoords() {
     if (containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect();
-      setCoords({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+      // near the bottom of the window (the last field of a page) the list opens upwards, else it would be cut off
+      const below = window.innerHeight - rect.bottom;
+      if (below < PANEL_HEIGHT && rect.top > below) {
+        setCoords({ bottom: window.innerHeight - rect.top + 4, left: rect.left, width: rect.width });
+      } else {
+        setCoords({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+      }
     }
   }
 
@@ -88,7 +96,7 @@ export default function Select({ value, onChange, options, placeholder, compact 
       {open && createPortal(
         <div
           ref={panelRef}
-          style={{ position: 'fixed', top: coords.top, left: coords.left, width: coords.width, zIndex: 1000 }}
+          style={{ position: 'fixed', top: coords.top, bottom: coords.bottom, left: coords.left, width: coords.width, zIndex: 1000 }}
           className="bg-bg-elevated border border-border rounded-md shadow-xl overflow-hidden"
         >
           <div className="flex items-center gap-2 px-3 py-2 border-b border-border">

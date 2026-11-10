@@ -25,9 +25,14 @@ async def test_the_pgc_suggests_the_accounts_of_the_operations(db, company_with_
     rows = {r["key"]: r for r in (await list_mappings(db, company_id))["operations"]}
     assert rows["VAT_OUTPUT"]["account_code"] == "34.5.3" and rows["SALES_SERVICES"]["account_code"] == "62.1.1"
     assert rows["CASH_SHORTAGE"]["account_id"] is None  # the accountant decides
+    # 26 and 71 have sub-accounts in the PGC: not suggested, the accountant creates and chooses a last-level one
+    assert rows["STOCK_GOODS"]["account_id"] is None and rows["COST_OF_SALES"]["account_id"] is None
+    assert rows["PARENT_BANKS_NATIONAL"]["account_code"] == "43.1"  # a parent of the system's sub-accounts: as it is
     chart = {a["code"]: a for a in (await get_chart(db, company_id))["accounts"]}
-    await set_mapping(db, company_id, "VAT_OUTPUT", chart["34.5"]["id"])  # the company's own choice
-    assert {r["key"]: r for r in (await list_mappings(db, company_id))["operations"]}["VAT_OUTPUT"]["account_code"] == "34.5"
+    with pytest.raises(ChartError, match="último nível"):
+        await set_mapping(db, company_id, "VAT_OUTPUT", chart["34.5"]["id"])
+    await set_mapping(db, company_id, "VAT_OUTPUT", chart["34.5.1"]["id"])  # the company's own choice
+    assert {r["key"]: r for r in (await list_mappings(db, company_id))["operations"]}["VAT_OUTPUT"]["account_code"] == "34.5.1"
     with pytest.raises(ChartError, match="Contas por operação"):
         await delete_account(db, company_id, chart["62.1.1"]["id"])
 
