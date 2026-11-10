@@ -255,7 +255,7 @@ function Banks({ banks, selectedId, onSelect, statement, onEditOpening, onNewMov
             {b.in_transit_in > 0 && <p className="text-[12px] text-accent">+ {formatKz(b.in_transit_in)} em trânsito (a chegar)</p>}
             <div className="flex items-center justify-between gap-2 text-[12px]">
               <span className={b.opening_date ? 'text-text-muted' : 'text-accent'}>
-                {b.opening_date ? `Saldo inicial ${formatKz(b.opening_balance)} em ${day(b.opening_date)}` : 'Saldo inicial por definir'}
+                {b.opening_date ? `Saldo inicial ${formatKz(b.opening_balance)} em ${day(b.opening_date)}` + (b.opening_from_accounting ? ' (contabilidade)' : '') : 'Saldo inicial por definir'}
               </span>
               {onEditOpening && (
                 <span
@@ -598,6 +598,9 @@ export default function Tesouraria() {
         {opening && (
           <form onSubmit={(e) => { e.preventDefault(); saveOpening(); }} className="flex flex-col gap-4">
             <p className="text-text-muted text-[13px]">O saldo do extrato do banco no dia em que a empresa começa a seguir esta conta no RM Soft. Os movimentos anteriores a esse dia já estão neste saldo e não são contados.</p>
+            {opening.bank.opening_from_accounting && (
+              <p className="text-[12px] text-amber-500">Este saldo vem dos saldos iniciais importados na contabilidade (Lançamentos › Saldos iniciais). Mudá-lo aqui não muda a contabilidade.</p>
+            )}
             <div>
               <label className={labelCls}>Saldo no extrato ({opening.bank.currency}) *</label>
               <input type="number" step="0.01" required value={opening.amount} onChange={(e) => setOpening((o) => ({ ...o, amount: e.target.value }))} className={inputCls + ' w-full font-mono'} />

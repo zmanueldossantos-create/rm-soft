@@ -198,11 +198,16 @@ def _describe(account: CompanyBankAccount, acronym: str, full_name: str, currenc
 async def list_bank_positions(db: AsyncSession, company_id: uuid.UUID) -> list[dict]:
     """Each bank account of the company with its balance today, and the money on its way to it (em trânsito)."""
     from app.services.bank_transfer_service import in_transit_by_account
+    from app.services.opening_balances_service import bank_openings
     in_transit = await in_transit_by_account(db, company_id)
+    from_accounting = await bank_openings(db, company_id)  # the opening balances imported in the accounting
     out = []
     for account, acronym, full_name, currency in await _accounts(db, company_id):
         lines = await _lines(db, company_id, account)
         row = _describe(account, acronym, full_name, currency)
+        imported = from_accounting.get(account.id)
+        row["opening_from_accounting"] = bool(imported and float(imported[0]) == row["opening_balance"]
+                                              and imported[1] == account.opening_date)
         row["balance"] = round(row["opening_balance"] + sum(line.amount for line in lines), 2)
         row["movements"] = len(lines)
         row["in_transit_in"] = in_transit.get(account.id, 0.0)

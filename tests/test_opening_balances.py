@@ -67,3 +67,41 @@ async def test_the_import_of_the_opening_balances(db, company_with_essentials):
     assert (await opening_balances(db, company_id))["entry"] is None
     with pytest.raises(OpeningBalancesError, match="Não há saldos"):
         await cancel_opening_balances(db, company_id, None)
+
+
+@pytest.mark.asyncio
+async def test_a_bank_row_is_also_its_opening_balance_in_tesouraria(db, company_with_essentials):
+    """Typed once: the bank account's sub-account in the import sets its Tesouraria opening balance; cancelled, it goes
+    back to «por definir» - unless the company changed it in Tesouraria since."""
+    from app.models.bank import Bank
+    from app.models.company_bank_account import CompanyBankAccount
+    from app.models.currency import Currency
+    from app.services.account_mapping_service import sync_subaccounts
+    from app.services.bank_treasury_service import list_bank_positions, set_opening_balance
+    company_id = company_with_essentials["company"].id
+    today = date.today()
+    bank, kz = Bank(acronym="BAI", full_name="BAI"), Currency(code="AOA", name="Kwanza")
+    db.add_all([bank, kz])
+    await db.flush()
+    account = CompanyBankAccount(company_id=company_id, bank_id=bank.id, account_number="0001", iban="AO060001", currency_id=kz.id)
+    db.add(account)
+    await db.commit()
+    account_id = account.id
+    await start_chart(db, company_id, "PGC")
+    await sync_subaccounts(db, company_id)  # BAI -> 43.1.1
+
+    await import_opening_balances(db, company_id, None, _xlsx([("43.1.1", "BAI", 500_000, None), ("51", "", None, 500_000)]), today)
+    [position] = await list_bank_positions(db, company_id)
+    assert position["opening_balance"] == 500_000 and position["opening_date"] == today and position["opening_from_accounting"]
+
+    await cancel_opening_balances(db, company_id, None)
+    [position] = await list_bank_positions(db, company_id)
+    assert position["opening_balance"] == 0 and position["opening_date"] is None  # «por definir» again
+
+    await import_opening_balances(db, company_id, None, _xlsx([("43.1.1", "BAI", 300_000, None), ("51", "", None, 300_000)]), today)
+    await set_opening_balance(db, company_id, account_id, 310_000, today)  # the company's own, in Tesouraria
+    [position] = await list_bank_positions(db, company_id)
+    assert not position["opening_from_accounting"]
+    await cancel_opening_balances(db, company_id, None)
+    [position] = await list_bank_positions(db, company_id)
+    assert position["opening_balance"] == 310_000  # kept: changed there since

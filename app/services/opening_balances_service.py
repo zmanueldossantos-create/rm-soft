@@ -8,6 +8,10 @@ a debit or a credit; the totals must be equal. No account is created on the way 
 account): the chart is imported first when needed. A new import cancels the previous one (its estorno) and posts the
 new file - a corrected file is imported again, without duplicates. The entry is cancelled from its own screen only
 (journal_service.PROTECTED_SOURCES). The stock quantities are not here: only the value of the stock, in the accounts.
+
+A bank account's row (its sub-account, 43.1.x) is also its opening balance in Tesouraria › Bancos, on the same day:
+typed once. A new import replaces it; a bank no longer in the file, or the import cancelled, gets its Tesouraria
+balance back to «por definir» - unless it was changed there since (then it is the company's own and stays).
 """
 import io
 import uuid
@@ -16,10 +20,11 @@ from decimal import Decimal, InvalidOperation
 
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, PatternFill
-from sqlalchemy import select
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.account import Account, AccountingSettings
+from app.models.account import Account, AccountingSettings, AccountLink
+from app.models.company_bank_account import CompanyBankAccount
 from app.models.journal import JournalEntry, JournalEntryLine
 from app.services.chart_of_accounts_service import normalize_code
 from app.services.journal_service import JournalError, check_entry_date, label_of, reverse_entry, save_entry
@@ -125,6 +130,33 @@ async def _active(db: AsyncSession, company_id: uuid.UUID) -> JournalEntry | Non
     return None
 
 
+async def bank_openings(db: AsyncSession, company_id: uuid.UUID, entry: JournalEntry | None = None) -> dict:
+    """The bank accounts in the opening balances in force (or in entry): bank account id -> (balance, day)."""
+    entry = entry or await _active(db, company_id)
+    if entry is None:
+        return {}
+    rows = (await db.execute(select(AccountLink.entity_id, JournalEntryLine.debit, JournalEntryLine.credit)
+                             .join(AccountLink, and_(AccountLink.account_id == JournalEntryLine.account_id,
+                                                     AccountLink.company_id == company_id, AccountLink.entity_kind == "BANK"))
+                             .where(JournalEntryLine.entry_id == entry.id))).all()
+    return {bank_id: (debit - credit, entry.entry_date) for bank_id, debit, credit in rows}
+
+
+async def _sync_banks(db: AsyncSession, now: dict, before: dict) -> None:
+    """The Tesouraria opening balances follow the import (flush only, in the entry's transaction): now's banks get
+    theirs; those only in before go back to «por definir» when nobody changed them since."""
+    for bank_id, (amount, day) in now.items():
+        account = await db.get(CompanyBankAccount, bank_id)
+        account.opening_balance, account.opening_date = amount, day
+    for bank_id, (amount, day) in before.items():
+        if bank_id in now:
+            continue
+        account = await db.get(CompanyBankAccount, bank_id)
+        if account is not None and Decimal(str(account.opening_balance or 0)) == amount and account.opening_date == day:
+            account.opening_balance, account.opening_date = 0, None
+    await db.flush()
+
+
 async def opening_balances(db: AsyncSession, company_id: uuid.UUID) -> dict:
     """The imported opening balances in force (or none), and the day suggested for an import."""
     settings = await db.get(AccountingSettings, company_id)
@@ -187,12 +219,16 @@ async def import_opening_balances(db: AsyncSession, company_id: uuid.UUID, user_
     from app.services.year_closing_service import _journal
     journal = await _journal(db, company_id, "ABE")
     previous = await _active(db, company_id)
+    before = await bank_openings(db, company_id, previous) if previous is not None else {}
+
+    async def banks(entry: JournalEntry) -> None:  # Tesouraria › Bancos: the same opening balances
+        await _sync_banks(db, await bank_openings(db, company_id, entry), before)
     try:
         if previous is not None:  # the import before is cancelled: the new file replaces it
             await reverse_entry(db, company_id, user_id, previous.id, max(entry_date, previous.entry_date), system=True)
         return await save_entry(db, company_id, user_id, entry_id=None, journal_id=journal.id, entry_date=entry_date,
                                 description="Saldos iniciais (importação)", document_ref="Saldos iniciais",
-                                lines=lines, post=True, source=(SOURCE, uuid.uuid4()))
+                                lines=lines, post=True, source=(SOURCE, uuid.uuid4()), on_saved=banks)
     except JournalError as e:
         raise OpeningBalancesError(str(e))
 
@@ -201,7 +237,11 @@ async def cancel_opening_balances(db: AsyncSession, company_id: uuid.UUID, user_
     entry = await _active(db, company_id)
     if entry is None:
         raise OpeningBalancesError("Não há saldos iniciais importados")
+    before = await bank_openings(db, company_id, entry)
+
+    async def banks(_estorno: JournalEntry) -> None:  # Tesouraria › Bancos: back to «por definir»
+        await _sync_banks(db, {}, before)
     try:
-        await reverse_entry(db, company_id, user_id, entry.id, entry.entry_date, system=True)
+        await reverse_entry(db, company_id, user_id, entry.id, entry.entry_date, system=True, on_saved=banks)
     except JournalError as e:
         raise OpeningBalancesError(str(e))

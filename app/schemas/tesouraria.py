@@ -197,6 +197,7 @@ class BankPosition(BaseModel):
     balance: float
     movements: int
     in_transit_in: float = 0  # transfers on their way to this account (em trânsito)
+    opening_from_accounting: bool = False  # the opening balance set by the accounting's imported saldos iniciais
 
 
 class BankStatementLine(BaseModel):

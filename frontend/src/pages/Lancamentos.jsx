@@ -404,7 +404,7 @@ export default function Lancamentos() {
               Para uma empresa que vem de outro programa: os saldos das contas no dia do início (a balança do programa anterior), num
               lançamento do diário ABE. Descarregue o modelo, preencha uma linha por conta de último nível (Débito ou Crédito) e importe-o.
               Tudo ou nada: o total do débito tem de ser igual ao do crédito. Importar de novo anula a importação anterior. As quantidades em
-              stock entram no Stock; aqui só o seu valor.
+              stock entram no Stock; aqui só o seu valor. O saldo de uma conta bancária (43.1.x) passa também a ser o seu saldo inicial em Tesouraria › Bancos.
             </p>
             <div className="flex items-end gap-3 flex-wrap">
               <div>
