@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BookText, Plus, Trash2, Loader2, Search, Undo2, Pencil, CheckCircle2, AlertTriangle, RefreshCw, CalendarCheck, Bot, Download, Upload } from 'lucide-react';
+import { BookText, Plus, Trash2, Loader2, Search, Undo2, Pencil, CheckCircle2, AlertTriangle, RefreshCw, CalendarCheck, Bot, Download, Upload, FileText, FileSpreadsheet } from 'lucide-react';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
 import DateInput from '../components/DateInput';
@@ -136,12 +136,24 @@ export default function Lancamentos() {
     setForm({ id: null, status: 'RASCUNHO', journal_id: od.id, entry_date: today(), description: '', document_ref: '', lines: [emptyLine(), emptyLine()] });
   }
 
+  // the diário (posted entries with their lines) of the period in the filters, of the journal chosen or of all
+  function exportBook(kind) {
+    if (!filters.date_from || !filters.date_to) {
+      toast.error('Indique o período (de ... a ...) para exportar o diário');
+      return;
+    }
+    const params = { date_from: filters.date_from, date_to: filters.date_to, ...(filters.journal_id ? { journal_id: filters.journal_id } : {}) };
+    downloadAccountingFile('/accounting/journal-book/' + kind, params, 'diario_' + filters.date_from + '_' + filters.date_to + '.xlsx', kind === 'pdf')
+      .catch(() => toast.error('Erro ao gerar o ficheiro'));
+  }
+
   async function openEntry(row) {
     try {
       const e = await getEntry(row.id);
       setForm({
         id: e.id, status: e.status, label: e.label, journal_id: e.journal_id, entry_date: e.entry_date, description: e.description,
         document_ref: e.document_ref || '', reversal_of: e.reversal_of, reversed_by: e.reversed_by, automatic: e.automatic,
+        protected_in: e.protected_in,
         lines: e.lines.map((l) => ({ ...emptyLine(), account_id: l.account_id, account_label: l.account_code + ' · ' + l.account_name,
           description: l.description || '', debit: Number(l.debit) ? String(Number(l.debit)) : '', credit: Number(l.credit) ? String(Number(l.credit)) : '' })),
       });
@@ -258,6 +270,12 @@ export default function Lancamentos() {
               <span className="text-text-muted text-xs">a</span>
               <div className="flex-1 min-w-0"><DateInput value={filters.date_to} min={filters.date_from || undefined} onChange={(e) => setFilters((f) => ({ ...f, date_to: e.target.value }))} className={inputCls + ' w-full'} /></div>
             </div>
+          </div>
+          <div className="flex items-center justify-end gap-2 mb-3">
+            <span className="text-[12px] text-text-muted mr-1">Diário do período (lançados), com o filtro do diário:</span>
+            {[['pdf', FileText, 'PDF'], ['excel', FileSpreadsheet, 'Excel']].map(([kind, Icon, label]) => (
+              <button key={kind} type="button" className={btnGhost} onClick={() => exportBook(kind)}><Icon size={15} /> {label}</button>
+            ))}
           </div>
 
           <div className="bg-bg-elevated border border-border rounded-lg overflow-x-auto">
@@ -480,8 +498,11 @@ export default function Lancamentos() {
           <div className="flex items-center justify-between gap-3 px-6 py-4 flex-wrap">
             <div className="flex items-center gap-2">
               {editable && form.id && <button type="button" disabled={busy} onClick={() => setToDelete(form)} className={btnGhost + ' hover:!border-danger hover:!text-danger'}><Trash2 size={15} /> Apagar rascunho</button>}
-              {!editable && form.status === 'LANCADO' && canRecord && !form.reversal_of && !form.reversed_by && (
+              {!editable && form.status === 'LANCADO' && canRecord && !form.reversal_of && !form.reversed_by && !form.protected_in && (
                 <button type="button" disabled={busy} onClick={() => setReverse({ entry: form, date: today() })} className={btnGhost}><Undo2 size={15} /> Estornar</button>
+              )}
+              {!editable && form.protected_in && !form.reversal_of && !form.reversed_by && (
+                <p className="text-[12px] text-text-muted">Anula-se em {form.protected_in}</p>
               )}
             </div>
             {editable && (

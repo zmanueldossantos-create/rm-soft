@@ -1,5 +1,5 @@
 """
-Contabilidade in A4: the balancete and the extrato de conta (figures from accounting_reports_service). Internal
+Contabilidade in A4: the balancete, the extrato de conta, the razão and the diário (figures from accounting_reports_service). Internal
 documents, with the company box and the logo of the invoices.
 """
 import io
@@ -116,6 +116,68 @@ def generate_account_ledger_pdf(data: dict, company: dict) -> bytes:
     _table(p, ["Data", "Lançamento", "Conta", "Descrição", "Débito", "Crédito", "Saldo"], rows,
            [0.1, 0.13, 0.1, 0.27, 0.13, 0.13, 0.14], ["l", "l", "l", "l", "r", "r", "r"],
            total=["", "", "", "Totais", _amount(data["total_debit"]), _amount(data["total_credit"]), _side(data["closing"])])
+    _footer(c)
+    c.showPage()
+    c.save()
+    return buffer.getvalue()
+
+
+def _section(p: _Page, title: str, rows_after: int = 3) -> None:
+    """A section title kept with its first rows (a new page, footer included, when they would not fit)."""
+    if p.y - (14 * mm + rows_after * ROW_H) < 25 * mm:
+        _footer(p.c)
+        p.c.showPage()
+        p.y = A4[1] - MARGIN
+    _section_title(p, title)
+
+
+def generate_general_ledger_pdf(data: dict, company: dict) -> bytes:
+    """The razão: each account's extrato after the other, its opening balance, its lines and its totals."""
+    buffer = io.BytesIO()
+    c = canvas.Canvas(buffer, pagesize=A4)
+    c.setTitle("Razão")
+    p = _Page(c)
+    period = f"{_day(data['date_from'])} a {_day(data['date_to'])}"
+    accounts = (f"{data['code_from'] or 'início'} a {data['code_to'] or 'fim'}"
+                if data["code_from"] or data["code_to"] else "Todas")
+    _draw_header(p, company, "RAZÃO (GRANDE LIVRO)", [period], [
+        ("Período", period), ("Contas", accounts), ("Com saldo", str(len(data["accounts"])))])
+    if not data["accounts"]:
+        _section(p, "Nenhuma conta com saldo ou movimento no período")
+    for a in data["accounts"]:
+        _section(p, f"{a['code']} - {a['name']}  ·  saldo inicial {_side(a['opening']) or '0,00'}")
+        rows = [[_day(l["date"]), l["entry"], l["description"] + (f" · {l['document_ref']}" if l["document_ref"] else ""),
+                 _amount(l["debit"]), _amount(l["credit"]), _side(l["balance"])] for l in a["lines"]]
+        _table(p, ["Data", "Lançamento", "Descrição", "Débito", "Crédito", "Saldo"], rows,
+               [0.1, 0.14, 0.34, 0.14, 0.14, 0.14], ["l", "l", "l", "r", "r", "r"],
+               total=["", "", "Totais", _amount(a["total_debit"]), _amount(a["total_credit"]), _side(a["closing"]) or "0,00"])
+        p.y -= 3 * mm
+    _footer(c)
+    c.showPage()
+    c.save()
+    return buffer.getvalue()
+
+
+def generate_journal_book_pdf(data: dict, company: dict) -> bytes:
+    """The diário: each posted entry with its lines, in the order of the journals and their numbers."""
+    buffer = io.BytesIO()
+    c = canvas.Canvas(buffer, pagesize=A4)
+    c.setTitle("Diário")
+    p = _Page(c)
+    period = f"{_day(data['date_from'])} a {_day(data['date_to'])}"
+    _draw_header(p, company, "DIÁRIO", [period], [
+        ("Período", period), ("Diário", data["journal"] or "Todos"), ("Lançamentos", str(len(data["entries"])))])
+    _section(p, "Lançamentos (débito = crédito em cada um)")
+    rows, bold = [], []
+    for e in data["entries"]:
+        bold.append(len(rows))
+        rows.append([e["label"], _day(e["date"]), e["description"] + (f" · {e['document_ref']}" if e["document_ref"] else ""), "", ""])
+        for l in e["lines"]:
+            rows.append(["", l["account_code"], l["account_name"] + (f" - {l['description']}" if l["description"] else ""),
+                         _amount(l["debit"]), _amount(l["credit"])])
+    _table(p, ["Lançamento", "Data / Conta", "Descrição", "Débito", "Crédito"], rows,
+           [0.14, 0.12, 0.46, 0.14, 0.14], ["l", "l", "l", "r", "r"], bold_rows=bold,
+           total=["", "", "Totais", _amount(data["total"]), _amount(data["total"])])
     _footer(c)
     c.showPage()
     c.save()

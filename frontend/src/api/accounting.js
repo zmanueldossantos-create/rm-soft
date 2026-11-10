@@ -160,6 +160,12 @@ export async function getTrialBalance(filters) {
   return res.data;
 }
 
+// the razão: every last-level account of a range of codes with its lines in the period
+export async function getGeneralLedger(params) {
+  const res = await apiClient.get('/accounting/general-ledger', { params });
+  return res.data;
+}
+
 export async function getAccountLedger(accountId, dateFrom, dateTo) {
   const res = await apiClient.get('/accounting/ledger/' + accountId, { params: { date_from: dateFrom, date_to: dateTo } });
   return res.data;

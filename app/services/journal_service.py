@@ -372,6 +372,8 @@ async def list_entries(db: AsyncSession, company_id: uuid.UUID, *, journal_id: u
         "debit": debit or Decimal("0"), "credit": credit or Decimal("0"), "lines": lines or 0,
         "reversal_of": original_label.get(e.reversal_of_id), "reversed_by": reversed_by.get(e.id),
         "automatic": e.source_kind is not None,
+        # cancelled from its own screen only (no «Estornar» here): where
+        "protected_in": PROTECTED_SOURCES.get(e.source_kind) if e.source_kind else None,
     } for e, code, debit, credit, lines in rows]
 
 

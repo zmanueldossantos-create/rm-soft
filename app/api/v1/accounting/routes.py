@@ -460,6 +460,62 @@ async def get_account_ledger_pdf(account_id: uuid.UUID, date_from: date, date_to
                     headers={"Content-Disposition": f'inline; filename="extrato_{data["account"]["code"]}.pdf"'})
 
 
+from app.services.accounting_reports_service import (  # noqa: E402
+    general_ledger, general_ledger_excel, journal_book, journal_book_excel,
+)
+
+
+async def _report(call, *args):
+    try:
+        return await call(*args)
+    except ReportError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+def _file(content: bytes, kind: str, name: str) -> Response:
+    if kind == "pdf":
+        return Response(content=content, media_type="application/pdf", headers={"Content-Disposition": f'inline; filename="{name}.pdf"'})
+    return Response(content=content, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": f'attachment; filename="{name}.xlsx"'})
+
+
+@router.get("/general-ledger")
+async def get_general_ledger(date_from: date, date_to: date, code_from: str | None = None, code_to: str | None = None,
+                             db: AsyncSession = Depends(get_db),
+                             current_user: User = Depends(require_permission("accounting:entries_view"))):
+    """The razão: the extrato of every last-level account of the range that holds a balance or moved."""
+    return await _report(general_ledger, db, current_user.company_id, date_from, date_to, code_from, code_to)
+
+
+@router.get("/general-ledger/{kind}")
+async def get_general_ledger_file(kind: str, date_from: date, date_to: date, code_from: str | None = None,
+                                  code_to: str | None = None, db: AsyncSession = Depends(get_db),
+                                  current_user: User = Depends(require_permission("accounting:entries_view"))):
+    if kind not in ("pdf", "excel"):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Formato desconhecido")
+    data = await _report(general_ledger, db, current_user.company_id, date_from, date_to, code_from, code_to)
+    company = await _company(db, current_user.company_id)
+    if kind == "pdf":
+        from app.utils.accounting_pdf import generate_general_ledger_pdf
+        return _file(generate_general_ledger_pdf(data, company), kind, f"razao_{date_from}_{date_to}")
+    return _file(general_ledger_excel(data, company["name"]), kind, f"razao_{date_from}_{date_to}")
+
+
+@router.get("/journal-book/{kind}")
+async def get_journal_book_file(kind: str, date_from: date, date_to: date, journal_id: uuid.UUID | None = None,
+                                db: AsyncSession = Depends(get_db),
+                                current_user: User = Depends(require_permission("accounting:entries_view"))):
+    """The diário of the period (one journal, or all): each posted entry with its lines."""
+    if kind not in ("pdf", "excel"):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Formato desconhecido")
+    data = await _report(journal_book, db, current_user.company_id, date_from, date_to, journal_id)
+    company = await _company(db, current_user.company_id)
+    if kind == "pdf":
+        from app.utils.accounting_pdf import generate_journal_book_pdf
+        return _file(generate_journal_book_pdf(data, company), kind, f"diario_{date_from}_{date_to}")
+    return _file(journal_book_excel(data, company["name"]), kind, f"diario_{date_from}_{date_to}")
+
+
 # ---------- the stock in the accounting ----------
 
 from app.services.account_mapping_service import set_inventory_system, set_stock_type_account  # noqa: E402
