@@ -33,7 +33,9 @@ cost of each movement:
     and the other side - the purchases (21) for the system's own documents (a purchase's goods in, a cancelled
     purchase's out), the account chosen for the document's type otherwise;
   - the other movements of one warehouse, one entry per day once the day is over (the day of the sales document a
-    movement comes from, else the day it was written): the sales and guides to customers
+    movement comes from, else the day it was written) - each row carried by one entry only (JournalStockRow): a row
+    written after its day was posted (a sale with an earlier date) gets an entry of its own; in Modo formação the day
+    may be posted before it is over (integrate_today), its rest once it is: the sales and guides to customers
     to «Custo das existências vendidas» (their returns back), the internal consumption, the losses and inventory
     differences, the production (the ingredients consumed into the products made). A movement without a known cost
     is left out.
@@ -50,12 +52,12 @@ reason, and is tried again each round (integration_loop, every minute) or at onc
 import asyncio
 import logging
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import and_, case, delete, exists, func, null, select, true
+from sqlalchemy import and_, case, delete, exists, func, null, or_, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -76,7 +78,7 @@ from app.models.country import Country
 from app.models.customer import Customer
 from app.models.invoice import Invoice, InvoiceType
 from app.models.invoice_line import InvoiceLine
-from app.models.journal import Journal, JournalEntry, PendingIntegration
+from app.models.journal import Journal, JournalEntry, JournalStockRow, PendingIntegration
 from app.models.payment import Payment
 from app.models.payment_method_catalog import PaymentMethodCatalog
 from app.models.point_of_sale import PointOfSale
@@ -123,6 +125,7 @@ class _Context:
     mappings: dict[str, Account]
     links: dict[tuple[str, uuid.UUID], Account]
     journals: dict[str, Journal]
+    stock_rows: list[uuid.UUID] = field(default_factory=list)  # the rows of the day's stock entry being built
 
 
 async def _context(db: AsyncSession, company_id: uuid.UUID, settings: AccountingSettings) -> _Context:
@@ -534,21 +537,45 @@ def _with_day(query, company_id: uuid.UUID):
     joined = query.outerjoin(invoice, and_(
         invoice.company_id == company_id,
         StockMovement.reference == func.concat(code, " ", invoice.series, "/", invoice.number)))
-    return joined, day
+    return joined, day, invoice
+
+
+# the ledger rows the day's entries post (the others: their own documents, or the product made of a production)
+DAY_KINDS = (LedgerType.SAIDA, LedgerType.RECEPCAO, LedgerType.PERDA, LedgerType.AJUSTE)
+
+
+def _day_rows(query, company_id: uuid.UUID, training: bool):
+    """The query of the stock rows still to be posted by a day's entry, with their day: at a cost, without a stock
+    document of their own, not yet carried by an entry - those of the Modo formação sales only when asked for."""
+    query, day, invoice = _with_day(query, company_id)
+    query = query.where(
+        StockMovement.company_id == company_id,
+        or_(StockMovement.movement_type.in_(DAY_KINDS),
+            and_(StockMovement.movement_type == LedgerType.PRODUCAO, StockMovement.is_production_output.is_not(True))),
+        StockMovement.unit_cost.is_not(None), StockMovement.unit_cost != 0,
+        func.coalesce(StockMovement.reference, "").not_in(_document_refs(company_id)),
+        ~exists().where(JournalStockRow.stock_movement_id == StockMovement.id),
+    )
+    if not training:
+        query = query.where(or_(invoice.id.is_(None), invoice.issuance_mode != TRAINING))
+    return query, day
+
+
+def _training_rows(company_id: uuid.UUID):
+    """The stock rows of the Modo formação sales documents."""
+    query, _day, invoice = _with_day(select(StockMovement.id), company_id)
+    return query.where(StockMovement.company_id == company_id, invoice.issuance_mode == TRAINING)
 
 
 async def build_stock_day_entry(db: AsyncSession, ctx: _Context, target: tuple) -> tuple[str, list[dict]]:
     """The stock movements of one warehouse on one day that have no document of their own, at their cost: the sales
     (and the guides to customers) to «Custo das existências vendidas», their returns back; the internal consumption;
     the losses and the inventory differences; the production (the ingredients consumed into the products made)."""
-    company_id, warehouse_id, day = target
-    query, row_day = _with_day(select(StockMovement), company_id)
-    rows = (await db.execute(query.where(
-        StockMovement.company_id == company_id, StockMovement.warehouse_id == warehouse_id,
-        row_day == day, StockMovement.movement_type != LedgerType.TRANSFERENCIA,
-        StockMovement.unit_cost.is_not(None), StockMovement.unit_cost != 0,
-        func.coalesce(StockMovement.reference, "").not_in(_document_refs(company_id)),
-    ).order_by(StockMovement.created_at))).scalars().all()
+    company_id, warehouse_id, day, training = target
+    query, row_day = _day_rows(select(StockMovement), company_id, training)
+    rows = (await db.execute(query.where(StockMovement.warehouse_id == warehouse_id, row_day == day)
+                             .order_by(StockMovement.created_at))).scalars().all()
+    ctx.stock_rows = [r.id for r in rows]
     accounts = await _stock_accounts(db, ctx, [r.product_id for r in rows])
     pairs = []
     for row in rows:
@@ -569,7 +596,7 @@ async def build_stock_day_entry(db: AsyncSession, ctx: _Context, target: tuple) 
                 pairs.append((stock_op, "STOCK_GAINS", "Sobras", value))
             else:
                 pairs.append(("STOCK_LOSSES", stock_op, "Quebras", value))
-        elif kind == LedgerType.PRODUCAO and not row.is_production_output:  # the product made carries what it consumed
+        elif kind == LedgerType.PRODUCAO:  # an ingredient consumed: the product made carries it
             pairs.append(("STOCK_PRODUCTS", stock_op, "Produção", value))
     return "OD", _pairs_to_lines(ctx, pairs)
 
@@ -579,25 +606,16 @@ def _today() -> date:
     return datetime.now(LUANDA).date()
 
 
-async def _stock_days(db: AsyncSession, company_id: uuid.UUID, start: date) -> list[tuple[uuid.UUID, tuple]]:
-    """The (warehouse, day) still without their stock entry: the days before today with a movement at a cost."""
+async def _stock_days(db: AsyncSession, company_id: uuid.UUID, start: date, training: bool = False,
+                      with_today: bool = False) -> list[tuple[uuid.UUID, tuple]]:
+    """The (warehouse, day) with rows still to be posted: the days before today (today too: with_today). The id
+    names the day in «Por integrar»; each entry gets an id of its own (a day may have several)."""
     today = _today()
-    query, day = _with_day(select(StockMovement.warehouse_id), company_id)
-    query = query.add_columns(day)
-    pairs = (await db.execute(query.where(
-        StockMovement.company_id == company_id, day >= start, day < today,
-        StockMovement.movement_type != LedgerType.TRANSFERENCIA,
-        StockMovement.unit_cost.is_not(None), StockMovement.unit_cost != 0,
-        func.coalesce(StockMovement.reference, "").not_in(_document_refs(company_id)),
-    ).group_by(StockMovement.warehouse_id, day).order_by(day))).all()
-    posted = set((await db.execute(select(JournalEntry.source_id).where(
-        JournalEntry.company_id == company_id, JournalEntry.source_kind == SOURCE_STOCK_DAY))).scalars().all())
-    out = []
-    for warehouse_id, d in pairs:
-        source_id = uuid.uuid5(STOCK_DAY_NAMESPACE, f"{company_id}:{warehouse_id}:{d.isoformat()}")
-        if source_id not in posted:
-            out.append((source_id, (company_id, warehouse_id, d)))
-    return out
+    query, day = _day_rows(select(StockMovement.warehouse_id), company_id, training)
+    pairs = (await db.execute(query.add_columns(day).where(day >= start, day <= today if with_today else day < today)
+                              .group_by(StockMovement.warehouse_id, day).order_by(day))).all()
+    return [(uuid.uuid5(STOCK_DAY_NAMESPACE, f"{company_id}:{warehouse_id}:{d.isoformat()}"),
+             (company_id, warehouse_id, d, training)) for warehouse_id, d in pairs]
 
 
 def _local_day(moment, default: date) -> date:
@@ -663,7 +681,7 @@ async def _describe(db: AsyncSession, kind: str, source_id: uuid.UUID, extra=Non
             day = day if (day.year, day.month) == (year, month) else date(year, month, 1)
         return _Document(kind, document.id, _document_ref(document), day, type_name), document
     if kind == SOURCE_STOCK_DAY:
-        company_id, warehouse_id, day = extra
+        company_id, warehouse_id, day, _training = extra
         name = (await db.execute(select(Warehouse.name).where(Warehouse.id == warehouse_id))).scalar_one()
         return _Document(kind, source_id, f"Stock {day.strftime('%d/%m')} - {name}"[:60], day,
                          f"Movimentos de stock do dia - {name}"), extra
@@ -776,6 +794,10 @@ def _to_reverse(company_id: uuid.UUID, training: bool = False):
         base.add_columns(null()).join(Invoice, and_(
             JournalEntry.source_kind == SOURCE_INVOICE, Invoice.id == JournalEntry.source_id))
         .where(Invoice.issuance_mode == TRAINING),
+        base.add_columns(null()).where(  # a day's stock carrying Modo formação sales: posted anew without them
+            JournalEntry.source_kind == SOURCE_STOCK_DAY, JournalEntry.reversal_of_id.is_(None),
+            exists().where(and_(JournalStockRow.entry_id == JournalEntry.id,
+                                JournalStockRow.stock_movement_id.in_(_training_rows(company_id))))),
     ])
 
 
@@ -792,9 +814,17 @@ async def integrate_document(db: AsyncSession, company_id: uuid.UUID, ctx: _Cont
             raise IntegrationError("Nada a lançar: sem valor")
         party = lines[0]["description"] if kind == SOURCE_INVOICE else next(
             (l["description"] for l in lines if l["account_id"] in _party_accounts(ctx)), "")
+        on_saved = None
+        if kind == SOURCE_STOCK_DAY:  # the rows it carries, in the same transaction
+            rows = list(ctx.stock_rows)
+
+            async def on_saved(entry: JournalEntry) -> None:
+                db.add_all([JournalStockRow(stock_movement_id=row_id, entry_id=entry.id) for row_id in rows])
+                await db.flush()
         await save_entry(db, company_id, None, entry_id=None, journal_id=journal.id, entry_date=document.day,
                          description=f"{document.description} - {party}" if party else document.description,
-                         document_ref=document.label[:60], lines=lines, post=True, source=(kind, document.id))
+                         document_ref=document.label[:60], lines=lines, post=True,
+                         source=(kind, uuid.uuid4() if kind == SOURCE_STOCK_DAY else document.id), on_saved=on_saved)
     except (IntegrationError, JournalError) as e:
         await _keep_pending(db, company_id, document, str(e))
         return False
@@ -816,9 +846,16 @@ async def _reverse_cancelled(db: AsyncSession, company_id: uuid.UUID, entry_id: 
     from app.services.journal_service import reverse_entry
     entry = await db.get(JournalEntry, entry_id)
     day = max(cancelled_at.astimezone(LUANDA).date() if cancelled_at else date.today(), entry.entry_date)
-    document, _obj = await _describe(db, kind, source_id)
+    on_saved = None
+    if kind == SOURCE_STOCK_DAY:  # its rows free again: posted anew without those no longer in the accounting
+        document = _Document(kind, source_id, entry.document_ref or "Stock", entry.entry_date, entry.description)
+
+        async def on_saved(_estorno: JournalEntry) -> None:
+            await db.execute(delete(JournalStockRow).where(JournalStockRow.entry_id == entry_id))
+    else:
+        document, _obj = await _describe(db, kind, source_id)
     try:
-        await reverse_entry(db, company_id, None, entry_id, day)
+        await reverse_entry(db, company_id, None, entry_id, day, on_saved=on_saved)
     except JournalError as e:
         await _keep_pending(db, company_id, document, f"Anulado - o estorno do lançamento não pôde ser feito: {e}")
         return False
@@ -845,9 +882,9 @@ async def _clear_pending(db: AsyncSession, company_id: uuid.UUID, kind: str, sou
     await db.commit()
 
 
-async def integrate_company(db: AsyncSession, company_id: uuid.UUID, limit: int = BATCH) -> dict:
-    """One round for one company: {posted, pending} - the documents' entries, then the estornos of the cancelled ones.
-    Nothing before the chart is started."""
+async def integrate_company(db: AsyncSession, company_id: uuid.UUID, limit: int = BATCH, with_today: bool = False) -> dict:
+    """One round for one company: {posted, pending} - the documents' entries, the estornos of the cancelled ones, then
+    the days' stock (today's too: with_today). Nothing before the chart is started."""
     settings = await db.get(AccountingSettings, company_id)
     if settings is None or settings.chart_source is None or settings.integration_start is None:
         return {"posted": 0, "pending": 0}
@@ -885,12 +922,12 @@ async def integrate_company(db: AsyncSession, company_id: uuid.UUID, limit: int 
     for kind, query in _waiting_queries(company_id, start, permanent, training).items():
         for source_id in (await db.execute(query.limit(limit))).scalars().all():
             await run("post", kind, source_id)
-    if permanent:
-        for source_id, target in (await _stock_days(db, company_id, start))[:limit]:
-            await run("day", SOURCE_STOCK_DAY, (source_id, target))
     for query in _to_reverse(company_id, training):
         for entry_id, kind, source_id, cancelled_at in (await db.execute(query.limit(limit))).all():
             await run("reverse", kind, (entry_id, source_id, cancelled_at))
+    if permanent:  # after the estornos: the rows they freed are posted in the same round
+        for source_id, target in (await _stock_days(db, company_id, start, training, with_today))[:limit]:
+            await run("day", SOURCE_STOCK_DAY, (source_id, target))
     return {"posted": state["posted"], "pending": state["pending"]}
 
 
@@ -915,14 +952,24 @@ async def integration_status(db: AsyncSession, company_id: uuid.UUID) -> dict:
     waiting = 0
     if start is not None:
         permanent = settings.inventory_system == "PERMANENTE"
-        for query in _waiting_queries(company_id, start, permanent, await _with_training(db, company_id, settings)).values():
+        training = await _with_training(db, company_id, settings)
+        for query in _waiting_queries(company_id, start, permanent, training).values():
             waiting += (await db.execute(select(func.count()).select_from(query.subquery()))).scalar_one()
         if permanent:
-            waiting += len(await _stock_days(db, company_id, start))
+            waiting += len(await _stock_days(db, company_id, start, training))
     from app.models.company import Company
     training_mode = bool((await db.execute(select(Company.training_mode).where(Company.id == company_id))).scalar_one())
     return {"integration_start": start, "waiting": waiting, "pending": await list_pending(db, company_id),
             "training_mode": training_mode, "include_training": bool(settings and settings.include_training)}
+
+
+async def integrate_today(db: AsyncSession, company_id: uuid.UUID) -> dict:
+    """Modo formação only (a demonstration shown in one go): everything now, today's stock too - the cost of today's
+    sales, the production, the losses. What happens later today gets its entry once the day is over."""
+    from app.models.company import Company
+    if not (await db.execute(select(Company.training_mode).where(Company.id == company_id))).scalar_one():
+        raise IntegrationError("Só em Modo formação: numa empresa real, o stock do dia é lançado quando o dia termina")
+    return await integrate_company(db, company_id, limit=5000, with_today=True)
 
 
 async def set_include_training(db: AsyncSession, company_id: uuid.UUID, include: bool) -> None:

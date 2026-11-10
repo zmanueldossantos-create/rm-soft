@@ -207,9 +207,10 @@ async def _entry(db: AsyncSession, company_id: uuid.UUID, entry_id: uuid.UUID) -
 async def save_entry(db: AsyncSession, company_id: uuid.UUID, user_id: uuid.UUID | None, *, entry_id: uuid.UUID | None,
                      journal_id: uuid.UUID, entry_date: date, description: str, document_ref: str | None,
                      lines: list[dict], post: bool = False, reversal_of_id: uuid.UUID | None = None,
-                     source: tuple[str, uuid.UUID] | None = None) -> JournalEntry:
+                     source: tuple[str, uuid.UUID] | None = None, on_saved=None) -> JournalEntry:
     """Creates a draft (entry_id None) or changes one; post=True posts it in the same step - all or nothing: a refused
-    posting saves nothing. Every check runs before anything is changed (a refusal leaves the session as it was)."""
+    posting saves nothing. Every check runs before anything is changed (a refusal leaves the session as it was).
+    on_saved(entry): an async step of the caller's in the same transaction (the stock rows an entry carries...)."""
     if entry_id is None:
         entry = JournalEntry(company_id=company_id, status="RASCUNHO", created_by=user_id, reversal_of_id=reversal_of_id,
                              source_kind=source[0] if source else None, source_id=source[1] if source else None)
@@ -239,6 +240,8 @@ async def save_entry(db: AsyncSession, company_id: uuid.UUID, user_id: uuid.UUID
         await db.flush()
         if post:
             await _post(db, company_id, user_id, entry)
+        if on_saved is not None:
+            await on_saved(entry)
         await db.commit()
     except Exception:
         await db.rollback()
@@ -291,7 +294,7 @@ PROTECTED_SOURCES = {
 
 
 async def reverse_entry(db: AsyncSession, company_id: uuid.UUID, user_id: uuid.UUID | None, entry_id: uuid.UUID,
-                        entry_date: date, system: bool = False) -> JournalEntry:
+                        entry_date: date, system: bool = False, on_saved=None) -> JournalEntry:
     """The estorno of a posted entry: posted at once, in the same journal, the debits and credits swapped.
     A protected entry (PROTECTED_SOURCES) is cancelled from its own screen only (system)."""
     entry = await _entry(db, company_id, entry_id)
@@ -310,7 +313,8 @@ async def reverse_entry(db: AsyncSession, company_id: uuid.UUID, user_id: uuid.U
     reversal = await save_entry(db, company_id, user_id, entry_id=None, journal_id=entry.journal_id,
                                 entry_date=entry_date, description=f"Estorno de {await _label(db, entry)}",
                                 document_ref=entry.document_ref, lines=lines, post=True, reversal_of_id=entry.id,
-                                source=(entry.source_kind, uuid.uuid4()) if entry.source_kind in PROTECTED_SOURCES else None)
+                                source=(entry.source_kind, uuid.uuid4()) if entry.source_kind in PROTECTED_SOURCES else None,
+                                on_saved=on_saved)
     return reversal
 
 

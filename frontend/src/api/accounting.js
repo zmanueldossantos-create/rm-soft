@@ -135,6 +135,12 @@ export async function runIntegration() {
   return res.data;
 }
 
+// Modo formação: everything now, today's stock too (a demonstration in one go)
+export async function runIntegrationToday() {
+  const res = await apiClient.post('/accounting/integration/today');
+  return res.data;
+}
+
 export async function setIntegrationStart(integrationStart) {
   const res = await apiClient.put('/accounting/integration/start', { integration_start: integrationStart });
   return res.data;

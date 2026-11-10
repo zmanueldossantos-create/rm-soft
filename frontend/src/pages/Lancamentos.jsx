@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BookText, Plus, Trash2, Loader2, Search, Undo2, Pencil, CheckCircle2, AlertTriangle, RefreshCw, Bot, Download, Upload } from 'lucide-react';
+import { BookText, Plus, Trash2, Loader2, Search, Undo2, Pencil, CheckCircle2, AlertTriangle, RefreshCw, CalendarCheck, Bot, Download, Upload } from 'lucide-react';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
 import DateInput from '../components/DateInput';
 import ConfirmDialog from '../components/ConfirmDialog';
 import {
   getChart, getJournals, createJournal, updateJournal, deleteJournal, getEntries, getEntry, saveEntry, deleteEntry, reverseEntry,
-  getIntegration, runIntegration, setIntegrationStart, setIncludeTraining,
+  getIntegration, runIntegration, runIntegrationToday, setIntegrationStart, setIncludeTraining,
   getOpeningBalances, importOpeningBalances, cancelOpeningBalances, downloadAccountingFile,
 } from '../api/accounting';
 import { extractErrorMessage } from '../utils/errors';
@@ -356,6 +356,14 @@ export default function Lancamentos() {
               <p className="text-[13px] text-text-muted pb-2.5 flex-1 min-w-[200px]">
                 {integration.waiting > 0 ? integration.waiting + ' documento(s) ainda sem lançamento' : 'Todos os documentos têm o seu lançamento'}
               </p>
+              {canRecord && integration.training_mode && (
+                <button type="button" disabled={busy} className={btnGhost}
+                  title="Modo formação: lança já o stock de hoje (custo das vendas, produção, perdas, consumo interno) - o que acontecer depois lança-se quando o dia terminar"
+                  onClick={() => run(runIntegrationToday, (r) => r.posted + ' lançamento(s) gerado(s), o dia de hoje incluído' + (r.refused ? ' · ' + r.refused + ' ainda por integrar' : ''),
+                    (data) => { setIntegration(data); loadEntries(); loadJournals(); })}>
+                  <CalendarCheck size={15} /> Integrar o dia de hoje
+                </button>
+              )}
               {canRecord && (
                 <button type="button" disabled={busy} className={btnPrimary}
                   onClick={() => run(runIntegration, (r) => r.posted + ' lançamento(s) gerado(s)' + (r.refused ? ' · ' + r.refused + ' ainda por integrar' : ''),

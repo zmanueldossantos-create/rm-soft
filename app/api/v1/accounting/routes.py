@@ -325,7 +325,7 @@ async def remove_entry(entry_id: uuid.UUID, db: AsyncSession = Depends(get_db),
 # ---------- the entries made by the system from the documents (integração) ----------
 
 from app.services.accounting_integration_service import (  # noqa: E402
-    IntegrationError, integrate_company, integration_status, set_include_training, set_integration_start,
+    IntegrationError, integrate_company, integrate_today, integration_status, set_include_training, set_integration_start,
 )
 
 
@@ -349,6 +349,17 @@ async def post_integration_run(db: AsyncSession = Depends(get_db),
                                current_user: User = Depends(require_permission("accounting:entries_record"))):
     """At once, instead of waiting for the next round (every minute)."""
     result = await integrate_company(db, current_user.company_id, limit=5000)
+    return {"posted": result["posted"], "refused": result["pending"], **await integration_status(db, current_user.company_id)}
+
+
+@router.post("/integration/today")
+async def post_integration_today(db: AsyncSession = Depends(get_db),
+                                 current_user: User = Depends(require_permission("accounting:entries_record"))):
+    """Modo formação: everything now, today's stock too (the cost of today's sales...) - a demonstration in one go."""
+    try:
+        result = await integrate_today(db, current_user.company_id)
+    except IntegrationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     return {"posted": result["posted"], "refused": result["pending"], **await integration_status(db, current_user.company_id)}
 
 

@@ -14,6 +14,10 @@ JournalEntryLine: one line - an account of the chart (a last-level, active one),
 An entry made by the system from a document (source_kind / source_id: INVOICE and the invoice) is posted at once and
 never changed by hand - see app.services.accounting_integration_service. PendingIntegration: a document the system
 could not post yet (an account missing in «Contas por operação», a closed period...), with the reason.
+
+JournalStockRow: which stock ledger row an entry of the day's stock (STOCK_DAY) carries. A row without one is still to
+be posted: a sale written later for a day already posted, or the rest of a day posted early (Modo formação), gets an
+entry of its own; the estorno of such an entry frees its rows again.
 """
 import uuid
 from datetime import date, datetime
@@ -111,3 +115,13 @@ class PendingIntegration(Base):
     document_date: Mapped[date] = mapped_column(Date, nullable=False)
     reason: Mapped[str] = mapped_column(String(300), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class JournalStockRow(Base):
+    """A stock ledger row posted by an entry of the day's stock (one entry per row at most)."""
+    __tablename__ = "journal_stock_rows"
+
+    stock_movement_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("stock_movements.id", ondelete="CASCADE"), primary_key=True)
+    entry_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("journal_entries.id", ondelete="CASCADE"), nullable=False, index=True)

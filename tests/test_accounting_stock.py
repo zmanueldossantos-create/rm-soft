@@ -90,3 +90,51 @@ async def test_the_day_waits_while_it_is_not_over_and_nothing_in_the_intermitent
     await integration.integrate_company(db, company_id)
     assert await _entries(db, company_id, "STOCK_DAY") == []
     assert len(await _entries(db, company_id, "STOCK_DOCUMENT")) == 1  # posted before the change
+
+
+@pytest.mark.asyncio
+async def test_a_sale_written_after_its_day_was_posted_gets_an_entry_of_its_own(db, company_with_essentials, monkeypatch):
+    ctx = company_with_essentials
+    company_id, water_id, _warehouse = await _setup(db, ctx, monkeypatch)
+    await create_invoice(db, company_id, ctx["activity"].id, customer_id=None, invoice_type="FACTURA",
+                         lines_input=[{"product_id": water_id, "quantity": 4}])
+    await integration.integrate_company(db, company_id)
+    await create_invoice(db, company_id, ctx["activity"].id, customer_id=None, invoice_type="FACTURA",
+                         lines_input=[{"product_id": water_id, "quantity": 2}])  # the same day, already posted
+    await integration.integrate_company(db, company_id)
+    assert await _entries(db, company_id, "STOCK_DAY") == [
+        [("26.1", 0.0, 400.0), ("71.6", 400.0, 0.0)], [("26.1", 0.0, 200.0), ("71.6", 200.0, 0.0)]]
+    assert (await integration.integration_status(db, company_id))["waiting"] == 0
+
+
+@pytest.mark.asyncio
+async def test_today_in_modo_formacao_and_its_estorno_once_left_out(db, company_with_essentials, monkeypatch):
+    """A demonstration in one go: today's stock posted at once (Modo formação only), the rest of the day once it is
+    over; the Modo formação documents no longer in the accounting: the day's entry reversed."""
+    from app.models.company import Company
+    ctx = company_with_essentials
+    company_id, water_id, _warehouse = await _setup(db, ctx, monkeypatch)
+    monkeypatch.setattr(integration, "_today", lambda: date.today())  # today is not over
+    with pytest.raises(integration.IntegrationError, match="Modo formação"):
+        await integration.integrate_today(db, company_id)
+    (await db.get(Company, company_id)).training_mode = True
+    await db.commit()
+    await integration.set_include_training(db, company_id, True)
+    await create_invoice(db, company_id, ctx["activity"].id, customer_id=None, invoice_type="FACTURA",
+                         lines_input=[{"product_id": water_id, "quantity": 4}])
+    await integration.integrate_company(db, company_id)
+    assert await _entries(db, company_id, "STOCK_DAY") == []  # the loop waits for the day's end
+    await integration.integrate_today(db, company_id)
+    assert await _entries(db, company_id, "STOCK_DAY") == [[("26.1", 0.0, 400.0), ("71.6", 400.0, 0.0)]]
+    await create_invoice(db, company_id, ctx["activity"].id, customer_id=None, invoice_type="FACTURA",
+                         lines_input=[{"product_id": water_id, "quantity": 1}])
+    monkeypatch.setattr(integration, "_today", lambda: date.today() + timedelta(days=1))  # the day is over: its rest
+    await integration.integrate_company(db, company_id)
+    assert len(await _entries(db, company_id, "STOCK_DAY")) == 2
+
+    await integration.set_include_training(db, company_id, False)
+    await integration.integrate_company(db, company_id)
+    entries = (await db.execute(select(JournalEntry).where(JournalEntry.description.like("Estorno de OD%")))).scalars().all()
+    assert len(entries) == 2  # both days' entries reversed, nothing posted again (only Modo formação sales)
+    assert (await integration.integrate_company(db, company_id))["posted"] == 0
+    assert len(await _entries(db, company_id, "STOCK_DOCUMENT")) == 1  # the purchase's goods stay

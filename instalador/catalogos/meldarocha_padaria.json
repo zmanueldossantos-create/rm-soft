@@ -1,5 +1,5 @@
 {
-  "_nota": "Base mínima de formação da Mel da Rocha - módulo Padaria: catálogo só, sem movimentos (compras, stock, produção e vendas fazem-se à frente dos proprietários). Ficam por criar ao vivo: categoria Encomendas e festas, fornecedor Bebidas Mutamba, matéria-prima Chocolate em pó, artigo Bolo de chocolate (fatia) com a sua receita, serviço ENT02, cliente Ana Silva.",
+  "_nota": "Base mínima de formação da Mel da Rocha - módulo Padaria: catálogo só, sem movimentos (compras, stock, produção e vendas fazem-se à frente dos proprietários). Ficam por criar ao vivo: categoria Encomendas e festas, fornecedor Bebidas Mutamba, matéria-prima Chocolate em pó, artigo Bolo de chocolate (inteiro, encomenda) com a sua receita, serviço ENT02, cliente Ana Silva.",
   "categorias": [
     "Pão",
     "Pastelaria",
