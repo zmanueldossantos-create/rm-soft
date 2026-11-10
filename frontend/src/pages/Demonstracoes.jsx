@@ -108,7 +108,7 @@ function YearClosing({ year }) {
   );
 
   return (
-    <div className="flex flex-col gap-4 max-w-4xl">
+    <div className="flex flex-col gap-4">
       <div className="bg-bg-elevated border border-border rounded-lg p-5 flex items-center justify-between gap-4 flex-wrap">
         <div>
           <p className="text-[11px] uppercase tracking-wide text-text-muted">Resultado líquido do exercício {year}</p>
@@ -170,7 +170,7 @@ export default function Demonstracoes() {
   const sheet = data?.balance_sheet;
 
   return (
-    <main className="max-w-[1200px] mx-auto px-4 sm:px-6 md:px-8 py-6 sm:py-9">
+    <main className="max-w-[1600px] mx-auto px-4 sm:px-6 md:px-8 py-6 sm:py-9">
       <div className="flex items-start justify-between gap-4 flex-wrap mb-6">
         <div>
           <h1 className="font-display text-2xl font-semibold text-text-primary flex items-center gap-2.5"><Landmark size={22} className="text-accent" /> Demonstrações financeiras</h1>
