@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ListTree, Download, Upload, Plus, Pencil, Trash2, Loader2, Search, BookOpen, FileSpreadsheet, Square } from 'lucide-react';
+import { ListTree, Download, Upload, Plus, Minus, Pencil, Trash2, Loader2, Search, BookOpen, FileSpreadsheet, Square, ChevronsDownUp, ChevronsUpDown } from 'lucide-react';
 import Modal from '../components/Modal';
 import ContasPorOperacao from '../components/ContasPorOperacao';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -12,6 +12,7 @@ import { toast } from '../store/toastStore';
 // Contabilidade › Plano de contas: the company's chart, fully set by it - the PGC loaded from the system, its own chart
 // imported from the Excel model, or typed one account at a time. A class has 1 digit (4), an account 2 (45), the
 // sub-accounts follow with points (45.1, 45.1.1); the parent is the code without its last part.
+// The tree opens and closes with +/- (class 1 open at first); a search shows its matches with their parents.
 
 const inputCls = 'bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors';
 const labelCls = 'text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block';
@@ -23,6 +24,7 @@ export default function PlanoContas() {
   const [chart, setChart] = useState(null);
   const [busy, setBusy] = useState(false);
   const [search, setSearch] = useState('');
+  const [opened, setOpened] = useState(null); // ids of the accounts shown open (null: not set yet - class 1 open)
   const [form, setForm] = useState(null); // { id?, code, name, isActive }
   const [toDelete, setToDelete] = useState(null);
   const [importErrors, setImportErrors] = useState(null);
@@ -76,15 +78,44 @@ export default function PlanoContas() {
       () => (form.id ? updateAccount(form.id, form.name, form.isActive) : createAccount(form.code, form.name)),
       form.id ? 'Conta atualizada' : 'Conta ' + form.code + ' criada',
     );
-    if (ok) setForm(null);
+    if (ok) {
+      if (!form.id) openPathOf(form.code);  // the new account shown under its parents
+      setForm(null);
+    }
   }
 
   const accounts = chart?.accounts || [];
+  const byId = useMemo(() => new Map(accounts.map((a) => [a.id, a])), [accounts]);
+  const open = useMemo(() => opened ?? new Set(accounts.filter((a) => a.level === 1 && a.code === '1').map((a) => a.id)),
+    [opened, accounts]);
   const shown = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return accounts;
-    return accounts.filter((a) => a.code.startsWith(q) || a.name.toLowerCase().includes(q));
-  }, [accounts, search]);
+    if (q) {  // the matches and their parents (to read them in their place)
+      const keep = new Set();
+      accounts.filter((a) => a.code.startsWith(q) || a.name.toLowerCase().includes(q)).forEach((a) => {
+        for (let x = a; x && !keep.has(x.id); x = byId.get(x.parent_id)) keep.add(x.id);
+      });
+      return accounts.filter((a) => keep.has(a.id));
+    }
+    return accounts.filter((a) => {  // shown when every parent is open
+      for (let x = byId.get(a.parent_id); x; x = byId.get(x.parent_id)) if (!open.has(x.id)) return false;
+      return true;
+    });
+  }, [accounts, byId, open, search]);
+  const searching = search.trim() !== '';
+
+  function toggle(id) {
+    const next = new Set(open);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setOpened(next);
+  }
+  function openPathOf(code) {  // 45.1.1 -> 4, 45 and 45.1 open (the class is the first digit)
+    const parts = code.split('.');
+    const parents = new Set([code[0], ...parts.slice(0, -1).map((_, i) => parts.slice(0, i + 1).join('.'))]);
+    const next = new Set(open);
+    accounts.filter((a) => parents.has(a.code)).forEach((a) => next.add(a.id));
+    setOpened(next);
+  }
 
   if (!chart) {
     return <main className="max-w-[1600px] mx-auto px-4 sm:px-6 md:px-8 py-9 flex justify-center"><Loader2 className="animate-spin text-accent" /></main>;
@@ -169,9 +200,23 @@ export default function PlanoContas() {
         </div>
       ) : (
         <>
-          <div className="relative mb-4 max-w-md">
-            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" />
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Procurar por código ou descrição" className={inputCls + ' w-full pl-10'} />
+          <div className="flex items-center gap-2 mb-4 flex-wrap">
+            <div className="relative flex-1 max-w-md">
+              <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" />
+              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Procurar por código ou descrição" className={inputCls + ' w-full pl-10'} />
+            </div>
+            {!searching && (
+              <>
+                <button type="button" onClick={() => setOpened(new Set(accounts.filter((a) => a.has_children).map((a) => a.id)))}
+                  className="flex items-center gap-1.5 border border-border hover:border-accent text-text-primary text-[13px] font-medium px-3 py-2.5 rounded-md transition-colors cursor-pointer">
+                  <ChevronsUpDown size={15} /> Abrir tudo
+                </button>
+                <button type="button" onClick={() => setOpened(new Set())}
+                  className="flex items-center gap-1.5 border border-border hover:border-accent text-text-primary text-[13px] font-medium px-3 py-2.5 rounded-md transition-colors cursor-pointer">
+                  <ChevronsDownUp size={15} /> Fechar tudo
+                </button>
+              </>
+            )}
           </div>
           <div className="bg-bg-elevated border border-border rounded-lg overflow-hidden">
             {shown.length === 0 && <p className="text-text-muted text-[13px] text-center py-10">Nenhuma conta encontrada</p>}
@@ -182,6 +227,12 @@ export default function PlanoContas() {
                   <span key={i} aria-hidden="true" className="absolute -top-px -bottom-px w-px bg-text-muted/30" style={{ left: 22 + i * 18 }} />
                 ))}
                 <div className="flex-1 min-w-0 flex items-center gap-3" style={{ paddingLeft: (a.level - 1) * 18 }}>
+                  {a.has_children && !searching ? (
+                    <button type="button" onClick={() => toggle(a.id)} title={open.has(a.id) ? 'Fechar' : 'Abrir'}
+                      className="w-5 h-5 shrink-0 inline-flex items-center justify-center rounded border border-border text-text-muted hover:text-accent hover:border-accent transition-colors cursor-pointer">
+                      {open.has(a.id) ? <Minus size={12} /> : <Plus size={12} />}
+                    </button>
+                  ) : <span className="w-5 shrink-0" />}
                   <span className={'font-mono text-[13px] w-24 shrink-0 ' + (a.level <= 2 ? 'text-text-primary font-semibold' : 'text-text-muted')}>{a.code}</span>
                   <span className={'text-[13px] truncate ' + (a.level === 1 ? 'font-semibold text-text-primary uppercase tracking-wide' : 'text-text-primary')}>{a.name}</span>
                   {!a.is_active && <span className="text-[10px] font-semibold uppercase text-text-muted bg-bg-inset px-1.5 py-0.5 rounded">Inativa</span>}
