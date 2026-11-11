@@ -89,11 +89,31 @@ def _nights_between(starts_at: datetime, ends_at: datetime) -> int:
 
 def _stay_quantity(service: Service, starts_at: datetime, ends_at: datetime) -> int:
     """How many times the booked rate is charged: a timed rate ("Quarto 1 hora", duration 60 min) once per started
-    slice of its duration - 2h30 on a 1-hour rate is 3; a rate without duration (the night) once per night."""
+    slice of its duration - 2h30 on a 1-hour rate is 3; a rate with hours of its own once per period - overnight
+    hours (Pernoite 22:00 -> 07:30) per night, same-day hours (Day use 08:00 -> 18:00) per day; a rate without
+    either (the night, at the type's hours) once per night."""
     if service.duration_minutes:
         minutes = (ends_at - starts_at).total_seconds() / 60
         return max(math.ceil(minutes / service.duration_minutes - 1e-9), 1)
+    if service.stay_start_time is not None and service.stay_end_time is not None \
+            and service.stay_end_time > service.stay_start_time:
+        days = (ends_at.astimezone(LUANDA).date() - starts_at.astimezone(LUANDA).date()).days + 1
+        return max(days, 1)
     return _nights_between(starts_at, ends_at)
+
+
+def stay_end_from(service: Service, starts_at: datetime) -> datetime | None:
+    """The end of a stay started now on a rate: its duration after, or the next time its exit hour comes (a Pernoite
+    taken at 22:30 ends at 07:30 the next morning). None for a rate at the type's hours."""
+    if service.duration_minutes:
+        return starts_at + timedelta(minutes=service.duration_minutes)
+    if service.stay_end_time is None:
+        return None
+    local = starts_at.astimezone(LUANDA)
+    end = local.replace(hour=service.stay_end_time.hour, minute=service.stay_end_time.minute, second=0, microsecond=0)
+    if end <= local:
+        end += timedelta(days=1)
+    return end
 
 
 async def _open_stay_account(db: AsyncSession, booking_id: uuid.UUID) -> OpenAccount | None:
@@ -211,7 +231,7 @@ async def walk_in(
     guest_name: str | None = None, party_size: int | None = None, now: datetime | None = None,
     terminal_id: uuid.UUID | None = None,
 ) -> tuple[Booking, Invoice]:
-    """A passage (30 min, 1 hora, 2 horas...), paid before going in. Everything is checked first - the room free
+    """A passage (30 min, 1 hora, 2 horas... or a rate with hours: the Pernoite until 07:30), paid before going in. Everything is checked first - the room free
     for the whole duration and not still occupied, a timed service of its type, a till of its activity - so nothing is
     ever cashed for a room the guest cannot have. The sale is an ordinary till sale (pos_service.checkout: series,
     VAT, payments, session), then the room is occupied from now for the service's duration, the booking linked to
@@ -222,8 +242,9 @@ async def walk_in(
     )).scalar_one_or_none()
     if service is None or not service.is_active:
         raise InvalidWalkInError("Serviço não encontrado ou inativo")
-    if not service.duration_minutes:
-        raise InvalidWalkInError("Uma entrada imediata precisa de um serviço com duração (30 min, 1 hora...) - uma diária faz-se por reserva")
+    if not service.duration_minutes and service.stay_end_time is None:
+        raise InvalidWalkInError("Uma entrada imediata precisa de uma tarifa com duração (1 hora...) ou com horário "
+                                 "(Pernoite 22:00 - 07:30) - uma diária faz-se por reserva")
     await _validate_service_for_resource(db, company_id, resource, service.id)
     await ensure_capacity(db, resource, party_size)
     pos = (await db.execute(
@@ -233,7 +254,7 @@ async def walk_in(
         raise NoDefaultPosError("Este ponto de venda não pertence à atividade do quarto")
 
     starts_at = now or datetime.now(timezone.utc)
-    ends_at = starts_at + timedelta(minutes=service.duration_minutes)
+    ends_at = stay_end_from(service, starts_at)
     still_occupied = (await db.execute(
         select(Booking.id).where(Booking.resource_id == resource.id, Booking.status == BookingStatus.EM_CURSO).limit(1)
     )).first()

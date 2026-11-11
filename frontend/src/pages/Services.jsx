@@ -42,6 +42,7 @@ const emptyForm = {
   notAvailablePos: false, status: 'ACTIVO', activityIds: [],
   exemptionReasonId: '',
   durationMinutes: '',
+  stayStart: '', stayEnd: '',  // a rate's own hours (Pernoite 22:00 - 07:30)
 };
 
 export default function Services() {
@@ -81,6 +82,11 @@ export default function Services() {
   function loadResourceTypes() {
     return can('resource_types:view') ? listResourceTypes().catch(() => []) : Promise.resolve([]);
   }
+  // the permissions may arrive after the first load (a fresh login): the types are asked again once granted
+  const canResourceTypes = can('resource_types:view');
+  useEffect(() => {
+    if (canResourceTypes) listResourceTypes().then((d) => setResourceTypes(d.filter((t) => t.is_active))).catch(() => {});
+  }, [canResourceTypes]);
 
   async function loadData() {
     setLoading(true);
@@ -137,6 +143,8 @@ export default function Services() {
       unitOfMeasureId: service.unit_of_measure_id || '',
       price: service.price != null ? String(service.price) : '',
       durationMinutes: service.duration_minutes != null ? String(service.duration_minutes) : '',
+      stayStart: (service.stay_start_time || '').slice(0, 5),
+      stayEnd: (service.stay_end_time || '').slice(0, 5),
       brand: service.brand || '',
       vatId: service.vat_id,
       withholdingTaxId: service.withholding_tax_id || '',
@@ -198,6 +206,8 @@ export default function Services() {
       status: form.status,
       exemption_reason_id: form.exemptionReasonId || null,
       duration_minutes: form.durationMinutes !== '' ? parseInt(form.durationMinutes, 10) : null,
+      stay_start_time: form.resourceTypeId && form.stayStart ? form.stayStart : null,
+      stay_end_time: form.resourceTypeId && form.stayEnd ? form.stayEnd : null,
     };
 
     try {
@@ -374,9 +384,19 @@ export default function Services() {
                 <Select value={form.resourceTypeId} onChange={(v) => updateField('resourceTypeId', v)} options={resourceTypes.map((t) => ({ value: t.id, label: t.name }))} placeholder="Nenhum - genérico" />
               </Field>
             )}
-            <Field label="Duração (min)" hint="Fim automático nas reservas">
-              <input type="number" step="1" min="5" max="1440" value={form.durationMinutes} onChange={(e) => updateField('durationMinutes', e.target.value)} className={inputClass} />
+            <Field label="Duração (min)" hint="Fim automático nas reservas - contada por fatia começada (1 hora, 2 horas)">
+              <input type="number" step="1" min="5" max="1440" value={form.durationMinutes} disabled={!!(form.stayStart || form.stayEnd)}
+                onChange={(e) => updateField('durationMinutes', e.target.value)} className={inputClass + ((form.stayStart || form.stayEnd) ? ' opacity-40 cursor-not-allowed' : '')} />
             </Field>
+            {form.resourceTypeId && (
+              <Field label="Horário próprio da tarifa (opcional)" hint="Ex.: Pernoite 22:00 - 07:30. Sem horário: o do tipo de recurso (a diária). Contada uma vez por período.">
+                <div className="flex items-center gap-2">
+                  <input type="time" value={form.stayStart} disabled={form.durationMinutes !== ''} onChange={(e) => updateField('stayStart', e.target.value)} className={inputClass + (form.durationMinutes !== '' ? ' opacity-40 cursor-not-allowed' : '')} />
+                  <span className="text-text-muted text-xs">a</span>
+                  <input type="time" value={form.stayEnd} disabled={form.durationMinutes !== ''} onChange={(e) => updateField('stayEnd', e.target.value)} className={inputClass + (form.durationMinutes !== '' ? ' opacity-40 cursor-not-allowed' : '')} />
+                </div>
+              </Field>
+            )}
             {isExemptVat && (
               <div className="col-span-2">
                 <Field label="Motivo de isenção *">

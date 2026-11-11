@@ -1,6 +1,6 @@
 """Pydantic schemas for Service (Video 3)."""
 import uuid
-from datetime import datetime
+from datetime import datetime, time
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -28,6 +28,8 @@ class ServiceCreateRequest(BaseModel):
     unit_of_measure_id: uuid.UUID | None = None
     price: float | None = None
     duration_minutes: int | None = Field(default=None, ge=5, le=1440)
+    stay_start_time: time | None = None  # a rate's own hours (Pernoite 22:00 -> 07:30) - both or none
+    stay_end_time: time | None = None
     brand: str | None = None
     withholding_tax_id: uuid.UUID | None = None
     not_available_pos: bool = False
@@ -69,6 +71,8 @@ class ServiceResponse(BaseModel):
     unit_of_measure_code: str | None = None  # attached by the list: the unit's code (UN, CX...)
     price: float | None
     duration_minutes: int | None = None
+    stay_start_time: time | None = None
+    stay_end_time: time | None = None
     is_stay_rate: bool = False  # attached by the list: a room rate, sold with its room only (never in the cart)
     brand: str | None
     withholding_tax_id: uuid.UUID | None

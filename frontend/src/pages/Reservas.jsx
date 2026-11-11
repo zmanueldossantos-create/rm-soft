@@ -94,13 +94,32 @@ function formatDayLabel(dateStr) {
 }
 
 // How many times a booked service is charged - as the server does (hotel_service._stay_quantity): a timed service
-// once per started duration (90 min on a 60 min massage: 2), a service without duration once per night (at least 1).
+// once per started duration (90 min on a 60 min massage: 2), a rate with same-day hours (Day use 08:00 - 18:00) once
+// per day, any other (the night, a Pernoite 22:00 - 07:30) once per night (at least 1).
 function bookingQuantity(service, booking) {
   const minutes = (new Date(booking.ends_at) - new Date(booking.starts_at)) / 60000;
   if (service.duration_minutes) return Math.max(Math.ceil(minutes / service.duration_minutes - 1e-9), 1);
   const day = (iso) => new Date(new Date(iso).getTime() + 3600000).toISOString().slice(0, 10);  // Luanda: UTC+1
   const nights = Math.round((Date.parse(day(booking.ends_at)) - Date.parse(day(booking.starts_at))) / 86400000);
+  if (service.stay_start_time && service.stay_end_time && service.stay_end_time > service.stay_start_time) return Math.max(nights + 1, 1);
   return Math.max(nights, 1);
+}
+
+// a rate's label: its duration, or its own hours
+function rateLabel(s) {
+  if (s.duration_minutes) return s.name + ' (' + s.duration_minutes + ' min)';
+  if (s.stay_start_time && s.stay_end_time) return s.name + ' (' + s.stay_start_time.slice(0, 5) + ' - ' + s.stay_end_time.slice(0, 5) + ')';
+  return s.name;
+}
+
+// the end of a stay started now on a rate: its duration after, or the next time its exit hour comes (Luanda)
+function walkInEnd(s) {
+  if (s.duration_minutes) return new Date(Date.now() + s.duration_minutes * 60000);
+  const nowLuanda = new Date(Date.now() + 3600000);
+  const [hh, mm] = s.stay_end_time.split(':').map(Number);
+  let end = Date.UTC(nowLuanda.getUTCFullYear(), nowLuanda.getUTCMonth(), nowLuanda.getUTCDate(), hh, mm) - 3600000;
+  if (end <= Date.now()) end += 86400000;
+  return new Date(end);
 }
 
 // The reservations - a page for the manager, and a drawer in the till (Caixa) for the reception: same list, same
@@ -341,6 +360,15 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
   // Never applied when editing an existing booking. UTC arithmetic on the naive
   // date/time strings, so browser daylight-saving rules cannot shift the result.
   // Without a duration (a night), an exit hour not after the entry hour means the next day: 14:00 -> 12:00 tomorrow.
+  // A rate with hours of its own (Pernoite 22:00 - 07:30): the booking takes them, until the times are edited by hand
+  // (withAutoEnd then puts the exit on the next day when it is not after the entry).
+  function withRateHours(next) {
+    if (editingBookingId || next.endTouched) return next;
+    const service = next.serviceId ? services.find((s) => s.id === next.serviceId) : null;
+    if (!service?.stay_start_time || !service?.stay_end_time) return next;
+    return { ...next, startTime: service.stay_start_time.slice(0, 5), endTime: service.stay_end_time.slice(0, 5), endDate: next.date };
+  }
+
   function withAutoEnd(next) {
     if (editingBookingId || next.endTouched) return next;
     const service = next.serviceId ? services.find((s) => s.id === next.serviceId) : null;
@@ -582,9 +610,9 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
     }
   }
 
-  // the timed services of the chosen room's type (a night is a booking, not a passage)
+  // the timed rates and the rates with hours (a Pernoite) of the chosen room's type (a night is a booking)
   const walkInRoom = resources.find((r) => r.id === walkInForm.resourceId);
-  const walkInServices = services.filter((s) => s.duration_minutes && (!s.resource_type_id || s.resource_type_id === walkInRoom?.resource_type_id));
+  const walkInServices = services.filter((s) => (s.duration_minutes || s.stay_end_time) && (!s.resource_type_id || s.resource_type_id === walkInRoom?.resource_type_id));
   const walkInService = services.find((s) => s.id === walkInForm.serviceId);
   // What is sold: the Entrada's service once, or the charged marcação's service as many times as it lasts.
   const chargeService = chargeTarget ? services.find((s) => s.id === chargeTarget.service_id) : null;
@@ -1207,7 +1235,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
               <Select
                 value={walkInForm.serviceId}
                 onChange={chooseWalkInService}
-                options={walkInServices.map((s) => ({ value: s.id, label: s.name + ' (' + s.duration_minutes + ' min)' }))}
+                options={walkInServices.map((s) => ({ value: s.id, label: rateLabel(s) }))}
                 placeholder={walkInForm.resourceId ? 'Selecionar' : 'Escolha o quarto'}
               />
             </div>
@@ -1223,7 +1251,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
               <input type="number" min="1" step="1" value={walkInForm.partySize} onChange={(e) => setWalkInForm((p) => ({ ...p, partySize: e.target.value }))} className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
             </div>
           </div>
-          {walkInService && renderPayment('Total a pagar (IVA incluído) - até ' + new Date(Date.now() + walkInService.duration_minutes * 60000).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Luanda' }))}
+          {walkInService && renderPayment('Total a pagar (IVA incluído) - até ' + walkInEnd(walkInService).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Luanda' }))}
           <button type="submit" disabled={walkInSaving || !walkInService || walkInTotal <= 0 || walkInRemaining !== 0} className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer">
             {walkInSaving ? <Loader2 size={17} className="animate-spin" /> : <DoorOpen size={17} />}
             {walkInSaving ? 'A registar...' : 'Receber e dar entrada'}
@@ -1339,8 +1367,8 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
             </label>
             <Select
               value={form.serviceId}
-              onChange={(v) => setForm((p) => withAutoEnd({ ...p, serviceId: v }))}
-              options={availableServices.map((s) => ({ value: s.id, label: s.name + (s.duration_minutes ? ' (' + s.duration_minutes + ' min)' : '') }))}
+              onChange={(v) => setForm((p) => withAutoEnd(withRateHours({ ...p, serviceId: v })))}
+              options={availableServices.map((s) => ({ value: s.id, label: rateLabel(s) }))}
               placeholder="Nenhum"
             />
           </div>

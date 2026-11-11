@@ -24,6 +24,25 @@ class ServiceAlreadyExistsError(Exception):
     pass
 
 
+class InvalidStayHoursError(Exception):
+    """The hours of a rate (Pernoite 22:00 -> 07:30) cannot be kept as given."""
+
+
+def check_stay_hours(resource_type_id, duration_minutes, stay_start_time, stay_end_time) -> None:
+    """A rate's own hours: both or none, on a resource type's rate, never with a duration (it is one or the other: a
+    timed rate is counted by its slices, a rate with hours once per period)."""
+    if (stay_start_time is None) != (stay_end_time is None):
+        raise InvalidStayHoursError("Indique a hora de entrada e a hora de saída da tarifa, ou nenhuma")
+    if stay_start_time is None:
+        return
+    if resource_type_id is None:
+        raise InvalidStayHoursError("Só uma tarifa de um tipo de recurso (um quarto...) tem horário próprio")
+    if duration_minutes:
+        raise InvalidStayHoursError("Uma tarifa tem duração (1 hora, 2 horas) ou horário (22:00 - 07:30), não os dois")
+    if stay_start_time == stay_end_time:
+        raise InvalidStayHoursError("A hora de saída tem de ser diferente da hora de entrada (12:00 - 12:00: deixe sem horário, é o do tipo)")
+
+
 class ServiceNotFoundError(Exception):
     pass
 
@@ -67,9 +86,12 @@ async def create_service(
     status: str = "ACTIVO",
     exemption_reason_id: uuid.UUID | None = None,
     duration_minutes: int | None = None,
+    stay_start_time=None,
+    stay_end_time=None,
     activity_ids: list[uuid.UUID] | None = None,
 ) -> Service:
     await _check_fields_available(db, company_id, code, name)
+    check_stay_hours(resource_type_id, duration_minutes, stay_start_time, stay_end_time)
     await ensure_owned(db, company_id, ServiceType, service_type_id, "Tipo de serviço não encontrado")
     await ensure_owned(db, company_id, ResourceTypeCatalog, resource_type_id, "Tipo de recurso não encontrado")
     if unit_of_measure_id is None:  # every article has a base unit: the SAF-T and the documents show it
@@ -81,7 +103,7 @@ async def create_service(
         company_id=company_id, code=code, name=name, vat_id=vat_id,
         service_type_id=service_type_id, resource_type_id=resource_type_id, description=description,
         unit_of_measure_id=unit_of_measure_id, price=price, brand=brand, duration_minutes=duration_minutes,
-        withholding_tax_id=withholding_tax_id,
+        stay_start_time=stay_start_time, stay_end_time=stay_end_time, withholding_tax_id=withholding_tax_id,
         not_available_pos=not_available_pos, status=status,
         exemption_reason_id=exemption_reason_id, activity_ids=activity_ids,
     )
@@ -141,10 +163,13 @@ async def update_service(
     status: str = "ACTIVO",
     exemption_reason_id: uuid.UUID | None = None,
     duration_minutes: int | None = None,
+    stay_start_time=None,
+    stay_end_time=None,
     activity_ids: list[uuid.UUID] | None = None,
 ) -> Service:
     service = await get_service_or_raise(db, company_id, service_id)
     await _check_fields_available(db, company_id, code, name, exclude_id=service_id)
+    check_stay_hours(resource_type_id, duration_minutes, stay_start_time, stay_end_time)
     await ensure_owned(db, company_id, ServiceType, service_type_id, "Tipo de serviço não encontrado")
     await ensure_owned(db, company_id, ResourceTypeCatalog, resource_type_id, "Tipo de recurso não encontrado")
     if unit_of_measure_id is None:  # every article has a base unit: the SAF-T and the documents show it
@@ -160,6 +185,7 @@ async def update_service(
     service.unit_of_measure_id = unit_of_measure_id
     service.price = price
     service.duration_minutes = duration_minutes
+    service.stay_start_time, service.stay_end_time = stay_start_time, stay_end_time
     service.brand = brand
     service.withholding_tax_id = withholding_tax_id
     service.not_available_pos = not_available_pos

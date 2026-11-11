@@ -8,7 +8,7 @@ example of each kind in front of the owners. Everything goes through the same se
 
 What it loads, in this order (every key optional): categorias, fornecedores, materias_primas, produtos, servicos,
 receitas, clientes, compras (purchase invoices with their stock entry: the stock comes in as in real life), and a
-"hotel" block - room types with their rates ("tarifas": the night without "duracao_min", the timed ones with it) and rooms, hotel services - loaded only when the company has the Hotel
+"hotel" block - room types with their rates ("tarifas": the night without "duracao_min", the timed ones with it, a rate with hours of its own with "entrada" and "saida") and rooms, hotel services - loaded only when the company has the Hotel
 module (run it again after granting it). It may be run again: what already exists (same code, name or document) is
 left as it is and listed - never duplicated, never overwritten. Refused for a company with real (non-training)
 sales documents.
@@ -81,7 +81,7 @@ async def load(db, nif: str, data: dict, dry_run: bool = False) -> dict:
     from app.services.recipe_service import set_recipe
     from app.services.resource_service import create_resource
     from app.services.resource_type_service import create_resource_type
-    from app.services.service_service import create_service
+    from app.services.service_service import InvalidStayHoursError, check_stay_hours, create_service
     from app.services.supplier_service import create_supplier
 
     company = (await db.execute(select(Company).where(Company.nif == nif))).scalar_one_or_none()
@@ -211,7 +211,7 @@ async def load(db, nif: str, data: dict, dry_run: bool = False) -> dict:
     # -------------------------------------------------------------------------------------------------- services
     services = {s.code: s for s in (await db.execute(select(Service).where(Service.company_id == cid))).scalars().all()}
 
-    async def service(item: dict, resource_type=None, activity_ids=None) -> None:
+    async def service(item: dict, resource_type=None, activity_ids=None, is_rate: bool = False) -> None:
         code, name = item["codigo"], item["nome"]
         what = f"Serviço {code} {name}"
         if code in services:
@@ -222,12 +222,18 @@ async def load(db, nif: str, data: dict, dry_run: bool = False) -> dict:
         duration = item.get("duracao_min")  # a timed room rate (1 hora = 60): charged per started slice
         if duration is not None and (not isinstance(duration, int) or duration <= 0):
             raise CatalogError(f"{what}: duração inválida ({duration}) - minutos inteiros, maiores que zero")
+        # a rate with hours of its own (Pernoite: "entrada" 22:00, "saida" 07:30) - checked as on the screen
+        start, end = _time(item.get("entrada"), f"{what}: entrada"), _time(item.get("saida"), f"{what}: saida")
+        try:
+            check_stay_hours("rate" if is_rate else None, duration, start, end)  # a rate: its type made just before
+        except InvalidStayHoursError as e:
+            raise CatalogError(f"{what}: {e}")
         if not dry_run:
             services[code] = await create_service(
                 db, cid, code=code, name=name, vat_id=vat.id, unit_of_measure_id=units[item.get("unidade") or "UN"].id,
                 price=price, resource_type_id=resource_type.id if resource_type else None, duration_minutes=duration,
-                activity_ids=activity_ids)
-        created(what + (f" ({duration} min)" if duration else ""))
+                stay_start_time=start, stay_end_time=end, activity_ids=activity_ids)
+        created(what + (f" ({duration} min)" if duration else f" ({item['entrada']} - {item['saida']})" if start else ""))
 
     for item in data.get("servicos", []):
         await service(item)
@@ -330,7 +336,7 @@ async def load(db, nif: str, data: dict, dry_run: bool = False) -> dict:
                     existed(f"Tipo de quarto {name}")
                 # the type's rates: the night (no duration) and the timed ones (1 hora, 2 horas, day use)
                 for rate in ([item["diaria"]] if item.get("diaria") else []) + item.get("tarifas", []):
-                    await service(rate, resource_type)
+                    await service(rate, resource_type, is_rate=True)
                 for room in item.get("quartos", []):
                     key = (resource_type.id if resource_type else None, room["nome"])
                     if key in rooms:

@@ -5,9 +5,9 @@ nao tem lote/stock/validade/codigo de barras, por exemplo).
 """
 import enum
 import uuid
-from datetime import datetime
+from datetime import datetime, time
 
-from sqlalchemy import String, Numeric, Boolean, Integer, DateTime, ForeignKey, Enum, func, UniqueConstraint
+from sqlalchemy import String, Numeric, Boolean, Integer, DateTime, ForeignKey, Enum, Time, func, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import ARRAY, UUID
 
@@ -47,6 +47,10 @@ class Service(Base):
     # Optional default length of a booking for this service (massage 60 min, haircut 30 min...).
     # The reservation form uses it to fill in the end time; null = no default length.
     duration_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # A rate of a resource type with hours of its own (Pernoite 22:00 -> 07:30, Day use 08:00 -> 18:00): the booking
+    # takes them, charged once per period. None: the type's usual hours (the night). Never with a duration.
+    stay_start_time: Mapped[time | None] = mapped_column(Time, nullable=True)
+    stay_end_time: Mapped[time | None] = mapped_column(Time, nullable=True)
     vat_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("vat_rates.id"), nullable=False)
     # Required whenever the selected VAT rate is 0% (isento) - see Product.exemption_reason_id.
     exemption_reason_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("vat_codes.id"), nullable=True)

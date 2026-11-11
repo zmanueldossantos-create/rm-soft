@@ -12,6 +12,7 @@ from app.api.deps import require_permission
 from app.models.user import User
 from app.schemas.service import ServiceCreateRequest, ServiceUpdateRequest, ServiceResponse
 from app.services.service_service import (
+    InvalidStayHoursError,
     create_service,
     list_services,
     update_service,
@@ -43,6 +44,8 @@ async def create_new_service(
             unit_of_measure_id=payload.unit_of_measure_id,
             price=payload.price,
             duration_minutes=payload.duration_minutes,
+            stay_start_time=payload.stay_start_time,
+            stay_end_time=payload.stay_end_time,
             brand=payload.brand,
             withholding_tax_id=payload.withholding_tax_id,
             not_available_pos=payload.not_available_pos,
@@ -52,6 +55,8 @@ async def create_new_service(
         )
     except ServiceAlreadyExistsError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except InvalidStayHoursError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     return service
 
 
@@ -88,6 +93,8 @@ async def edit_service(
             unit_of_measure_id=payload.unit_of_measure_id,
             price=payload.price,
             duration_minutes=payload.duration_minutes,
+            stay_start_time=payload.stay_start_time,
+            stay_end_time=payload.stay_end_time,
             brand=payload.brand,
             withholding_tax_id=payload.withholding_tax_id,
             not_available_pos=payload.not_available_pos,
@@ -97,6 +104,8 @@ async def edit_service(
         )
     except ServiceAlreadyExistsError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except InvalidStayHoursError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     except ServiceNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     return service
