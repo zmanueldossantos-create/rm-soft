@@ -103,6 +103,7 @@ export default function DateInput({ value, onChange, min, max, required, readOnl
       <input
         ref={pickerRef}
         type="date"
+        data-label={rest['aria-label'] || undefined}
         value={value || ''}
         min={min}
         max={max}

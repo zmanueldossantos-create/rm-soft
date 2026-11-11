@@ -614,7 +614,8 @@ export default function Compras() {
                             </div>
                             <div>
                               <p className="text-[10.5px] uppercase tracking-wide text-text-muted mb-0.5">{lotRule(l).expiry ? 'Validade *' : 'Validade'}</p>
-                              <DateInput value={l.expiryDate} min={form.documentDate || undefined} onChange={(e) => updateLine(idx, { expiryDate: e.target.value })} className={cellCls} />
+                              <DateInput value={l.expiryDate} min={form.documentDate || undefined} onChange={(e) => updateLine(idx, { expiryDate: e.target.value })} className={cellCls}
+                                aria-label={'Validade de ' + (((l.kind === 'product' ? products : services).find((x) => x.id === l.itemId)?.name) || 'linha ' + (idx + 1))} />
                             </div>
                           </div>
                         )}

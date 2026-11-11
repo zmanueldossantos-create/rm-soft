@@ -5,6 +5,7 @@ import { toast } from '../store/toastStore';
 // The field's visible label: a <label for>, else the nearest label above it in its block (the app's forms put the
 // label just before the field, in the same wrapper).
 function fieldLabel(el) {
+  if (el.dataset?.label || el.getAttribute('aria-label')) return el.dataset?.label || el.getAttribute('aria-label');
   const own = el.labels && el.labels[0];
   let text = own ? own.textContent : '';
   for (let node = el.parentElement, depth = 0; !text && node && depth < 4; node = node.parentElement, depth += 1) {
@@ -19,6 +20,12 @@ function message(el) {
   const name = label ? '«' + label + '»' : 'este campo';
   const v = el.validity;
   if (v.valueMissing) return el.type === 'checkbox' ? 'Marque ' + name + '.' : 'Preencha o campo ' + name + '.';
+  if (el.type === 'date' && (v.rangeUnderflow || v.rangeOverflow)) {  // DD/MM/AAAA, as the app shows dates
+    const day = (iso) => iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4);
+    const what = label ? 'A data «' + label + '»' : 'A data';
+    return v.rangeUnderflow ? what + ' (' + day(el.value) + ') não pode ser anterior a ' + day(el.min) + '.'
+      : what + ' (' + day(el.value) + ') não pode ser posterior a ' + day(el.max) + '.';
+  }
   if (v.rangeUnderflow) return 'O valor de ' + name + ' tem de ser no mínimo ' + el.min + '.';
   if (v.rangeOverflow) return 'O valor de ' + name + ' tem de ser no máximo ' + el.max + '.';
   if (v.stepMismatch) return 'O valor de ' + name + ' não é válido (casas decimais a mais?).';
@@ -39,7 +46,9 @@ export function installFormValidationToasts() {
     if (reported) return;
     reported = true;
     setTimeout(() => { reported = false; }, 0);
-    el.focus({ preventScroll: false });
+    // a DateInput's hidden calendar field: the visible one gets the focus
+    const shown = el.getAttribute('aria-hidden') === 'true' ? el.parentElement?.querySelector('input[type="text"]') : null;
+    (shown || el).focus({ preventScroll: false });
     toast.error(message(el));
   }, true); // 'invalid' does not bubble: caught on the way down
 }
