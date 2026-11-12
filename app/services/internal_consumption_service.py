@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.ownership import ensure_owned
 from app.models.internal_consumption import InternalConsumption
+from app.models.consumption_reason_catalog import ConsumptionReasonCatalog
 from app.models.product import Product
 from app.models.resource import Resource
 from app.models.user import User
@@ -75,8 +76,10 @@ async def list_consumptions(
 ) -> list[dict]:
     query = (
         select(InternalConsumption, Product.name.label("product_name"), Product.code.label("product_code"),
-               Resource.name.label("resource_name"), User.full_name.label("consumed_by_name"))
+               Resource.name.label("resource_name"), User.full_name.label("consumed_by_name"),
+               ConsumptionReasonCatalog.name.label("reason_name"))
         .join(Product, Product.id == InternalConsumption.product_id)
+        .join(ConsumptionReasonCatalog, ConsumptionReasonCatalog.id == InternalConsumption.reason_id)
         .outerjoin(Resource, Resource.id == InternalConsumption.resource_id)
         .join(User, User.id == InternalConsumption.consumed_by_user_id)
         .where(InternalConsumption.company_id == company_id)
@@ -98,9 +101,10 @@ async def list_consumptions(
             "product_code": product_code,
             "quantity": float(record.quantity),
             "resource_name": resource_name,
+            "reason_name": reason_name,
             "consumed_by_name": consumed_by_name,
             "notes": record.notes,
             "created_at": record.created_at,
         }
-        for record, product_name, product_code, resource_name, consumed_by_name in rows
+        for record, product_name, product_code, resource_name, consumed_by_name, reason_name in rows
     ]

@@ -38,6 +38,7 @@ class InternalConsumptionEntry(BaseModel):
     product_code: str
     quantity: float
     resource_name: str | None
+    reason_name: str
     consumed_by_name: str
     notes: str | None
     created_at: datetime

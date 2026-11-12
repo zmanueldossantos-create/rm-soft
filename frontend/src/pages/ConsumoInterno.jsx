@@ -185,6 +185,7 @@ export default function ConsumoInterno() {
               <tr className="border-b border-border text-[11px] uppercase tracking-wide text-text-muted">
                 <th className="text-left px-4 py-2.5">Produto</th>
                 <th className="text-right px-4 py-2.5">Qtd</th>
+                <th className="text-left px-4 py-2.5">Motivo</th>
                 <th className="text-left px-4 py-2.5">Recurso</th>
                 <th className="text-left px-4 py-2.5">Registado por</th>
                 <th className="text-left px-4 py-2.5">Data</th>
@@ -196,6 +197,7 @@ export default function ConsumoInterno() {
                 <tr key={e.id} className="border-b border-border last:border-0 hover:bg-bg-inset/40 transition-colors">
                   <td className="px-4 py-2.5 text-text-primary font-medium">{e.product_name}</td>
                   <td className="px-4 py-2.5 text-right font-mono text-text-primary">{e.quantity}</td>
+                  <td className="px-4 py-2.5 text-text-primary">{e.reason_name}</td>
                   <td className="px-4 py-2.5 text-text-muted">{e.resource_name || '-'}</td>
                   <td className="px-4 py-2.5 text-text-muted">{e.consumed_by_name}</td>
                   <td className="px-4 py-2.5 font-mono text-[12px] text-text-muted">{formatDateTime(e.created_at)}</td>
