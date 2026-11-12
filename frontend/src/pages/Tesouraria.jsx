@@ -21,6 +21,8 @@ import { toast } from '../store/toastStore';
 // (treasury_overview_service), and each bank account's balance and statement (bank_treasury_service). A read only,
 // but for a bank's opening balance: transfers, entradas and saídas are made at the Caixa.
 const TYPE_LABELS = { TRANSFERENCIA: 'Transferência', ENTRADA_EXTERNA: 'Entrada externa', SAIDA_EXTERNA: 'Saída externa' };
+// not a movement (read-only): the cash a till had on the day the company started, from the opening balances (ABE)
+const OPENING = 'SALDO_INICIAL';
 const STATUS_LABELS = { PENDENTE: 'Em trânsito', RECEBIDO: 'Recebido' };
 const TABS = [
   { key: 'position', label: 'Posição', icon: Wallet },
@@ -141,10 +143,10 @@ function Movements({ movements }) {
             {movements.map((m) => (
               <tr key={m.id} className="border-b border-border last:border-0">
                 <td className={th + ' font-mono text-[12px] text-text-muted whitespace-nowrap'}>{dateTime(m.created_at)}</td>
-                <td className={th + ' text-[13px] text-text-primary whitespace-nowrap'}>{TYPE_LABELS[m.movement_type] || m.movement_type}</td>
+                <td className={th + ' text-[13px] text-text-primary whitespace-nowrap'}>{m.movement_type === OPENING ? 'Saldo inicial' : TYPE_LABELS[m.movement_type] || m.movement_type}</td>
                 <td className={th + ' text-[12px] text-text-primary'}>
                   <span className="flex items-center gap-1.5 flex-wrap">
-                    <span>{m.source ? tillName(m.source) : 'Exterior'}</span>
+                    <span>{m.source ? tillName(m.source) : m.movement_type === OPENING ? 'Contabilidade' : 'Exterior'}</span>
                     <ArrowRight size={12} className="text-text-muted shrink-0" />
                     <span>{m.destination ? tillName(m.destination) : 'Exterior'}</span>
                   </span>
@@ -154,9 +156,11 @@ function Movements({ movements }) {
                   {m.movement_type === 'SAIDA_EXTERNA' ? '- ' : ''}{formatKz(m.amount)} Kz
                 </td>
                 <td className={th}>
-                  <span className={'text-[11px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap ' + (m.status === 'PENDENTE' ? 'bg-accent/10 text-accent' : 'bg-bg-inset text-text-muted')}>
-                    {STATUS_LABELS[m.status] || m.status}
-                  </span>
+                  {m.movement_type === OPENING ? <span className="text-text-muted text-[12px]">-</span> : (
+                    <span className={'text-[11px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap ' + (m.status === 'PENDENTE' ? 'bg-accent/10 text-accent' : 'bg-bg-inset text-text-muted')}>
+                      {STATUS_LABELS[m.status] || m.status}
+                    </span>
+                  )}
                 </td>
                 <td className={th + ' text-[12px] text-text-muted'}>{m.created_by || '-'}</td>
                 <td className={th + ' text-[12px] text-text-muted'}>{m.received_by ? m.received_by + ' · ' + dateTime(m.received_at) : '-'}</td>

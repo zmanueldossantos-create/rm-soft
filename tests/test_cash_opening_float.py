@@ -76,3 +76,24 @@ async def test_an_opening_by_mistake_is_cancelled_while_nothing_happened(db, com
     assert not (await get_session_summary(db, company_id, pos_id))["cancellable"]
     with pytest.raises(SessionNotEmptyError):
         await cancel_empty_session(db, company_id, session.id)
+
+
+@pytest.mark.asyncio
+async def test_the_opening_balance_heads_the_till_history_without_being_a_movement(db, company_with_essentials):
+    from app.models.cash_movement import CashMovement
+    from app.services.opening_balances_service import cancel_opening_balances
+    from app.services.treasury_overview_service import list_treasury_movements
+    ctx = company_with_essentials
+    company_id, pos_id = ctx["company"].id, ctx["pos"].id
+    await start_chart(db, company_id, "PGC")
+    await sync_subaccounts(db, company_id)
+    code = await _till_code(db, company_id, pos_id)
+    await import_opening_balances(db, company_id, None, _xlsx([(code, "Caixa", 5_000, None), ("51", "", None, 5_000)]), date.today())
+
+    [row] = await list_treasury_movements(db, company_id, pos_id=pos_id)
+    assert (row["movement_type"], row["amount"], row["destination"]["id"], row["source"]) == ("SALDO_INICIAL", 5_000, pos_id, None)
+    assert (await db.execute(select(CashMovement.id).where(CashMovement.company_id == company_id))).first() is None
+    assert await list_treasury_movements(db, company_id, movement_type=CashMovementType.ENTRADA_EXTERNA) == []
+
+    await cancel_opening_balances(db, company_id, None)
+    assert await list_treasury_movements(db, company_id, pos_id=pos_id) == []  # follows the import

@@ -129,7 +129,7 @@ async def list_treasury_movements(
     def till(pos_id):
         return {"id": pos_id, "name": tills[pos_id][0].name, "activity_name": tills[pos_id][1]} if pos_id in tills else None
 
-    return [{
+    rows = [{
         "id": m.id, "movement_type": m.movement_type.value, "status": m.status.value,
         "movement_date": m.movement_date, "created_at": m.created_at, "amount": _money(m.amount),
         "source": till(m.source_pos_id), "destination": till(m.destination_pos_id),
@@ -139,6 +139,31 @@ async def list_treasury_movements(
         "received_by": names.get(m.received_by_user_id) if m.movement_type == CashMovementType.TRANSFERENCIA else None,
         "received_at": m.received_at if m.movement_type == CashMovementType.TRANSFERENCIA else None,
     } for m in movements]
+    if movement_type is None and status in (None, CashMovementStatus.RECEBIDO):
+        rows += await _opening_rows(db, company_id, tills, till, date_from, date_to, pos_id)
+        rows.sort(key=lambda r: (r["movement_date"], r["created_at"]), reverse=True)
+    return rows[:limit]
+
+
+async def _opening_rows(db, company_id, tills, till, date_from, date_to, pos_id) -> list[dict]:
+    """The cash each till had on the day the company started - read from the opening balances (ABE), shown as the
+    first line of its history like on a bank statement. Not a CashMovement: the money did not move (already
+    counted in the till's balance through its first opening float), so never posted, cancelled or counted twice;
+    it follows the import (gone if cancelled, changed if imported again)."""
+    from app.services.journal_service import label_of
+    from app.services.opening_balances_service import till_openings
+    entry, openings = await till_openings(db, company_id)
+    if entry is None or (date_from is not None and entry.entry_date < date_from) or (date_to is not None and entry.entry_date > date_to):
+        return []
+    label = label_of("ABE", entry.year, entry.number)
+    author = (await _user_names(db, [entry.created_by])).get(entry.created_by) if entry.created_by else None
+    return [{
+        "id": uuid.uuid5(entry.id, str(till_id)), "movement_type": "SALDO_INICIAL", "status": "RECEBIDO",
+        "movement_date": entry.entry_date, "created_at": entry.created_at, "amount": round(amount, 2),
+        "source": None, "destination": till(till_id),
+        "reason": "Saldos iniciais (contabilidade)", "description": label,
+        "created_by": author, "received_by": None, "received_at": None,
+    } for till_id, amount in openings.items() if amount and till_id in tills and (pos_id is None or till_id == pos_id)]
 
 
 async def list_closings(
