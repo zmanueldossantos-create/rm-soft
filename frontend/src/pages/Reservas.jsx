@@ -618,7 +618,11 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
   const chargeService = chargeTarget ? services.find((s) => s.id === chargeTarget.service_id) : null;
   const saleService = chargeTarget ? chargeService : walkInService;
   const saleQuantity = chargeTarget && chargeService ? bookingQuantity(chargeService, chargeTarget) : 1;
-  const saleSubtotal = saleService ? Math.round(Number(saleService.price || 0) * saleQuantity * 100) / 100 : 0;
+  // the price of the rate for this resource: its own (Recursos), else the rate's
+  const saleResourceId = chargeTarget ? chargeTarget.resource_id : walkInForm.resourceId;
+  const ownPrice = saleService ? resources.find((r) => r.id === saleResourceId)?.rate_prices?.[saleService.id] : undefined;
+  const salePrice = saleService ? (ownPrice != null ? Number(ownPrice) : Number(saleService.price || 0)) : 0;
+  const saleSubtotal = saleService ? Math.round(salePrice * saleQuantity * 100) / 100 : 0;
   // the price before VAT, plus its rate - rounded as the invoice does (create_invoice)
   const walkInTotal = (() => {
     if (!saleService) return 0;
@@ -1048,7 +1052,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
             <button
               onClick={openWalkIn}
               disabled={resources.length === 0}
-              title="Passagem paga já: quarto livre, serviço com duração"
+              title="Passagem paga já: quarto livre, tarifa com duração (1 hora) ou com horário (Pernoite)"
               className="flex items-center gap-2 border border-accent text-accent hover:bg-accent/10 disabled:opacity-50 font-medium text-[13px] px-3.5 py-1.5 rounded-md transition-colors cursor-pointer"
             >
               <DoorOpen size={15} />

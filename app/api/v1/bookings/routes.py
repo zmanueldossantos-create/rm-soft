@@ -9,7 +9,7 @@ from app.api.deps import require_permission
 from app.models.user import User
 from app.models.booking import BookingStatus
 from app.schemas.booking import (
-    ResourceCreateRequest, ResourceUpdateRequest, ResourceResponse,
+    ResourceCreateRequest, ResourceUpdateRequest, ResourceResponse, RatePricesRequest,
     ResourceTypeCreateRequest, ResourceTypeUpdateRequest, ResourceTypeResponse,
     BookingCreateRequest, BookingRescheduleRequest, BookingStatusUpdateRequest, BookingResponse,
     BookingChargeRequest, BookingChargeResponse, ResourceStatusResponse, ResourceHistoryResponse,
@@ -24,6 +24,7 @@ from app.services.invoice_service import (
 from app.services.pos_service import NoOpenSessionError
 from app.services.resource_service import (
     create_resource, get_resource_or_raise, list_resources, update_resource, toggle_resource_status,
+    InvalidRatePriceError, attach_rate_prices, set_rate_prices,
     ResourceNotFoundError,
 )
 from app.services.resource_type_service import (
@@ -120,7 +121,23 @@ async def get_resources(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("resources:view")),
 ):
-    return await list_resources(db, current_user.company_id, activity_id, resource_type_id)
+    return await attach_rate_prices(db, await list_resources(db, current_user.company_id, activity_id, resource_type_id))
+
+
+@router.put("/resources/{resource_id}/rate-prices", response_model=ResourceResponse)
+async def put_resource_rate_prices(
+    resource_id: uuid.UUID,
+    payload: RatePricesRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("resources:manage")),
+):
+    """The resource's own prices for the rates of its type (the others: the rate's price)."""
+    try:
+        return await set_rate_prices(db, current_user.company_id, resource_id, [p.model_dump() for p in payload.prices])
+    except ResourceNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except InvalidRatePriceError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
 
 
 @router.patch("/resources/{resource_id}", response_model=ResourceResponse)

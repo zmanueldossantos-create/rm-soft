@@ -5,7 +5,8 @@ import { useNavigate } from 'react-router-dom';
 import { useCan } from '../utils/permissions';
 import Select from '../components/Select';
 import { listActivities } from '../api/activity';
-import { listResources, createResource, updateResource, toggleResourceStatus, listResourceTypes, listResourceStatuses } from '../api/booking';
+import { listResources, createResource, updateResource, toggleResourceStatus, listResourceTypes, listResourceStatuses, setResourceRatePrices } from '../api/booking';
+import { listServices } from '../api/services';
 import { extractErrorMessage } from '../utils/errors';
 import Modal from '../components/Modal';
 import { useToastState } from '../components/Toaster';
@@ -29,6 +30,9 @@ const STATUS_STYLE = {
   RESERVADA: 'text-accent bg-accent/10',
 };
 
+// the rates in the order a price list reads: by duration (1 hora, 2 horas), then those with hours, then the night
+const rateOrder = (s) => (s.duration_minutes ? s.duration_minutes : s.stay_start_time ? 100000 : 200000);
+
 export default function Recursos() {
   const can = useCan();
   const navigate = useNavigate();
@@ -44,7 +48,8 @@ export default function Recursos() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const [form, setForm] = useState({ activityId: '', resourceTypeId: '', name: '', capacity: '' });
+  const [form, setForm] = useState({ activityId: '', resourceTypeId: '', name: '', capacity: '', prices: {} });
+  const [rates, setRates] = useState([]); // the services of a resource type (its rates), for the resource's own prices
   const [formError, setFormError] = useToastState('error');
   const [saving, setSaving] = useState(false);
 
@@ -63,6 +68,7 @@ export default function Recursos() {
     // Resource types are managed under Configuracoes > Catalogos > Tipos de Recurso -
     // this screen only reads the catalog to populate the selector below.
     listResourceTypes().then(setResourceTypes).catch((err) => setError(extractErrorMessage(err, 'Erro ao carregar tipos de recurso')));
+    listServices().then((data) => setRates(data.filter((s) => s.resource_type_id && s.is_active))).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -89,14 +95,15 @@ export default function Recursos() {
 
   function openCreateForm() {
     setEditingId(null);
-    setForm({ activityId: selectedActivityId, resourceTypeId: '', name: '', capacity: '' });
+    setForm({ activityId: selectedActivityId, resourceTypeId: '', name: '', capacity: '', prices: {} });
     setFormError('');
     setFormOpen(true);
   }
 
   function openEditForm(resource) {
     setEditingId(resource.id);
-    setForm({ activityId: resource.activity_id, resourceTypeId: resource.resource_type_id, name: resource.name, capacity: resource.capacity ? String(resource.capacity) : '' });
+    setForm({ activityId: resource.activity_id, resourceTypeId: resource.resource_type_id, name: resource.name, capacity: resource.capacity ? String(resource.capacity) : '',
+      prices: Object.fromEntries(Object.entries(resource.rate_prices || {}).map(([id, price]) => [id, String(price)])) });
     setFormError('');
     setFormOpen(true);
   }
@@ -107,10 +114,12 @@ export default function Recursos() {
     setSaving(true);
     try {
       const capacityValue = form.capacity ? parseInt(form.capacity, 10) : null;
-      if (editingId) {
-        await updateResource(editingId, form.name, capacityValue);
-      } else {
-        await createResource(form.activityId, form.resourceTypeId, form.name, capacityValue);
+      const saved = editingId
+        ? await updateResource(editingId, form.name, capacityValue)
+        : await createResource(form.activityId, form.resourceTypeId, form.name, capacityValue);
+      const typeRates = rates.filter((s) => s.resource_type_id === form.resourceTypeId);
+      if (typeRates.length) {  // its own prices: an empty field is the rate's own price
+        await setResourceRatePrices(saved.id, typeRates.map((s) => ({ service_id: s.id, price: form.prices[s.id] !== undefined && form.prices[s.id] !== '' ? Number(form.prices[s.id]) : null })));
       }
       setFormOpen(false);
       if (form.activityId === selectedActivityId) {
@@ -200,6 +209,7 @@ export default function Recursos() {
                 </div>
                 <p className="font-display font-medium text-text-primary text-sm truncate">{r.name}</p>
                 {r.capacity && <p className="text-text-muted text-[12px] mt-0.5">Capacidade: {r.capacity}</p>}
+                {Object.keys(r.rate_prices || {}).length > 0 && <p className="text-accent text-[12px] mt-0.5">{Object.keys(r.rate_prices).length} preço(s) próprio(s)</p>}
                 {r.is_active && statusByResource[r.id]?.status === 'OCUPADA' && (
                   <p className="text-text-muted text-[12px] mt-0.5 font-mono">
                     {statusByResource[r.id].open_accounts} conta(s) - {formatKz(statusByResource[r.id].open_total)} Kz
@@ -280,6 +290,26 @@ export default function Recursos() {
               className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors"
             />
           </div>
+          {rates.some((s) => s.resource_type_id === form.resourceTypeId) && (
+            <div>
+              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Preços deste recurso (opcional)</label>
+              <p className="text-[12px] text-text-muted mb-2">Vazio: o preço da tarifa. Preencha só quando este recurso tem o seu próprio preço.</p>
+              <div className="flex flex-col gap-2">
+                {rates.filter((s) => s.resource_type_id === form.resourceTypeId)
+                  .sort((a, b) => rateOrder(a) - rateOrder(b) || a.name.localeCompare(b.name)).map((s) => (
+                  <div key={s.id} className="grid grid-cols-[minmax(0,1fr)_140px] gap-3 items-center">
+                    <span className="text-[13px] text-text-primary truncate">
+                      {s.name}
+                      <span className="text-text-muted"> · {s.duration_minutes ? s.duration_minutes + ' min' : s.stay_start_time && s.stay_end_time ? s.stay_start_time.slice(0, 5) + ' - ' + s.stay_end_time.slice(0, 5) : 'horário do tipo'}</span>
+                    </span>
+                    <input type="number" min="0" step="0.01" value={form.prices[s.id] ?? ''} placeholder={formatKz(Number(s.price || 0))}
+                      onChange={(e) => setForm((p) => ({ ...p, prices: { ...p.prices, [s.id]: e.target.value } }))}
+                      className="w-full bg-bg-inset border border-border rounded-md px-3 py-2 text-sm text-text-primary font-mono text-right outline-none focus:border-accent transition-colors" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <button
             type="submit"
             disabled={saving || (!editingId && !form.resourceTypeId)}

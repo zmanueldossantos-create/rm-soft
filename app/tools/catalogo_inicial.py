@@ -8,7 +8,7 @@ example of each kind in front of the owners. Everything goes through the same se
 
 What it loads, in this order (every key optional): categorias, fornecedores, materias_primas, produtos, servicos,
 receitas, clientes, compras (purchase invoices with their stock entry: the stock comes in as in real life), and a
-"hotel" block - room types with their rates ("tarifas": the night without "duracao_min", the timed ones with it, a rate with hours of its own with "entrada" and "saida") and rooms, hotel services - loaded only when the company has the Hotel
+"hotel" block - room types with their rates ("tarifas": the night without "duracao_min", the timed ones with it, a rate with hours of its own with "entrada" and "saida") and rooms (with "precos": their own price for some rates) and rooms, hotel services - loaded only when the company has the Hotel
 module (run it again after granting it). It may be run again: what already exists (same code, name or document) is
 left as it is and listed - never duplicated, never overwritten. Refused for a company with real (non-training)
 sales documents.
@@ -79,7 +79,7 @@ async def load(db, nif: str, data: dict, dry_run: bool = False) -> dict:
     from app.services.product_service import create_product
     from app.services.purchase_invoice_service import register_purchase_invoice
     from app.services.recipe_service import set_recipe
-    from app.services.resource_service import create_resource
+    from app.services.resource_service import create_resource, set_rate_prices
     from app.services.resource_type_service import create_resource_type
     from app.services.service_service import InvalidStayHoursError, check_stay_hours, create_service
     from app.services.supplier_service import create_supplier
@@ -342,11 +342,20 @@ async def load(db, nif: str, data: dict, dry_run: bool = False) -> dict:
                     if key in rooms:
                         existed(f"Quarto {room['nome']} ({name})")
                         continue
+                    own = room.get("precos") or {}  # this room's own price for some rates of its type: {código: preço}
+                    rate_codes = {r["codigo"] for r in ([item["diaria"]] if item.get("diaria") else []) + item.get("tarifas", [])}
+                    for code in own:
+                        if code not in rate_codes:
+                            raise CatalogError(f"Quarto {room['nome']}: {code} não é uma tarifa do tipo {name}")
+                        _positive(own[code], f"Quarto {room['nome']}, preço de {code}")
                     if not dry_run:
-                        await create_resource(db, cid, hotel_activity.id, resource_type.id, room["nome"],
-                                              capacity=room.get("capacidade"))
+                        new_room = await create_resource(db, cid, hotel_activity.id, resource_type.id, room["nome"],
+                                                         capacity=room.get("capacidade"))
+                        if own:
+                            await set_rate_prices(db, cid, new_room.id, [
+                                {"service_id": services[code].id, "price": price} for code, price in own.items()])
                         rooms.add(key)
-                    created(f"Quarto {room['nome']} ({name})")
+                    created(f"Quarto {room['nome']} ({name})" + (f" - {len(own)} preço(s) próprio(s)" if own else ""))
             for item in hotel.get("servicos", []):  # the hotel's services: offered at the hotel's tills only
                 await service(item, activity_ids=[hotel_activity.id] if hotel_activity is not None else None)
 

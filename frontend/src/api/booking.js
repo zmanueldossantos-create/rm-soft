@@ -43,6 +43,12 @@ export async function updateResource(resourceId, name, capacity = null) {
   return res.data;
 }
 
+// the resource's own prices for the rates of its type: [{ service_id, price }] - an empty price: the rate's own
+export async function setResourceRatePrices(resourceId, prices) {
+  const res = await apiClient.put('/resources/' + resourceId + '/rate-prices', { prices });
+  return res.data;
+}
+
 export async function toggleResourceStatus(resourceId) {
   const res = await apiClient.post('/resources/' + resourceId + '/toggle');
   return res.data;

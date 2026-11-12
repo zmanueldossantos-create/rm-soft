@@ -49,7 +49,7 @@ from app.services.booking_service import (
 from app.services.document_rules import default_paid_on_issue_type
 from app.services.pos_service import checkout
 from app.services.stay_text import stay_observation
-from app.services.resource_service import get_resource_or_raise
+from app.services.resource_service import get_resource_or_raise, resource_rate_price
 from app.services.open_account_service import open_account, add_line, KITCHEN_CANCELLED
 
 # Angola has a single time zone, UTC+1, without daylight saving: a night is counted on Luanda's calendar.
@@ -265,7 +265,8 @@ async def walk_in(
 
     invoice = await checkout(
         db, company_id, pos.id, selling_user, customer_id,
-        [{"product_id": None, "service_id": str(service.id), "quantity": 1.0, "sale_unit_id": None}],
+        [{"product_id": None, "service_id": str(service.id), "quantity": 1.0, "sale_unit_id": None,
+          "_resource_price": await resource_rate_price(db, resource.id, service)}],  # the room's own price, if any
         payments, invoice_type=await default_paid_on_issue_type(db), stay_sale=True,
         observations=stay_observation(resource.name, starts_at, ends_at, _clean_guest_name(guest_name), party_size),
         terminal_id=terminal_id,

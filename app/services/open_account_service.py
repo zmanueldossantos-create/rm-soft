@@ -24,7 +24,7 @@ from app.models.product import Product
 from app.services.ownership import ensure_owned
 from app.models.service import Service
 from app.services.point_of_sale_service import get_pos_or_raise
-from app.services.resource_service import get_resource_or_raise
+from app.services.resource_service import get_resource_or_raise, resource_rate_price
 from app.services.pos_service import checkout
 
 
@@ -158,6 +158,8 @@ async def add_line(
             if room_type is not None and room_type.requires_service:
                 raise InvalidLineError(f"{item.name} vende-se pela Entrada ou pela reserva do quarto")
         name_snapshot, unit_price = item.name, float(item.price or 0)
+        if stay_rate and account.resource_id is not None:  # the room's own price for its rate, if any
+            unit_price = await resource_rate_price(db, account.resource_id, item)
         unit_factor, line_sale_unit_id, unit_code = 1.0, None, None
         kitchen_status = None
     else:

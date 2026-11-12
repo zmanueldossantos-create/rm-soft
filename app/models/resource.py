@@ -13,7 +13,9 @@ a single-person massage room doesn't need one).
 import uuid
 from datetime import datetime
 
-from sqlalchemy import String, Boolean, Integer, DateTime, ForeignKey, func
+from decimal import Decimal
+
+from sqlalchemy import String, Boolean, Integer, DateTime, ForeignKey, Numeric, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import UUID
 
@@ -35,3 +37,18 @@ class Resource(Base):
 
     def __repr__(self) -> str:
         return f"<Resource {self.resource_type_id} {self.name}>"
+
+
+class ResourceRatePrice(Base):
+    """The price of one rate of a resource's type for this resource only (the Luanda room's 1 hora at 8 000 where its
+    type says 5 000). Without one, the rate's own price. Set in Recursos, used wherever the rate is sold with the
+    resource: the check-in, the passage, the charged marcação."""
+    __tablename__ = "resource_rate_prices"
+    __table_args__ = (UniqueConstraint("resource_id", "service_id", name="uq_resource_rate_price"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    company_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("companies.id"), nullable=False, index=True)
+    resource_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("resources.id", ondelete="CASCADE"),
+                                                   nullable=False, index=True)
+    service_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("services.id", ondelete="CASCADE"), nullable=False)
+    price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)

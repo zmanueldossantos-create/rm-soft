@@ -28,7 +28,7 @@ from app.services.booking_service import get_booking_or_raise
 from app.services.document_rules import default_paid_on_issue_type
 from app.services.hotel_service import LUANDA, NoDefaultPosError, _stay_quantity
 from app.services.pos_service import checkout
-from app.services.resource_service import get_resource_or_raise
+from app.services.resource_service import get_resource_or_raise, resource_rate_price
 from app.services.sector_service import activity_has_capability
 from app.services.stay_text import stay_observation
 
@@ -73,7 +73,8 @@ async def charge_booking(
     invoice = await checkout(
         db, company_id, pos.id, selling_user, customer_id,
         [{"product_id": None, "service_id": str(service.id),
-          "quantity": float(_stay_quantity(service, booking.starts_at, booking.ends_at)), "sale_unit_id": None}],
+          "quantity": float(_stay_quantity(service, booking.starts_at, booking.ends_at)), "sale_unit_id": None,
+          "_resource_price": await resource_rate_price(db, resource.id, service)}],  # the resource's own price, if any
         payments, invoice_type=await default_paid_on_issue_type(db),
         stay_sale=True,  # the service of a resource that requires one: sold with its booking only
         observations=stay_observation(resource.name, booking.starts_at, booking.ends_at, booking.guest_name,

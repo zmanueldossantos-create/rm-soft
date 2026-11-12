@@ -1,127 +1,48 @@
 {
-  "_nota": "Base de formação da Mel da Rocha - módulo Hotel (depois de ativar o módulo Hotel). O tipo de quarto é a categoria (leva as tarifas): Executivo (mais equipado, mais caro) e Clássico. Os quartos têm o número (1.º andar 101 a 104, Executivo; 2.º andar 201 a 203, Clássico) - um quarto novo da mesma categoria só leva um número novo, uma categoria superior leva um tipo novo com as suas tarifas. Cada tipo tem a diária e a noite (sem duração: por noite) e as tarifas à hora (com duração: por fatia começada). Ficam por fazer à mão, à frente dos proprietários, um caso de cada para explicar: o tipo Suite com a sua diária e o quarto 301, a cama extra (HOT-CAM) e os clientes.",
+  "_nota": "Base de formação da Mel da Rocha - módulo Hotel (corra depois de ativar o módulo Hotel), segundo a tabela geral de preços. Dois tipos de quarto: Complexo VIP e Standard. Cada tipo leva as suas tarifas: 1 hora e 2 horas (por duração, contadas por fatia começada), Pernoite (horário próprio 22:00 - 07:30) e Diária (o horário do tipo, 12:00 - 12:00, 24 horas). O preço das tarifas do tipo é o do primeiro quarto da tabela (Luanda no VIP, Massabi no Standard); os outros quartos levam os seus preços próprios. Os quartos têm os nomes da casa. Refeições: o serviço «Pequeno-almoço + almoço» (5 000) junta-se à conta da estadia - a Diária com refeições incluídas é a Diária mais este serviço. Ficam por fazer à mão, à frente dos proprietários: o quarto Malanje (Standard, com os seus preços), o serviço Lavandaria e os hóspedes.",
   "hotel": {
     "atividade": "Hotel",
     "tipos_quarto": [
       {
-        "nome": "Executivo",
-        "entrada": "14:00",
+        "nome": "Complexo VIP",
+        "entrada": "12:00",
         "saida": "12:00",
         "tarifas": [
-          {
-            "codigo": "EXE-DIA",
-            "nome": "Diária Executivo",
-            "preco": 35000
-          },
-          {
-            "codigo": "EXE-NOI",
-            "nome": "Noite Executivo",
-            "preco": 18000
-          },
-          {
-            "codigo": "EXE-1H",
-            "nome": "Executivo 1 hora",
-            "preco": 5000,
-            "duracao_min": 60
-          },
-          {
-            "codigo": "EXE-2H",
-            "nome": "Executivo 2 horas",
-            "preco": 8000,
-            "duracao_min": 120
-          },
-          {
-            "codigo": "EXE-DAY",
-            "nome": "Day use Executivo",
-            "preco": 20000,
-            "duracao_min": 480
-          }
+          {"codigo": "VIP-1H", "nome": "VIP 1 hora", "preco": 8000, "duracao_min": 60},
+          {"codigo": "VIP-2H", "nome": "VIP 2 horas", "preco": 10000, "duracao_min": 120},
+          {"codigo": "VIP-PER", "nome": "VIP Pernoite", "preco": 15000, "entrada": "22:00", "saida": "07:30"},
+          {"codigo": "VIP-DIA", "nome": "VIP Diária (24 horas)", "preco": 30000}
         ],
         "quartos": [
-          {
-            "nome": "101",
-            "capacidade": 2
-          },
-          {
-            "nome": "102",
-            "capacidade": 2
-          },
-          {
-            "nome": "103",
-            "capacidade": 2
-          },
-          {
-            "nome": "104",
-            "capacidade": 3
-          }
+          {"nome": "Luanda", "capacidade": 2},
+          {"nome": "Cabinda", "capacidade": 2},
+          {"nome": "Benguela", "capacidade": 2,
+           "precos": {"VIP-1H": 5000, "VIP-2H": 8000, "VIP-PER": 12000, "VIP-DIA": 25000}},
+          {"nome": "Huambo", "capacidade": 2,
+           "precos": {"VIP-1H": 5000, "VIP-2H": 8000, "VIP-PER": 12000, "VIP-DIA": 25000}}
         ]
       },
       {
-        "nome": "Clássico",
-        "entrada": "14:00",
+        "nome": "Standard",
+        "entrada": "12:00",
         "saida": "12:00",
         "tarifas": [
-          {
-            "codigo": "CLA-DIA",
-            "nome": "Diária Clássico",
-            "preco": 20000
-          },
-          {
-            "codigo": "CLA-NOI",
-            "nome": "Noite Clássico",
-            "preco": 10000
-          },
-          {
-            "codigo": "CLA-1H",
-            "nome": "Clássico 1 hora",
-            "preco": 3000,
-            "duracao_min": 60
-          },
-          {
-            "codigo": "CLA-2H",
-            "nome": "Clássico 2 horas",
-            "preco": 5000,
-            "duracao_min": 120
-          },
-          {
-            "codigo": "CLA-DAY",
-            "nome": "Day use Clássico",
-            "preco": 12000,
-            "duracao_min": 480
-          }
+          {"codigo": "STD-1H", "nome": "Standard 1 hora", "preco": 4000, "duracao_min": 60},
+          {"codigo": "STD-2H", "nome": "Standard 2 horas", "preco": 6000, "duracao_min": 120},
+          {"codigo": "STD-PER", "nome": "Standard Pernoite", "preco": 10000, "entrada": "22:00", "saida": "07:30"},
+          {"codigo": "STD-DIA", "nome": "Standard Diária (24 horas)", "preco": 17000}
         ],
         "quartos": [
-          {
-            "nome": "201",
-            "capacidade": 2
-          },
-          {
-            "nome": "202",
-            "capacidade": 2
-          },
-          {
-            "nome": "203",
-            "capacidade": 2
-          }
+          {"nome": "Massabi", "capacidade": 2},
+          {"nome": "Soyo", "capacidade": 2,
+           "precos": {"STD-2H": 5000, "STD-DIA": 15000}},
+          {"nome": "Uíge", "capacidade": 2,
+           "precos": {"STD-1H": 3000, "STD-2H": 4000, "STD-PER": 8000, "STD-DIA": 10000}}
         ]
       }
     ],
     "servicos": [
-      {
-        "codigo": "HOT-PEQ",
-        "nome": "Pequeno-almoço",
-        "preco": 3500
-      },
-      {
-        "codigo": "HOT-LAV",
-        "nome": "Lavandaria (peça)",
-        "preco": 1000
-      },
-      {
-        "codigo": "HOT-LCO",
-        "nome": "Late check-out",
-        "preco": 10000
-      }
+      {"codigo": "HOT-REF", "nome": "Pequeno-almoço + almoço", "preco": 5000}
     ]
   }
 }

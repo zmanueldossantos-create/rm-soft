@@ -400,6 +400,8 @@ async def create_invoice(
 
             tax_code = vat.tax_category if vat else "ISE"
             unit_price = float(service.price or 0)
+            if line_input.get("_resource_price") is not None:  # a rate sold with its resource (set by the server only)
+                unit_price = float(line_input["_resource_price"])
             line_unit_factor, line_sale_unit_id, line_unit_code = 1.0, None, None
 
             line_unit_code = await _base_unit_code(db, service)

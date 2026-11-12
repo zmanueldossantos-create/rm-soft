@@ -91,9 +91,19 @@ class ResourceResponse(BaseModel):
     name: str
     capacity: int | None
     is_active: bool
+    rate_prices: dict[uuid.UUID, float] = {}  # its own price for some rates of its type (service id -> price)
 
     class Config:
         from_attributes = True
+
+
+class RatePriceItem(BaseModel):
+    service_id: uuid.UUID
+    price: float | None = None  # empty: the rate's own price
+
+
+class RatePricesRequest(BaseModel):
+    prices: list[RatePriceItem]
 
 
 class BookingCreateRequest(BaseModel):

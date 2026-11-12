@@ -33,7 +33,7 @@ from app.models.pharmaceutical_form import PharmaceuticalForm
 from app.models.prescription import Prescription
 from app.models.insurance_share import InsuranceShare
 from app.models.internal_consumption import InternalConsumption
-from app.models.resource import Resource
+from app.models.resource import Resource, ResourceRatePrice
 from app.models.open_account import OpenAccount
 from app.models.open_account_line import OpenAccountLine
 from app.models.booking import Booking
