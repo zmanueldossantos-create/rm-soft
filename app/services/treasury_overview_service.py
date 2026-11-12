@@ -66,7 +66,7 @@ async def get_treasury_position(db: AsyncSession, company_id: uuid.UUID) -> dict
         if session is not None:
             cash = await get_current_expected_cash_balance(db, company_id, pos_id, session)
         else:
-            cash = await get_carry_forward_amount(db, company_id, pos_id)  # counted at the last closing, still there
+            cash = await get_carry_forward_amount(db, company_id, pos_id)  # counted at the last closing (or the opening balance), still there
         rows.append({
             "pos_id": pos_id, "pos_name": pos.name, "activity_name": activity_name, "is_default": pos.is_default,
             "billetage_enabled": pos.billetage_enabled,

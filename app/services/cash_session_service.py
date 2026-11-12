@@ -62,12 +62,14 @@ async def get_open_session_for_user(db: AsyncSession, company_id: uuid.UUID, use
     return await get_open_session(db, company_id, access.pos_id)
 
 
-async def get_carry_forward_amount(db: AsyncSession, company_id: uuid.UUID, pos_id: uuid.UUID) -> float:
+async def get_carry_forward(db: AsyncSession, company_id: uuid.UUID, pos_id: uuid.UUID) -> tuple[float, str]:
     """
-    The amount that will automatically become the opening float for this POS's next
-    session - this POS's last closed session's closing_amount_counted, or 0 if it has
-    never had one. Exposed separately so the "Abrir caixa" confirmation screen can show
-    the carried-over amount before the cashier commits (see open_session docstring).
+    The amount that will automatically become the opening float for this POS's next session, and where it
+    comes from: this POS's last closed session's closing_amount_counted (LAST_CLOSING); a POS never closed
+    starts with its cash in the imported opening balances, when its sub-account has a line there
+    (OPENING_BALANCES); otherwise 0 (NONE) - the money then comes in by a «Levantamento do banco» or a
+    transfer from the cofre. Exposed separately so the "Abrir caixa" confirmation screen can show the
+    amount before the cashier commits (see open_session docstring).
     """
     last_closed_result = await db.execute(
         select(CashSession)
@@ -76,7 +78,18 @@ async def get_carry_forward_amount(db: AsyncSession, company_id: uuid.UUID, pos_
         .limit(1)
     )
     last_closed = last_closed_result.scalar_one_or_none()
-    return float(last_closed.closing_amount_counted) if last_closed is not None else 0.0
+    if last_closed is not None:
+        return float(last_closed.closing_amount_counted), "LAST_CLOSING"
+    from app.services.opening_balances_service import till_opening  # deferred: accounting sits above the till
+    opening = await till_opening(db, company_id, pos_id)
+    if opening is not None:
+        return opening, "OPENING_BALANCES"
+    return 0.0, "NONE"
+
+
+async def get_carry_forward_amount(db: AsyncSession, company_id: uuid.UUID, pos_id: uuid.UUID) -> float:
+    """The amount of get_carry_forward alone."""
+    return (await get_carry_forward(db, company_id, pos_id))[0]
 
 
 async def open_session(
@@ -94,7 +107,7 @@ async def open_session(
     opening_amount is now optional - if not given, the float automatically carries
     over from this POS's last closed session (closing_amount_counted), so the
     cashier no longer has to manually re-enter the drawer's cash each morning. If
-    this POS has never had a session before, it starts at 0. Passing an explicit
+    this POS has never been closed, it starts with its opening balance (see get_carry_forward). Passing an explicit
     value still overrides the carry-over, for the rare case of a manual correction."""
     await ensure_period_open(db, company_id, date.today())
     await require_cash_point_access(db, company_id, opened_by_user, pos_id)
@@ -244,11 +257,49 @@ async def get_session_summary(
         "transfers_out": round(transfers_out, 2),
         "exits": round(exits, 2),
         "pending_in": round(pending_in, 2),
+        # open and nothing happened yet: the opening can still be cancelled (opened by mistake)
+        "cancellable": session.status == CashSessionStatus.ABERTA and await session_is_empty(db, company_id, session),
         # closed: the expected recorded at the closing, frozen; open: computed live by the one formula
         "expected_cash": round(float(session.closing_amount_expected), 2)
         if session.status == CashSessionStatus.FECHADA and session.closing_amount_expected is not None
         else round(await get_current_expected_cash_balance(db, company_id, pos_id, session), 2),
     }
+
+
+class SessionNotEmptyError(Exception):
+    """Cancelling an opening is only for a session opened by mistake, before anything happened in it."""
+
+
+async def session_is_empty(db: AsyncSession, company_id: uuid.UUID, session: CashSession) -> bool:
+    """Nothing happened yet in this session: no document, no cash movement, no count but the opening one."""
+    from app.models.cash_denomination_count import CashDenominationCount
+    if (await db.execute(select(Invoice.id).where(Invoice.cash_session_id == session.id).limit(1))).first():
+        return False
+    if (await db.execute(select(CashMovement.id).where(
+            CashMovement.company_id == company_id,
+            or_(CashMovement.source_pos_id == session.pos_id, CashMovement.destination_pos_id == session.pos_id),
+            CashMovement.created_at >= session.opened_at).limit(1))).first():
+        return False
+    return (await db.execute(select(CashDenominationCount.id).where(
+        CashDenominationCount.cash_session_id == session.id,
+        CashDenominationCount.count_type != DenominationCountType.ABERTURA).limit(1))).first() is None
+
+
+async def cancel_empty_session(db: AsyncSession, company_id: uuid.UUID, session_id: uuid.UUID) -> None:
+    """Undo the opening of a session opened by mistake, before anything happened in it: as if it had never been
+    opened - the next opening proposes the same float again. A session with any activity is closed normally."""
+    from sqlalchemy import delete
+    from app.models.cash_denomination_count import CashDenominationCount, CashDenominationCountLine
+    session = await get_session_or_raise(db, company_id, session_id)
+    if session.status == CashSessionStatus.FECHADA:
+        raise SessionAlreadyClosedError("Esta sessão de caixa já está fechada")
+    if not await session_is_empty(db, company_id, session):
+        raise SessionNotEmptyError("Já houve movimento nesta sessão - feche a caixa normalmente")
+    count_ids = select(CashDenominationCount.id).where(CashDenominationCount.cash_session_id == session.id)
+    await db.execute(delete(CashDenominationCountLine).where(CashDenominationCountLine.count_id.in_(count_ids)))
+    await db.execute(delete(CashDenominationCount).where(CashDenominationCount.cash_session_id == session.id))
+    await db.delete(session)
+    await db.commit()
 
 
 class BilletageRequiredError(Exception):

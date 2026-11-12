@@ -29,7 +29,7 @@ import { listActivities, listPointsOfSale } from '../api/activity';
 import { createCustomer } from '../api/customers';
 import { listProducts } from '../api/products';
 import { listCustomers } from '../api/customers';
-import { openCashSession, getOpenCashSession, closeCashSession, checkout, liquidatePendingInvoice, getSessionSummary, listCashSessions, fetchClosingReportPdfBlob, getCarryForwardAmount } from '../api/pos';
+import { openCashSession, getOpenCashSession, closeCashSession, checkout, liquidatePendingInvoice, getSessionSummary, listCashSessions, fetchClosingReportPdfBlob, getCarryForward, cancelCashSession } from '../api/pos';
 import { listPendingProFormas, listRecentIssuedInvoices, fetchInvoicePdfBlob, getInvoiceDetail } from '../api/invoices';
 import { listPendingReceptions, receiveCashMovement, listPendingEmissions, cancelCashMovement, getDailyReport, fetchDailyReportPdfBlob, getTransferBilletage } from '../api/tesouraria';
 import DocumentActionModals from '../components/DocumentActionModals';
@@ -143,6 +143,8 @@ export default function Caixa() {
   const [sessionSummary, setSessionSummary] = useState(null); // the balance justified, by payment method
   const [balanceDetailOpen, setBalanceDetailOpen] = useState(false); // its detail: hover (mouse) or tap (touch)
   const [carryForwardAmount, setCarryForwardAmount] = useState(0);
+  const [carryForwardSource, setCarryForwardSource] = useState('NONE'); // LAST_CLOSING, OPENING_BALANCES, NONE
+  const [cancellingOpening, setCancellingOpening] = useState(false);
   const [carryForwardLoading, setCarryForwardLoading] = useState(false);
   const [dailyReportModalOpen, setDailyReportModalOpen] = useState(false);
   const [dailyReportEntries, setDailyReportEntries] = useState([]);
@@ -626,9 +628,12 @@ export default function Caixa() {
     setOpenModalOpen(true);
     setCarryForwardLoading(true);
     try {
-      setCarryForwardAmount(await getCarryForwardAmount(selectedPosId));
+      const carry = await getCarryForward(selectedPosId);
+      setCarryForwardAmount(carry.amount);
+      setCarryForwardSource(carry.source);
     } catch (err) {
       setCarryForwardAmount(0);
+      setCarryForwardSource('NONE');
     } finally {
       setCarryForwardLoading(false);
     }
@@ -648,6 +653,23 @@ export default function Caixa() {
       setOpenError(extractErrorMessage(err, 'Erro ao abrir caixa'));
     } finally {
       setOpenSaving(false);
+    }
+  }
+
+  // A session opened by mistake (wrong till, wrong float): undone while nothing happened in it.
+  async function handleCancelOpening() {
+    setCancellingOpening(true);
+    try {
+      await cancelCashSession(session.id);
+      setSession(null);
+      setSessionSummary(null);
+      setCurrentBalance(null);
+      toast.success('Abertura anulada - a caixa pode ser aberta de novo');
+    } catch (err) {
+      toast.error(extractErrorMessage(err, 'Erro ao anular a abertura'));
+      refreshBalance(selectedPosId);
+    } finally {
+      setCancellingOpening(false);
     }
   }
 
@@ -1523,6 +1545,17 @@ export default function Caixa() {
               )}
             </div>
           )}
+          {session && sessionSummary?.cancellable && (
+            <button
+              onClick={handleCancelOpening}
+              disabled={cancellingOpening || !can('pos:close_session')}
+              title="Caixa aberta por engano: anular a abertura enquanto nada foi registado"
+              className="flex items-center gap-2 border border-border hover:border-text-muted text-text-muted hover:text-text-primary font-medium text-sm px-4 py-2 rounded-md transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {cancellingOpening ? <Loader2 size={15} className="animate-spin" /> : <X size={15} />}
+              Anular abertura
+            </button>
+          )}
           {session && (
             <button
               onClick={openCloseModal}
@@ -1921,11 +1954,19 @@ export default function Caixa() {
       <Modal open={openModalOpen} onClose={() => setOpenModalOpen(false)} title="Abrir caixa">
         <form onSubmit={handleOpenSession} className="flex flex-col gap-4">
           <div className="bg-bg-inset border border-border rounded-md px-4 py-3">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1">Fundo reportado da sessão anterior</p>
+            <p className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1">
+              {carryForwardSource === 'OPENING_BALANCES' ? 'Fundo de abertura - saldo inicial importado'
+                : carryForwardSource === 'LAST_CLOSING' ? 'Fundo reportado da sessão anterior' : 'Fundo de abertura'}
+            </p>
             {carryForwardLoading ? (
               <div className="flex items-center gap-2 text-text-muted text-sm"><Loader2 size={14} className="animate-spin" />A calcular...</div>
             ) : (
               <p className="font-mono font-semibold text-text-primary text-lg">{formatKz(carryForwardAmount)} Kz</p>
+            )}
+            {!carryForwardLoading && carryForwardSource === 'NONE' && (
+              <p className="text-[12px] text-text-muted mt-1">
+                Primeira abertura, sem saldo inicial: o numerário entra por um levantamento do banco ou uma transferência do cofre.
+              </p>
             )}
           </div>
           <button type="submit" disabled={openSaving} className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer">

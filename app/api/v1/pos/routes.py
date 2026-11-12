@@ -26,7 +26,9 @@ from app.services.cash_session_service import (
     open_session,
     close_session,
     get_open_session,
-    get_carry_forward_amount,
+    get_carry_forward as carry_forward_of,
+    cancel_empty_session,
+    SessionNotEmptyError,
     list_sessions,
     SessionAlreadyOpenError,
     SessionNotFoundError,
@@ -57,7 +59,7 @@ from fastapi import Response
 from app.services.cash_report_service import SessionNotClosedError, get_closing_report_data
 from app.services.cash_session_service import get_session_or_raise
 from app.services.user_cash_point_access_service import (
-    CashPointAccessDeniedError, get_access_for_user, require_cash_point_read_access,
+    CashPointAccessDeniedError, get_access_for_user, require_cash_point_read_access, require_cash_point_access,
 )
 from app.utils.cash_report_pdf import generate_closing_report_pdf
 
@@ -128,8 +130,27 @@ async def get_carry_forward(
         await require_cash_point_read_access(db, current_user.company_id, current_user, pos_id)
     except CashPointAccessDeniedError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
-    amount = await get_carry_forward_amount(db, current_user.company_id, pos_id)
-    return {"amount": amount}
+    amount, source = await carry_forward_of(db, current_user.company_id, pos_id)
+    return {"amount": amount, "source": source}  # source: LAST_CLOSING, OPENING_BALANCES or NONE
+
+
+@router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_empty_session(
+    session_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("pos:close_session")),
+):
+    """Cancel the opening of a session opened by mistake - only while nothing happened in it."""
+    try:
+        session = await get_session_or_raise(db, current_user.company_id, session_id)
+        await require_cash_point_access(db, current_user.company_id, current_user, session.pos_id)
+        await cancel_empty_session(db, current_user.company_id, session_id)
+    except SessionNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except CashPointAccessDeniedError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    except (SessionAlreadyClosedError, SessionNotEmptyError) as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
 
 
 @router.post("/sessions/{session_id}/close", response_model=CashSessionResponse)

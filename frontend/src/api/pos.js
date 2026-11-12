@@ -18,9 +18,15 @@ export async function getSessionSummary(posId) {
   return res.data;
 }
 
-export async function getCarryForwardAmount(posId) {
+// The float the next opening will take, and where it comes from: LAST_CLOSING, OPENING_BALANCES or NONE.
+export async function getCarryForward(posId) {
   const res = await apiClient.get('/pos/sessions/carry-forward', { params: { pos_id: posId } });
-  return res.data.amount;
+  return res.data;
+}
+
+// Cancel the opening of a session opened by mistake (refused once anything happened in it).
+export async function cancelCashSession(sessionId) {
+  await apiClient.delete('/pos/sessions/' + sessionId);
 }
 
 // The quantity of each product the till sells from - read from THE till stock route (getPosStock), which also

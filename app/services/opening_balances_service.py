@@ -152,6 +152,20 @@ async def bank_openings(db: AsyncSession, company_id: uuid.UUID, entry: JournalE
     return {bank_id: (debit - credit, entry.entry_date) for bank_id, debit, credit in rows}
 
 
+async def till_opening(db: AsyncSession, company_id: uuid.UUID, pos_id: uuid.UUID) -> float | None:
+    """The cash a till (or the cofre) holds in the opening balances in force - the debit of its own sub-account
+    (45.1.x) in the import, or None when the import has no line for it (or there is no import)."""
+    entry = await _active(db, company_id)
+    if entry is None:
+        return None
+    row = (await db.execute(select(JournalEntryLine.debit, JournalEntryLine.credit)
+                            .join(AccountLink, and_(AccountLink.account_id == JournalEntryLine.account_id,
+                                                    AccountLink.company_id == company_id, AccountLink.entity_kind == "TILL",
+                                                    AccountLink.entity_id == pos_id))
+                            .where(JournalEntryLine.entry_id == entry.id))).first()
+    return float(row.debit - row.credit) if row is not None else None
+
+
 async def _sync_banks(db: AsyncSession, now: dict, before: dict) -> None:
     """The Tesouraria opening balances follow the import (flush only, in the entry's transaction): now's banks get
     theirs; those only in before go back to «por definir» when nobody changed them since."""
