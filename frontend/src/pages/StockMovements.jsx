@@ -219,17 +219,17 @@ export default function StockMovements() {
         )}
 
         {!loading && !error && filteredMovements.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[900px]">
+          <div className="overflow-x-auto">  {/* one line per movement: the table scrolls sideways (as Faturas) */}
+            <table className="min-w-full w-max text-sm">
               <thead>
                 <tr className="border-b border-border">
-                  <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Tipo</th>
-                  <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Armazém</th>
-                  <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Produto</th>
-                  <th className="text-right text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Quantidade</th>
-                  <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Lote</th>
-                  <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Motivo / Referência</th>
-                  <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3">Data</th>
+                  <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3 whitespace-nowrap">Tipo</th>
+                  <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3 whitespace-nowrap">Armazém</th>
+                  <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3 whitespace-nowrap">Produto</th>
+                  <th className="text-right text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3 whitespace-nowrap">Quantidade</th>
+                  <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3 whitespace-nowrap">Lote</th>
+                  <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3 whitespace-nowrap">Motivo / Referência</th>
+                  <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3 whitespace-nowrap">Data</th>
                 </tr>
               </thead>
               <tbody>
@@ -254,30 +254,30 @@ export default function StockMovements() {
 
                   return (
                     <tr key={m.id} className="border-b border-border last:border-0 hover:bg-bg-inset/40 transition-colors">
-                      <td className="px-6 py-4">
+                      <td className="px-6 py-4 whitespace-nowrap">
                         <span className={'inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide px-2.5 py-1 rounded ' + style.bg + ' ' + style.color}>
                           <Icon size={12} />
                           {style.label}
                         </span>
                       </td>
-                      <td className="px-6 py-4 font-mono text-text-muted text-[13px]">
+                      <td className="px-6 py-4 font-mono text-text-muted text-[13px] whitespace-nowrap">
                         {isTransfer
                           ? (warehouseById[m._transferFrom]?.name || '-') + ' → ' + (warehouseById[m._transferTo]?.name || '-')
                           : (warehouseById[m.warehouse_id]?.name || '-')}
                       </td>
-                      <td className="px-6 py-4 font-display font-medium text-text-primary">
+                      <td className="px-6 py-4 font-display font-medium text-text-primary whitespace-nowrap">
                         {product ? product.name : m.product_id}
                       </td>
                       {/* a transfer moves the goods (no entry, no exit): ⇄ and no colour */}
-                      <td className={'px-6 py-4 font-mono text-right ' + (isTransfer ? 'text-text-primary' : isOutgoing ? 'text-danger' : 'text-success')}>
+                      <td className={'px-6 py-4 font-mono text-right whitespace-nowrap ' + (isTransfer ? 'text-text-primary' : isOutgoing ? 'text-danger' : 'text-success')}>
                         {isTransfer ? '⇄ ' : isOutgoing ? '-' : '+'}{qtyUnit(Math.abs(m.quantity), product)}
                       </td>
                       {/* a product followed by lot: the lots this movement took or filled */}
-                      <td className="px-6 py-4 font-mono text-text-muted text-[12px] max-w-[260px]">{m.lots || '-'}</td>
-                      <td className="px-6 py-4 font-mono text-text-muted text-[13px]">
+                      <td className="px-6 py-4 font-mono text-text-muted text-[12px] whitespace-nowrap">{m.lots || '-'}</td>
+                      <td className="px-6 py-4 font-mono text-text-muted text-[13px] whitespace-nowrap">
                         {reasonCell}
                       </td>
-                      <td className="px-6 py-4 font-mono text-text-muted text-[13px]">
+                      <td className="px-6 py-4 font-mono text-text-muted text-[13px] whitespace-nowrap">
                         {formatDateTime(m.created_at)}
                       </td>
                     </tr>
