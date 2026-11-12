@@ -53,7 +53,10 @@ export default function ConsumoInterno() {
       if (active.length === 1) setSelectedActivityId(active[0].id);
       else setLoading(false);
     }).catch((err) => setError(extractErrorMessage(err, 'Erro ao carregar atividades')));
-    listProducts().then((data) => setProducts(data.filter((p) => p.is_active && p.internal_use_only))).catch(() => {});
+    // any article kept in stock can be consumed in-house (the bread of the guests' breakfast, a towel, soap): the
+    // articles of internal use only come first, then the others, by name
+    listProducts().then((data) => setProducts(data.filter((p) => p.is_active && p.managed_by_stock)
+      .sort((a, b) => Number(!!b.internal_use_only) - Number(!!a.internal_use_only) || a.name.localeCompare(b.name)))).catch(() => {});
     listConsumptionReasons().then((data) => setReasons(data.filter((r) => r.is_active))).catch(() => {});
     getMyPermissions().then((perms) => setCanRecord(perms.includes('internal_consumption:record'))).catch(() => {});
   }, []);
@@ -137,7 +140,7 @@ export default function ConsumoInterno() {
           </button>
         )}
       </div>
-      <p className="text-text-muted text-sm mb-6">Consumiveis usados internamente (limpeza, amenities...) - nao gera fatura, apenas deduz stock</p>
+      <p className="text-text-muted text-sm mb-6">O que a casa consome sem vender (o pequeno-almoço dos hóspedes, a refeição do pessoal, a limpeza) - não gera fatura, só tira do stock</p>
 
       {activities.length > 1 && (
         <div className="flex items-center gap-2 mb-4 flex-wrap">
@@ -212,11 +215,11 @@ export default function ConsumoInterno() {
               <Select
                 value={form.productId}
                 onChange={(v) => setForm((p) => ({ ...p, productId: v }))}
-                options={products.map((p) => ({ value: p.id, label: p.code + ' - ' + p.name }))}
+                options={products.map((p) => ({ value: p.id, label: p.code + ' - ' + p.name + (p.internal_use_only ? ' · uso interno' : '') }))}
                 placeholder="Selecionar"
               />
               {products.length === 0 && (
-                <p className="text-[12px] text-text-muted mt-1.5">Nenhum produto de uso interno - marque "Uso interno apenas" num produto em Produtos.</p>
+                <p className="text-[12px] text-text-muted mt-1.5">Nenhum artigo com stock - ative «Gerir stock» num produto em Produtos.</p>
               )}
             </div>
             <div className="flex-1">
