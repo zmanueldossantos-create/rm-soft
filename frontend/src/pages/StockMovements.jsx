@@ -268,8 +268,9 @@ export default function StockMovements() {
                       <td className="px-6 py-4 font-display font-medium text-text-primary">
                         {product ? product.name : m.product_id}
                       </td>
-                      <td className={'px-6 py-4 font-mono text-right ' + (isOutgoing ? 'text-danger' : 'text-success')}>
-                        {isOutgoing ? '-' : '+'}{qtyUnit(Math.abs(m.quantity), product)}
+                      {/* a transfer moves the goods (no entry, no exit): ⇄ and no colour */}
+                      <td className={'px-6 py-4 font-mono text-right ' + (isTransfer ? 'text-text-primary' : isOutgoing ? 'text-danger' : 'text-success')}>
+                        {isTransfer ? '⇄ ' : isOutgoing ? '-' : '+'}{qtyUnit(Math.abs(m.quantity), product)}
                       </td>
                       {/* a product followed by lot: the lots this movement took or filled */}
                       <td className="px-6 py-4 font-mono text-text-muted text-[12px] max-w-[260px]">{m.lots || '-'}</td>

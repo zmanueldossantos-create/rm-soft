@@ -40,6 +40,24 @@ async def test_a_loss_of_one_bag_removes_its_kilos(db, company_with_essentials):
     company_id, product_id, bag_id, warehouse_id = await _rice(db, company_with_essentials, "SU-001")
     await record_stock_loss(db, company_id, warehouse_id, product_id, 1, "QUEBRA", "Saco rasgado", sale_unit_id=bag_id)
     assert await _stock(db, product_id) == 75.0
+    from app.models.stock_movement import StockMovement
+    reason = (await db.execute(select(StockMovement.reason).where(StockMovement.product_id == product_id))).scalar_one()
+    assert reason == "Saco rasgado (1 S001 = 25 K001)"  # what was typed, kept beside the base quantity
+
+
+@pytest.mark.asyncio
+async def test_a_transfer_of_two_bags_keeps_what_was_typed(db, company_with_essentials):
+    from app.models.stock_movement import StockMovement
+    from app.models.warehouse import Warehouse
+    from app.services.stock_service import transfer_stock
+    ctx = company_with_essentials
+    company_id, product_id, bag_id, warehouse_id = await _rice(db, ctx, "SU-004")
+    other = Warehouse(company_id=company_id, name="Armazém 2")
+    db.add(other)
+    await db.commit()
+    await transfer_stock(db, company_id, product_id, warehouse_id, other.id, 2, sale_unit_id=bag_id)
+    reasons = (await db.execute(select(StockMovement.reason).where(StockMovement.product_id == product_id))).scalars().all()
+    assert reasons == ["2 S004 = 50 K004", "2 S004 = 50 K004"]  # both legs of the transfer
 
 
 @pytest.mark.asyncio

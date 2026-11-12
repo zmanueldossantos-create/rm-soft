@@ -356,6 +356,26 @@ async def _to_base_quantity(db: AsyncSession, company_id: uuid.UUID, product_id:
     return quantity * factor
 
 
+async def _entered_in(db: AsyncSession, company_id: uuid.UUID, product_id: uuid.UUID, quantity: float,
+                      sale_unit_id: uuid.UUID | None, base: float, reason: str | None) -> str | None:
+    """The reason of a movement entered in another unit than the base one, with what was typed: «2 CX = 60 UN»
+    (the history shows the base quantity - this keeps the cases the user moved)."""
+    if sale_unit_id is None:
+        return reason
+    from app.services.product_sale_unit_service import resolve_line_unit
+    product = await db.get(Product, product_id)
+    _price, _factor, _id, code = await resolve_line_unit(db, company_id, product, sale_unit_id, quantity)
+    base_code = None
+    if product is not None and product.unit_of_measure_id is not None:
+        from app.models.unit_of_measure_catalog import UnitOfMeasureCatalog
+        base_code = (await db.execute(select(UnitOfMeasureCatalog.code).where(
+            UnitOfMeasureCatalog.id == product.unit_of_measure_id))).scalar_one_or_none()
+    if not code:
+        return reason
+    note = f"{_format_quantity(quantity)} {code} = {_format_quantity(base)}" + (f" {base_code}" if base_code else "")
+    return f"{reason} ({note})" if reason else note
+
+
 async def transfer_stock(
     db: AsyncSession,
     company_id: uuid.UUID,
@@ -376,7 +396,9 @@ async def transfer_stock(
     reads as one transfer.
     """
     posting_period = await resolve_posting_period(db, company_id, fiscal_period_id)
+    entered = quantity
     quantity = await _to_base_quantity(db, company_id, product_id, quantity, sale_unit_id)
+    reason = await _entered_in(db, company_id, product_id, entered, sale_unit_id, quantity, reason)
     if from_warehouse_id == to_warehouse_id:
         raise ValueError("O armazem de origem e destino não pode ser o mesmo")
 
@@ -438,7 +460,9 @@ async def record_stock_loss(
     correction. Requires the category; free-text reason is optional detail.
     """
     posting_period = await resolve_posting_period(db, company_id, fiscal_period_id)
+    entered = quantity
     quantity = await _to_base_quantity(db, company_id, product_id, quantity, sale_unit_id)
+    reason = await _entered_in(db, company_id, product_id, entered, sale_unit_id, quantity, reason)
     warehouse = await get_warehouse_or_raise(db, company_id, warehouse_id)
     await _stock_rule(db, product_id, warehouse.id, "out", strict=True)
     await ensure_available_at_period_end(db, company_id, posting_period, product_id, warehouse.id, quantity, InsufficientStockError)

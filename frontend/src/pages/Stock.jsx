@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { qtyWithUnit } from '../utils/stockUnits';
-import { Package2, Plus, Loader2, Search, AlertTriangle, ArrowDownToLine, SlidersHorizontal, Warehouse, Pencil, Check, X, ArrowRightLeft, Trash2, Power, ClipboardCheck, MapPin, Star } from 'lucide-react';
+import { Package2, Plus, Loader2, Search, AlertTriangle, ArrowDownToLine, SlidersHorizontal, Warehouse, Pencil, Check, X, ArrowRightLeft, ArrowLeftRight, Trash2, Power, ClipboardCheck, MapPin, Star } from 'lucide-react';
 import Modal from '../components/Modal';
 import MovementForm from '../components/MovementForm';
 import StockInventory from '../components/StockInventory';
@@ -123,7 +123,7 @@ export default function Stock() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
-  const [hideRaw, setHideRaw] = useState(false);  // «Ocultar matérias-primas»: only what is sold
+  const [kindFilter, setKindFilter] = useState('ALL');  // ALL · PRODUCTS (what is sold) · RAW (matérias-primas)
 
   const [newWarehouseModalOpen, setNewWarehouseModalOpen] = useState(false);
   const [editingWarehouseId, setEditingWarehouseId] = useState(null);
@@ -226,7 +226,8 @@ export default function Stock() {
   const defaultWarehouse = warehouses.find((w) => w.is_default && w.is_active) || centralWarehouse;
 
   const filteredLevels = levels.filter((l) => {
-    if (hideRaw && l.is_raw_material) return false;
+    if (kindFilter === 'PRODUCTS' && l.is_raw_material) return false;
+    if (kindFilter === 'RAW' && !l.is_raw_material) return false;
     if (!search.trim()) return true;
     const q = search.toLowerCase();
     return l.product_code.toLowerCase().includes(q) || l.product_name.toLowerCase().includes(q)
@@ -287,8 +288,16 @@ export default function Stock() {
     setSelectedProductId('');
     setQuantity(''); setCountLines(EMPTY_COUNT);
     setReason('');
-    setTransferFromWarehouseId(selectedWarehouseId || centralWarehouse?.id || '');
-    setTransferToWarehouseId('');
+    // the usual way: from the central warehouse to the one on screen (a shop, the padaria) - viewing the central one,
+    // the destination is left to choose; ⇄ swaps them for the way back
+    const central = centralWarehouse?.id || '';
+    if (central && selectedWarehouseId && selectedWarehouseId !== central) {
+      setTransferFromWarehouseId(central);
+      setTransferToWarehouseId(selectedWarehouseId);
+    } else {
+      setTransferFromWarehouseId(selectedWarehouseId || central);
+      setTransferToWarehouseId('');
+    }
     setLotId('');
     setFormError('');
     setFormSuccess('');
@@ -606,10 +615,14 @@ export default function Stock() {
         />
       </div>
       {view !== 'validades' && levels.some((l) => l.is_raw_material) && (
-        <label className="flex items-center gap-2.5 cursor-pointer select-none">
-          <input type="checkbox" checked={hideRaw} onChange={(e) => setHideRaw(e.target.checked)} className="w-4 h-4 accent-accent cursor-pointer" />
-          <span className="text-sm text-text-primary">Ocultar matérias-primas</span>
-        </label>
+        <div className="flex items-center bg-bg-inset border border-border rounded-md p-0.5">
+          {[['ALL', 'Tudo'], ['PRODUCTS', 'Produtos'], ['RAW', 'Matérias-primas']].map(([key, label]) => (
+            <button key={key} type="button" onClick={() => setKindFilter(key)}
+              className={'px-3.5 py-2 rounded text-[13px] font-medium transition-colors cursor-pointer ' + (kindFilter === key ? 'bg-accent text-white' : 'text-text-muted hover:text-text-primary')}>
+              {label}
+            </button>
+          ))}
+        </div>
       )}
       </div>
 
@@ -722,7 +735,7 @@ export default function Stock() {
 
       <Modal open={transferModalOpen} onClose={() => setTransferModalOpen(false)} title="Transferir stock" maxWidthClass="max-w-2xl">
         <form onSubmit={handleTransferSubmit} className="flex flex-col gap-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] gap-4 items-end">
             <div>
               <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">De *</label>
               <Select
@@ -732,6 +745,11 @@ export default function Stock() {
                 placeholder="Selecionar origem"
               />
             </div>
+            <button type="button" title="Trocar origem e destino" disabled={!transferFromWarehouseId || !transferToWarehouseId}
+              onClick={() => { const from = transferFromWarehouseId; setTransferFromWarehouseId(transferToWarehouseId); setTransferToWarehouseId(from); setLotId(''); }}
+              className="h-[42px] w-10 inline-flex items-center justify-center rounded-md border border-border text-text-muted hover:text-accent hover:border-accent transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
+              <ArrowLeftRight size={16} />
+            </button>
             <div>
               <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Para *</label>
               <Select
