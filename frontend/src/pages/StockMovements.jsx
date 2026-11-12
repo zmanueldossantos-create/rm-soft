@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { History, Loader2, Search, ArrowDownToLine, ArrowUpFromLine, SlidersHorizontal, ClipboardList, ArrowRightLeft, Trash2, Factory, Plus } from 'lucide-react';
 import { listStockMovements, getMovementPeriods, listWarehouses } from '../api/stock';
 import PeriodFilter from '../components/PeriodFilter';
+import HorizontalScroll from '../components/HorizontalScroll';
 import { listProducts } from '../api/products';
 import { extractErrorMessage } from '../utils/errors';
 
@@ -219,9 +220,10 @@ export default function StockMovements() {
         )}
 
         {!loading && !error && filteredMovements.length > 0 && (
-          <div className="overflow-x-auto">  {/* one line per movement: the table scrolls sideways (as Faturas) */}
+          // one line per movement: the table scrolls sideways (as Faturas)
+          <HorizontalScroll className="max-h-[70vh]">
             <table className="min-w-full w-max text-sm">
-              <thead>
+              <thead className="sticky top-0 z-10 bg-bg-elevated">
                 <tr className="border-b border-border">
                   <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3 whitespace-nowrap">Tipo</th>
                   <th className="text-left text-[11px] uppercase tracking-wide text-text-muted font-medium px-6 py-3 whitespace-nowrap">Armazém</th>
@@ -285,7 +287,7 @@ export default function StockMovements() {
                 })}
               </tbody>
             </table>
-          </div>
+          </HorizontalScroll>
         )}
         {!loading && !error && movements.length > 0 && hasMore && (
           <div className="flex justify-center py-4 border-t border-border">
