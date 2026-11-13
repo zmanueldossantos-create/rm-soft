@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import DateInput from '../components/DateInput';
 import { CalendarClock, Plus, Loader2, X, CheckCircle2, Pencil, ChevronLeft, ChevronRight, DoorOpen, Banknote, Globe } from 'lucide-react';
@@ -166,6 +167,10 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
   // its check-in and its account; without it (spa, salão, consultório) a marcação is charged at the till. The words
   // follow: the guest of a room, the client of a marcação. A module without any capability ticked keeps the old rule.
   const activityCapabilities = activities.find((a) => a.id === selectedActivityId)?.capabilities || [];
+  // the activities that book something (their module has the resources): a Padaria next to the Hotel has no tab here;
+  // without any capability set anywhere (old modules), every activity stays
+  const bookingActivities = activities.some((a) => (a.capabilities || []).length)
+    ? activities.filter((a) => (a.capabilities || []).includes('RESOURCES')) : activities;
   const hasStay = activityCapabilities.length ? activityCapabilities.includes('HOTEL_STAY') : can('hotel:checkin');
   const personWord = hasStay ? 'hóspede' : 'cliente';
   const [resources, setResources] = useState([]);
@@ -178,7 +183,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
   const [customerSaving, setCustomerSaving] = useState(false);
   const [selectedResourceId, setSelectedResourceId] = useState('');
   const [dateFrom, setDateFrom] = useState(todayIso());
-  const [dateTo, setDateTo] = useState(todayIso());
+  const [dateTo, setDateTo] = useState(addDays(todayIso(), 7));  // what is coming, not only today
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useToastState('error');
@@ -243,7 +248,8 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
       if (activityId) setSelectedActivityId(activityId);
       else if (active.length === 1) setSelectedActivityId(active[0].id);
       // the activity this user picked last on this device
-      else if (rememberedActivity(userId, active)) setSelectedActivityId(rememberedActivity(userId, active).id);
+      else if (rememberedActivity(userId, withResources.length ? withResources : active))
+        setSelectedActivityId(rememberedActivity(userId, withResources.length ? withResources : active).id);
       else if (withResources.length === 1) setSelectedActivityId(withResources[0].id);
     }).catch((err) => setError(extractErrorMessage(err, 'Erro ao carregar atividades')));
     listServices().then((data) => setServices(data.filter((s) => s.is_active))).catch(() => {});
@@ -1017,9 +1023,9 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
       )}
       {!embedded && <p className="text-text-muted text-sm mb-6">Gerir reservas de quartos, praticantes, mesas ou qualquer outro recurso</p>}
 
-      {activities.length > 1 && !activityId && (
+      {bookingActivities.length > 1 && !activityId && (
         <div className="flex items-center gap-2 mb-4 flex-wrap">
-          {activities.map((a) => (
+          {bookingActivities.map((a) => (
             <button
               key={a.id}
               onClick={() => { setSelectedActivityId(a.id); writeLastActivity(userId, a.id); }}
@@ -1031,23 +1037,64 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
         </div>
       )}
 
-      {/* One row: the view (Lista / Agenda) on the left, the actions (Entrada for a hotel, Nova reserva) on the right. */}
-      <div className="flex items-center gap-2 mb-4 flex-wrap">
+      {!selectedActivityId && bookingActivities.length > 1 && !activityId && (
+        <p className="text-text-muted text-[13px] mb-4">Selecione uma atividade para ver os recursos e as reservas</p>
+      )}
+
+      {/* One bar: the view, the filters, the period, and the actions on the right */}
+      <div className="flex items-end gap-2.5 mb-5 flex-wrap">
+        <div className="flex items-center gap-2 pb-0.5">
         <button
-          type="button"
-          onClick={() => setViewMode('list')}
-          className={'px-3.5 py-1.5 rounded-md text-[13px] font-medium transition-colors cursor-pointer ' + (viewMode === 'list' ? 'bg-accent text-white' : 'bg-bg-elevated border border-border text-text-muted hover:text-text-primary')}
+            type="button"
+            onClick={() => setViewMode('list')}
+            className={'px-3.5 py-1.5 rounded-md text-[13px] font-medium transition-colors cursor-pointer ' + (viewMode === 'list' ? 'bg-accent text-white' : 'bg-bg-elevated border border-border text-text-muted hover:text-text-primary')}
         >
           Lista
         </button>
-        <button
-          type="button"
-          onClick={() => setViewMode('agenda')}
-          className={'px-3.5 py-1.5 rounded-md text-[13px] font-medium transition-colors cursor-pointer ' + (viewMode === 'agenda' ? 'bg-accent text-white' : 'bg-bg-elevated border border-border text-text-muted hover:text-text-primary')}
+          <button
+            type="button"
+            onClick={() => setViewMode('agenda')}
+            className={'px-3.5 py-1.5 rounded-md text-[13px] font-medium transition-colors cursor-pointer ' + (viewMode === 'agenda' ? 'bg-accent text-white' : 'bg-bg-elevated border border-border text-text-muted hover:text-text-primary')}
         >
           Agenda
         </button>
-        <div className="ml-auto flex items-center gap-2">
+        </div>
+        <div className="w-56">
+          <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Recurso</label>
+          <Select
+            value={selectedResourceId}
+            onChange={setSelectedResourceId}
+            options={resources.map((r) => ({ value: r.id, label: r.name }))}
+            placeholder="Todos os recursos"
+          />
+        </div>
+        {viewMode === 'list' && (
+          <>
+        <div className="w-44">
+          <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">De</label>
+          <DateInput value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
+        </div>
+        <div className="w-44">
+          <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Até</label>
+          <DateInput value={dateTo} min={dateFrom || undefined} onChange={(e) => setDateTo(e.target.value)} className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
+        </div>
+          </>
+        )}
+        {viewMode === 'list' && (
+          <div className="flex items-center gap-1 pb-0.5">
+            {/* the usual periods in one click: today, the week to come, the month to come */}
+            {[['Hoje', 0], ['7 dias', 7], ['30 dias', 30]].map(([label, days]) => {
+              const on = dateFrom === todayIso() && dateTo === addDays(todayIso(), days);
+              return (
+                <button key={label} type="button" onClick={() => { setDateFrom(todayIso()); setDateTo(addDays(todayIso(), days)); }}
+                  className={'px-2.5 py-2 rounded-md text-[12px] font-medium transition-colors cursor-pointer ' + (on ? 'bg-accent/15 text-accent' : 'text-text-muted hover:text-text-primary')}>
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <div className="ml-auto flex items-center gap-2 pb-0.5">
           {embedded && hasStay && (
             <button
               onClick={openWalkIn}
@@ -1062,6 +1109,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
           <button
             onClick={openCreateForm}
             disabled={resources.length === 0 || !can('bookings:create')}
+            title={resources.length === 0 && selectedActivityId ? 'Crie primeiro os recursos desta atividade (Reservas → Recursos)' : undefined}
             className="flex items-center gap-2 bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-medium text-[13px] px-3.5 py-1.5 rounded-md transition-colors cursor-pointer"
           >
             <Plus size={15} />
@@ -1070,39 +1118,21 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
         </div>
       </div>
 
-      {!selectedActivityId && activities.length > 1 && !activityId && (
-        <p className="text-text-muted text-[13px] mb-4">Selecione uma atividade para ver os recursos e as reservas</p>
-      )}
-
-      <div className="flex items-end gap-2.5 mb-5 flex-wrap">
-        <div className="w-56">
-          <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Recurso</label>
-          <Select
-            value={selectedResourceId}
-            onChange={setSelectedResourceId}
-            options={resources.map((r) => ({ value: r.id, label: r.name }))}
-            placeholder="Todos os recursos"
-          />
-        </div>
-        {viewMode === 'list' && (
-          <>
-        <div>
-          <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">De</label>
-          <DateInput value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
-        </div>
-        <div>
-          <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Até</label>
-          <DateInput value={dateTo} min={dateFrom || undefined} onChange={(e) => setDateTo(e.target.value)} className="bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
-        </div>
-          </>
-        )}
-      </div>
-
-
       {viewMode === 'agenda' ? renderAgenda() : loading ? (
         <div className="flex items-center justify-center py-16 text-text-muted text-sm">
           <Loader2 size={18} className="animate-spin mr-2" />
           A carregar...
+        </div>
+      ) : selectedActivityId && resources.length === 0 ? (
+        <div className="bg-bg-elevated border border-border rounded-lg p-10 text-center">
+          <CalendarClock size={28} className="text-text-muted mx-auto mb-3" />
+          <p className="text-text-primary font-medium mb-1">Ainda não há recursos nesta atividade</p>
+          <p className="text-text-muted text-[13px] mb-4">Crie primeiro os quartos, as mesas ou o que se reserva - depois as reservas fazem-se aqui.</p>
+          {can('resources:manage') && (
+            <Link to="/recursos" className="inline-flex items-center gap-2 bg-accent hover:bg-accent-hover text-white font-medium text-[13px] px-3.5 py-2 rounded-md transition-colors no-underline">
+              <Plus size={15} /> Criar recurso
+            </Link>
+          )}
         </div>
       ) : bookings.length === 0 ? (
         <div className="bg-bg-elevated border border-border rounded-lg p-10 text-center">
