@@ -299,9 +299,13 @@ export default function Recursos() {
                 {rates.filter((s) => s.resource_type_id === form.resourceTypeId)
                   .sort((a, b) => rateOrder(a) - rateOrder(b) || a.name.localeCompare(b.name)).map((s) => (
                   <div key={s.id} className="grid grid-cols-[minmax(0,1fr)_140px] gap-3 items-center">
-                    <span className="text-[13px] text-text-primary truncate">
-                      {s.name}
-                      <span className="text-text-muted"> · {s.duration_minutes ? s.duration_minutes + ' min' : s.stay_start_time && s.stay_end_time ? s.stay_start_time.slice(0, 5) + ' - ' + s.stay_end_time.slice(0, 5) : 'horário do tipo'}</span>
+                    <span className="min-w-0">
+                      <span className="block text-[13px] text-text-primary truncate">
+                        {s.name}
+                        <span className="text-text-muted"> · {s.duration_minutes ? s.duration_minutes + ' min' : s.stay_start_time && s.stay_end_time ? s.stay_start_time.slice(0, 5) + ' - ' + s.stay_end_time.slice(0, 5) : 'horário do tipo'}</span>
+                      </span>
+                      {/* the rate's own price beside this room's: the difference read at once */}
+                      <span className="block text-[11px] text-text-muted">Preço da tarifa: {formatKz(Number(s.price || 0))} Kz</span>
                     </span>
                     <input type="number" min="0" step="0.01" value={form.prices[s.id] ?? ''} placeholder={formatKz(Number(s.price || 0))}
                       onChange={(e) => setForm((p) => ({ ...p, prices: { ...p.prices, [s.id]: e.target.value } }))}
