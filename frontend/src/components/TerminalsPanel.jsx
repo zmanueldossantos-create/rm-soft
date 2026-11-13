@@ -33,7 +33,7 @@ export default function TerminalsPanel({ account, canManage }) {
   }, []);
 
   const mine = terminals.filter((t) => t.bank_account_id === account.id);
-  const methodName = (id) => { const m = methods.find((x) => x.id === id); return m ? (m.short_label || m.name) : null; };
+  const methodName = (id) => { const m = methods.find((x) => x.id === id); return m ? m.name : null; };
 
   // the methods a type receives by default: a TPA the cards (CC, CD), an Express the electronic money (DE)
   const defaultMethods = (kind) => methods.filter((m) => (kind === 'EXPRESS' ? ['DE'] : ['CC', 'CD']).includes(m.code)).map((m) => m.id);
@@ -156,7 +156,7 @@ export default function TerminalsPanel({ account, canManage }) {
                     {methods.map((m) => (
                       <label key={m.id} className="flex items-center gap-2 text-[13px] text-text-primary cursor-pointer select-none">
                         <input type="checkbox" checked={form.methodIds.includes(m.id)} onChange={() => toggleMethod(m.id)} className="w-4 h-4 accent-accent cursor-pointer" />
-                        {m.short_label || m.name} <span className="text-text-muted">({m.code})</span>
+                        {m.name} <span className="text-text-muted">({m.code})</span>
                       </label>
                     ))}
                   </div>

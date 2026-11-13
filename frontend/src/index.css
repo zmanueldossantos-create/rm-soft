@@ -77,6 +77,12 @@ tbody tr[data-reading] > td {
 tbody tr[data-reading] > td:first-child {
   box-shadow: inset 3px 0 0 var(--accent);
 }
+/* A sticky cell (a frozen first or last column) stays opaque: the tint is laid over the page colour, so the columns
+   scrolling under it never show through. */
+tbody tr[data-reading] > td.sticky {
+  background-color: var(--bg-elevated);
+  background-image: linear-gradient(color-mix(in srgb, var(--accent) 14%, transparent), color-mix(in srgb, var(--accent) 14%, transparent));
+}
 
 /* The toasts (components/Toaster): slide in from the right; the bar empties, paused under the pointer. */
 @keyframes toast-in {

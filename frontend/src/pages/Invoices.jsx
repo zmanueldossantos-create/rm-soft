@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { WORKING_TYPES, isExpired, workingDocumentState } from '../utils/documentStatus';
 import { API_BASE_URL } from '../api/config';
+import { formatDate } from '../utils/format';
 import { useCan } from '../utils/permissions';
 import { useAuthStore } from '../store/authStore';
 import { useBrandStore } from '../store/brandStore';
@@ -58,7 +59,6 @@ const INVOICE_TYPE_CODE = {
   ORCAMENTO: 'OR',
 };
 
-const ptDate = (iso) => (iso ? iso.split('-').reverse().join('/') : '-');
 
 const PDF_BASE_URL = API_BASE_URL + '/invoices';
 
@@ -621,8 +621,8 @@ export default function Invoices() {
                       <td className="px-4 py-3 text-text-primary whitespace-nowrap">{customer ? (customer.customer_code ? customer.customer_code + ' - ' : '') + customer.name : 'Consumidor Final'}</td>
                       <td className="px-4 py-3 text-text-muted whitespace-nowrap">{customer?.fiscal_name || customer?.name || '-'}</td>
                       <td className="px-4 py-3 font-mono text-text-muted whitespace-nowrap">{customer?.nif || '999999999'}</td>
-                      <td className="px-4 py-3 font-mono text-text-muted whitespace-nowrap">{inv.business_date}</td>
-                      <td className={'px-4 py-3 font-mono whitespace-nowrap ' + (isExpired(inv) ? 'text-danger' : 'text-text-muted')} title={inv.valid_until ? 'Válido até' : undefined}>{inv.due_date || inv.valid_until || '-'}</td>
+                      <td className="px-4 py-3 font-mono text-text-muted whitespace-nowrap">{formatDate(inv.business_date)}</td>
+                      <td className={'px-4 py-3 font-mono whitespace-nowrap ' + (isExpired(inv) ? 'text-danger' : 'text-text-muted')} title={inv.valid_until ? 'Válido até' : undefined}>{formatDate(inv.due_date || inv.valid_until)}</td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         {workingDocumentState(inv) ? (
                           <span className={'text-[11px] font-semibold uppercase tracking-wide px-2.5 py-1 rounded ' + workingDocumentState(inv).className}>
@@ -799,10 +799,10 @@ export default function Invoices() {
                 <p className="font-display font-semibold text-lg text-text-primary">
                   {INVOICE_TYPE_CODE[detailInvoice.invoice_type] || detailInvoice.invoice_type} {detailInvoice.series}/{detailInvoice.number}
                 </p>
-                <p className="text-text-muted text-sm font-mono">{detailInvoice.business_date}</p>
+                <p className="text-text-muted text-sm font-mono">{formatDate(detailInvoice.business_date)}</p>
                 {detailInvoice.valid_until && (
                   <p className={'text-[12px] mt-0.5 ' + (isExpired(detailInvoice) ? 'text-danger' : 'text-text-muted')}>
-                    Válido até {ptDate(detailInvoice.valid_until)}{isExpired(detailInvoice) ? ' - expirado: emita um novo orçamento para faturar' : ''}
+                    Válido até {formatDate(detailInvoice.valid_until)}{isExpired(detailInvoice) ? ' - expirado: emita um novo orçamento para faturar' : ''}
                   </p>
                 )}
               </div>

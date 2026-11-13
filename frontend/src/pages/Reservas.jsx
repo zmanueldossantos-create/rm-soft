@@ -832,7 +832,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
                 <div key={m.id} className="flex items-center justify-between gap-3">
                   <label className="flex items-center gap-2 flex-1 cursor-pointer select-none">
                     <input type="checkbox" checked={m.id in walkInPayments} onChange={() => toggleWalkInPayment(m.id)} className="w-4 h-4 accent-accent cursor-pointer" />
-                    <span className="text-[13px] text-text-primary">{m.short_label || m.name}</span>
+                    <span className="text-[13px] text-text-primary">{m.name}{m.short_label && m.short_label !== m.name && <span className="text-text-muted"> · {m.short_label}</span>}</span>
                   </label>
                   {m.id in walkInPayments && (
                     <input type="number" min="0" step="0.01" value={walkInPayments[m.id]} onChange={(e) => setWalkInPayments((p) => ({ ...p, [m.id]: e.target.value }))} className="w-36 bg-bg-elevated border border-border rounded-md px-3 py-2 text-sm text-right font-mono text-text-primary outline-none focus:border-accent transition-colors" />
