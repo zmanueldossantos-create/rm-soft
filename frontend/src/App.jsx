@@ -165,9 +165,10 @@ export default function App() {
 
 
 
-// The preview opened by code without a page of its own (the accounting reports): see store/pdfViewerStore.
+// The preview opened by code without a page of its own (the accounting reports): see store/pdfViewerStore. Stacked:
+// it opens over the window it was asked from (the account's extract in Balancete).
 function GlobalPdfViewer() {
   const doc = usePdfViewerStore((state) => state.doc);
   const close = usePdfViewerStore((state) => state.close);
-  return <PdfViewer url={doc?.url} title={doc?.title || ''} fileName={doc?.fileName} onClose={close} maxWidthClass="max-w-5xl" heightClass="h-[68vh]" />;
+  return <PdfViewer url={doc?.url} title={doc?.title || ''} fileName={doc?.fileName} onClose={close} maxWidthClass="max-w-5xl" heightClass="h-[68vh]" stacked />;
 }
