@@ -264,14 +264,20 @@ async def sync_subaccounts(db: AsyncSession, company_id: uuid.UUID) -> dict:
     settings = await _settings(db, company_id)
     accounts = await _accounts(db, company_id)
     mappings = await _mappings(db, company_id)
-    linked = {(l.entity_kind, l.entity_id) for l in (await db.execute(
+    links = {(l.entity_kind, l.entity_id): l.account_id for l in (await db.execute(
         select(AccountLink).where(AccountLink.company_id == company_id))).scalars().all()}
+    linked = set(links)
     used_codes = {a.code for a in accounts.values()}
     from app.services.chart_of_accounts_service import accounts_with_entries
     with_entries = await accounts_with_entries(db, company_id)
     created, missing = 0, set()
     for kind, entity_id, name, parent_op in await _entities(db, company_id, settings):
         if (kind, entity_id) in linked:
+            # the sub-account keeps the name of what it stands for: a till renamed «Caixa Geral» -> «Receção» renames
+            # its 45.1.x (the code, its entries and the link stay)
+            account = accounts.get(links[(kind, entity_id)])
+            if account is not None and account.name != name:
+                account.name = name
             continue
         mapping = mappings.get(parent_op)
         parent = accounts.get(mapping.account_id) if mapping else None
