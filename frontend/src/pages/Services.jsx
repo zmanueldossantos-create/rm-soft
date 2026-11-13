@@ -127,6 +127,15 @@ export default function Services() {
     return [...shown].sort((a, b) => a.code.localeCompare(b.code, 'pt', { numeric: true }));
   }, [services, search]);
   // what a service is: its service type, or - a rate of a room type - that type, with its duration or its hours
+  // how the rate in the form is counted: by its duration, its own hours, or the room type's hours (nothing typed)
+  const rateMode = form.rateMode || (form.durationMinutes !== '' ? 'DURATION' : (form.stayStart || form.stayEnd) ? 'HOURS' : 'TYPE');
+  const formRoomType = resourceTypes.find((t) => t.id === form.resourceTypeId);
+  const typeHours = formRoomType?.default_start_time && formRoomType?.default_end_time
+    ? formRoomType.default_start_time.slice(0, 5) + ' - ' + formRoomType.default_end_time.slice(0, 5) : '';
+  function chooseRateMode(mode) {  // one way at a time: the other fields are emptied
+    setForm((p) => ({ ...p, rateMode: mode, durationMinutes: mode === 'DURATION' ? p.durationMinutes : '',
+      stayStart: mode === 'HOURS' ? p.stayStart : '', stayEnd: mode === 'HOURS' ? p.stayEnd : '' }));
+  }
   function kindOf(s) {
     const type = serviceTypes.find((t) => t.id === s.service_type_id)?.name;
     const roomType = resourceTypes.find((t) => t.id === s.resource_type_id)?.name;
@@ -199,6 +208,14 @@ export default function Services() {
   async function handleSubmit(e) {
     e.preventDefault();
     setFormError('');
+    if (form.resourceTypeId && rateMode === 'DURATION' && !(parseInt(form.durationMinutes, 10) > 0)) {
+      setFormError('Indique a duração da tarifa em minutos (ou escolha outra forma de contar)');
+      return;
+    }
+    if (form.resourceTypeId && rateMode === 'HOURS' && !(form.stayStart && form.stayEnd)) {
+      setFormError('Indique a hora de entrada e a de saída da tarifa');
+      return;
+    }
     setSaving(true);
 
     const payload = {
@@ -394,17 +411,11 @@ export default function Services() {
                 <Select value={form.resourceTypeId} onChange={(v) => updateField('resourceTypeId', v)} options={resourceTypes.map((t) => ({ value: t.id, label: t.name }))} placeholder="Nenhum - genérico" />
               </Field>
             )}
-            <Field label="Duração (min)" hint="Fim automático nas reservas - contada por fatia começada (1 hora, 2 horas)">
-              <input type="number" step="1" min="5" max="1440" value={form.durationMinutes} disabled={!!(form.stayStart || form.stayEnd)}
-                onChange={(e) => updateField('durationMinutes', e.target.value)} className={inputClass + ((form.stayStart || form.stayEnd) ? ' opacity-40 cursor-not-allowed' : '')} />
-            </Field>
-            {form.resourceTypeId && (
-              <Field label="Horário próprio da tarifa (opcional)" hint="Ex.: Pernoite 22:00 - 07:30. Sem horário: o do tipo de recurso (a diária). Contada uma vez por período.">
-                <div className="flex items-center gap-2">
-                  <input type="time" value={form.stayStart} disabled={form.durationMinutes !== ''} onChange={(e) => updateField('stayStart', e.target.value)} className={inputClass + (form.durationMinutes !== '' ? ' opacity-40 cursor-not-allowed' : '')} />
-                  <span className="text-text-muted text-xs">a</span>
-                  <input type="time" value={form.stayEnd} disabled={form.durationMinutes !== ''} onChange={(e) => updateField('stayEnd', e.target.value)} className={inputClass + (form.durationMinutes !== '' ? ' opacity-40 cursor-not-allowed' : '')} />
-                </div>
+            {/* a service without a room type: its duration only (a marcação of 45 min); a room's rate: the block below */}
+            {!form.resourceTypeId && (
+              <Field label="Duração (min)">
+                <input type="number" step="1" min="5" max="1440" value={form.durationMinutes}
+                  onChange={(e) => updateField('durationMinutes', e.target.value)} className={inputClass} />
               </Field>
             )}
             {isExemptVat && (
@@ -415,6 +426,50 @@ export default function Services() {
               </div>
             )}
           </div>
+
+          {/* A room's rate is counted one of three ways - one choice, its own fields inside it */}
+          {form.resourceTypeId && (
+            <div>
+              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Como se conta esta tarifa</label>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                {[
+                  ['DURATION', 'Por duração', 'Por fatia começada: 1 hora, 2 horas'],
+                  ['HOURS', 'Horário próprio', 'Uma vez por período, às horas da tarifa: Pernoite 22:00 - 07:30'],
+                  ['TYPE', 'Horário do tipo', 'Por noite, com o horário do tipo' + (typeHours ? ' (' + typeHours + ')' : '') + ': Diária'],
+                ].map(([mode, title, text]) => {
+                  const on = rateMode === mode;
+                  return (
+                    <div key={mode} onClick={() => !on && chooseRateMode(mode)}
+                      className={'rounded-md border px-3.5 py-3 flex flex-col gap-2 ' + (on ? 'border-accent bg-accent/10' : 'border-border hover:border-accent cursor-pointer')}>
+                      <div className="flex items-start gap-2.5">
+                        <span className={'mt-0.5 w-4 h-4 rounded-full border shrink-0 flex items-center justify-center ' + (on ? 'border-accent' : 'border-border')}>
+                          {on && <span className="w-2 h-2 rounded-full bg-accent" />}
+                        </span>
+                        <span>
+                          <span className="block text-sm font-medium text-text-primary">{title}</span>
+                          <span className="block text-[12px] text-text-muted">{text}</span>
+                        </span>
+                      </div>
+                      {on && mode === 'DURATION' && (
+                        <div className="flex items-center gap-2 pl-6">
+                          <input type="number" step="1" min="5" max="1440" value={form.durationMinutes} autoFocus
+                            onChange={(e) => updateField('durationMinutes', e.target.value)} className={inputClass + ' w-28'} />
+                          <span className="text-[12px] text-text-muted">minutos</span>
+                        </div>
+                      )}
+                      {on && mode === 'HOURS' && (
+                        <div className="flex items-center gap-2 pl-6">
+                          <input type="time" value={form.stayStart} onChange={(e) => updateField('stayStart', e.target.value)} className={inputClass + ' min-w-0 flex-1'} />
+                          <span className="text-text-muted text-xs">a</span>
+                          <input type="time" value={form.stayEnd} onChange={(e) => updateField('stayEnd', e.target.value)} className={inputClass + ' min-w-0 flex-1'} />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <Field label="Descrição">
             <textarea value={form.description} onChange={(e) => updateField('description', e.target.value)} rows={2} className={inputClass} />
