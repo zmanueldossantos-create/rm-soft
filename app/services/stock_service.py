@@ -661,7 +661,8 @@ async def list_stock_levels(db: AsyncSession, company_id: uuid.UUID, warehouse_i
             "is_raw_material": bool(product.is_raw_material),  # the screen can hide the raw materials
             "quantity": float(stock.quantity),
             "min_stock_threshold": float(product.min_stock_threshold),
-            "is_low": float(stock.quantity) <= float(product.min_stock_threshold),
+            # a minimum of 0 (a made-to-order cake): never «low», as the Painel and the alerts
+            "is_low": float(product.min_stock_threshold or 0) > 0 and float(stock.quantity) <= float(product.min_stock_threshold),
             "followed_by_lot": is_followed(product),
             "expired_quantity": float(expired.get(product.id, 0) or 0),
             "location_id": locations.get(product.id),

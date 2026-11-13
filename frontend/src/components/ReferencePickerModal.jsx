@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { formatKz } from '../utils/format';
 import { BookOpen, Check, Download, Loader2, Search } from 'lucide-react';
 import Modal from './Modal';
 import { listCompanyReferenceCatalog, takeReferenceProducts } from '../api/products';
@@ -9,7 +10,7 @@ import { toast } from '../store/toastStore';
 // of every sector) to tick and take - stock 0, the company's VAT, without price off the Caixa until priced. The ones
 // the company has already are shown, never taken twice.
 
-const kz = (v) => (v == null ? null : Number(v).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' Kz');
+const kz = (v) => (v == null ? null : formatKz(v) + ' Kz');
 
 export default function ReferencePickerModal({ open, onClose, onTaken, units = [] }) {
   const [search, setSearch] = useState('');

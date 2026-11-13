@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { formatKz } from '../utils/format';
 import { BookOpen, Download, FileSpreadsheet, Loader2, Pencil, Plus, Save, Search, Trash2, X } from 'lucide-react';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
@@ -16,7 +17,7 @@ import { useToastState } from '../components/Toaster';
 
 const inputClass = 'w-full bg-bg-inset border border-border rounded-md px-3 py-2 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors';
 const emptyForm = { barcode: '', name: '', category: '', unit_of_measure_id: '', tax_category: 'NOR', exemption_id: '', price: '', sectors: [], units: [] };
-const kz = (v) => (v == null ? null : Number(v).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' Kz');
+const kz = (v) => (v == null ? null : formatKz(v) + ' Kz');
 
 function Field({ label, children, className = '' }) {
   return (

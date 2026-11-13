@@ -71,3 +71,24 @@ async def test_the_painel_blocks_follow_the_permissions(db, company_with_essenti
     summary = await get_dashboard_summary(db, company_id, every)  # the gestor: every block, even when empty
     assert summary["payables"]["total"] == 0 and summary["tills"] == [] and summary["production_today"]["count"] == 0
     assert summary["expiring"]["lots"] == []
+
+
+@pytest.mark.asyncio
+async def test_a_product_without_a_minimum_is_never_low_stock(db, company_with_essentials):
+    """A minimum of 0 (a cake made to order) asks for no alert: at 0 in stock it stays off the «Stock baixo» block;
+    a product at or under its own minimum is listed."""
+    from app.models.product import Product, ProductType
+    from app.models.stock import Stock
+    ctx = company_with_essentials
+    company_id = ctx["company"].id
+    cake = Product(company_id=company_id, code="ENC-T", name="Bolo por encomenda", vat_id=ctx["vat_nor"].id, price=1,
+                   min_stock_threshold=0, product_type=ProductType.BEM, unit_of_measure_id=ctx["unit_un"].id)
+    bread = Product(company_id=company_id, code="PAO-T", name="Pão", vat_id=ctx["vat_nor"].id, price=1,
+                    min_stock_threshold=50, product_type=ProductType.BEM, unit_of_measure_id=ctx["unit_un"].id)
+    db.add_all([cake, bread])
+    await db.flush()
+    db.add_all([Stock(company_id=company_id, product_id=cake.id, warehouse_id=ctx["activity_warehouse"].id, quantity=0),
+                Stock(company_id=company_id, product_id=bread.id, warehouse_id=ctx["activity_warehouse"].id, quantity=38)])
+    await db.commit()
+    summary = await get_dashboard_summary(db, company_id, {"stock:view"})
+    assert [p["code"] for p in summary["low_stock_products"]] == ["PAO-T"]

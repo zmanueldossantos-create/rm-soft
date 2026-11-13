@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { formatKz } from '../utils/format';
 import { Gauge, Loader2, AlertTriangle, Package2, Wallet, Search, CalendarClock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '../api/client';
@@ -20,7 +21,7 @@ async function getPeriodClosing(periodId) {
 }
 
 function formatMoney(v) {
-  return Number(v || 0).toLocaleString('pt-AO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' Kz';
+  return formatKz(v) + ' Kz';
 }
 
 function formatQty(v) {

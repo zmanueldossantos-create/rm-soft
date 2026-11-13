@@ -113,7 +113,8 @@ async def get_dashboard_summary(db: AsyncSession, company_id: uuid.UUID, permiss
         .join(Warehouse, Warehouse.id == Stock.warehouse_id)
         .outerjoin(UnitOfMeasureCatalog, UnitOfMeasureCatalog.id == Product.unit_of_measure_id)
         .where(Product.company_id == company_id, Product.is_active.is_(True), Product.managed_by_stock.is_(True),
-               Warehouse.is_active.is_(True), Stock.quantity <= Product.min_stock_threshold)
+               Warehouse.is_active.is_(True), Product.min_stock_threshold > 0,  # a minimum of 0: no alert wanted
+               Stock.quantity <= Product.min_stock_threshold)
         .order_by(Product.name, Warehouse.name)
     )).all() if "stock:view" in permissions else []
     low_by_product: dict = {}

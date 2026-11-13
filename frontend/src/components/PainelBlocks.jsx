@@ -1,14 +1,15 @@
 // The Painel's blocks (Dashboard.jsx): each one shows a part of the summary (dashboard_service) and is only rendered
 // when the server sent it - a block the user may not see never arrives.
 import { useState } from 'react';
+import { formatKz } from '../utils/format';
 import { Link } from 'react-router-dom';
 import { qtyWithUnit } from '../utils/stockUnits';
 
 export function formatMoney(value) {
-  return new Intl.NumberFormat('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value || 0) + ' Kz';
+  return formatKz(value) + ' Kz';
 }
 
-const shortKz = (value) => new Intl.NumberFormat('pt-PT', { maximumFractionDigits: 0 }).format(value || 0);
+const shortKz = (value) => formatKz(Math.round(value || 0)).slice(0, -3);  // 12 500 (no decimals)
 
 // A titled box; «to» puts a «Ver tudo» link to the full screen in its header.
 export function Block({ icon: Icon, title, to, tone = 'text-accent', children, className = '' }) {

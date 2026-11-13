@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { WORKING_TYPES, isExpired, workingDocumentState } from '../utils/documentStatus';
 import { API_BASE_URL } from '../api/config';
-import { formatDate } from '../utils/format';
+import { formatDate, formatKz } from '../utils/format';
 import { useCan } from '../utils/permissions';
 import { useAuthStore } from '../store/authStore';
 import { useBrandStore } from '../store/brandStore';
@@ -124,7 +124,7 @@ function RowActionMenu({ items }) {
 }
 
 function formatMoney(v) {
-  return Number(v).toLocaleString('pt-AO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' Kz';
+  return formatKz(v) + ' Kz';
 }
 
 function round2(v) {

@@ -1,4 +1,5 @@
 import DateInput from './DateInput';
+import { formatKz } from '../utils/format';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { Plus, Loader2, Trash2, Upload, Download } from 'lucide-react';
 import Select from './Select';
@@ -15,7 +16,7 @@ import { useToastState } from './Toaster';
 const inputClass = "w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors";
 
 function formatMoney(v) {
-  return Number(v || 0).toLocaleString('pt-AO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' Kz';
+  return formatKz(v) + ' Kz';
 }
 
 // Reusable stock movement form, always used within a specific contextual action

@@ -19,7 +19,7 @@ import { extractErrorMessage } from '../utils/errors';
 import { medicineSummary, getPharmacyContext } from '../api/pharmacy';
 import PrescriptionModal, { prescriptionNeedOf } from './PrescriptionModal';
 
-import { formatDate } from '../utils/format';
+import { formatDate, formatKz } from '../utils/format';
 import { dueDateFor, isProntoTerm } from '../utils/paymentTerms';
 import { useAuthStore } from '../store/authStore';
 import { FREE, priceOf, levelOptions, hasPriceChoice, unitCost } from '../utils/priceLevels';
@@ -62,7 +62,7 @@ function numberToWordsPT(n) {
 }
 
 function formatMoney(v) {
-  return (v || 0).toLocaleString('pt-AO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' Kz';
+  return formatKz(v) + ' Kz';
 }
 
 function todayStr() {
