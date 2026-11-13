@@ -77,3 +77,22 @@ def test_the_company_long_name_is_wrapped_never_cut():
     finally:
         COMPANY = saved
     assert "SERVIÇOS, LDA" in seen  # the end of the name is printed (on a second line of the box)
+
+
+def test_a4_names_each_withholding_with_its_rate_and_the_due_date():
+    """The «Totais retidos» table: one row per tax and rate, with the rate (not «-»); a Fatura on credit prints its
+    due date and term under the date of issue."""
+    lines = [dict(LINES[0], retention_type="IRT", retention_name="Retenção na fonte - serviços", retention_rate=6.5,
+                  retention_amount=6.5)]
+    invoice = dict(_invoice(6.5), due_date="2026-09-27", payment_term_name="A 7 dias")
+    seen = []
+    from reportlab.pdfgen import canvas as c
+    original = c.Canvas.drawString
+
+    def rec(self, x, y, text, *a, **k):
+        seen.append(str(text))
+        return original(self, x, y, text, *a, **k)
+    with patch.object(c.Canvas, "drawString", rec):
+        generate_invoice_pdf_a4(invoice, lines, COMPANY, None)
+    assert "IRT" in seen and "Retenção na fonte - serviços" in seen and "6,5%" in seen
+    assert "Vencimento: 27/09/2026 · A 7 dias" in seen

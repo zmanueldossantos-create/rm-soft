@@ -240,6 +240,10 @@ async def render_invoice_pdf(db: AsyncSession, company_id: uuid.UUID, invoice_id
             "exemption_code": l.exemption_code, "exemption_reason": l.exemption_reason_snapshot,
             "iec_amount": float(l.iec_amount or 0),
             "iselo_amount": float(l.iselo_amount or 0),
+            # the withholding on this line, as issued: the A4's «Totais retidos» table groups them by tax and rate
+            "retention_type": l.retention_type, "retention_name": l.retention_name_snapshot,
+            "retention_rate": float(l.retention_rate) if l.retention_rate is not None else None,
+            "retention_amount": float(l.retention_amount or 0),
             "lots": _line_lots(l, doc_lots, guide_lots, lots_printed),
         })
     company_dict = {"name": company.name, "nif": company.nif, "address": company.address, "city": company.city, "phone_number": company.phone_number, "phone_number_2": company.phone_number_2, "email": company.email, "website": company.website, "logo_path": company.logo_path, "bank_accounts": bank_accounts_list}

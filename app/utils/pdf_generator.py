@@ -194,6 +194,31 @@ def _reference_texts(invoice: dict) -> list[str]:
     return texts
 
 
+def _due_text(invoice: dict) -> str | None:
+    """«Vencimento: 20/11/2026 · A 7 dias» - only on a document paid after its issue (a Fatura on credit): its due
+    date differs from the document's day. A document paid on issue (FR, Pronto pagamento) prints nothing."""
+    due, day = invoice.get("due_date"), invoice.get("business_date")
+    if not due or str(due)[:10] == str(day)[:10]:
+        return None
+    term = invoice.get("payment_term_name")
+    return f"Vencimento: {_date_pt(due)}" + (f" · {term}" if term else "")
+
+
+def _retention_rows(lines: list[dict]) -> list[tuple[str, str, str, float]]:
+    """The withholdings of the document, one row per tax and rate: (SAF-T type, name, rate, amount) - e.g.
+    («IRT», «Retenção na fonte - serviços», «6,5%», 130.0)."""
+    rows: dict = {}
+    for line in lines:
+        amount = line.get("retention_amount") or 0
+        if amount <= 0:
+            continue
+        rate = line.get("retention_rate")
+        key = (line.get("retention_type") or "II", line.get("retention_name") or "Retenção na fonte",
+               (f"{rate:g}".replace(".", ",") + "%") if rate else "-")
+        rows[key] = rows.get(key, 0) + amount
+    return [(*key, round(amount, 2)) for key, amount in rows.items()]
+
+
 def _emission_text(invoice: dict) -> str:
     """Data de emissao as on the AGT model - 08/10/2026 - 15h45: the day of the document (the one declared in the
     SAF-T), and the time it was recorded, in Luanda time."""
@@ -715,6 +740,10 @@ def generate_factura_style_a4(invoice, lines, company, customer):
     y -= 5 * mm
     c.setFont("Helvetica", 9)
     c.drawString(margin, y, f"Data de emissão: {_emission_text(invoice)}")
+    due = _due_text(invoice)
+    if due:  # a document paid later: when, and on which term
+        y -= 4.6 * mm
+        c.drawString(margin, y, due)
     for text in _reference_texts(invoice):  # a credit / debit note: the document it corrects, and why
         y -= 4.6 * mm
         c.drawString(margin, y, _fit_text(c, text, "Helvetica", 9, page_width - 2 * margin))
@@ -841,18 +870,22 @@ def generate_factura_style_a4(invoice, lines, company, customer):
         c.setFillColor(TEXT_PRIMARY)
         c.setFont("Helvetica-Bold", 7)
         c.drawString(margin + 1 * mm, y - rh + 1.6 * mm, "Tipo")
-        c.drawString(margin + 30 * mm, y - rh + 1.6 * mm, "Imposto")
-        c.drawString(margin + 55 * mm, y - rh + 1.6 * mm, "Taxa")
+        c.drawString(margin + 12 * mm, y - rh + 1.6 * mm, "Imposto")
+        c.drawString(margin + 68 * mm, y - rh + 1.6 * mm, "Taxa")
         c.drawRightString(margin + left_w - 1 * mm, y - rh + 1.6 * mm, "Valor")
         y -= rh
         c.setFont("Helvetica", 7.5)
-        c.drawString(margin + 1 * mm, y - rh + 1.6 * mm, "II")
-        c.drawString(margin + 30 * mm, y - rh + 1.6 * mm, "Retenção na fonte")
-        c.drawString(margin + 55 * mm, y - rh + 1.6 * mm, "-")
-        c.drawRightString(margin + left_w - 1 * mm, y - rh + 1.6 * mm, fmt(retention_total) + " Kz")
-        c.setStrokeColor(BORDER)
-        c.rect(margin, y - rh, left_w, rh, fill=0, stroke=1)
-        y -= rh + 2 * mm
+        # one row per tax and rate (older documents without the detail: the total alone)
+        for kind, name, rate, amount in _retention_rows(lines) or [("II", "Retenção na fonte", "-", retention_total)]:
+            c.setFillColor(TEXT_PRIMARY)
+            c.drawString(margin + 1 * mm, y - rh + 1.6 * mm, kind)
+            c.drawString(margin + 12 * mm, y - rh + 1.6 * mm, _fit_text(c, name, "Helvetica", 7.5, 54 * mm))
+            c.drawString(margin + 68 * mm, y - rh + 1.6 * mm, rate)
+            c.drawRightString(margin + left_w - 1 * mm, y - rh + 1.6 * mm, fmt(amount) + " Kz")
+            c.setStrokeColor(BORDER)
+            c.rect(margin, y - rh, left_w, rh, fill=0, stroke=1)
+            y -= rh
+        y -= 2 * mm
 
     # The taxes by rate, as declared to the AGT (after the global discount), and the reason of each exemption
     summary = tax_summary(lines, invoice)
@@ -917,7 +950,7 @@ def generate_factura_style_a4(invoice, lines, company, customer):
     # Net amount actually due after withholding - drawn as its own bare row (no "Kz" suffix,
     # matches the historic Resumo de impostos format) rather than folded into the boxed totals.
     if retention_total > 0:
-        ry -= 2 * mm
+        ry -= 4.5 * mm  # clear of the boxed «Valor total a pagar» above
         c.setFillColor(TEXT_MUTED)
         c.setFont("Helvetica", 7.5)
         c.drawString(right_col_x + 2 * mm, ry, "Retenção na fonte")
