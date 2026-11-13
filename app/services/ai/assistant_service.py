@@ -93,7 +93,7 @@ async def _system_prompt(db: AsyncSession, company_id: uuid.UUID, user_name: str
         "configurados, Resumo de Produção; Stock → Resumo de Stock, Armazéns e Stock, Histórico de Movimentos, Consumo "
         "Interno, Fornecedores, Faturas de compra, Pagamentos a fornecedores, Guias; Reservas → Recursos, Reservas, "
         "Histórico; Finanças → Tesouraria, Períodos/Exercício, Apuramento do IVA, SAF-T; Administração → Empresa "
-        "(Definições da Empresa: dados, atividades, séries, email, assistente), Catálogos, Utilizadores, Permissões. Alguns só aparecem conforme os módulos e os direitos do utilizador."
+        "(Definições da Empresa: dados, atividades, séries, email, assistente), Tabelas e motivos, Utilizadores, Permissões. Alguns só aparecem conforme os módulos e os direitos do utilizador."
     )
 
 

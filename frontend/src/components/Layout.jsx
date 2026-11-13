@@ -309,7 +309,7 @@ export default function Layout() {
     {
       key: 'administracao', icon: Cog, label: 'Administração', items: visible([
         { to: '/company-settings', icon: Building2, label: 'Empresa', show: can('company:view') },
-        { to: '/categorias', icon: Tags, label: 'Catálogos', show: can.any(['product_categories:manage', 'service_types:manage', 'tesouraria:reasons_manage', 'resource_types:manage', 'consumption_reasons:manage', 'tesouraria:payment_prefs_manage', 'pharmaceutical_forms:manage']) },
+        { to: '/categorias', icon: Tags, label: 'Tabelas e motivos', show: can.any(['product_categories:manage', 'service_types:manage', 'tesouraria:reasons_manage', 'resource_types:manage', 'consumption_reasons:manage', 'tesouraria:payment_prefs_manage', 'pharmaceutical_forms:manage']) },
         { to: '/users', icon: UserCog, label: 'Utilizadores', show: user?.role === 'GESTOR' },
         { to: '/permissoes', icon: ShieldCheck, label: 'Permissões', show: user?.role === 'GESTOR' },
       ]),

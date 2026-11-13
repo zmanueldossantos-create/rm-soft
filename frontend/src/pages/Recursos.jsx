@@ -168,7 +168,7 @@ export default function Recursos() {
       </div>
       <p className="text-text-muted text-sm mb-6">
         Quartos, praticantes, mesas ou qualquer outro recurso reservável - a base das reservas.
-        Os tipos (com os seus horários e tarifas) definem-se em Administração {'>'} Catálogos {'>'} Tipos de Recurso.
+        Os tipos (com os seus horários e tarifas) definem-se em Administração {'>'} Tabelas e motivos {'>'} Tipos de Recurso.
       </p>
 
       {activities.length > 1 && (

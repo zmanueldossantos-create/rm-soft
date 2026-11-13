@@ -628,7 +628,7 @@ export default function Tesouraria() {
             <div>
               <label className={labelCls}>Motivo *</label>
               {bankReasons.length === 0
-                ? <p className="text-[12px] text-danger py-2">Nenhum motivo para bancos - crie-os em Administração › Catálogos › Motivos de Tesouraria, marcando «Banco».</p>
+                ? <p className="text-[12px] text-danger py-2">Nenhum motivo para bancos - crie-os em Administração › Tabelas e motivos › Motivos de Tesouraria, marcando «Banco».</p>
                 : <Select value={newMovement.reasonId} onChange={(v) => setNewMovement((m) => ({ ...m, reasonId: v, negativeOk: false }))} placeholder="Selecionar"
                     options={bankReasons.map((r) => ({ value: r.id, label: (r.direction === 'ENTRADA' ? 'Entrada · ' : 'Saída · ') + r.name }))} />}
             </div>

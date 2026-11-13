@@ -267,10 +267,10 @@ export default function Categorias() {
     <main className="max-w-[1600px] mx-auto px-4 sm:px-6 md:px-8 py-6 sm:py-9">
       <h2 className="font-display font-semibold text-[22px] text-text-primary flex items-center gap-2.5 mb-1">
         <Tags size={22} className="text-accent" />
-        Catálogos
+        Tabelas e motivos
       </h2>
       <p className="text-text-muted text-sm mb-6">
-        Categorias de produto e tipos de serviço - próprios da sua empresa
+        As listas próprias da sua empresa: categorias, tipos, motivos e métodos de pagamento
       </p>
 
 

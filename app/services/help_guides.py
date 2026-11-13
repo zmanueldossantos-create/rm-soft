@@ -403,7 +403,7 @@ PAGES = [
         "intro": "O que a empresa usa ela própria (limpeza, amenities…): retira do stock sem emitir fatura.",
         "steps": [
             "Clique em «Registar consumo»: o produto, a quantidade, o motivo e, se quiser, o recurso (ex.: o quarto) e notas.",
-            "Os motivos de consumo geram-se em Administração → Catálogos.",
+            "Os motivos de consumo geram-se em Administração → Tabelas e motivos.",
         ],
     },
     {
@@ -503,7 +503,7 @@ PAGES = [
         "intro": "O que se reserva ou se ocupa: quartos, mesas, praticantes (cabeleireiro, massagista).",
         "steps": [
             "Clique em «Novo recurso»: a atividade, o nome (ex.: Quarto 101, Mesa 4), o tipo de recurso e, se quiser, a capacidade.",
-            "Os tipos de recurso geram-se em Administração → Catálogos.",
+            "Os tipos de recurso geram-se em Administração → Tabelas e motivos.",
         ],
     },
     {
@@ -589,7 +589,7 @@ PAGES = [
         ],
     },
     {
-        "id": "catalogos", "path": "/categorias", "title": "Catálogos",
+        "id": "catalogos", "path": "/categorias", "title": "Tabelas e motivos",
         "perms": ["product_categories:manage", "service_types:manage", "tesouraria:reasons_manage", "resource_types:manage",
                   "consumption_reasons:manage", "tesouraria:payment_prefs_manage", "pharmaceutical_forms:manage"],
         "intro": "As listas próprias da empresa usadas nos outros ecrãs: categorias de produtos, tipos de serviço, motivos de "

@@ -341,7 +341,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
       const type = resourceTypesCatalog.find((rt) => rt.id === resource?.resource_type_id);
       const untouched = !prev.endTouched && prev.startTime === '14:00' && prev.endTime === '12:00';
       if (type?.default_start_time && type?.default_end_time && untouched) {
-        // the usual hours of this type (Catálogos): a room 14:00 -> 12:00, the night rule below sets the next day
+        // the usual hours of this type (Tabelas e motivos): a room 14:00 -> 12:00, the night rule below sets the next day
         next.startTime = type.default_start_time.slice(0, 5);
         next.endTime = type.default_end_time.slice(0, 5);
         next.endDate = next.date;
