@@ -1,7 +1,7 @@
 """
 Business logic for the POS/Caixa checkout flow - combines invoice
-creation (via invoice_service.create_invoice) with split payments and the
-active CashSession's business_date, as ONE atomic sale.
+creation (via invoice_service.create_invoice) with split payments, inside the
+POS's open CashSession, as ONE atomic sale dated the real day of the sale.
 """
 from datetime import date
 import uuid
@@ -101,8 +101,8 @@ async def checkout(
     Completes a POS sale: requires an open CashSession for this specific POS
     (see cash_session_service.open_session) - activity_id for the invoice is
     taken from the session (denormalized from the POS at open time, see
-    CashSession model docstring), the session's business_date becomes the
-    invoice's date, and every payment line is recorded against the invoice,
+    CashSession model docstring), the invoice is dated the real day of the
+    sale (never the session's opening day), and every payment line is recorded against the invoice,
     split across methods if the customer paid with more than one (e.g. part
     cash, part Multicaixa Express). Requires the caller to be associated with
     this exact POS (GESTOR bypasses this check). invoice_type defaults to

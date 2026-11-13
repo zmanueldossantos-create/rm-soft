@@ -2168,8 +2168,8 @@ export default function Caixa() {
                       <p className="text-[12px] text-text-primary">{e.description}</p>
                       <p className="text-[10px] text-text-muted font-mono">{new Date(e.time).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</p>
                     </div>
-                    <span className={'font-mono text-[13px] font-semibold ' + (e.direction === 'saída' ? 'text-danger' : 'text-success')}>
-                      {e.direction === 'saída' ? '-' : '+'}{formatKz(e.amount)} Kz
+                    <span className={'font-mono text-[13px] font-semibold ' + (e.direction === 'saida' ? 'text-danger' : 'text-success')}>
+                      {e.direction === 'saida' ? '-' : '+'}{formatKz(e.amount)} Kz
                     </span>
                   </div>
                 ))}
@@ -2177,7 +2177,7 @@ export default function Caixa() {
               <div className="flex justify-between border-t border-border pt-3">
                 <span className="text-text-muted text-[13px] font-medium">Total do período</span>
                 <span className="font-mono font-bold text-text-primary text-[15px]">
-                  {formatKz(dailyReportEntries.reduce((sum, e) => sum + (e.direction === 'saída' ? -e.amount : e.amount), 0))} Kz
+                  {formatKz(dailyReportEntries.reduce((sum, e) => sum + (e.direction === 'saida' ? -e.amount : e.amount), 0))} Kz
                 </span>
               </div>
             </>

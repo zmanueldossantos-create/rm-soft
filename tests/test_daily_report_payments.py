@@ -37,3 +37,21 @@ async def test_journal_lists_the_payments_not_the_documents(db, company_with_ess
     sales = [e for e in entries if e["type"] == "venda"]
     assert sorted((e["description"].split(" ")[0], e["amount"]) for e in sales) == [("FR", 1140.0), ("RC", 500.0)]
     assert all(e["direction"] == "entrada" for e in sales)  # no line for the FT billed later nor for the credit note
+
+@pytest.mark.asyncio
+async def test_an_exit_is_an_outgoing_line_with_its_reason(db, company_with_essentials):
+    """A «Saída externa» is a saida line on the journal, named with its reason (the screen subtracts it)."""
+    from datetime import date as _date
+    from app.models.cash_movement import CashMovementType
+    from app.models.cash_movement_reason import MovementDirection
+    from app.services.cash_movement_service import create_cash_movement, create_cash_movement_reason
+    from app.services.cash_session_service import open_session
+    from app.services.daily_report_service import get_daily_report
+    ctx = company_with_essentials
+    company_id, pos_id, gestor = ctx["company"].id, ctx["pos"].id, ctx["gestor"]
+    await open_session(db, company_id, pos_id, gestor, opening_amount=5_000)
+    reason = await create_cash_movement_reason(db, company_id, "Compra de matéria-prima", MovementDirection.SAIDA)
+    await create_cash_movement(db, company_id, CashMovementType.SAIDA_EXTERNA, gestor, amount=3_000,
+                               source_pos_id=pos_id, reason_id=reason.id)
+    [line] = await get_daily_report(db, company_id, pos_id, _date.today(), _date.today())
+    assert (line["direction"], line["amount"], line["description"]) == ("saida", 3_000, "Saída externa - Compra de matéria-prima")

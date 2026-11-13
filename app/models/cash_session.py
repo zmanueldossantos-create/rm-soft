@@ -1,9 +1,9 @@
 """
 CashSession model - a cash register open/close cycle for one Activity.
-See specification section 3.1/3.3: the "journee commerciale" (business
-date) is tied to this session's lifecycle, not to the real calendar date
-at each sale - this was the interim decision noted on Invoice.business_date
-since the very first version of this project, now finally implemented.
+business_date is the day the session was opened: it names the session (its
+closing report, its float, its counted cash). The documents sold in it are
+dated the real day of each sale - a bar's session that runs past midnight
+puts the sales after midnight on the new day (invoices, VAT, accounting).
 
 A session is opened by a CAIXA/GESTOR with a starting cash float
 (fundo de caixa), and closed with the counted cash - the difference

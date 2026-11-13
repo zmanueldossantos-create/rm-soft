@@ -20,6 +20,7 @@ from app.models.payment import Payment
 from app.models.payment_method_catalog import PaymentMethodCatalog
 from app.models.cash_session import CashSession
 from app.models.cash_movement import CashMovement, CashMovementStatus, CashMovementType
+from app.models.cash_movement_reason import CashMovementReason
 from app.models.point_of_sale import PointOfSale
 
 
@@ -87,6 +88,8 @@ async def get_daily_report(
     )).all())
     from app.services.bank_transfer_service import _labels as bank_account_labels
     movements = list(movements_result.scalars().all())
+    reasons = dict((await db.execute(select(CashMovementReason.id, CashMovementReason.name).where(
+        CashMovementReason.company_id == company_id))).all())
     bank_labels = await bank_account_labels(db, {m.bank_account_id for m in movements if m.bank_account_id})
     for mov in movements:
         is_outgoing = mov.source_pos_id == pos_id
@@ -106,7 +109,8 @@ async def get_daily_report(
             "description": (
                 (f"Transferência para {pos_names.get(mov.destination_pos_id, '-')}" if is_outgoing
                  else f"Transferência de {pos_names.get(mov.source_pos_id, '-')}")
-                if mov.movement_type == CashMovementType.TRANSFERENCIA else label
+                if mov.movement_type == CashMovementType.TRANSFERENCIA
+                else label + (f" - {reasons[mov.reason_id]}" if mov.reason_id in reasons else "")  # why the cash came in or out
             )
             + (" - por confirmar" if not is_outgoing and mov.status != CashMovementStatus.RECEBIDO else ""),
             "amount": float(mov.amount),

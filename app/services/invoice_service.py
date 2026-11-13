@@ -16,13 +16,11 @@ companies). The Activity determines the invoice series and number padding;
 both are snapshotted onto the Invoice at creation time so past documents
 never reformat retroactively if the Activity's settings change later.
 
-business_date and payments are optional - when called from the POS/Caixa
-flow (see cash_session_service), business_date comes from the active
-CashSession (not today's real date, so a session spanning midnight stays
-on the day it opened - see CashSession model docstring) and payments
-records how the sale was settled (possibly split across several methods).
-Called directly by a GESTOR outside a cash session, both stay unset -
-business_date defaults to today, no Payment rows are created.
+business_date and payments are optional - business_date is always the real
+day of the document (a POS sale after midnight in a session opened the day
+before is dated the new day: see pos_service); payments records how the sale
+was settled (possibly split across several methods). Called directly by a
+GESTOR outside a cash session, no Payment rows are created.
 """
 import hashlib
 import uuid
