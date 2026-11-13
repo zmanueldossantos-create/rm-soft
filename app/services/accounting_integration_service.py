@@ -275,7 +275,7 @@ async def build_invoice_entry(db: AsyncSession, ctx: _Context, invoice: Invoice)
     for amount, method in payments:
         amount = Decimal(str(amount))
         all_cash = all_cash and method.is_cash
-        add(await _treasury(db, ctx, invoice, method), method.short_label or method.name, amount, debit=True)
+        add(await _treasury(db, ctx, invoice, method), method.name, amount, debit=True)
         add(customer, customer_name, amount, debit=False)
     retention = Decimal(str(invoice.retention_total or 0))
     if retention and kind in (InvoiceType.FACTURA_RECIBO, InvoiceType.RECIBO):
@@ -353,7 +353,7 @@ async def build_supplier_payment_entry(db: AsyncSession, ctx: _Context, payment:
     add = _adder(lines)
     amount = Decimal(str(payment.amount))
     add(supplier, supplier_name, amount, debit=True)
-    add(money, method.short_label or method.name, amount, debit=False)
+    add(money, method.name, amount, debit=False)
     return ("CX" if method.is_cash else "BCO"), lines
 
 
@@ -812,8 +812,10 @@ async def integrate_document(db: AsyncSession, company_id: uuid.UUID, ctx: _Cont
             raise IntegrationError(f"O diário {code} não existe - crie-o em Lançamentos › Diários")
         if not lines:
             raise IntegrationError("Nada a lançar: sem valor")
-        party = lines[0]["description"] if kind == SOURCE_INVOICE else next(
-            (l["description"] for l in lines if l["account_id"] in _party_accounts(ctx)), "")
+        # who the entry is about: the customer's / supplier's line (a receipt's first line is the bank, not the
+        # customer: «Recibo - Ana Silva», never «Recibo - Cartão débito»); an invoice without one, its first line
+        party = next((l["description"] for l in lines if l["account_id"] in _party_accounts(ctx)),
+                     lines[0]["description"] if kind == SOURCE_INVOICE else "")
         on_saved = None
         if kind == SOURCE_STOCK_DAY:  # the rows it carries, in the same transaction
             rows = list(ctx.stock_rows)

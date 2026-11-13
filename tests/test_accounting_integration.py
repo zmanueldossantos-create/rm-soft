@@ -90,6 +90,7 @@ async def test_sales_documents_are_posted(db, company_with_essentials):
     assert lines == [("31.1.2.1.1", 2280.0, 0.0), ("61.3.1", 0.0, 2000.0), ("34.5.3", 0.0, 280.0)]
     entry, lines = await _entry_of(db, company_id, rc_id)
     assert entry["label"] == f"BCO {year}/0001"
+    assert entry["description"] == "Recibo - Hotel Atlântico"  # the customer, not the bank line's payment method
     assert lines == [("43.1.1", 1140.0, 0.0), ("31.1.2.1.1", 0.0, 1140.0)]
     entry, lines = await _entry_of(db, company_id, nc_id)
     assert lines == [("31.1.2.1.1", 0.0, 570.0), ("61.7.1", 500.0, 0.0), ("34.5.3", 70.0, 0.0)]
