@@ -298,6 +298,8 @@ async def create_company(
             raise CompanyAlreadyExistsError(str(e))  # answered 409 with the message, like the other refusals here
 
     await grant_default_role_permissions(db, company.id)
+    from app.services.supplier_service import ensure_generic_supplier  # «Fornecedor diverso»: purchases without a NIF
+    await ensure_generic_supplier(db, company.id)
     await db.commit()
     from app.services.activity_service import ensure_company_activities  # each module that sells: its activity
     await ensure_company_activities(db, company.id)

@@ -23,6 +23,25 @@ class SupplierNifRequiredError(Exception):
     """A supplier of Angola needs its NIF - the purchase invoices are declared with it."""
 
 
+# The supplier of the purchases from someone without a NIF (a market seller, a small shop): the anonymous NIF of the
+# AGT, as the Consumidor final of the sales - every company has it from its creation (see ensure_generic_supplier).
+GENERIC_SUPPLIER_NAME = "Fornecedor diverso"
+GENERIC_SUPPLIER_NIF = "999999999"
+
+
+async def ensure_generic_supplier(db: AsyncSession, company_id: uuid.UUID) -> None:
+    """Creates the company's «Fornecedor diverso» (NIF 999999999) when it has none - flush only, in the caller's
+    transaction. Kept when it exists, whatever it was renamed to (found by its anonymous NIF)."""
+    exists = (await db.execute(select(Supplier.id).where(
+        Supplier.company_id == company_id, Supplier.nif == GENERIC_SUPPLIER_NIF).limit(1))).first()
+    taken = (await db.execute(select(Supplier.id).where(
+        Supplier.company_id == company_id, Supplier.name == GENERIC_SUPPLIER_NAME).limit(1))).first()
+    if exists is None and taken is None:
+        db.add(Supplier(company_id=company_id, name=GENERIC_SUPPLIER_NAME, nif=GENERIC_SUPPLIER_NIF,
+                        notes="Compras a quem não tem NIF (mercado, pequeno comércio) - NIF anónimo da AGT"))
+        await db.flush()
+
+
 async def _check_nif(db: AsyncSession, nif: str | None, country_id: uuid.UUID | None) -> None:
     from app.models.country import Country
     code = None

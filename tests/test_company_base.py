@@ -105,7 +105,7 @@ async def test_a_company_made_from_a_base_file(db, base_file):
 
     async def count(model, company_id):
         return (await db.execute(select(func.count()).select_from(model).where(model.company_id == company_id))).scalar_one()
-    assert await count(Supplier, new.id) == 1
+    assert await count(Supplier, new.id) == 2  # the file's supplier and the company's own «Fornecedor diverso»
     assert await count(Customer, new.id) == 0 and await count(Stock, new.id) == 0  # never clients, never stock
     assert await count(Product, source_id) == 2  # the file's company is untouched
 

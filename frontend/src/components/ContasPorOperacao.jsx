@@ -23,6 +23,7 @@ export default function ContasPorOperacao({ accounts, canManage, onChartChanged 
     ...accounts.filter((a) => a.is_active).map((a) => ({ value: a.id, label: a.code + ' · ' + a.name }))], [accounts]);
   const leafOptions = useMemo(() => [{ value: '', label: '— Nenhuma —' },
     ...accounts.filter((a) => a.is_active && !a.has_children).map((a) => ({ value: a.id, label: a.code + ' · ' + a.name }))], [accounts]);
+  const codeOf = useMemo(() => new Map(accounts.map((a) => [a.id, a.code])), [accounts]);
   const optionsFor = (kind, current) => {
     if (kind === 'parent') return options;
     const stale = current && !leafOptions.some((o) => o.value === current) && options.find((o) => o.value === current);
@@ -171,8 +172,16 @@ export default function ContasPorOperacao({ accounts, canManage, onChartChanged 
                     {r.direction === 'ENTRADA' ? 'Entrada' : 'Saída'} · {[r.for_cash && 'caixa', r.for_bank && 'banco'].filter(Boolean).join(' e ')}{r.is_active ? '' : ' · inativo'}
                   </p>
                 </div>
-                <Select value={r.account_id || ''} disabled={!canManage || busy} options={optionsFor('', r.account_id)} placeholder="— Nenhuma —"
-                  onChange={(v) => run(() => setReasonAccount(r.id, v), 'Conta guardada')} />
+                <div>
+                  <Select value={r.account_id || ''} disabled={!canManage || busy} options={optionsFor('', r.account_id)} placeholder="— Nenhuma —"
+                    onChange={(v) => run(() => setReasonAccount(r.id, v), 'Conta guardada')} />
+                  {/* a till's exit on an inventory account (class 2): the money leaves, nothing enters the stock */}
+                  {r.for_cash && r.direction === 'SAIDA' && (codeOf.get(r.account_id) || '').startsWith('2') && (
+                    <p className="text-[11px] text-amber-500 [.light_&]:text-amber-700 mt-1">
+                      Uma compra que entra em stock regista-se como fatura de compra paga pela caixa (o artigo entra no stock) - com este motivo o valor fica na conta {codeOf.get(r.account_id)} sem entrada em stock.
+                    </p>
+                  )}
+                </div>
               </div>
             ))}
           </div>
