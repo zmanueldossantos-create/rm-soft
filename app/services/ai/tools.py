@@ -178,14 +178,19 @@ async def produtos_mais_vendidos(db: AsyncSession, company_id: uuid.UUID, argume
 async def alertas_stock(db: AsyncSession, company_id: uuid.UUID, arguments: dict) -> dict:
     days = max(0, min(int(arguments.get("dias") or 30), 365))
     today = date.today()
-    totals = (await db.execute(
-        select(Product.code, Product.name, Product.min_stock_threshold, func.coalesce(func.sum(Stock.quantity), 0))
-        .outerjoin(Stock, (Stock.product_id == Product.id) & (Stock.company_id == company_id))
+    # Per warehouse, as the Painel and the alerts: the shop short of sugar is short, even with sugar left at the depot.
+    rows = (await db.execute(
+        select(Product.code, Product.name, Product.min_stock_threshold, Stock.quantity, Warehouse.name, UnitOfMeasureCatalog.code)
+        .join(Stock, (Stock.product_id == Product.id) & (Stock.company_id == company_id))
+        .join(Warehouse, Warehouse.id == Stock.warehouse_id)
+        .outerjoin(UnitOfMeasureCatalog, UnitOfMeasureCatalog.id == Product.unit_of_measure_id)
         .where(Product.company_id == company_id, Product.is_active.is_(True), Product.managed_by_stock.is_(True),
-               Product.min_stock_threshold > 0)
-        .group_by(Product.id, Product.code, Product.name, Product.min_stock_threshold)
+               Warehouse.is_active.is_(True), Product.min_stock_threshold > 0,  # a minimum of 0: no alert wanted
+               Stock.quantity <= Product.min_stock_threshold)
+        .order_by(Product.name, Warehouse.name)
     )).all()
-    low = [{"codigo": c, "nome": n, "stock": _qty(q), "minimo": _qty(m)} for c, n, m, q in totals if float(q) <= float(m)]
+    low = [{"codigo": c, "nome": n, "armazem": w, "stock": _qty(q), "minimo": _qty(m), "unidade": u}
+           for c, n, m, q, w, u in rows]
     expiring = (await db.execute(
         select(Product.code, Product.name, StockLot.lot_number, StockLot.expiry_date, StockLot.quantity, Warehouse.name)
         .join(Product, Product.id == StockLot.product_id)
@@ -195,7 +200,7 @@ async def alertas_stock(db: AsyncSession, company_id: uuid.UUID, arguments: dict
         .order_by(StockLot.expiry_date).limit(50)
     )).all()
     return {
-        "abaixo_do_minimo": sorted(low, key=lambda r: r["nome"])[:50],
+        "abaixo_do_minimo": low[:80],  # one row per product AND warehouse
         "lotes_a_expirar": [{"codigo": c, "nome": n, "lote": l, "validade": e.isoformat(), "expirado": e < today,
                              "quantidade": _qty(q), "armazem": w} for c, n, l, e, q, w in expiring],
         "dias_considerados": days,
@@ -361,7 +366,8 @@ TOOLS = [
      {"type": "object", "properties": {**_PERIOD, "limite": {"type": "integer", "description": "Quantos (máx. 30)"}},
       "required": ["data_inicio", "data_fim"]}),
     ("alertas_stock", "stock:view", alertas_stock,
-     "Produtos abaixo do stock mínimo e lotes expirados ou a expirar nos próximos N dias.",
+     "Produtos abaixo do stock mínimo, armazém a armazém (o mínimo vale para cada armazém; a resposta indica o "
+     "armazém, a quantidade e a unidade), e lotes expirados ou a expirar nos próximos N dias.",
      {"type": "object", "properties": {"dias": {"type": "integer", "description": "Dias à frente para as validades (30 por omissão)"}}}),
     ("clientes_em_divida", "invoices:view", clientes_em_divida,
      "Dinheiro por receber dos clientes: faturas não pagas por cliente, com o que está vencido.",

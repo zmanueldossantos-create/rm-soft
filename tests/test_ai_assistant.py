@@ -66,7 +66,13 @@ async def test_the_tools_answer_for_the_company_only(db, company_with_essentials
     assert top["artigos"] == [{"artigo": "Panadol 500", "quantidade_unidade_base": 2.0, "valor_com_iva": float(ft.total)}]
 
     alerts = json.loads(await call("alertas_stock", dias=30))
-    assert [a["nome"] for a in alerts["abaixo_do_minimo"]] == ["Panadol 500"]
+    assert [(a["nome"], a["armazem"], a["stock"], a["minimo"]) for a in alerts["abaixo_do_minimo"]] == [
+        ("Panadol 500", ctx["activity_warehouse"].name, 10.0, 20.0)]
+    # per warehouse, as the Painel: 30 more at the central warehouse do not hide the shop's 10
+    await receive_stock(db, company_id, panadol.id, 30, lot_number="P2", expiry_date=TODAY + timedelta(days=200),
+                        warehouse_id=ctx["central_warehouse"].id)
+    alerts = json.loads(await call("alertas_stock", dias=30))
+    assert [(a["nome"], a["armazem"]) for a in alerts["abaixo_do_minimo"]] == [("Panadol 500", ctx["activity_warehouse"].name)]
     assert alerts["lotes_a_expirar"][0]["lote"] == "P1" and alerts["lotes_a_expirar"][0]["expirado"] is False
 
     debts = json.loads(await call("clientes_em_divida"))
