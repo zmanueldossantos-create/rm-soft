@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { FileText, Loader2 } from 'lucide-react';
 import Modal from './Modal';
+import PdfViewer from './PdfViewer';
 import DateInput from './DateInput';
 import { formatKz } from '../utils/format';
 import { extractErrorMessage } from '../utils/errors';
@@ -92,9 +93,9 @@ export default function SupplierStatementModal({ supplier, onClose }) {
           </div>
         )}
       </Modal>
-      <Modal open={!!pdf} onClose={() => { if (pdf) URL.revokeObjectURL(pdf); setPdf(null); }} title={supplier ? 'Conta corrente - ' + supplier.name : ''} maxWidthClass="max-w-3xl" stacked>
-        {pdf && <iframe src={pdf} title="Conta corrente" className="w-full h-[70vh] rounded-md border border-border" />}
-      </Modal>
+      <PdfViewer url={pdf} onClose={() => { if (pdf) URL.revokeObjectURL(pdf); setPdf(null); }} stacked
+        title={supplier ? 'Conta corrente - ' + supplier.name : ''}
+        fileName={supplier ? ['Conta-corrente', supplier.name, range.from, range.to].join('_') : ''} />
     </>
   );
 }

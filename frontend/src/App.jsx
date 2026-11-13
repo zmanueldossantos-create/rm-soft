@@ -13,6 +13,8 @@ import ProductionHistory from './pages/ProductionHistory';
 import Caixa from './pages/Caixa';
 import Configuracoes from './pages/Configuracoes';
 import Toaster from './components/Toaster';
+import PdfViewer from './components/PdfViewer';
+import { usePdfViewerStore } from './store/pdfViewerStore';
 import CatalogoReferencia from './pages/CatalogoReferencia';
 import Planos from './pages/Planos';
 import Pedidos from './pages/Pedidos';
@@ -81,6 +83,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <Toaster />
+      <GlobalPdfViewer />
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/suporte" element={<Suporte />} />
@@ -161,3 +164,10 @@ export default function App() {
 
 
 
+
+// The preview opened by code without a page of its own (the accounting reports): see store/pdfViewerStore.
+function GlobalPdfViewer() {
+  const doc = usePdfViewerStore((state) => state.doc);
+  const close = usePdfViewerStore((state) => state.close);
+  return <PdfViewer url={doc?.url} title={doc?.title || ''} fileName={doc?.fileName} onClose={close} maxWidthClass="max-w-5xl" heightClass="h-[68vh]" />;
+}

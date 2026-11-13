@@ -148,7 +148,7 @@ export default function Balancete() {
         footer={ledger?.data && (
           <div className="flex justify-end px-6 py-4">
             <button type="button" className={btnGhost}
-              onClick={() => downloadAccountingFile('/accounting/ledger/' + ledger.account.id + '/pdf', { date_from: filters.date_from, date_to: filters.date_to }, '', true)
+              onClick={() => downloadAccountingFile('/accounting/ledger/' + ledger.account.id + '/pdf', { date_from: filters.date_from, date_to: filters.date_to }, 'extrato_' + ledger.account.code + '_' + filters.date_from + '_' + filters.date_to, true)
                 .catch(() => toast.error('Erro ao gerar o PDF'))}>
               <FileText size={15} /> PDF
             </button>

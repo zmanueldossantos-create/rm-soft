@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { HandCoins, Loader2, Eye, FileText, Ban } from 'lucide-react';
 import Modal from '../components/Modal';
+import PdfViewer from '../components/PdfViewer';
 import Select from '../components/Select';
 import DateInput from '../components/DateInput';
 import { formatKz } from '../utils/format';
@@ -210,9 +211,7 @@ export default function PagamentosFornecedores() {
         )}
       </Modal>
 
-      <Modal open={!!pdf} onClose={() => { if (pdf) URL.revokeObjectURL(pdf); setPdf(null); }} title={detail ? 'Pagamento ' + detail.reference : ''} maxWidthClass="max-w-3xl" stacked>
-        {pdf && <iframe src={pdf} title="Pagamento" className="w-full h-[70vh] rounded-md border border-border" />}
-      </Modal>
+      <PdfViewer url={pdf} title={detail ? 'Pagamento ' + detail.reference : ''} onClose={() => { if (pdf) URL.revokeObjectURL(pdf); setPdf(null); }} stacked />
     </main>
   );
 }

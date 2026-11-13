@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Loader2, Printer } from 'lucide-react';
 import Modal from './Modal';
+import PdfViewer from './PdfViewer';
 import { traceLot, fetchLotTracePdf } from '../api/pharmacy';
 import { extractErrorMessage } from '../utils/errors';
 import { useToastState } from './Toaster';
@@ -75,9 +76,8 @@ export default function LotTraceModal({ lot, onClose }) {
           </div>
         )}
       </Modal>
-      <Modal open={!!pdf} onClose={() => { URL.revokeObjectURL(pdf); setPdf(null); }} title="Rastreabilidade do lote" maxWidthClass="max-w-5xl" stacked>
-        {pdf && <iframe src={pdf} title="Rastreabilidade do lote" className="w-full h-[75vh] rounded-md border border-border" />}
-      </Modal>
+      <PdfViewer url={pdf} onClose={() => { URL.revokeObjectURL(pdf); setPdf(null); }} stacked maxWidthClass="max-w-5xl"
+        title="Rastreabilidade do lote" fileName={['Rastreabilidade-lote', lot?.lot_number].filter(Boolean).join('_')} />
     </>
   );
 }

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ClipboardCheck, Loader2, Plus, Printer, Save, Search, ChevronLeft, CheckCircle2 } from 'lucide-react';
 import Modal from './Modal';
+import PdfViewer from './PdfViewer';
 import Select from './Select';
 import ConfirmDialog from './ConfirmDialog';
 import PostingPeriodSelect from './PostingPeriodSelect';
@@ -343,9 +344,7 @@ export default function StockInventory({ open, onClose, warehouses, warehouseId,
         confirmLabel="Validar"
       />
 
-      <Modal open={!!pdf} onClose={() => { if (pdf?.url) URL.revokeObjectURL(pdf.url); setPdf(null); }} title={pdf?.title || ''} maxWidthClass="max-w-3xl" stacked>
-        {pdf && <iframe src={pdf.url} title={pdf.title} className="w-full h-[70vh] rounded-md border border-border" />}
-      </Modal>
+      <PdfViewer url={pdf?.url} title={pdf?.title || ''} onClose={() => { if (pdf?.url) URL.revokeObjectURL(pdf.url); setPdf(null); }} stacked />
     </>
   );
 }

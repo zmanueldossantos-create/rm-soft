@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Calculator, Loader2, FileText, Eye } from 'lucide-react';
 import Select from '../components/Select';
 import Modal from '../components/Modal';
+import PdfViewer from '../components/PdfViewer';
 import { formatKz } from '../utils/format';
 import { extractErrorMessage } from '../utils/errors';
 import { listVatPeriods, getVatReturn, listVatDocuments, fetchVatReturnPdfBlob } from '../api/vatReturn';
@@ -238,9 +239,7 @@ export default function ApuramentoIva() {
         )}
       </Modal>
 
-      <Modal open={!!pdf} onClose={() => { if (pdf?.url) URL.revokeObjectURL(pdf.url); setPdf(null); }} title={pdf?.title || ''} maxWidthClass="max-w-3xl" stacked={!!pdf?.stacked}>
-        {pdf && <iframe src={pdf.url} title={pdf.title} className="w-full h-[70vh] rounded-md border border-border" />}
-      </Modal>
+      <PdfViewer url={pdf?.url} title={pdf?.title || ''} onClose={() => { if (pdf?.url) URL.revokeObjectURL(pdf.url); setPdf(null); }} stacked={!!pdf?.stacked} />
     </main>
   );
 }

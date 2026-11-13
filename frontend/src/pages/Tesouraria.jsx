@@ -3,6 +3,7 @@ import { PiggyBank, Loader2, Wallet, ArrowLeftRight, Lock, FileText, RefreshCw, 
 import DateInput from '../components/DateInput';
 import Select from '../components/Select';
 import Modal from '../components/Modal';
+import PdfViewer from '../components/PdfViewer';
 import { formatKz } from '../utils/format';
 import { extractErrorMessage } from '../utils/errors';
 import { getTreasuryPosition, listTreasuryMovements, listTreasuryClosings, listBankPositions, getBankStatement, setBankOpeningBalance, listCashMovementReasons, createBankMovement, cancelBankMovement, cancelBankTransfer } from '../api/tesouraria';
@@ -680,20 +681,7 @@ export default function Tesouraria() {
         )}
       </Modal>
 
-      <Modal open={!!pdf} onClose={closeReport} title={pdf?.title || ''} maxWidthClass="max-w-3xl">
-        {pdf && (
-          <div className="flex flex-col gap-3">
-            <iframe src={pdf.url} title={pdf.title} className="w-full h-[70vh] rounded-md border border-border" />
-            <a
-              href={pdf.url}
-              download={pdf.title + '.pdf'}
-              className="bg-accent hover:bg-accent-hover text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer no-underline"
-            >
-              Descarregar PDF
-            </a>
-          </div>
-        )}
-      </Modal>
+      <PdfViewer url={pdf?.url} title={pdf?.title || ''} onClose={closeReport} />
     </main>
   );
 }

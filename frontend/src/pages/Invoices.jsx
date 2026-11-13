@@ -6,8 +6,9 @@ import { useCan } from '../utils/permissions';
 import { useAuthStore } from '../store/authStore';
 import { useBrandStore } from '../store/brandStore';
 import { createPortal } from 'react-dom';
-import { Receipt, Plus, Loader2, Search, Trash2, FileText, Printer, Eye, X as XIcon, RefreshCw, RotateCcw, FilePlus, MoreVertical, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Receipt, Plus, Loader2, Search, Trash2, FileText, Printer, Eye, RefreshCw, RotateCcw, FilePlus, MoreVertical, ChevronLeft, ChevronRight } from 'lucide-react';
 import Modal from '../components/Modal';
+import PdfViewer from '../components/PdfViewer';
 import InvoiceWizardModal from '../components/InvoiceWizardModal';
 
 import DocumentActionModals from '../components/DocumentActionModals';
@@ -192,12 +193,15 @@ export default function Invoices() {
   const [pdfModalOpen, setPdfModalOpen] = useState(false);
   const [pdfBlobUrl, setPdfBlobUrl] = useState('');
   const [pdfFilename, setPdfFilename] = useState('documento.pdf');
+  const [pdfFileNameFull, setPdfFileNameFull] = useState('');
   const [pdfViaLabel, setPdfViaLabel] = useState('Original');
 
+  // filename: the title shown («MEL DA ROCHA - FT2026-2 (A4)»); the file is saved as MEL-DA-ROCHA_FT2026-2_A4.pdf
   async function openPdfViewer(invoiceId, format, filename) {
     const blobUrl = await fetchInvoicePdfBlob(invoiceId, format);
     setPdfBlobUrl(blobUrl);
     setPdfFilename(filename);
+    setPdfFileNameFull(filename.split(' - ').join('_').replace(/ \((.+)\)$/, '_$1'));
     setPdfModalOpen(true);
   }
 
@@ -205,13 +209,6 @@ export default function Invoices() {
     setPdfModalOpen(false);
     if (pdfBlobUrl) URL.revokeObjectURL(pdfBlobUrl);
     setPdfBlobUrl('');
-  }
-
-  function downloadPdf() {
-    const a = document.createElement('a');
-    a.href = pdfBlobUrl;
-    a.download = pdfFilename;
-    a.click();
   }
 
   async function handleResubmit(invoiceId) {
@@ -996,29 +993,7 @@ export default function Invoices() {
         )}
       </Modal>
 
-      {pdfModalOpen && (
-        <div className="fixed inset-0 z-[1000] bg-black/80 flex items-center justify-center p-4">
-          <div className="w-full max-w-[1000px] h-full max-h-[90vh] overflow-hidden bg-bg-surface rounded-lg shadow-2xl flex flex-col scrollbar-thin">
-            <iframe src={pdfBlobUrl} title="Pre-visualizacao do documento" className="flex-1 w-full border-none rounded-t-lg" />
-            <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-bg-elevated rounded-b-lg">
-              <button
-                type="button"
-                onClick={closePdfViewer}
-                className="flex items-center gap-1.5 text-text-primary hover:text-danger text-sm font-medium px-4 py-2 rounded-md border border-border hover:border-danger transition-colors cursor-pointer"
-              >
-                <XIcon size={15} /> Fechar
-              </button>
-              <button
-                type="button"
-                onClick={downloadPdf}
-                className="flex items-center gap-1.5 bg-accent hover:bg-accent-hover text-white text-sm font-medium px-4 py-2 rounded-md transition-colors cursor-pointer"
-              >
-                Guardar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <PdfViewer url={pdfModalOpen ? pdfBlobUrl : ''} title={pdfFilename} fileName={pdfFileNameFull} onClose={closePdfViewer} maxWidthClass="max-w-5xl" heightClass="h-[68vh]" />
     </main>
   );
 }

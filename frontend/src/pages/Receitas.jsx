@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { FileText, Loader2, Printer, Search } from 'lucide-react';
-import Modal from '../components/Modal';
+import PdfViewer from '../components/PdfViewer';
 import Select from '../components/Select';
 import { extractErrorMessage } from '../utils/errors';
 import { listPrescriptions, fetchPrescriptionsPdf, getPsychotropicRegister, fetchPsychotropicsPdf, listInsuranceShares, fetchInsuranceSharesPdf } from '../api/pharmacy';
@@ -235,9 +235,7 @@ export default function Receitas() {
         </div>
       )}
 
-      <Modal open={!!pdf} onClose={() => { if (pdf?.url) URL.revokeObjectURL(pdf.url); setPdf(null); }} title={pdf?.title || ''} maxWidthClass="max-w-6xl">
-        {pdf && <iframe src={pdf.url} title={pdf.title} className="w-full h-[75vh] rounded-md border border-border" />}
-      </Modal>
+      <PdfViewer url={pdf?.url} title={pdf?.title || ''} onClose={() => { if (pdf?.url) URL.revokeObjectURL(pdf.url); setPdf(null); }} maxWidthClass="max-w-6xl" />
     </main>
   );
 }

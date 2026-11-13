@@ -194,6 +194,11 @@ def _reference_texts(invoice: dict) -> list[str]:
     return texts
 
 
+def _doc_title(invoice: dict) -> str:
+    """The PDF's own title (shown by the browser's viewer instead of a blob address): «FT2026/2»."""
+    return f"{invoice.get('series', '')}/{invoice.get('number', '')}"
+
+
 def _due_text(invoice: dict) -> str | None:
     """«Vencimento: 20/11/2026 · A 7 dias» - only on a document paid after its issue (a Fatura on credit): its due
     date differs from the document's day. A document paid on issue (FR, Pronto pagamento) prints nothing."""
@@ -322,6 +327,7 @@ def generate_invoice_pdf_thermal(invoice: dict, lines: list[dict], company: dict
 
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=(width, height))
+    c.setTitle(_doc_title(invoice))
     margin = 3 * mm
     center_x = width / 2
     y = height - 4 * mm
@@ -703,6 +709,7 @@ def _totais_documento_box(c, x, y, w, rows, highlight_last=True):
 def generate_factura_style_a4(invoice, lines, company, customer):
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
+    c.setTitle(_doc_title(invoice))
     page_width, page_height = A4
     margin = 14 * mm
 
@@ -1046,6 +1053,7 @@ def generate_factura_style_a4(invoice, lines, company, customer):
 def generate_recibo_style_a4(invoice, company, customer):
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
+    c.setTitle(_doc_title(invoice))
     page_width, page_height = A4
     margin = 14 * mm
 

@@ -1,3 +1,4 @@
+import { openPdf } from '../store/pdfViewerStore';
 // Contabilidade - the chart of accounts (plano de contas).
 import apiClient from './client';
 
@@ -172,12 +173,21 @@ export async function getAccountLedger(accountId, dateFrom, dateTo) {
 }
 
 // a file of the reports, saved by the browser (Excel) or opened in a new tab (PDF)
+// razao_2026-11-01_2026-11-30 -> «Razão 01/11/2026 - 30/11/2026»: the preview's title for a file name.
+const REPORT_NAMES = { razao: 'Razão', diario: 'Diário', balancete: 'Balancete', demonstracoes: 'Demonstrações financeiras', extrato_conta: 'Extrato de conta' };
+function reportTitle(base) {
+  const [head, ...rest] = base.split(/_(?=\d{4}-\d{2}-\d{2})/);
+  const dates = rest.map((d) => d.split('-').reverse().join('/'));
+  const name = REPORT_NAMES[head] || (head.startsWith('extrato_') ? 'Extrato da conta ' + head.slice(8) : head.replace(/_/g, ' '));
+  return [name, dates.join(' - ')].filter(Boolean).join(' ');
+}
+
 export async function downloadAccountingFile(path, params, filename, open = false) {
   const res = await apiClient.get(path, { params: _params(params), responseType: 'blob' });
   const url = URL.createObjectURL(res.data);
-  if (open) {
-    window.open(url, '_blank');
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  if (open) {  // a PDF: the app's preview, saved under the same name as the Excel (razao_2026-11-01_2026-11-30.pdf)
+    const base = (filename || 'extrato_conta').replace(/\.[a-z]+$/i, '');
+    openPdf({ url, title: reportTitle(base), fileName: base });
     return;
   }
   const a = document.createElement('a');

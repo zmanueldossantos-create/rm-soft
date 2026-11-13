@@ -1,4 +1,4 @@
-import { formatKz } from '../utils/format';
+import { formatKz, formatDate } from '../utils/format';
 import { offeredIn } from '../components/ActivityScopePicker';
 import { FREE, priceOf, levelOptions, hasPriceChoice, unitCost } from '../utils/priceLevels';
 import { guessLegalPersonType, isPessoaColetiva, LEGAL_PERSON_OPTIONS } from '../utils/customerType';
@@ -20,6 +20,7 @@ import { listPaymentMethodPreferences } from '../api/tesouraria';
 import { Wallet, Plus, Minus, Trash2, Loader2, Search, X, ShoppingCart, LogOut, CheckCircle2, FileSearch, ArrowLeftRight, Coins, Receipt, Printer, FileText, ChevronLeft, Snowflake, MonitorUp } from 'lucide-react';
 import { useCustomerDisplay } from '../utils/customerDisplay';
 import Modal from '../components/Modal';
+import PdfViewer from '../components/PdfViewer';
 import DenominationGrid, { denominationLines, denominationTotal } from '../components/DenominationGrid';
 import OpenAccountsPanel from '../components/OpenAccountsPanel';
 import { Wallet2 as OpenAccountsIcon, CalendarClock } from 'lucide-react';
@@ -542,7 +543,7 @@ export default function Caixa() {
   async function printDailyReport() {
     try {
       setPdfBlobUrl(await fetchDailyReportPdfBlob(selectedPosId, dailyReportDateFrom, dailyReportDateTo));
-      setPdfFilename('Relatório de movimentos');
+      setPdfFilename('Relatório de movimentos ' + formatDate(dailyReportDateFrom) + (dailyReportDateTo && dailyReportDateTo !== dailyReportDateFrom ? ' a ' + formatDate(dailyReportDateTo) : ''));
       setPdfModalOpen(true);
     } catch (err) {
       setError(extractErrorMessage(err, 'Erro ao gerar o relatório de movimentos'));
@@ -3080,20 +3081,7 @@ export default function Caixa() {
         </div>
       </Modal>
 
-      <Modal open={pdfModalOpen} onClose={closePdfViewer} title={pdfFilename} maxWidthClass="max-w-3xl">
-        <div className="flex flex-col gap-3">
-          {pdfBlobUrl && (
-            <iframe src={pdfBlobUrl} title={pdfFilename} className="w-full h-[70vh] rounded-md border border-border" />
-          )}
-          <a
-            href={pdfBlobUrl}
-            download={pdfFilename + '.pdf'}
-            className="bg-accent hover:bg-accent-hover text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer no-underline"
-          >
-            Descarregar PDF
-          </a>
-        </div>
-      </Modal>
+      <PdfViewer url={pdfModalOpen ? pdfBlobUrl : ''} title={pdfFilename} onClose={closePdfViewer} />
       <DocumentActionModals cashPosId={selectedPosId} ref={documentActionsRef} onSuccess={() => listRecentIssuedInvoices(selectedPosId).then(setRecentInvoices).catch(() => {})} />
     </main>
     </div>

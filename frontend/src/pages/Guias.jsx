@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Send, Plus, Loader2, Trash2, Ban, FileText, Eye, Receipt } from 'lucide-react';
 import Modal from '../components/Modal';
+import PdfViewer from '../components/PdfViewer';
 import Select from '../components/Select';
 import DateInput from '../components/DateInput';
 import { formatKz } from '../utils/format';
@@ -579,9 +580,7 @@ export default function Guias() {
         )}
       </Modal>
 
-      <Modal open={!!pdf} onClose={() => { if (pdf?.url) URL.revokeObjectURL(pdf.url); setPdf(null); }} title={pdf?.title || ''} maxWidthClass="max-w-3xl" stacked>
-        {pdf && <iframe src={pdf.url} title={pdf.title} className="w-full h-[70vh] rounded-md border border-border" />}
-      </Modal>
+      <PdfViewer url={pdf?.url} title={pdf?.title || ''} onClose={() => { if (pdf?.url) URL.revokeObjectURL(pdf.url); setPdf(null); }} stacked />
     </main>
   );
 }
