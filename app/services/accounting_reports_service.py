@@ -83,6 +83,7 @@ async def trial_balance(db: AsyncSession, company_id: uuid.UUID, date_from: date
         if not all_accounts and not (opening or debit or credit):
             continue
         out.append({"id": a.id, "code": a.code, "name": a.name, "level": a.level, "has_children": a.id in with_children,
+                    "parent_id": a.parent_id,  # the screen's tree (+/-, a search shows a match with its parents)
                     "opening": opening, "debit": debit, "credit": credit, "closing": closing})
     return {"date_from": date_from, "date_to": date_to, "accounts": out,
             "totals": {"opening": totals[0], "debit": totals[1], "credit": totals[2], "closing": totals[3]}}

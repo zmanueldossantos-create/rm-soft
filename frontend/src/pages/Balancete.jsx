@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Scale, Loader2, FileSpreadsheet, FileText, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Scale, Loader2, FileSpreadsheet, FileText, CheckCircle2, AlertTriangle, Search, Plus, Minus, ChevronsUpDown, ChevronsDownUp } from 'lucide-react';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
 import DateInput from '../components/DateInput';
@@ -10,7 +10,9 @@ import { toast } from '../store/toastStore';
 
 // Contabilidade › Balancete: every account with its balance before the period, its debits and credits in it and its
 // balance at the end (D devedor, C credor) - an account adds up its sub-accounts, the classes make the totals. Only the
-// posted entries count. A row opens the extrato de conta (its lines, with the running balance).
+// posted entries count. A row opens the extrato de conta (its lines, with the running balance). As the Plano de contas,
+// the tree opens and closes with +/- (all open at first: the balancete is read whole) and a search shows its matches
+// with their parents.
 
 const inputCls = 'bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors';
 const labelCls = 'text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block';
@@ -53,6 +55,34 @@ export default function Balancete() {
       .catch(() => toast.error('Erro ao gerar o ficheiro'));
   }
 
+  const [search, setSearch] = useState('');
+  const [closed, setClosed] = useState(new Set()); // ids of the accounts shown closed
+  const rows = data?.accounts || [];
+  const byId = useMemo(() => new Map(rows.map((a) => [a.id, a])), [rows]);
+  const parents = useMemo(() => new Set(rows.map((a) => a.parent_id).filter(Boolean)), [rows]); // with rows under them
+  const searching = search.trim() !== '';
+  const shown = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (q) {  // the matches and their parents (to read them in their place)
+      const keep = new Set();
+      rows.filter((a) => a.code.startsWith(q) || a.name.toLowerCase().includes(q)).forEach((a) => {
+        for (let x = a; x && !keep.has(x.id); x = byId.get(x.parent_id)) keep.add(x.id);
+      });
+      return rows.filter((a) => keep.has(a.id));
+    }
+    return rows.filter((a) => {  // shown when no parent is closed
+      for (let x = byId.get(a.parent_id); x; x = byId.get(x.parent_id)) if (closed.has(x.id)) return false;
+      return true;
+    });
+  }, [rows, byId, closed, search]);
+
+  function toggle(e, id) {
+    e.stopPropagation();  // the row itself opens the extrato
+    const next = new Set(closed);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setClosed(next);
+  }
+
   const totals = data?.totals;
   const balanced = totals && Number(totals.debit).toFixed(2) === Number(totals.credit).toFixed(2);
 
@@ -88,6 +118,21 @@ export default function Balancete() {
         </label>
       </div>
 
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        <div className="relative flex-1 max-w-md">
+          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Procurar por código ou descrição" className={inputCls + ' w-full pl-10'} />
+        </div>
+        {!searching && (
+          <>
+            <button type="button" onClick={() => setClosed(new Set())} className={btnGhost}><ChevronsUpDown size={15} /> Abrir tudo</button>
+            <button type="button" onClick={() => setClosed(new Set(rows.filter((a) => a.level === 1).map((a) => a.id)))} className={btnGhost}>
+              <ChevronsDownUp size={15} /> Fechar tudo
+            </button>
+          </>
+        )}
+      </div>
+
       <div className="bg-bg-elevated border border-border rounded-lg overflow-x-auto">
         <table className="w-full text-[13px]">
           <thead>
@@ -102,7 +147,8 @@ export default function Balancete() {
           <tbody>
             {data === null && <tr><td colSpan={5} className="py-10 text-center"><Loader2 className="animate-spin text-accent inline" /></td></tr>}
             {data?.accounts.length === 0 && <tr><td colSpan={5} className="py-10 text-center text-text-muted">Nenhum movimento no período</td></tr>}
-            {data?.accounts.map((a) => (
+            {data && rows.length > 0 && shown.length === 0 && <tr><td colSpan={5} className="py-10 text-center text-text-muted">Nenhuma conta encontrada</td></tr>}
+            {shown.map((a) => (
               <tr key={a.id} onClick={() => openLedger(a)}
                 className={'border-b border-border last:border-0 hover:bg-bg-inset/60 cursor-pointer ' + (a.level === 1 ? 'bg-bg-inset/60 font-semibold' : '')}>
                 <td className="relative px-4 py-2">
@@ -110,6 +156,12 @@ export default function Balancete() {
                     <span key={i} aria-hidden="true" className="absolute -top-px -bottom-px w-px bg-text-muted/30" style={{ left: 22 + i * 18 }} />
                   ))}
                   <div className="flex items-center gap-3" style={{ paddingLeft: (a.level - 1) * 18 }}>
+                    {parents.has(a.id) && !searching ? (
+                      <button type="button" onClick={(e) => toggle(e, a.id)} title={closed.has(a.id) ? 'Abrir' : 'Fechar'}
+                        className="w-5 h-5 shrink-0 inline-flex items-center justify-center rounded border border-border text-text-muted hover:text-accent hover:border-accent transition-colors cursor-pointer">
+                        {closed.has(a.id) ? <Plus size={12} /> : <Minus size={12} />}
+                      </button>
+                    ) : <span className="w-5 shrink-0" />}
                     <span className={'font-mono w-24 shrink-0 ' + (a.level <= 2 ? 'text-text-primary' : 'text-text-muted')}>{a.code}</span>
                     <span className={'truncate ' + (a.level === 1 ? 'uppercase tracking-wide text-text-primary' : 'text-text-primary')}>{a.name}</span>
                   </div>
