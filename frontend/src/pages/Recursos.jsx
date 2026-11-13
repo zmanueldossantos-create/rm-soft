@@ -167,8 +167,8 @@ export default function Recursos() {
         </button>
       </div>
       <p className="text-text-muted text-sm mb-6">
-        Chambres, praticiens, mesas ou qualquer outro recurso reservável - a base para o sistema de reservas.
-        Os tipos disponíveis geram-se em Configurações {'>'} Catalogos {'>'} Tipos de Recurso.
+        Quartos, praticantes, mesas ou qualquer outro recurso reservável - a base das reservas.
+        Os tipos (com os seus horários e tarifas) definem-se em Administração {'>'} Catálogos {'>'} Tipos de Recurso.
       </p>
 
       {activities.length > 1 && (
@@ -192,11 +192,12 @@ export default function Recursos() {
         <div className="bg-bg-elevated border border-border rounded-lg p-10 text-center">
           <Boxes size={28} className="text-text-muted mx-auto mb-3" />
           <p className="text-text-primary font-medium mb-1">{!selectedActivityId ? (activities.length === 0 ? 'Nenhuma atividade ativa' : 'Selecione uma atividade') : 'Nenhum recurso registado'}</p>
-          {selectedActivityId && <p className="text-text-muted text-sm">Crie o primeiro recurso desta atividade para comecar a gerir reservas</p>}
+          {selectedActivityId && <p className="text-text-muted text-sm">Crie o primeiro recurso desta atividade para começar a gerir reservas</p>}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {resources.map((r) => (
+          {/* grouped by type (the VIP rooms together), then by name */}
+          {[...resources].sort((a, b) => typeName(a.resource_type_id).localeCompare(typeName(b.resource_type_id)) || a.name.localeCompare(b.name)).map((r) => (
             <div key={r.id} className="bg-bg-elevated border border-border rounded-lg p-4 flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex items-center gap-2 mb-1">
