@@ -133,3 +133,22 @@ def test_the_file_is_a_small_catalog_that_leaves_the_rest_to_the_training():
     assert {p["categoria"] for p in data["produtos"]} == set(data["categorias"])  # every category has its articles
     assert not data.get("compras") and "hotel" not in data  # no movement, the Padaria only
     assert {p["codigo"] for p in data["produtos"] if "custo" in p} == {"BEB02"}  # only what is bought ready
+
+
+@pytest.mark.asyncio
+async def test_a_company_already_selling_takes_a_catalog_but_never_purchases(db, company_with_essentials, legal_vat_rates):
+    """The Hotel granted after the Padaria has sold: its catalog loads (nothing existing touched); a file with
+    «compras» (documents and stock) stays for a company that is starting."""
+    from app.services.invoice_service import create_invoice
+    ctx = company_with_essentials
+    company = ctx["company"]
+    await _prepare(db, company.id)
+    await load(db, company.nif, {"servicos": [{"codigo": "ENT-T", "nome": "Entrega", "preco": 1000}]})
+    from app.models.service import Service
+    entrega = (await db.execute(select(Service).where(Service.company_id == company.id, Service.code == "ENT-T"))).scalar_one()
+    await create_invoice(db, company.id, ctx["activity"].id, customer_id=None, invoice_type="FACTURA_RECIBO",
+                         lines_input=[{"service_id": entrega.id, "quantity": 1}])  # a real sale (not training)
+    await load(db, company.nif, {"servicos": [{"codigo": "ENT-T2", "nome": "Entrega 2", "preco": 2000}]})
+    assert (await db.execute(select(Service).where(Service.company_id == company.id, Service.code == "ENT-T2"))).first()
+    with pytest.raises(CatalogError, match="compras"):
+        await load(db, company.nif, {"compras": [{"fornecedor": "X"}]})

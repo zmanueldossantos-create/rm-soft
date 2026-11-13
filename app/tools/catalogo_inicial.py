@@ -10,8 +10,8 @@ What it loads, in this order (every key optional): categorias, fornecedores, mat
 receitas, clientes, compras (purchase invoices with their stock entry: the stock comes in as in real life), and a
 "hotel" block - room types with their rates ("tarifas": the night without "duracao_min", the timed ones with it, a rate with hours of its own with "entrada" and "saida") and rooms (with "precos": their own price for some rates) and rooms, hotel services - loaded only when the company has the Hotel
 module (run it again after granting it). It may be run again: what already exists (same code, name or document) is
-left as it is and listed - never duplicated, never overwritten. Refused for a company with real (non-training)
-sales documents.
+left as it is and listed - never duplicated, never overwritten. A company with real (non-training) sales documents
+still takes a catalog (a module granted later), but never the «compras» block (documents and stock).
 
 Units (KG, L...) come from the platform's catalog: a missing one is named before anything is created.
 """
@@ -88,9 +88,12 @@ async def load(db, nif: str, data: dict, dry_run: bool = False) -> dict:
     if company is None:
         raise CatalogError(f"Nenhuma empresa com o NIF {nif} - crie-a primeiro em Empresas")
     cid = company.id
-    if (await db.execute(select(Invoice.id).where(
+    # A company already selling may still receive a catalog (a module granted later: the Hotel next to the Padaria) -
+    # what exists is never touched; only the purchases (documents and stock) are for a company that is starting.
+    if data.get("compras") and (await db.execute(select(Invoice.id).where(
             Invoice.company_id == cid, Invoice.issuance_mode != "FORMACAO").limit(1))).first() is not None:
-        raise CatalogError("A empresa já tem documentos reais - o catálogo inicial é só para uma empresa a começar")
+        raise CatalogError("A empresa já tem documentos reais - as compras do ficheiro (documentos e stock) são só para "
+                           "uma empresa a começar: retire o bloco «compras» para carregar o resto do catálogo")
 
     report = {"criados": [], "existentes": [], "ignorados": []}
     created, existed, skipped = report["criados"].append, report["existentes"].append, report["ignorados"].append
