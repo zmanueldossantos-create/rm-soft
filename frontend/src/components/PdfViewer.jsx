@@ -8,7 +8,9 @@ import { pdfFileName } from '../utils/fileName';
 // preview, can only name it after the temporary blob address (e2a79e69-….pdf).
 export default function PdfViewer({ url, title, fileName, onClose, maxWidthClass = 'max-w-3xl', stacked = false, heightClass = 'h-[66vh]' }) {
   const frame = useRef(null);
-  const name = pdfFileName(fileName || title);
+  // without a fileName, the title's « - » separate the parts: «Relatório de fecho - Caixa 1 - 13/11/2026» ->
+  // Relatorio-de-fecho_Caixa-1_13-11-2026.pdf
+  const name = pdfFileName(...(fileName ? [fileName] : String(title || '').split(' - ')));
 
   function save() {
     const a = document.createElement('a');

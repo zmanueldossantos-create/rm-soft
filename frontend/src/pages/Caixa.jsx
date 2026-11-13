@@ -567,10 +567,12 @@ export default function Caixa() {
     }
   }
 
-  async function printClosingReport(sessionId) {
+  // businessDate: the session's day - the report is saved as Relatorio-de-fecho_Caixa-1-Balcao_13-11-2026.pdf
+  async function printClosingReport(sessionId, businessDate) {
     try {
+      const posName = allActivePos.find((p) => p.id === selectedPosId)?.name;
       setPdfBlobUrl(await fetchClosingReportPdfBlob(sessionId));
-      setPdfFilename('Relatório de fecho');
+      setPdfFilename(['Relatório de fecho', posName, businessDate && formatDate(businessDate)].filter(Boolean).join(' - '));
       setPdfModalOpen(true);
     } catch (err) {
       setError(extractErrorMessage(err, 'Erro ao gerar o relatório de fecho'));
@@ -704,9 +706,9 @@ export default function Caixa() {
   // The closing report (A4): proposed after the closing when the till asks for it (print_closing_report), and
   // always available - the closing window closes, then the report opens in the PDF viewer.
   const [closingReportProposed, setClosingReportProposed] = useState(false); // read fresh after each closing
-  async function finishAndPrintClosingReport(sessionId) {
+  async function finishAndPrintClosingReport(sessionId, businessDate) {
     finishClosing();
-    await printClosingReport(sessionId);
+    await printClosingReport(sessionId, businessDate);
   }
 
   async function handleCloseAfterBilletage() {
@@ -2028,7 +2030,7 @@ export default function Caixa() {
             {/* the closing report: the main button when the till proposes it, otherwise next to Concluir */}
             <div className="flex gap-2">
               <button
-                onClick={() => finishAndPrintClosingReport(closeResult.id)}
+                onClick={() => finishAndPrintClosingReport(closeResult.id, closeResult.business_date)}
                 className={(closingReportProposed ? 'flex-1 bg-accent hover:bg-accent-hover text-white' : 'border border-border hover:border-accent text-text-primary')
                   + ' font-semibold text-sm rounded-md py-3 px-4 transition-colors cursor-pointer'}
               >
@@ -2221,7 +2223,7 @@ export default function Caixa() {
                       <span className="text-[11px] text-amber-500 [.light_&]:text-amber-700 whitespace-nowrap">Aberta</span>
                     )}
                     <button
-                      onClick={() => printClosingReport(s.id)}
+                      onClick={() => printClosingReport(s.id, s.business_date)}
                       disabled={!closed}
                       className="border border-border hover:border-accent text-text-primary text-[12px] font-medium px-3 py-1.5 rounded-md transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                     >
