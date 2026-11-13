@@ -48,7 +48,12 @@ async def test_the_balance_sheet_and_the_income_statement(db, company_with_essen
 
     with pytest.raises(StatementError):
         await financial_statements(db, company_id, today, today.replace(year=today.year - 1))
-    company = {"name": "Empresa", "nif": "5000000000"}
+    company = {"name": "MEL DA ROCHA - COMÉRCIO GERAL E PRESTAÇÃO DE SERVIÇOS, LDA", "nif": "5000000000",
+               "address": "Rua da Brigada Eletrónica, Palanca – Kilamba Kiaxi, Luanda", "phone_number": "+244921717712"}
+    pypdf = pytest.importorskip("pypdf")
+    import io
+    # the balance sheet holds on one page, its last total included (a company box of two lines, as a real one)
+    assert len(pypdf.PdfReader(io.BytesIO(generate_statements_pdf(data, company, "balance"))).pages) == 1
     assert statements_excel(data, "Empresa")[:2] == b"PK"
     for which in ("balance", "income", "both"):
         assert generate_statements_pdf(data, company, which).startswith(b"%PDF")

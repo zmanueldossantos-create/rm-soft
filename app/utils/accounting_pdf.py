@@ -202,7 +202,8 @@ def _statement(p: _Page, heading: str | None, rows: list[dict], columns: tuple[s
     xs = [MARGIN, MARGIN + widths[0] * CONTENT_W, MARGIN + (widths[0] + widths[1]) * CONTENT_W]
 
     def draw(values, font, fill=None, indent=0):
-        if p.y - ROW_H < 25 * mm:
+        # down to just above the footer (15 mm): the balance sheet's last total never alone on a second page
+        if p.y - ROW_H < 19 * mm:
             _footer(c)
             c.showPage()
             p.y = A4[1] - MARGIN
