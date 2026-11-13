@@ -43,8 +43,9 @@ class _Page:
     def __init__(self, c):
         self.c, self.y = c, PAGE_H - MARGIN
 
-    def need(self, height: float) -> None:
-        if self.y - height < 25 * mm:
+    def need(self, height: float, floor: float = 25 * mm) -> None:
+        """floor: how low the block may go - the signatures may sit closer to the footer line (12 mm) than a table."""
+        if self.y - height < floor:
             self.c.showPage()
             self.y = PAGE_H - MARGIN
 
@@ -192,6 +193,7 @@ def generate_closing_report_pdf(data: dict) -> bytes:
             p.need(5 * mm)
             c.drawString(MARGIN + 18 * mm, p.y, part)
             p.y -= 5 * mm
+        p.y -= 3 * mm  # clear of the next section's title
     if s["pending_in"]:
         c.setFillColor(TEXT_MUTED)
         c.setFont("Helvetica-Oblique", 8.5)
@@ -225,9 +227,9 @@ def generate_closing_report_pdf(data: dict) -> bytes:
                    total=["Total", "", str(sum(b["quantity"] for b in t["lines"])), kz(sum(b["amount"] for b in t["lines"]))])
             p.y -= 2 * mm
 
-    # signatures
-    p.need(30 * mm)
-    p.y -= 16 * mm
+    # signatures: room for the two lines and their names only (21 mm) - never a page of their own when they fit
+    p.need(21 * mm, floor=16 * mm)
+    p.y -= 14 * mm
     c.setStrokeColor(BORDER)
     c.setLineWidth(0.6)
     for x, label, name in ((MARGIN, "O(A) Caixa", data["closed_by"]), (MARGIN + CONTENT_W / 2 + 5 * mm, "O(A) Responsável", "")):

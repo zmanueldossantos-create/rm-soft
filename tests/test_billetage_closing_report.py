@@ -47,6 +47,16 @@ async def test_the_closing_report_prints_the_notes_and_coins_counted(db, company
     pypdf = pytest.importorskip("pypdf")
     text = " ".join(page.extract_text() for page in pypdf.PdfReader(io.BytesIO(generate_closing_report_pdf(data))).pages)
     assert "Billetagem (contagem do fecho)" in text and "Total contado" in text
+    # a usual closing (receipts by method, a difference and its reason, the count): the signatures stay on its page
+    summary = dict(data["summary"], by_method=[
+        {"code": "NU", "name": "Numerário", "label": "Numerário", "is_cash": True, "amount": 1100.0},
+        {"code": "CD", "name": "Cartão débito", "label": "Cartão débito", "is_cash": False, "amount": 22000.0}])
+    company = dict(data["company"], name="MEL DA ROCHA - COMÉRCIO GERAL E PRESTAÇÃO DE SERVIÇOS, LDA",
+                   address="Rua da Brigada Eletrónica, Palanca – Kilamba Kiaxi, Luanda", phone_number="+244921717712")
+    data = dict(data, company=company, summary=summary, notes="Erro de troco",
+                documents=[{"label": "Factura/Recibo", "count": 2, "total": 23100.0}],
+                billetage=data["billetage"] + [{"value": 50.0, "type": "MOEDA", "quantity": 2, "amount": 100.0}])
+    assert len(pypdf.PdfReader(io.BytesIO(generate_closing_report_pdf(data))).pages) == 1
 
 
 @pytest.mark.asyncio

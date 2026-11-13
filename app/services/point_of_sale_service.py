@@ -70,6 +70,7 @@ async def create_point_of_sale(
     is_default=True is only ever set internally by activity_service.create_activity, never
     via the public create route - a GESTOR cannot mark an arbitrary POS as default afterward."""
     _check_printing(print_after_sale, print_ticket, print_a4)
+    name = " ".join((name or "").split())  # « Caixa 1» -> «Caixa 1»: no stray spaces in the reports and alerts
     await get_activity_or_raise(db, company_id, activity_id)
     await _check_name_available(db, activity_id, name)
     if not is_default:  # an activity's own till: checked before the activity is created (activity_service)
@@ -104,6 +105,7 @@ async def update_point_of_sale(
     allow_price_levels: bool = False, allow_free_price: bool = False, kind: str | None = None,
 ) -> PointOfSale:
     pos = await get_pos_or_raise(db, company_id, pos_id)
+    name = " ".join((name or "").split())  # « Caixa 1» -> «Caixa 1»: no stray spaces in the reports and alerts
     if kind is not None and PosKind(kind) != pos.kind:
         await _check_kind_change(db, company_id, pos, PosKind(kind))
         pos.kind = PosKind(kind)
