@@ -395,30 +395,30 @@ export default function CaixasPanel() {
           </label>
           </>}
             {/* closing: accept a difference (always with a reason) or refuse it; propose the A4 closing report */}
-            <label className="flex items-center gap-2 text-[13px] text-text-secondary cursor-pointer">
-              <input type="checkbox" checked={posForm.acceptClosingDifference} onChange={(e) => setPosForm((p) => ({ ...p, acceptClosingDifference: e.target.checked }))} />
+            <label className="flex items-center gap-2.5 text-[13px] text-text-primary cursor-pointer">
+              <input type="checkbox" checked={posForm.acceptClosingDifference} onChange={(e) => setPosForm((p) => ({ ...p, acceptClosingDifference: e.target.checked }))} className="w-4 h-4 accent-accent cursor-pointer" />
               Aceitar diferença no fecho (com motivo obrigatório)
             </label>
             {!posForm.acceptClosingDifference && (
               <p className="text-[11px] text-text-muted -mt-1 ml-6">O fecho só é aceite se o contado for igual ao esperado.</p>
             )}
-            <label className="flex items-center gap-2 text-[13px] text-text-secondary cursor-pointer">
-              <input type="checkbox" checked={posForm.printClosingReport} onChange={(e) => setPosForm((p) => ({ ...p, printClosingReport: e.target.checked }))} />
+            <label className="flex items-center gap-2.5 text-[13px] text-text-primary cursor-pointer">
+              <input type="checkbox" checked={posForm.printClosingReport} onChange={(e) => setPosForm((p) => ({ ...p, printClosingReport: e.target.checked }))} className="w-4 h-4 accent-accent cursor-pointer" />
               Propor a impressão do relatório de fecho (A4)
             </label>
           {posForm.kind !== 'COFRE' && <div className="rounded-md border border-border px-3.5 py-3 flex flex-col gap-2.5">
-            <label className="flex items-center gap-2 text-[13px] text-text-primary cursor-pointer">
-              <input type="checkbox" checked={posForm.printAfterSale} onChange={(e) => setPosForm((p) => ({ ...p, printAfterSale: e.target.checked }))} />
+            <label className="flex items-center gap-2.5 text-[13px] text-text-primary cursor-pointer">
+              <input type="checkbox" checked={posForm.printAfterSale} onChange={(e) => setPosForm((p) => ({ ...p, printAfterSale: e.target.checked }))} className="w-4 h-4 accent-accent cursor-pointer" />
               {'Imprimir ap\u00f3s a venda'}
             </label>
             {posForm.printAfterSale && (
               <div className="flex items-center gap-5 pl-6 text-[13px] text-text-primary">
                 <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={posForm.printTicket} onChange={(e) => setPosForm((p) => ({ ...p, printTicket: e.target.checked }))} />
+                  <input type="checkbox" checked={posForm.printTicket} onChange={(e) => setPosForm((p) => ({ ...p, printTicket: e.target.checked }))} className="w-4 h-4 accent-accent cursor-pointer" />
                   {'Tal\u00e3o'}
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={posForm.printA4} onChange={(e) => setPosForm((p) => ({ ...p, printA4: e.target.checked }))} />
+                  <input type="checkbox" checked={posForm.printA4} onChange={(e) => setPosForm((p) => ({ ...p, printA4: e.target.checked }))} className="w-4 h-4 accent-accent cursor-pointer" />
                   A4
                 </label>
               </div>
