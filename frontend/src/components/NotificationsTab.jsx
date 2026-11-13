@@ -253,7 +253,7 @@ function RecipientModal({ recipient, events, channels, onClose, onSaved }) {
   }
 
   return (
-    <Modal open onClose={onClose} title={recipient ? 'Editar destinatário' : 'Novo destinatário'} maxWidthClass="max-w-2xl">
+    <Modal open onClose={onClose} title={recipient ? 'Editar destinatário' : 'Novo destinatário'} maxWidthClass="max-w-5xl">
       <form onSubmit={submit} className="flex flex-col gap-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <label><span className={labelClass}>Nome *</span><input value={form.name} onChange={(e) => set('name', e.target.value)} maxLength={100} placeholder="Ex.: Dono, Gerente da sala" className={inputClass} /></label>
@@ -279,7 +279,7 @@ function RecipientModal({ recipient, events, channels, onClose, onSaved }) {
         )}
         <div>
           <span className={labelClass}>Avisos que recebe</span>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
             {events.map((ev) => {
               const on = form.events.includes(ev.code);
               return (
