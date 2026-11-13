@@ -333,6 +333,11 @@ export default function Caixa() {
   // matching exactly is required to submit, per the "button only activates when the breakdown matches" requirement.
   const moedeiroTarget = currentBalance;
   const moedeiroMatches = moedeiroTarget !== null && Math.abs(moedeiroTotal - moedeiroTarget) < 0.01;
+  // A closing count may differ from the expected when the till accepts a difference at closing (Tesouraria → Caixas):
+  // the count is recorded as it is, and the closing then asks for the reason - never blocked here.
+  const moedeiroPos = allActivePos.find((p) => p.id === selectedPosId);
+  const closingDifferenceAccepted = moedeiroCountType === 'FECHO' && moedeiroPos?.accept_closing_difference !== false;
+  const moedeiroCanSubmit = moedeiroMatches || (closingDifferenceAccepted && moedeiroTarget !== null);
 
   async function handleMoedeiroSubmit() {
     if (!session) return;
@@ -2504,6 +2509,9 @@ export default function Caixa() {
                 {!moedeiroMatches && moedeiroTarget !== null && (
                   <p className="text-[11px] text-danger">
                     {moedeiroTotal > moedeiroTarget ? `Excede em ${formatKz(moedeiroTotal - moedeiroTarget)} Kz` : `Falta ${formatKz(moedeiroTarget - moedeiroTotal)} Kz`}
+                    {moedeiroCountType === 'FECHO' && (closingDifferenceAccepted
+                      ? ' - a diferença fica registada no fecho, com o seu motivo'
+                      : ' - esta caixa não aceita diferenças no fecho: conte de novo')}
                   </p>
                 )}
               </div>
@@ -2511,7 +2519,7 @@ export default function Caixa() {
 
               <button
                 onClick={handleMoedeiroSubmit}
-                disabled={moedeiroSaving || !moedeiroMatches}
+                disabled={moedeiroSaving || !moedeiroCanSubmit}
                 className="bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer"
               >
                 {moedeiroSaving ? <Loader2 size={17} className="animate-spin" /> : <Coins size={17} />}
