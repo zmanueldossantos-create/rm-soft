@@ -1,3 +1,4 @@
+import { formatKz } from '../utils/format';
 import VatReclassify from '../components/VatReclassify';
 import ActivityScopePicker from '../components/ActivityScopePicker';
 import ExemptionMotiveField from '../components/ExemptionMotiveField';
@@ -119,11 +120,21 @@ export default function Services() {
     return map;
   }, [vatRates]);
 
+  // by code: the rates of a room type side by side (STD-1H, STD-2H...), the extras apart
   const filteredServices = useMemo(() => {
-    if (!search.trim()) return services;
-    const q = search.toLowerCase();
-    return services.filter((s) => s.code.toLowerCase().includes(q) || s.name.toLowerCase().includes(q));
+    const q = search.trim().toLowerCase();
+    const shown = q ? services.filter((s) => s.code.toLowerCase().includes(q) || s.name.toLowerCase().includes(q)) : services;
+    return [...shown].sort((a, b) => a.code.localeCompare(b.code, 'pt', { numeric: true }));
   }, [services, search]);
+  // what a service is: its service type, or - a rate of a room type - that type, with its duration or its hours
+  function kindOf(s) {
+    const type = serviceTypes.find((t) => t.id === s.service_type_id)?.name;
+    const roomType = resourceTypes.find((t) => t.id === s.resource_type_id)?.name;
+    if (!roomType) return type || '-';
+    const when = s.duration_minutes ? s.duration_minutes + ' min'
+      : s.stay_start_time && s.stay_end_time ? s.stay_start_time.slice(0, 5) + ' - ' + s.stay_end_time.slice(0, 5) : 'horário do tipo';
+    return 'Tarifa ' + roomType + ' · ' + when;
+  }
 
   function openCreateModal() {
     setEditingId(null);
@@ -309,14 +320,13 @@ export default function Services() {
               </thead>
               <tbody>
                 {filteredServices.map((s) => {
-                  const type = serviceTypes.find((t) => t.id === s.service_type_id);
                   return (
                     <tr key={s.id} className="border-b border-border last:border-0 hover:bg-bg-inset/40 transition-colors">
                       <td className="px-3 py-4"><input type="checkbox" checked={selectedIds.includes(s.id)} onChange={(e) => setSelectedIds((prev) => (e.target.checked ? [...prev, s.id] : prev.filter((x) => x !== s.id)))} /></td>
                       <td className="px-6 py-4 font-mono text-text-muted">{s.code}</td>
                       <td className="px-6 py-4 font-display font-medium text-text-primary">{s.name}</td>
-                      <td className="px-6 py-4 font-mono text-text-muted">{type?.name || '-'}</td>
-                      <td className="px-6 py-4 font-mono text-text-primary">{s.price != null ? Number(s.price).toFixed(2) + ' Kz' : '-'}</td>
+                      <td className="px-6 py-4 text-[13px] text-text-muted whitespace-nowrap">{kindOf(s)}</td>
+                      <td className="px-6 py-4 font-mono text-text-primary">{s.price != null ? formatKz(s.price) + ' Kz' : '-'}</td>
                       <td className="px-6 py-4 font-mono text-text-muted">{vatById[s.vat_id] ? vatById[s.vat_id].rate + '%' : '-'}</td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2.5">
