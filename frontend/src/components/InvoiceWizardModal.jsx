@@ -19,6 +19,7 @@ import { extractErrorMessage } from '../utils/errors';
 import { medicineSummary, getPharmacyContext } from '../api/pharmacy';
 import PrescriptionModal, { prescriptionNeedOf } from './PrescriptionModal';
 
+import { formatDate } from '../utils/format';
 import { dueDateFor, isProntoTerm } from '../utils/paymentTerms';
 import { useAuthStore } from '../store/authStore';
 import { FREE, priceOf, levelOptions, hasPriceChoice, unitCost } from '../utils/priceLevels';
@@ -1003,8 +1004,8 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
                         <div className="min-w-0"><p className="text-[10.5px] uppercase tracking-wide text-text-muted">Tipo</p><p className="text-text-primary truncate">{currentTypeLabel || '-'}</p></div>
                         <div className="min-w-0"><p className="text-[10.5px] uppercase tracking-wide text-text-muted">Atividade</p><p className="text-text-primary truncate">{activities.find((a) => a.id === activityId)?.name || '-'}</p></div>
                         <div className="min-w-0"><p className="text-[10.5px] uppercase tracking-wide text-text-muted">Cliente</p><p className="text-text-primary truncate">{selectedCustomer?.name || 'Sem cliente'}</p></div>
-                        <div className="min-w-0"><p className="text-[10.5px] uppercase tracking-wide text-text-muted">Data</p><p className="text-text-primary truncate">{businessDate}</p></div>
-                        <div className="min-w-0"><p className="text-[10.5px] uppercase tracking-wide text-text-muted">{invoiceType === 'ORCAMENTO' ? 'Válido até' : 'Vencimento'}</p><p className="text-text-primary truncate">{invoiceType === 'ORCAMENTO' ? (validUntil || addDays(businessDate || todayStr(), QUOTE_VALIDITY_DAYS)) : (dueDate || '-')}</p></div>
+                        <div className="min-w-0"><p className="text-[10.5px] uppercase tracking-wide text-text-muted">Data</p><p className="text-text-primary truncate">{formatDate(businessDate)}</p></div>
+                        <div className="min-w-0"><p className="text-[10.5px] uppercase tracking-wide text-text-muted">{invoiceType === 'ORCAMENTO' ? 'Válido até' : 'Vencimento'}</p><p className="text-text-primary truncate">{formatDate(invoiceType === 'ORCAMENTO' ? (validUntil || addDays(businessDate || todayStr(), QUOTE_VALIDITY_DAYS)) : dueDate)}</p></div>
                         <div className="min-w-0"><p className="text-[10.5px] uppercase tracking-wide text-text-muted">Pagamento</p><p className="text-text-primary truncate">{paymentMethods.find((m) => m.id === paymentMethodId)?.name || '-'}</p></div>
                       </div>
                     </div>
@@ -1223,11 +1224,11 @@ export default function InvoiceWizardModal({ open, onClose, onCreated, mode = 'c
               <tr className="text-left align-top">
                 <td className="py-1.5 pr-4">
                   <p className="font-semibold text-[11px]">Data de emissão</p>
-                  <p>{businessDate || '-'}</p>
+                  <p>{formatDate(businessDate)}</p>
                 </td>
                 <td className="py-1.5 pr-4">
                   <p className="font-semibold text-[11px]">Data de vencimento</p>
-                  <p>{dueDate || '-'}</p>
+                  <p>{formatDate(dueDate)}</p>
                 </td>
                 <td className="py-1.5 pr-4">
                   <p className="font-semibold text-[11px]">Modo de pagamento</p>

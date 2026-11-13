@@ -7,6 +7,7 @@ import { getMyCompanyBankAccounts } from '../api/company';
 import { extractErrorMessage } from '../utils/errors';
 import { paymentMethodsApi } from '../api/catalogs';
 import { useToastState } from './Toaster';
+import { formatKz } from '../utils/format';
 
 // Self-contained RC (receipt) action modal against an already-issued invoice - the ONE receipt modal of the app, used
 // from any screen (Caixa's "Consultar documentos" with its own cash point, Faturas choosing one) without leaving
@@ -110,7 +111,7 @@ const DocumentActionModals = forwardRef(function DocumentActionModals({ onSucces
           <form onSubmit={handleRcSubmit} className="flex flex-col gap-4">
             <p className="text-[12px] text-text-muted">
               Referente a <span className="font-mono text-text-primary">{INVOICE_TYPE_CODE[rcInvoice.invoice_type] || rcInvoice.invoice_type} {rcInvoice.series}/{rcInvoice.number}</span>
-              {Number(rcInvoice.amount_due || 0) > 0 && <span> - a pagar: <span className="font-mono text-text-primary">{Number(rcInvoice.amount_due).toFixed(2)}</span></span>}
+              {Number(rcInvoice.amount_due || 0) > 0 && <span> - a pagar: <span className="font-mono text-text-primary">{formatKz(rcInvoice.amount_due)} Kz</span></span>}
             </p>
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -125,7 +126,7 @@ const DocumentActionModals = forwardRef(function DocumentActionModals({ onSucces
             <div className="grid grid-cols-2 gap-4">
               <div className={rcUsesBank ? '' : 'opacity-60 pointer-events-none'}>
                 <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Conta bancária</label>
-                <Select value={rcUsesBank ? rcBankAccountId : ''} onChange={setRcBankAccountId} options={bankAccounts.map((b) => ({ value: b.id, label: b.account_number }))} placeholder={rcUsesBank ? 'Selecionar' : 'Não aplicável a este método'} />
+                <Select value={rcUsesBank ? rcBankAccountId : ''} onChange={setRcBankAccountId} options={bankAccounts.map((b) => ({ value: b.id, label: (b.bank_acronym || 'Banco') + ' · ' + b.account_number }))} placeholder={rcUsesBank ? 'Selecionar' : 'Não aplicável a este método'} />
               </div>
               <div>
                 <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Referência</label>

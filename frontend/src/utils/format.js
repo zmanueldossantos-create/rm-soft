@@ -6,3 +6,11 @@ export function formatKz(value) {
   const [int, dec] = Math.abs(n).toFixed(2).split('.');
   return (n < 0 ? '-' : '') + int.replace(/\B(?=(\d{3})+(?!\d))/g, '\u00a0') + ',' + dec;
 }
+
+// A day as everywhere on the screens: 13/11/2026 (an ISO «2026-11-13», or a full timestamp, read without any time zone
+// shift); empty stays '-'.
+export function formatDate(value) {
+  if (!value) return '-';
+  const [y, m, d] = String(value).slice(0, 10).split('-');
+  return d && m && y ? d + '/' + m + '/' + y : String(value);
+}
