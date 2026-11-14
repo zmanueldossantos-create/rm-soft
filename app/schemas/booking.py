@@ -246,3 +246,4 @@ class StayQuoteResponse(BaseModel):
     own_price: bool  # the room's own price, not the rate's
     total: float
     vat_rate: float
+    problem: str | None = None  # why the booking would be refused (a Pernoite over two nights)

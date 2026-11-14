@@ -45,7 +45,7 @@ from app.models.invoice import Invoice
 from app.models.vat import VAT
 from app.services.booking_service import (
     get_booking_or_raise, _clean_guest_name, _has_overlap, _validate_service_for_resource, ensure_capacity,
-    BookingOverlapError, InvalidBookingRangeError,
+    ensure_single_period, own_hours_periods, BookingOverlapError, InvalidBookingRangeError,
 )
 from app.services.document_rules import default_paid_on_issue_type
 from app.services.pos_service import checkout
@@ -97,11 +97,8 @@ def _stay_quantity(service: Service, starts_at: datetime, ends_at: datetime) -> 
     if service.duration_minutes:
         minutes = (ends_at - starts_at).total_seconds() / 60
         return max(math.ceil(minutes / service.duration_minutes - 1e-9), 1)
-    if service.stay_start_time is not None and service.stay_end_time is not None \
-            and service.stay_end_time > service.stay_start_time:
-        days = (ends_at.astimezone(LUANDA).date() - starts_at.astimezone(LUANDA).date()).days + 1
-        return max(days, 1)
-    return _nights_between(starts_at, ends_at)
+    periods = own_hours_periods(service, starts_at, ends_at)
+    return periods if periods is not None else _nights_between(starts_at, ends_at)
 
 
 def _quote_unit(service: Service) -> str:
@@ -127,7 +124,13 @@ async def stay_quote(
     quantity = _stay_quantity(service, starts_at, ends_at) if ends_at > starts_at else 1
     unit_price = await resource_rate_price(db, resource.id, service)
     vat_rate = (await db.execute(select(VAT.rate).where(VAT.id == service.vat_id))).scalar_one_or_none()
+    try:  # what the booking would be refused for, said before it is tried
+        ensure_single_period(service, starts_at, ends_at)
+        problem = None
+    except InvalidBookingRangeError as e:
+        problem = str(e)
     return {
+        "problem": problem,
         "quantity": quantity, "unit": _quote_unit(service), "unit_price": unit_price,
         "own_price": unit_price != float(service.price or 0), "total": round(quantity * unit_price, 2),
         "vat_rate": float(vat_rate or 0),
@@ -339,6 +342,7 @@ async def extend_stay(db: AsyncSession, company_id: uuid.UUID, booking_id: uuid.
                 OpenAccountLine.account_id == account.id, OpenAccountLine.service_id == booking.service_id,
             ).order_by(OpenAccountLine.added_at).limit(1)
         )).scalars().first()
+        ensure_single_period(service, booking.starts_at, ends_at)  # a Pernoite is not prolonged into a second one
         if service is not None and line is not None:
             line.quantity = _stay_quantity(service, booking.starts_at, ends_at)
 

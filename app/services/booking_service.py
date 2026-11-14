@@ -4,7 +4,7 @@ app.models.booking for the full design rationale, especially the overlap
 rule enforced here (never at the DB level).
 """
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,6 +15,8 @@ from app.models.resource_type_catalog import ResourceTypeCatalog
 from app.models.customer import Customer
 from app.models.service import Service
 from app.services.ownership import ensure_owned
+
+LUANDA = timezone(timedelta(hours=1))
 
 
 class BookingNotFoundError(Exception):
@@ -90,6 +92,35 @@ async def ensure_capacity(db: AsyncSession, resource, party_size: int | None) ->
                                     f"a reserva tem {party_size}")
 
 
+class RateSinglePeriodError(InvalidBookingRangeError):
+    """A rate with hours of its own (Pernoite 22:00 -> 07:30) covers one period: two in a row would keep the room
+    the whole day between for the price of two nights."""
+
+
+def _local_date(moment: datetime):
+    """The Luanda calendar day of a moment - one without a zone is Luanda's wall-clock time (the forms')."""
+    return (moment if moment.tzinfo else moment.replace(tzinfo=LUANDA)).astimezone(LUANDA).date()
+
+
+def own_hours_periods(service, starts_at: datetime, ends_at: datetime) -> int | None:
+    """How many periods of a rate with hours of its own a stay spans: overnight hours (Pernoite 22:00 -> 07:30) one
+    per night, same-day hours (Day use 08:00 -> 18:00) one per day; None for any other rate."""
+    if service.duration_minutes or service.stay_start_time is None or service.stay_end_time is None:
+        return None
+    days = (_local_date(ends_at) - _local_date(starts_at)).days
+    if service.stay_end_time > service.stay_start_time:
+        return max(days + 1, 1)
+    return max(days, 1)
+
+
+def ensure_single_period(service, starts_at: datetime, ends_at: datetime) -> None:
+    """A rate with hours of its own is sold one period at a time - longer, the night rate (Diária) or another booking."""
+    if service is not None and (own_hours_periods(service, starts_at, ends_at) or 1) > 1:
+        hours = service.stay_start_time.strftime("%H:%M") + " - " + service.stay_end_time.strftime("%H:%M")
+        raise RateSinglePeriodError(
+            f"A tarifa {service.name} cobre um só período ({hours}) - para mais tempo, use a diária ou faça outra reserva")
+
+
 async def _validate_service_for_resource(db: AsyncSession, company_id: uuid.UUID, resource, service_id: uuid.UUID | None) -> None:
     """Enforces ResourceTypeCatalog.requires_service (e.g. a CHAMBRE always has a
     rate to charge, even for a short stay) and, when a service IS given, that it's
@@ -137,6 +168,8 @@ async def create_booking(
     await ensure_owned(db, company_id, Service, service_id, "Serviço não encontrado")
     await _validate_service_for_resource(db, company_id, resource, service_id)
     await ensure_capacity(db, resource, party_size)
+    if service_id is not None:
+        ensure_single_period(await db.get(Service, service_id), starts_at, ends_at)
 
     if await _has_overlap(db, resource_id, starts_at, ends_at):
         raise BookingOverlapError("Este recurso já tem uma reserva neste período")
@@ -277,6 +310,8 @@ async def reschedule_booking(
     resource = await get_resource_or_raise(db, company_id, booking.resource_id)
     await _validate_service_for_resource(db, company_id, resource, service_id)
     await ensure_capacity(db, resource, party_size)
+    if service_id is not None:
+        ensure_single_period(await db.get(Service, service_id), starts_at, ends_at)
 
     if await _has_overlap(db, booking.resource_id, starts_at, ends_at, exclude_booking_id=booking_id):
         raise BookingOverlapError("Este recurso já tem uma reserva neste período")

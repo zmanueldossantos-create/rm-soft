@@ -1451,7 +1451,8 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
               options={availableServices.map((s) => ({ value: s.id, label: rateLabel(s) }))}
               placeholder="Nenhum"
             />
-            {quote && (
+            {quote?.problem && <p className="text-[12px] text-danger mt-1.5">{quote.problem}</p>}
+            {quote && !quote.problem && (
               <p className="text-[12px] text-text-muted mt-1.5">
                 <span className="text-text-primary font-medium font-mono">{quoteText(quote)}</span>
                 {quote.own_price ? ' · preço próprio deste recurso' : ''}
@@ -1495,7 +1496,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
           </div>
           <button
             type="submit"
-            disabled={saving || capacityBlocks}
+            disabled={saving || capacityBlocks || !!quote?.problem}
             className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer"
           >
             {saving ? <Loader2 size={17} className="animate-spin" /> : <Plus size={17} />}

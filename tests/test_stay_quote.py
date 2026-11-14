@@ -53,3 +53,32 @@ async def test_an_extra_is_not_a_rooms_rate(db, company_with_essentials):
         await create_booking(db, cid, room.id, ctx["gestor"].id, BASE, BASE + timedelta(days=2), service_id=breakfast.id)
     booking = await create_booking(db, cid, room.id, ctx["gestor"].id, BASE, BASE + timedelta(days=2), service_id=night.id)
     assert booking.service_id == night.id
+
+
+@pytest.mark.asyncio
+async def test_a_pernoite_covers_one_night(db, company_with_essentials):
+    """A rate with hours of its own is one period: two in a row would hold the room the whole day between."""
+    from app.services.booking_service import RateSinglePeriodError, create_booking, reschedule_booking
+
+    ctx = company_with_essentials
+    cid = ctx["company"].id
+    room, night, _hour = await _hotel(db, ctx)
+    overnight = Service(company_id=cid, code="HTL-PER", name="Pernoite", price=10000, vat_id=ctx["vat_nor"].id,
+                        unit_of_measure_id=ctx["unit_un"].id, resource_type_id=room.resource_type_id,
+                        stay_start_time=time(22, 0), stay_end_time=time(7, 30))
+    db.add(overnight)
+    await db.commit()
+    start = BASE.replace(hour=22)
+    one, two = start + timedelta(hours=9, minutes=30), start + timedelta(days=1, hours=9, minutes=30)
+
+    q = await stay_quote(db, cid, room.id, overnight.id, start, two)
+    assert "um só período (22:00 - 07:30)" in q["problem"]
+    assert (await stay_quote(db, cid, room.id, overnight.id, start, one))["problem"] is None
+    with pytest.raises(RateSinglePeriodError, match="use a diária"):
+        await create_booking(db, cid, room.id, ctx["gestor"].id, start, two, service_id=overnight.id)
+    booking = await create_booking(db, cid, room.id, ctx["gestor"].id, start, one, service_id=overnight.id)
+    with pytest.raises(RateSinglePeriodError):
+        await reschedule_booking(db, cid, booking.id, start, two, service_id=overnight.id)
+    # the same two nights on the Diária: fine
+    booking = await reschedule_booking(db, cid, booking.id, start, two, service_id=night.id)
+    assert booking.service_id == night.id
