@@ -86,3 +86,17 @@ async def test_the_life_of_a_stay_in_its_history(db, company_with_essentials):
     row = (await get_resource_history(db, cid, None, room.id, BASE - timedelta(days=1), BASE + timedelta(days=4)))["entries"][0]
     assert [e["kind"] for e in row["events"]] == ["CHECK_IN", "PROLONGAMENTO", "ENCURTAMENTO"]
     assert row["events"][1]["text"].endswith("(+1)") and row["events"][2]["text"].endswith("(-2)")
+
+
+@pytest.mark.asyncio
+async def test_the_assistant_sees_the_rooms_and_the_bookings(db, company_with_essentials):
+    """«Quantos quartos estão ocupados?» - the assistant reads the occupation now and the bookings of a period."""
+    from app.services.ai.tools import ocupacao_recursos, reservas
+    ctx = company_with_essentials
+    cid = ctx["company"].id
+    room, hour, _ = await _rooms(db, ctx)
+    await _enter(db, ctx, room, hour)
+    occupation = await ocupacao_recursos(db, cid, {})
+    assert occupation["ocupados"] == 1 and occupation["recursos"][0]["recurso"] == "Quarto 103"
+    listed = await reservas(db, cid, {})
+    assert [(r["recurso"], r["estado"], r["tarifa"]) for r in listed["reservas"]] == [("Quarto 103", "EM_CURSO", "Quarto 1 hora")]

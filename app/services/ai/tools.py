@@ -280,6 +280,62 @@ async def caixas(db: AsyncSession, company_id: uuid.UUID, arguments: dict) -> di
     }
 
 
+def _local(moment) -> str | None:
+    """A moment as Luanda's wall clock, for the answer (dd/mm hh:mm)."""
+    from app.services.hotel_service import LUANDA
+    return moment.astimezone(LUANDA).strftime("%d/%m %H:%M") if moment else None
+
+
+async def ocupacao_recursos(db: AsyncSession, company_id: uuid.UUID, arguments: dict) -> dict:
+    """Now: each resource (room, table, practitioner) of each activity - free, occupied (by whom, until when, past
+    its end) or reserved soon."""
+    from app.services.resource_status_service import list_resource_statuses
+    from app.models.resource import Resource
+    activity_ids = (await db.execute(select(Resource.activity_id).where(
+        Resource.company_id == company_id, Resource.is_active.is_(True)).distinct())).scalars().all()
+    result, counts = [], {"OCUPADA": 0, "RESERVADA": 0, "LIVRE": 0}
+    for activity_id in activity_ids:
+        activity = await db.get(Activity, activity_id)
+        for row in await list_resource_statuses(db, company_id, activity_id):
+            counts[row["status"]] = counts.get(row["status"], 0) + 1
+            item = {"atividade": activity.name if activity else None, "recurso": row["name"], "estado": row["status"]}
+            if row["stay_ends_at"]:
+                item["ate"] = _local(row["stay_ends_at"])
+                if row["stay_overdue_minutes"]:
+                    item["excedido_min"] = row["stay_overdue_minutes"]
+            if row["booking_id"]:
+                item["reserva"] = {"inicio": _local(row["booking_starts_at"]), "fim": _local(row["booking_ends_at"]),
+                                   "hospede": row["booking_guest_name"], "pessoas": row["booking_party_size"]}
+            if row["open_accounts"]:
+                item["conta_aberta"] = _money(row["open_total"])
+            result.append(item)
+    return {"ocupados": counts["OCUPADA"], "reservados_em_breve": counts["RESERVADA"], "livres": counts["LIVRE"],
+            "recursos": result}
+
+
+async def reservas(db: AsyncSession, company_id: uuid.UUID, arguments: dict) -> dict:
+    """The bookings of a period (today and the next 7 days by default): resource, guest, dates, status, rate."""
+    from app.models.booking import Booking
+    from app.models.customer import Customer as _Customer
+    from app.models.resource import Resource
+    from app.models.service import Service
+    from app.services.booking_service import list_bookings
+    from app.services.hotel_service import LUANDA
+    from datetime import datetime as _dt, time as _time
+    start = date.fromisoformat(arguments["data_inicio"]) if arguments.get("data_inicio") else date.today()
+    end = date.fromisoformat(arguments["data_fim"]) if arguments.get("data_fim") else start + timedelta(days=7)
+    bookings = await list_bookings(db, company_id, None, _dt.combine(start, _time.min, LUANDA), _dt.combine(end, _time.max, LUANDA))
+    names = dict((await db.execute(select(Resource.id, Resource.name).where(Resource.company_id == company_id))).all())
+    rates = dict((await db.execute(select(Service.id, Service.name).where(Service.company_id == company_id))).all())
+    people = dict((await db.execute(select(_Customer.id, _Customer.name).where(
+        _Customer.id.in_([b.customer_id for b in bookings if b.customer_id])))).all()) if bookings else {}
+    return {"de": start.isoformat(), "ate": end.isoformat(), "reservas": [
+        {"recurso": names.get(b.resource_id), "hospede": b.guest_name or people.get(b.customer_id),
+         "pessoas": b.party_size, "inicio": _local(b.starts_at), "fim": _local(b.ends_at), "estado": b.status.value,
+         "tarifa": rates.get(b.service_id), "conta_estadia": _money(b.stay_account_total) if b.stay_account_total else None}
+        for b in bookings][:60]}
+
+
 async def consultar_clientes(db: AsyncSession, company_id: uuid.UUID, arguments: dict) -> dict:
     from app.services.invoice_service import attach_amount_due
     search = " ".join(str(arguments.get("pesquisa") or "").split())
@@ -378,6 +434,15 @@ TOOLS = [
     ("caixas", "tesouraria:overview", caixas,
      "As caixas: abertas ou fechadas, quem abriu, e o numerário em cada gaveta.",
      {"type": "object", "properties": {}}),
+    ("ocupacao_recursos", "bookings:view", ocupacao_recursos,
+     "Agora: o estado de cada quarto, mesa ou praticante - livre, ocupado (até quando, excedido) ou reservado em breve "
+     "- e os totais de ocupados, reservados e livres.",
+     {"type": "object", "properties": {}}),
+    ("reservas", "bookings:view", reservas,
+     "As reservas e estadias de um período (hoje e os próximos 7 dias por omissão): recurso, hóspede, pessoas, "
+     "entrada e saída, estado, tarifa e conta da estadia em curso.",
+     {"type": "object", "properties": {"data_inicio": {"type": "string", "description": "AAAA-MM-DD (hoje por omissão)"},
+                                       "data_fim": {"type": "string", "description": "AAAA-MM-DD (7 dias depois por omissão)"}}}),
     ("consultar_clientes", "customers:view", consultar_clientes,
      "Os clientes da empresa (todos, ou por nome, NIF, código, email ou telefone): contactos e o que cada um deve. "
      "Mostra no máximo 30 - com mais, indica o total e sugere uma pesquisa.",

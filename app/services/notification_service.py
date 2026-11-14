@@ -555,6 +555,13 @@ async def notify_check_out(db: AsyncSession, booking, resource_name: str, user, 
         entry = await db.get(Invoice, booking.invoice_id)
         if entry is not None:
             lines.append(f"Pago à entrada {money(entry.total)} ({_document(entry)})")
+        from app.models.booking_supplement import BookingSupplement, KIND_PROLONGATION
+        for paid in (await db.execute(  # the more time bought while there
+            select(Invoice).join(BookingSupplement, BookingSupplement.invoice_id == Invoice.id).where(
+                BookingSupplement.booking_id == booking.id, BookingSupplement.kind == KIND_PROLONGATION)
+            .order_by(BookingSupplement.created_at)
+        )).scalars().all():
+            lines.append(f"Prolongamento pago {money(paid.total)} ({_document(paid)})")
     if excess:
         if excess.get("invoice") is not None:
             paid = await _payments_text(db, excess["invoice"])
