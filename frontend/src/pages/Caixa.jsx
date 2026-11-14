@@ -760,7 +760,10 @@ export default function Caixa() {
       || (p.barcode || '').includes(q) || (p.sale_units || []).some((u) => (u.barcode || '').includes(q));
   });
 
+  // a rate of a resource type (VIP Diária, 1 hora) is sold with its room - Reservas panel (check-in, Entrada) - never
+  // from the grid, where it would bill a night without occupying any room
   const filteredServices = services.filter((s) => {
+    if (s.resource_type_id) return false;
     if (!offeredIn(s.activity_ids, tillActivityId)) return false;
     if (!productSearch.trim()) return true;
     const q = productSearch.toLowerCase();
@@ -1678,23 +1681,9 @@ export default function Caixa() {
               </div>
 
 
-              {activeCategoryId === 'services' ? (
+              {/* «Todos»: the products, then the services (a hotel reception, without products, sees its services) */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2.5 max-h-[520px] overflow-y-auto scrollbar-thin pr-1">
-                  {filteredServices.map((s) => (
-                    <button
-                      key={s.id}
-                      onClick={() => addToCart(s, true)}
-                      className="bg-bg-elevated border border-border hover:border-accent rounded-lg p-3.5 text-left transition-colors cursor-pointer"
-                    >
-                      <p className="font-mono text-[10px] text-text-muted mb-1">{s.code}</p>
-                      <p className="font-display font-medium text-[13px] text-text-primary mb-1.5 line-clamp-2">{s.name}</p>
-                      <p className="font-mono text-accent text-[13px] font-semibold">{formatKz(s.price)} Kz</p>
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2.5 max-h-[520px] overflow-y-auto scrollbar-thin pr-1">
-                  {filteredProducts.map((p) => (
+                  {activeCategoryId !== 'services' && filteredProducts.map((p) => (
                     <button
                       key={p.id}
                       onClick={() => addToCart(p, false)}
@@ -1730,8 +1719,18 @@ export default function Caixa() {
                       </div>
                     </button>
                   ))}
+                  {(activeCategoryId === 'all' || activeCategoryId === 'services') && filteredServices.map((s) => (
+                    <button
+                      key={s.id}
+                      onClick={() => addToCart(s, true)}
+                      className="bg-bg-elevated border border-border hover:border-accent rounded-lg p-3.5 text-left transition-colors cursor-pointer"
+                    >
+                      <p className="font-mono text-[10px] text-text-muted mb-1">{s.code}</p>
+                      <p className="font-display font-medium text-[13px] text-text-primary mb-1.5 line-clamp-2">{s.name}</p>
+                      <p className="font-mono text-accent text-[13px] font-semibold">{formatKz(s.price)} Kz</p>
+                    </button>
+                  ))}
                 </div>
-              )}
             </div>
 
             <div ref={cartRef} style={cartHeight ? { height: cartHeight + 'px' } : undefined} className="bg-bg-elevated border border-border rounded-lg p-4 flex flex-col min-h-0">
