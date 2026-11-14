@@ -2569,6 +2569,18 @@ export default function Caixa() {
               />
             </div>
 
+            {/* every movement other than a transfer moves this till's cash: named, not implied */}
+            {movementForm.movementType !== 'TRANSFERENCIA' && (() => {
+              const thisPos = allActivePos.find((p) => p.id === selectedPosId);
+              const entering = movementForm.movementType === 'LEVANTAMENTO' || movementForm.movementType === 'ENTRADA_EXTERNA';
+              return (
+                <div>
+                  <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">{entering ? 'Caixa que recebe' : 'Caixa de onde sai'}</label>
+                  <div className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono opacity-80">{thisPos ? posLabel(thisPos) : '-'}</div>
+                </div>
+              );
+            })()}
+
             {(movementForm.movementType === 'DEPOSITO' || movementForm.movementType === 'LEVANTAMENTO') && (
               <div>
                 <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Conta bancária *</label>
@@ -2578,8 +2590,8 @@ export default function Caixa() {
                       options={bankAccounts.map((b) => ({ value: b.id, label: (b.bank_acronym || 'Banco') + ' · ' + b.account_number }))} />}
                 <p className="text-[12px] text-text-muted mt-1.5">
                   {movementForm.movementType === 'DEPOSITO'
-                    ? 'O dinheiro sai desta caixa e entra na conta bancária (Tesouraria › Bancos). Indique o nº do talão de depósito na descrição.'
-                    : 'O dinheiro sai da conta bancária e entra nesta caixa (fundo de maneio).'}
+                    ? 'O dinheiro sai da caixa acima e entra na conta bancária (Tesouraria › Bancos). Indique o nº do talão de depósito na descrição.'
+                    : 'O dinheiro sai da conta bancária e entra na caixa acima (fundo de maneio).'}
                 </p>
               </div>
             )}

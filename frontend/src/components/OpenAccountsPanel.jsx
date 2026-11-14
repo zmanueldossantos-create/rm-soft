@@ -190,7 +190,10 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
     setDetailAccount(account);
     setDetailError('');
     setItemSearch('');
-    setItemTab('products');
+    // an account where no product is offered (a hotel reception): straight to the services
+    const productsHere = products.some((p) => offeredIn(categories.find((c) => c.id === p.category_id)?.activity_ids,
+      account.activity_id || selectedActivityId));
+    setItemTab(productsHere ? 'products' : 'services');
     setDetailLoading(true);
     getPosStockLevels(account.pos_id).then(setStockLevels).catch(() => setStockLevels({}));
     try {
@@ -527,10 +530,12 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
   const filteredProducts = products.filter((p) => categoryOffered(p.category_id) && (!itemCategory || p.category_id === itemCategory) && (!searchText
     || p.name.toLowerCase().includes(searchText) || (p.code || '').toLowerCase().includes(searchText) || medicineSearchText(p).includes(searchText)
     || (p.barcode || '').includes(searchText) || (p.sale_units || []).some((u) => (u.barcode || '').includes(searchText))));
-  // a room rate goes on a stay's account only (hotel check-in); a table's or counter's account never offers it
-  const filteredServices = services.filter((s) => offeredIn(s.activity_ids, accountActivityId) && (!s.is_stay_rate || detailAccount?.booking_id) && (!searchText || s.name.toLowerCase().includes(searchText)
+  // a room rate is never picked here: a stay's rate line comes from its check-in and follows its dates (Prolongar);
+  // another rate added by hand would bill a second room. The extras (meals, laundry) are what the account takes.
+  const filteredServices = services.filter((s) => offeredIn(s.activity_ids, accountActivityId) && !s.is_stay_rate && (!searchText || s.name.toLowerCase().includes(searchText)
     || (s.code || '').toLowerCase().includes(searchText)));
   const usedCategories = categories.filter((c) => categoryOffered(c.id) && products.some((p) => p.category_id === c.id));
+  const anyProductHere = products.some((p) => categoryOffered(p.category_id));
 
   return (
     <main className={posId ? '' : 'max-w-[1600px] mx-auto px-4 sm:px-6 md:px-8 py-6 sm:py-9'}>
@@ -750,7 +755,7 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
                 />
               </div>
               <div className="flex items-center gap-2 flex-wrap">
-                <button type="button" onClick={() => setItemTab('products')} className={'px-3 py-1.5 rounded-md text-[13px] font-medium transition-colors cursor-pointer ' + (itemTab === 'products' ? 'bg-accent text-white' : 'bg-bg-elevated border border-border text-text-muted hover:text-text-primary')}>Produtos</button>
+                {anyProductHere && <button type="button" onClick={() => setItemTab('products')} className={'px-3 py-1.5 rounded-md text-[13px] font-medium transition-colors cursor-pointer ' + (itemTab === 'products' ? 'bg-accent text-white' : 'bg-bg-elevated border border-border text-text-muted hover:text-text-primary')}>Produtos</button>}
                 <button type="button" onClick={() => setItemTab('services')} className={'px-3 py-1.5 rounded-md text-[13px] font-medium transition-colors cursor-pointer ' + (itemTab === 'services' ? 'bg-accent text-white' : 'bg-bg-elevated border border-border text-text-muted hover:text-text-primary')}>Serviços</button>
                 {itemTab === 'products' && usedCategories.length > 0 && (
                   <>

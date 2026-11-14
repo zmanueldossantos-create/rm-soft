@@ -1218,6 +1218,18 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
                     {b.stay_account_total > 0 && (
                       <span className="text-[12px] font-mono text-text-primary whitespace-nowrap" title="Conta da estadia (IVA incluído)">{formatKz(b.stay_account_total)} Kz</span>
                     )}
+                    {/* the stay's account: extras (meals, laundry) added during the stay - at the till, where it is paid */}
+                    {onPayStay && b.stay_account_id && (
+                      <button
+                        onClick={() => onPayStay(b.stay_account_id)}
+                        disabled={!can('open_accounts:edit_lines')}
+                        title="Abrir a conta da estadia para acrescentar extras (refeições, lavandaria...)"
+                        className="flex items-center gap-1.5 border border-border hover:border-accent text-text-primary text-[12px] font-medium px-3 py-1.5 rounded-md transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        <Plus size={12} />
+                        Extras
+                      </button>
+                    )}
                     <button
                       onClick={() => openExtendForm(b)}
                       disabled={!can('bookings:update')}
