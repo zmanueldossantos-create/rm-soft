@@ -246,7 +246,10 @@ async def create_cash_movement(
                 f"O motivo '{reason.name}' e de {reason.direction.value}, incompatível com este tipo de movimento"
             )
 
-    initial_status = CashMovementStatus.PENDENTE if movement_type == CashMovementType.TRANSFERENCIA else CashMovementStatus.RECEBIDO
+    # cash brought to a till - from another till, from the bank, from outside - is counted there before it counts: the
+    # till receives it (receive_cash_movement); cash leaving a till leaves at once
+    initial_status = CashMovementStatus.PENDENTE \
+        if movement_type in (CashMovementType.TRANSFERENCIA, CashMovementType.ENTRADA_EXTERNA) else CashMovementStatus.RECEBIDO
     movement = CashMovement(
         company_id=company_id,
         movement_type=movement_type,
@@ -302,7 +305,8 @@ async def receive_cash_movement(
     db: AsyncSession, company_id: uuid.UUID, movement_id: uuid.UUID, receiving_pos_id: uuid.UUID, received_by_user_id: uuid.UUID,
     denomination_lines: list[dict] | None = None,
 ) -> CashMovement:
-    """Confirms receipt of a pending TRANSFERENCIA - only the destination POS
+    """Confirms receipt of pending cash - a TRANSFERENCIA, or an ENTRADA_EXTERNA (a bank withdrawal, an external
+    entry brought by the gestor) - only the destination POS
     (receiving_pos_id must match movement.destination_pos_id) can confirm, and
     only once. See CashMovement.status docstring for why this two-step flow
     exists."""
@@ -339,7 +343,7 @@ async def receive_cash_movement(
 
 
 async def list_pending_receptions(db: AsyncSession, company_id: uuid.UUID, pos_id: uuid.UUID) -> list[CashMovement]:
-    """Pending TRANSFERENCIA movements awaiting confirmation at this specific POS."""
+    """Cash awaiting confirmation at this specific POS: transfers, bank withdrawals and external entries."""
     result = await db.execute(
         select(CashMovement).where(
             CashMovement.company_id == company_id,
@@ -365,6 +369,7 @@ async def list_pending_emissions(db: AsyncSession, company_id: uuid.UUID, pos_id
 
 async def cancel_cash_movement(
     db: AsyncSession, company_id: uuid.UUID, movement_id: uuid.UUID, cancelling_pos_id: uuid.UUID,
+    can_cancel_entries: bool = False,
 ) -> None:
     """Cancels (deletes) a pending TRANSFERENCIA before it has been received - only
     the SOURCE POS can cancel, and only while still PENDENTE (the funds never actually
@@ -379,7 +384,11 @@ async def cancel_cash_movement(
         raise MovementNotFoundError("Movimento não encontrado")
     if movement.status == CashMovementStatus.RECEBIDO:
         raise MovementAlreadyReceivedError("Este movimento já foi recebido e não pode ser cancelado")
-    if movement.source_pos_id != cancelling_pos_id:
+    if movement.movement_type == CashMovementType.ENTRADA_EXTERNA:
+        # a withdrawal / an entry not yet counted at its till: withdrawn by who may register one (the gestor)
+        if not can_cancel_entries or movement.destination_pos_id != cancelling_pos_id:
+            raise MovementNotReceivableAtThisPosError("Só o gestor pode anular uma entrada ainda não recebida")
+    elif movement.source_pos_id != cancelling_pos_id:
         raise MovementNotReceivableAtThisPosError("Apenas a caixa de origem pode cancelar esta transferência")
 
     await delete_movement_counts(db, movement.id)  # the notes and coins sent go back with it

@@ -450,7 +450,7 @@ export default function Caixa() {
     setCancellingId(movementId);
     try {
       await cancelCashMovement(movementId, selectedPosId);
-      await loadPendingEmissionsList();
+      await Promise.all([loadPendingEmissionsList(), loadPendingReceptionsList()]);
       refreshBalance(selectedPosId);
       refreshPosStock(selectedPosId);
     } catch (err) {
@@ -2541,7 +2541,7 @@ export default function Caixa() {
             onClick={() => { setMovementModalTab('pending'); setReceptionDraft(null); }}
             className={'px-3.5 py-2 text-[13px] font-medium border-b-2 -mb-px transition-colors cursor-pointer flex items-center gap-1.5 ' + (movementModalTab === 'pending' ? 'border-accent text-accent' : 'border-transparent text-text-muted hover:text-text-primary')}
           >
-            Transferências pendentes
+            Pendentes
             {(pendingReceptions.length + pendingEmissions.length) > 0 && (
               <span className="bg-accent text-white text-[10px] font-semibold px-1.5 py-0.5 rounded-full">{pendingReceptions.length + pendingEmissions.length}</span>
             )}
@@ -2590,7 +2590,7 @@ export default function Caixa() {
                 <p className="text-[12px] text-text-muted mt-1.5">
                   {movementForm.movementType === 'DEPOSITO'
                     ? 'O dinheiro sai da caixa acima e entra na conta bancária (Tesouraria › Bancos). Indique o nº do talão de depósito na descrição.'
-                    : 'O dinheiro sai da conta bancária e entra na caixa acima (fundo de maneio).'}
+                    : 'O dinheiro sai da conta bancária e entra na caixa acima (fundo de maneio) quando a caixa confirmar a receção, depois de o contar.'}
                 </p>
               </div>
             )}
@@ -2691,7 +2691,7 @@ export default function Caixa() {
                   onClick={() => { setReceptionDraft(null); setMovementFormError(''); }}
                   className="self-start flex items-center gap-1 text-[12px] text-text-muted hover:text-text-primary cursor-pointer"
                 >
-                  <ChevronLeft size={14} /> Transferências pendentes
+                  <ChevronLeft size={14} /> Pendentes
                 </button>
 
                 <div className="bg-bg-inset border border-border rounded-md px-4 py-3 flex items-start justify-between gap-3">
@@ -2742,17 +2742,30 @@ export default function Caixa() {
               {pendingReceptionsLoading ? (
                 <div className="flex justify-center py-4"><Loader2 size={16} className="animate-spin text-accent" /></div>
               ) : pendingReceptions.length === 0 ? (
-                <p className="text-text-muted text-[12px] text-center py-4">Nenhuma transferência pendente de receção</p>
+                <p className="text-text-muted text-[12px] text-center py-4">Nada a receber nesta caixa</p>
               ) : (
                 <div className="flex flex-col gap-1.5 max-h-[200px] overflow-y-auto scrollbar-thin">
                   {pendingReceptions.map((m) => (
                     <div key={m.id} className="flex items-center justify-between gap-2 bg-bg-inset border border-border rounded-md px-3 py-2">
                       <div className="min-w-0">
-                        <p className="text-[12px] text-text-primary truncate">De {posNameById(m.source_pos_id)}</p>
+                        {/* a transfer comes from a till; a withdrawal / an entry, brought by the gestor, from outside */}
+                        <p className="text-[12px] text-text-primary truncate">{m.source_pos_id ? 'De ' + posNameById(m.source_pos_id)
+                          : (m.bank_account_id ? 'Levantamento do banco' : 'Entrada externa') + (m.description ? ' - ' + m.description : '')}</p>
                         <p className="text-[10px] text-text-muted font-mono">{new Date(m.movement_date).toLocaleDateString('pt-PT')}</p>
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="font-mono text-[12px] text-text-primary font-semibold">{formatKz(m.amount)} Kz</span>
+                        {!m.source_pos_id && can('tesouraria:external_movements') && (
+                          <button
+                            onClick={() => handleCancelMovement(m.id)}
+                            disabled={cancellingId === m.id}
+                            title="Anular (o dinheiro não chegou à caixa)"
+                            className="flex items-center gap-1 border border-border hover:border-danger hover:text-danger text-text-muted disabled:opacity-50 text-[11px] font-medium px-2.5 py-1.5 rounded-md cursor-pointer"
+                          >
+                            {cancellingId === m.id ? <Loader2 size={11} className="animate-spin" /> : <X size={11} />}
+                            Anular
+                          </button>
+                        )}
                         <button
                           onClick={() => startReception(m)}
                           disabled={receivingId === m.id || !can('tesouraria:receive')}

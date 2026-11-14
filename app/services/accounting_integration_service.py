@@ -657,8 +657,10 @@ async def _describe(db: AsyncSession, kind: str, source_id: uuid.UUID, extra=Non
             reason = await db.get(CashMovementReason, movement.reason_id) if movement.reason_id else None
             name = ("Entrada de caixa" if movement.movement_type == CashMovementType.ENTRADA_EXTERNA else "Saída de caixa") + \
                 (f" - {reason.name}" if reason else "")
+        # cash brought to a till (a transfer, a withdrawal, an entry) is posted the day the till received it
         day = _local_day(movement.received_at, movement.movement_date) \
-            if movement.movement_type == CashMovementType.TRANSFERENCIA else movement.movement_date
+            if movement.movement_type in (CashMovementType.TRANSFERENCIA, CashMovementType.ENTRADA_EXTERNA) \
+            else movement.movement_date
         return _Document(kind, movement.id, f"{name} {day.strftime('%d/%m')}"[:60], day, name), movement
     if kind == SOURCE_BANK_MOVEMENT:
         movement = await db.get(BankMovement, source_id)

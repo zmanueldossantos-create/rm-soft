@@ -8,7 +8,7 @@ from app.models.cash_movement import CashMovementStatus, CashMovementType
 from app.models.cash_movement_reason import CashMovementReason
 from app.models.movement_type import MovementDirection
 from app.models.point_of_sale import PointOfSale
-from app.services.cash_movement_service import create_cash_movement
+from app.services.cash_movement_service import receive_cash_movement, create_cash_movement
 from app.services.cash_session_service import close_session, open_session
 from app.services.treasury_overview_service import get_treasury_position, list_closings, list_treasury_movements
 
@@ -28,8 +28,9 @@ async def _three_tills(db, ctx):
     await close_session(db, company_id, closed.id, gestor.id, closing_amount_counted=250, closing_notes="Falta uma moeda")
     await create_cash_movement(db, company_id, CashMovementType.TRANSFERENCIA, gestor, 2000,
                                source_pos_id=ctx["pos"].id, destination_pos_id=till_2.id)
-    await create_cash_movement(db, company_id, CashMovementType.ENTRADA_EXTERNA, gestor, 500,
-                               destination_pos_id=ctx["pos"].id, reason_id=reason.id)
+    entry = await create_cash_movement(db, company_id, CashMovementType.ENTRADA_EXTERNA, gestor, 500,
+                                       destination_pos_id=ctx["pos"].id, reason_id=reason.id)
+    await receive_cash_movement(db, company_id, entry.id, ctx["pos"].id, gestor.id)  # counted at its till
     return till_2, till_3
 
 

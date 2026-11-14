@@ -381,7 +381,8 @@ async def delete_pending_movement(
     current_user: User = Depends(require_permission("tesouraria:cancel_movement")),
 ):
     try:
-        await cancel_cash_movement(db, current_user.company_id, movement_id, pos_id)
+        await cancel_cash_movement(db, current_user.company_id, movement_id, pos_id, can_cancel_entries=await has_permission(
+            db, current_user.company_id, current_user.role.value, "tesouraria:external_movements"))
     except MovementNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except MovementAlreadyReceivedError as e:
