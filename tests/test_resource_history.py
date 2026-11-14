@@ -115,3 +115,19 @@ async def test_a_reservation_still_to_come_is_planned_not_a_use(db, company_with
                          TODAY + timedelta(hours=5), service_id=massage.id)
     row = (await get_resource_history(db, company_id, None, ana.id, *_window()))["summary"][0]
     assert row["uses"] == 0 and row["planned"] == 1 and row["occupied_minutes"] == 0
+
+
+@pytest.mark.asyncio
+async def test_a_use_in_progress_counts_the_time_so_far(db, company_with_essentials):
+    """A stay in progress: the time it has lasted until now, not its planned length (48 h shown 10 minutes in)."""
+    ctx = company_with_essentials
+    company_id = ctx["company"].id
+    ana, _, _, massage, _ = await _setup(db, ctx)
+    booking = await create_booking(db, company_id, ana.id, ctx["gestor"].id, TODAY, TODAY + timedelta(hours=3),
+                                   service_id=massage.id)
+    await update_booking_status(db, company_id, booking.id, BookingStatus.EM_CURSO)
+    history = await get_resource_history(db, company_id, None, ana.id, *_window(), now=TODAY + timedelta(minutes=10))
+    assert history["summary"][0]["occupied_minutes"] == 10
+    # past its planned end, still there: the whole time, the overstay with it
+    history = await get_resource_history(db, company_id, None, ana.id, *_window(), now=TODAY + timedelta(hours=4))
+    assert history["summary"][0]["occupied_minutes"] == 240 and history["entries"][0]["overstay_minutes"] == 60

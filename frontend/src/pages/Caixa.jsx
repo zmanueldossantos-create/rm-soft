@@ -167,7 +167,6 @@ export default function Caixa() {
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
 
   const [openModalOpen, setOpenModalOpen] = useState(false);
-  const [openingAmount, setOpeningAmount] = useState('');
   const [openSaving, setOpenSaving] = useState(false);
   const [openError, setOpenError] = useToastState('error');
 

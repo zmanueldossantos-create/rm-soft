@@ -124,7 +124,7 @@ async def get_resource_history(
         elif b.checked_out_at is not None:
             occupied_until = b.checked_out_at
         elif b.status == BookingStatus.EM_CURSO:
-            occupied_until = max(now, b.ends_at)
+            occupied_until = now  # a stay in progress: the time it has lasted so far, not its planned length
         else:
             occupied_until = b.ends_at
         overstay_end = b.checked_out_at or (now if b.status == BookingStatus.EM_CURSO else None)
