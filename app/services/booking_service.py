@@ -95,7 +95,9 @@ async def _validate_service_for_resource(db: AsyncSession, company_id: uuid.UUID
     rate to charge, even for a short stay) and, when a service IS given, that it's
     actually meant for this resource's type - a service tied to a DIFFERENT
     resource_type_id (e.g. a Spa treatment picked for a hotel room booking) is
-    rejected; a service with resource_type_id=None is generic and always allowed.
+    rejected; a service with resource_type_id=None is generic and allowed - on a type that needs a service (a room, a
+    practitioner) only with a duration of its own (an «Avaliação» of 30 min): one without (breakfast, laundry) is an
+    extra, put on the stay's account, not booked.
     """
     type_result = await db.execute(select(ResourceTypeCatalog).where(ResourceTypeCatalog.id == resource.resource_type_id))
     resource_type = type_result.scalar_one_or_none()
@@ -108,6 +110,11 @@ async def _validate_service_for_resource(db: AsyncSession, company_id: uuid.UUID
         service = service_result.scalar_one_or_none()
         if service is not None and service.resource_type_id is not None and service.resource_type_id != resource.resource_type_id:
             raise IncompatibleServiceError("O serviço selecionado não é válido para este tipo de recurso")
+        if service is not None and resource_type is not None and resource_type.requires_service \
+                and service.resource_type_id is None and not service.duration_minutes:
+            raise IncompatibleServiceError(
+                f"Escolha uma tarifa de {resource_type.name} (Reservas > Tarifas) - um extra como {service.name} "
+                "acrescenta-se à conta da estadia")
         # the rate of a stay: without a price the check-in would add no line and the stay would cost nothing
         if service is not None and resource_type is not None and resource_type.requires_service and service.price is None:
             raise ServiceRequiredError(f"O serviço {service.code} não tem preço - defina-o na ficha do serviço")

@@ -756,8 +756,11 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
   // (ResourceTypeCatalog.requires_service, e.g. a CHAMBRE always has a rate).
   const selectedResource = (editingBookingId ? resources : formResources).find((r) => r.id === form.resourceId);
   const selectedResourceType = resourceTypesCatalog.find((t) => t.id === selectedResource?.resource_type_id);
+  // a type that needs a service (a room, a practitioner): its own rates, or a generic service with a duration (an
+  // «Avaliação» of 30 min) - an extra without one (breakfast) goes on the stay's account, it is not booked
   const availableServices = selectedResource
-    ? services.filter((s) => !s.resource_type_id || s.resource_type_id === selectedResource.resource_type_id)
+    ? services.filter((s) => s.resource_type_id === selectedResource.resource_type_id
+      || (!s.resource_type_id && (!selectedResourceType?.requires_service || s.duration_minutes)))
     : services;
 
   // The price as the room, the rate or the dates change - the backend counts it the way the check-in will

@@ -35,3 +35,21 @@ async def test_the_price_before_booking(db, company_with_essentials):
     await set_rate_prices(db, cid, room.id, [{"service_id": night.id, "price": 30000}])
     q = await stay_quote(db, cid, room.id, night.id, BASE.replace(tzinfo=None), (BASE + timedelta(days=3)).replace(tzinfo=None))
     assert (q["quantity"], q["unit_price"], q["total"], q["own_price"]) == (3, 30000.0, 90000.0, True)  # Luanda's hours
+
+
+@pytest.mark.asyncio
+async def test_an_extra_is_not_a_rooms_rate(db, company_with_essentials):
+    """Breakfast (no type, no duration) is put on the stay's account: a room is not booked on it."""
+    from app.services.booking_service import IncompatibleServiceError, create_booking
+
+    ctx = company_with_essentials
+    cid = ctx["company"].id
+    room, night, _hour = await _hotel(db, ctx)
+    breakfast = Service(company_id=cid, code="HOT-REF", name="Pequeno-almoço", price=5000, vat_id=ctx["vat_nor"].id,
+                        unit_of_measure_id=ctx["unit_un"].id)
+    db.add(breakfast)
+    await db.commit()
+    with pytest.raises(IncompatibleServiceError, match="tarifa de Quarto"):
+        await create_booking(db, cid, room.id, ctx["gestor"].id, BASE, BASE + timedelta(days=2), service_id=breakfast.id)
+    booking = await create_booking(db, cid, room.id, ctx["gestor"].id, BASE, BASE + timedelta(days=2), service_id=night.id)
+    assert booking.service_id == night.id
