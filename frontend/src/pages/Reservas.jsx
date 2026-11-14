@@ -890,6 +890,18 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
     return () => { alive = false; clearTimeout(t); };
   }, [formOpen, form.resourceId, form.serviceId, form.date, form.startTime, form.endDate, form.endTime]);
 
+  // the cheapest night of the passage's room (a Diária: no duration, no hours of its own; its own price if any), when the
+  // prolonged passage would cost more than it
+  const cheaperNight = (() => {
+    if (!isPassage(extendBooking) || !extendQuote || extendQuote.next.problem) return null;
+    const room = resources.find((r) => r.id === extendBooking.resource_id);
+    if (!room) return null;
+    const nights = services.filter((x) => x.resource_type_id === room.resource_type_id && !x.duration_minutes && !x.stay_start_time)
+      .map((x) => ({ name: x.name, price: Number(room.rate_prices?.[x.id] ?? x.price ?? 0) }))
+      .filter((x) => x.price > 0).sort((a, b) => a.price - b.price);
+    return nights.length && extendQuote.next.total > nights[0].price ? nights[0] : null;
+  })();
+
   // a passage was paid at its Entrada: it is not shortened (its exit is the Saída)
   const passageShorter = (() => {
     if (!isPassage(extendBooking) || !extendForm.date || !extendForm.time) return false;
@@ -1530,7 +1542,8 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
       <Modal open={!!extendBooking} onClose={() => setExtendBooking(null)} title={'Prolongar estadia' + (extendBooking ? ' - ' + resourceName(extendBooking.resource_id) : '')} maxWidthClass="max-w-xl">
         {extendBooking && (
           <form onSubmit={handleExtendSubmit} className="flex flex-col gap-4">
-            <p className="text-text-muted text-[13px]">Entrada {formatDateTime(extendBooking.starts_at)} - saída prevista {formatDateTime(extendBooking.ends_at)}. A diária da conta segue a nova data.</p>
+            <p className="text-text-muted text-[13px]">Entrada {formatDateTime(extendBooking.starts_at)} - saída prevista {formatDateTime(extendBooking.ends_at)}. {isPassage(extendBooking)
+              ? 'Passagem paga à entrada: o tempo a mais paga-se agora.' : 'A tarifa da conta segue a nova data.'}</p>
             <div className="flex gap-3">
               <div className="flex-1">
                 <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Nova data de saída *</label>
@@ -1571,6 +1584,12 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
                 </div>
               );
             })()}
+            {/* a passage stretched so long that a night rate of its room costs less: said, not imposed */}
+            {isPassage(extendBooking) && cheaperNight && (
+              <p className="text-[12px] text-amber-500 [.light_&]:text-amber-700 -mt-1">
+                Para este tempo, {cheaperNight.name} ({formatKz(cheaperNight.price)} Kz) fica mais barata - pode dar saída e fazer uma reserva.
+              </p>
+            )}
             {/* a passage: the extra slices paid now, as its Entrada */}
             {isPassage(extendBooking) && !passageShorter && !extendBeforeEntry && supplementSlices > 0 && (
               posId ? renderPayment('A pagar agora: ' + supplementSlices + ' × ' + (supplementService?.name || '') + ' (IVA incluído)')
