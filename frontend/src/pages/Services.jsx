@@ -125,7 +125,8 @@ export default function Services({ ratesOnly = false }) {
   // by code: the rates of a room type side by side (STD-1H, STD-2H...), the extras apart
   const filteredServices = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const scoped = ratesOnly ? services.filter((s) => s.resource_type_id) : services;
+    // one place each: the rates of the room types here in Tarifas, the extras in Serviços
+    const scoped = services.filter((s) => (ratesOnly ? !!s.resource_type_id : !s.resource_type_id));
     const shown = q ? scoped.filter((s) => s.code.toLowerCase().includes(q) || s.name.toLowerCase().includes(q)) : scoped;
     return [...shown].sort((a, b) => a.code.localeCompare(b.code, 'pt', { numeric: true }));
   }, [services, search, ratesOnly]);
@@ -150,7 +151,9 @@ export default function Services({ ratesOnly = false }) {
 
   function openCreateModal() {
     setEditingId(null);
-    setForm({ ...emptyForm });
+    // a rate is sold by the unit (one night, one hour): UN proposed
+    const un = ratesOnly ? units.find((u) => u.code === 'UN') : null;
+    setForm({ ...emptyForm, unitOfMeasureId: un ? un.id : emptyForm.unitOfMeasureId });
     setFormError('');
     setModalOpen(true);
   }
@@ -211,8 +214,8 @@ export default function Services({ ratesOnly = false }) {
   async function handleSubmit(e) {
     e.preventDefault();
     setFormError('');
-    if (ratesOnly && !form.resourceTypeId) {  // a rate without a room type would leave this list: an extra, made in Serviços
-      setFormError('Escolha o tipo de recurso desta tarifa (um extra sem tipo cria-se em Catálogo > Serviços)');
+    if (ratesOnly && !form.resourceTypeId) {  // a rate is always a room type's
+      setFormError('Escolha o tipo de recurso desta tarifa');
       return;
     }
     if (form.resourceTypeId && rateMode === 'DURATION' && !(parseInt(form.durationMinutes, 10) > 0)) {
@@ -276,7 +279,7 @@ export default function Services({ ratesOnly = false }) {
   const isExemptVat = selectedVat && selectedVat.tax_category === 'ISE';
   const imposedExemption = isExemptVat ? articleVatRule.exemption : null;
 
-  const isFormValid = form.code && form.name && form.unitOfMeasureId && form.vatId && (!isExemptVat || imposedExemption || form.exemptionReasonId);
+  const isFormValid = (!ratesOnly || form.resourceTypeId) && form.code && form.name && form.unitOfMeasureId && form.vatId && (!isExemptVat || imposedExemption || form.exemptionReasonId);
 
   return (
     <main className="max-w-[1600px] mx-auto px-4 sm:px-6 md:px-8 py-6 sm:py-9">
@@ -287,7 +290,7 @@ export default function Services({ ratesOnly = false }) {
       <p className="text-text-muted text-sm mb-6">
         {ratesOnly
           ? 'Os preços de cada tipo de recurso (1 hora, pernoite, diária...). Os extras ficam em Catálogo > Serviços.'
-          : 'Gerir a ficha de serviços da sua empresa'}
+          : 'Os serviços vendidos (mão de obra, refeições, entregas, lavandaria...).' + (can('resource_types:view') ? ' Os preços dos quartos e outros recursos estão em Reservas > Tarifas.' : '')}
       </p>
 
       {vatRates.length === 0 && !loading && (
@@ -386,15 +389,24 @@ export default function Services({ ratesOnly = false }) {
         <form onSubmit={handleSubmit} className="flex flex-col gap-4 max-h-[70vh] overflow-y-auto scrollbar-thin pr-1">
           {/* 4 fields per line; the status is not edited here - the list's active/inactive switch does it. */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {/* a rate: its room type first, required - an extra (Serviços) has none */}
+            {ratesOnly && (
+              <Field label="Tipo de recurso *">
+                <Select value={form.resourceTypeId} onChange={(v) => updateField('resourceTypeId', v)} options={resourceTypes.map((t) => ({ value: t.id, label: t.name }))} placeholder="Selecionar tipo" />
+              </Field>
+            )}
             <Field label="Código *">
               <input value={form.code} onChange={(e) => updateField('code', e.target.value)} required className={inputClass} />
             </Field>
             <Field label="Designação *">
               <input value={form.name} onChange={(e) => updateField('name', e.target.value)} required className={inputClass} />
             </Field>
+            {!ratesOnly && (
             <Field label="Marca">
               <input value={form.brand} onChange={(e) => updateField('brand', e.target.value)} className={inputClass} />
             </Field>
+            )}
+            {!ratesOnly && (
             <Field label="Tipo de serviço">
               <div className="flex items-center gap-1.5">
                 <div className="flex-1 min-w-0">
@@ -405,6 +417,7 @@ export default function Services({ ratesOnly = false }) {
                 </button>
               </div>
             </Field>
+            )}
             <Field label="Unidade de medida *">
               <Select value={form.unitOfMeasureId} onChange={(v) => updateField('unitOfMeasureId', v)} options={units.map((u) => ({ value: u.id, label: u.code + ' - ' + u.name }))} placeholder="Selecionar" />
             </Field>
@@ -417,14 +430,8 @@ export default function Services({ ratesOnly = false }) {
             <Field label="Retenção">
               <Select value={form.withholdingTaxId} onChange={(v) => updateField('withholdingTaxId', v)} options={withholdingTaxes.map((w) => ({ value: w.id, label: w.name }))} placeholder="Sem retenção" />
             </Field>
-            {can('resource_types:view') && (
-              <Field label="Tipo de recurso">
-                {/* "Nenhum" is an option too: a type chosen by mistake can be taken back (an extra is not a room rate) */}
-                <Select value={form.resourceTypeId} onChange={(v) => updateField('resourceTypeId', v)} options={[{ value: '', label: 'Nenhum - genérico' }, ...resourceTypes.map((t) => ({ value: t.id, label: t.name }))]} placeholder="Nenhum - genérico" />
-              </Field>
-            )}
-            {/* a service without a room type: its duration only (a marcação of 45 min); a room's rate: the block below */}
-            {!form.resourceTypeId && (
+            {/* an extra: its duration only, if any (a marcação of 45 min); a rate: the block below */}
+            {!ratesOnly && (
               <Field label="Duração (min)">
                 <input type="number" step="1" min="5" max="1440" value={form.durationMinutes}
                   onChange={(e) => updateField('durationMinutes', e.target.value)} className={inputClass} />
@@ -440,7 +447,7 @@ export default function Services({ ratesOnly = false }) {
           </div>
 
           {/* A room's rate is counted one of three ways - one choice, its own fields inside it */}
-          {form.resourceTypeId && (
+          {ratesOnly && (
             <div>
               <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Como se conta esta tarifa</label>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-2">

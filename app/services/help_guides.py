@@ -323,11 +323,11 @@ PAGES = [
     },
     {
         "id": "servicos", "path": "/services", "title": "Serviços", "perms": ["services:manage"],
-        "intro": "A ficha dos serviços vendidos (sem stock): mão de obra, lavandaria, tarifas de quarto, marcações.",
+        "intro": "A ficha dos serviços vendidos (sem stock): mão de obra, lavandaria, refeições, entregas, marcações. Os preços "
+                 "dos quartos (ou de outro tipo de recurso) estão em Reservas → Tarifas.",
         "steps": [
             "Clique em «Novo serviço»: código, nome, preço e taxa de IVA (0 % exige o motivo de isenção).",
-            "Para as reservas, um serviço pode ter uma duração (ex.: massagem de 60 min) e um tipo de recurso (ex.: só para "
-            "quartos).",
+            "Um serviço pode ter uma duração (ex.: massagem de 60 min).",
             "«Não disponível POS» esconde o serviço da caixa.",
         ],
     },
@@ -509,10 +509,10 @@ PAGES = [
     {
         "id": "tarifas", "path": "/tarifas", "title": "Tarifas", "module": "reservas",
         "perms": ["services:manage"], "requires": ["resource_types:view"],
-        "intro": "Os preços de cada tipo de recurso (1 hora, pernoite, diária...): os mesmos serviços que em Catálogo → "
-                 "Serviços, só os que têm um tipo de recurso. Os extras (lavandaria, refeições) ficam em Serviços.",
+        "intro": "Os preços de cada tipo de recurso (1 hora, pernoite, diária...). Os extras (lavandaria, refeições) ficam em "
+                 "Catálogo → Serviços.",
         "steps": [
-            "«Nova tarifa»: código, nome, preço, IVA e o tipo de recurso.",
+            "«Nova tarifa»: o tipo de recurso, código, nome, preço e IVA.",
             "«Como se conta esta tarifa»: por duração (por fatia começada), horário próprio (uma vez por período, ex.: "
             "pernoite 22:00 - 07:30) ou horário do tipo (por noite, às horas do tipo de recurso).",
             "Um recurso com preço diferente: Reservas → Recursos → lápis do recurso → «Preços deste recurso».",
