@@ -227,7 +227,9 @@ async def notify(db: AsyncSession, company_id: uuid.UUID, event: str, text: str,
             NotificationRecipient.company_id == company_id, NotificationRecipient.is_active.is_(True),
             NotificationRecipient.address.is_not(None), NotificationRecipient.events.any(event)))).scalars().all()
         company = await db.get(Company, company_id)
-        title = subject or f"{spec.label} - {company.short_name or company.name}"
+        company_name = company.short_name or company.name
+        # subject: a title of its own, «{company}» standing for the company's name (Estadia prolongada - MEL DA ROCHA)
+        title = subject.replace("{company}", company_name) if subject else f"{spec.label} - {company_name}"
         for recipient in recipients:
             _queue(db, recipient, event, title, text)
         if recipients:
@@ -496,6 +498,32 @@ async def notify_check_in(db: AsyncSession, booking, resource_name: str, user, *
         lines.append(f"Conta da estadia: {money(stay_amount)} - paga-se no check-out")
     lines.append(" · ".join(x for x in (pos_name, user.full_name) if x))
     await notify(db, booking.company_id, "CHECK_IN", "\n".join(lines), actor=user)
+
+
+@_safe
+async def notify_stay_changed(db: AsyncSession, booking, resource_name: str, user, old_end, *,
+                              rate_name: str | None = None, quantities: tuple | None = None,
+                              totals: tuple | None = None) -> None:
+    """ESTADIA_ALTERADA - the exit of a stay in progress moved (Prolongar). E.g.:
+        Luanda - Paulo Mendes · 2 pessoas   (under the title «Estadia prolongada - MEL DA ROCHA»)
+        Saída: 16/11 12:00 → 17/11 12:00
+        VIP Diária: 2 → 3 · conta 103 000,00 Kz (+30 000,00 Kz)
+        Joana Mendes"""
+    guest = await _guest(db, booking)
+    people = f" · {booking.party_size} pessoa{'s' if booking.party_size > 1 else ''}" if booking.party_size else ""
+    what = "prolongada" if booking.ends_at > old_end else "encurtada"
+    lines = [f"{resource_name} - {guest}{people}",
+             f"Saída: {_day(old_end)} {_hour(old_end)} → {_day(booking.ends_at)} {_hour(booking.ends_at)}"]
+    money_part = ""
+    if totals and totals[0] is not None and totals[1] is not None:
+        diff = totals[1] - totals[0]
+        money_part = f"conta {money(totals[1])}" + (f" ({'+' if diff > 0 else '-'}{money(abs(diff))})" if diff else "")
+    rate_part = f"{rate_name}: {_qty(quantities[0])} → {_qty(quantities[1])}" if rate_name and quantities else ""
+    if rate_part or money_part:
+        lines.append(" · ".join(x for x in (rate_part, money_part) if x))
+    lines.append(user.full_name)
+    await notify(db, booking.company_id, "ESTADIA_ALTERADA", "\n".join(lines), actor=user,
+                 subject=f"Estadia {what} - " + "{company}")
 
 
 @_safe

@@ -106,7 +106,7 @@ async def post_extend_stay(
 ):
     """New end of a stay in progress; the room-rate line of its account follows."""
     try:
-        return await extend_stay(db, current_user.company_id, booking_id, payload.ends_at)
+        return await extend_stay(db, current_user.company_id, booking_id, payload.ends_at, user=current_user)
     except BookingNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except InvalidStayStateError as e:

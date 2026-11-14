@@ -325,7 +325,8 @@ async def walk_in(
     return booking, invoice
 
 
-async def extend_stay(db: AsyncSession, company_id: uuid.UUID, booking_id: uuid.UUID, ends_at: datetime) -> Booking:
+async def extend_stay(db: AsyncSession, company_id: uuid.UUID, booking_id: uuid.UUID, ends_at: datetime,
+                      user=None) -> Booking:
     """Moves the end of a stay in progress - the guest stays longer, or leaves earlier - and recomputes the
     room-rate line of its account with the same rule as at check-in, so the bill always matches the stay.
     (reschedule_booking refuses a stay in progress: it would change the dates without the bill.)"""
@@ -339,8 +340,12 @@ async def extend_stay(db: AsyncSession, company_id: uuid.UUID, booking_id: uuid.
     if await _has_overlap(db, booking.resource_id, booking.starts_at, ends_at, exclude_booking_id=booking.id):
         raise BookingOverlapError("Este recurso já tem uma reserva neste período")
 
-    booking.ends_at = ends_at
+    from app.services.open_account_service import _account_totals
+    old_end = booking.ends_at
     account = await _open_stay_account(db, booking.id)
+    total_before = (await _account_totals(db, [account.id])).get(account.id, (0, 0.0, 0.0, 0.0))[3] if account else None
+    booking.ends_at = ends_at
+    service, line, quantities = None, None, None
     if account is not None and booking.service_id is not None:
         service = (await db.execute(select(Service).where(Service.id == booking.service_id))).scalar_one_or_none()
         line = (await db.execute(
@@ -350,8 +355,16 @@ async def extend_stay(db: AsyncSession, company_id: uuid.UUID, booking_id: uuid.
         )).scalars().first()
         ensure_single_period(service, booking.starts_at, ends_at)  # a Pernoite is not prolonged into a second one
         if service is not None and line is not None:
-            line.quantity = _stay_quantity(service, booking.starts_at, ends_at)
+            quantities = (float(line.quantity), _stay_quantity(service, booking.starts_at, ends_at))
+            line.quantity = quantities[1]
 
+    if user is not None and old_end != ends_at:  # Notificações: estadia prolongada / encurtada
+        from app.services.notification_service import notify_stay_changed
+        await db.flush()
+        total_after = (await _account_totals(db, [account.id])).get(account.id, (0, 0.0, 0.0, 0.0))[3] if account else None
+        resource = await get_resource_or_raise(db, company_id, booking.resource_id)
+        await notify_stay_changed(db, booking, resource.name, user, old_end, rate_name=service.name if service else None,
+                                  quantities=quantities, totals=(total_before, total_after))
     await db.commit()
     await db.refresh(booking)
     return booking

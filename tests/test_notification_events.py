@@ -28,7 +28,7 @@ from app.services.open_account_service import add_line, close_account, open_acco
 from app.services.user_cash_point_access_service import assign_user_to_cash_point
 from app.services.invoice_service import create_invoice
 
-EVERYTHING = ["CHECK_IN", "CHECK_OUT", "MESA_ABERTA", "MESA_FECHADA", "VENDA", "CAIXA_FECHADA", "STOCK_BAIXO"]
+EVERYTHING = ["CHECK_IN", "CHECK_OUT", "ESTADIA_ALTERADA", "MESA_ABERTA", "MESA_FECHADA", "VENDA", "CAIXA_FECHADA", "STOCK_BAIXO"]
 BASE = (datetime.now(LUANDA) + timedelta(days=1)).replace(hour=14, minute=0, second=0, microsecond=0)
 
 
@@ -161,6 +161,23 @@ async def test_a_passage_paid_at_once(db, team):
                     f"Quarto 1 hora · {start:%d/%m %H:%M} → {end:%d/%m %H:%M}\n"
                     f"Pago 5 700,00 Kz ({invoice.series}/{invoice.number}) · {ctx['pm_numerario'].name} 5 700,00 Kz\n"
                     f"{ctx['pos'].name} · João Caixa")
+
+
+async def test_a_stay_prolonged(db, team):
+    """Prolongar: the exit before and after, the nights, the account and what it adds."""
+    from app.services.hotel_service import extend_stay
+    ctx = team
+    room, night = await _room(db, ctx)
+    await open_session(db, ctx["company"].id, ctx["pos"].id, ctx["cashier"], 0)
+    booking = await create_booking(db, ctx["company"].id, room.id, ctx["cashier"].id, BASE, BASE + timedelta(days=2),
+                                   service_id=night.id, guest_name="Ana Silva")
+    booking, _ = await check_in(db, ctx["company"].id, booking.id, ctx["cashier"])
+    await extend_stay(db, ctx["company"].id, booking.id, BASE + timedelta(days=3), user=ctx["cashier"])
+    [message] = await _messages(db, "ESTADIA_ALTERADA")
+    old, new = (BASE + timedelta(days=2)).astimezone(LUANDA), (BASE + timedelta(days=3)).astimezone(LUANDA)
+    assert message.text == (f"Quarto 101 - Ana Silva\nSaída: {old:%d/%m %H:%M} → {new:%d/%m %H:%M}\n"
+                            "Diária: 2 → 3 · conta 85 500,00 Kz (+28 500,00 Kz)\nJoão Caixa")
+    assert message.subject.startswith("Estadia prolongada - ")
 
 
 async def test_a_check_out_with_nothing_to_pay(db, team):

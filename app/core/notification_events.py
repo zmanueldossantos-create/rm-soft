@@ -24,6 +24,8 @@ class Event:
 EVENTS: dict[str, Event] = {e.code: e for e in (
     Event("CHECK_IN", "Quarto ocupado", "Check-in ou walk-in: o quarto, o hóspede, as noites", "HOTEL_STAY"),
     Event("CHECK_OUT", "Quarto libertado", "Check-out: o quarto, o hóspede, o total", "HOTEL_STAY"),
+    Event("ESTADIA_ALTERADA", "Estadia prolongada ou encurtada", "A saída de uma estadia em curso mudou: o quarto, o "
+          "hóspede, a saída antes e depois, as noites e a conta", "HOTEL_STAY"),
     Event("RESERVA_ONLINE", "Nova reserva online", "Uma reserva chegada do site (API): o recurso, o hóspede, as datas - "
           "a confirmar na receção", "BOOKINGS", by_others=False),
     Event("MESA_ABERTA", "Mesa aberta", "Uma conta de mesa aberta: a mesa, quem a abriu", "OPEN_ACCOUNTS"),
