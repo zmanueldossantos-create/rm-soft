@@ -65,6 +65,14 @@ export async function listBookings(filters = {}) {
   return res.data;
 }
 
+// the price of a booking before it is made: { quantity, unit (NOITE|PERIODO|FATIA), unit_price, own_price, total, vat_rate }
+export async function getStayQuote(resourceId, serviceId, startsAt, endsAt) {
+  const res = await apiClient.get('/bookings/quote', {
+    params: { resource_id: resourceId, service_id: serviceId, starts_at: startsAt, ends_at: endsAt },
+  });
+  return res.data;
+}
+
 export async function createBooking(payload) {
   const res = await apiClient.post('/bookings', payload);
   return res.data;

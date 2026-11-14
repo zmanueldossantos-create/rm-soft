@@ -42,6 +42,7 @@ from app.models.point_of_sale import PointOfSale
 from app.models.cash_session import CashSession, CashSessionStatus
 from app.models.service import Service
 from app.models.invoice import Invoice
+from app.models.vat import VAT
 from app.services.booking_service import (
     get_booking_or_raise, _clean_guest_name, _has_overlap, _validate_service_for_resource, ensure_capacity,
     BookingOverlapError, InvalidBookingRangeError,
@@ -50,6 +51,7 @@ from app.services.document_rules import default_paid_on_issue_type
 from app.services.pos_service import checkout
 from app.services.stay_text import stay_observation
 from app.services.resource_service import get_resource_or_raise, resource_rate_price
+from app.services.service_service import get_service_or_raise
 from app.services.open_account_service import open_account, add_line, KITCHEN_CANCELLED
 
 # Angola has a single time zone, UTC+1, without daylight saving: a night is counted on Luanda's calendar.
@@ -100,6 +102,36 @@ def _stay_quantity(service: Service, starts_at: datetime, ends_at: datetime) -> 
         days = (ends_at.astimezone(LUANDA).date() - starts_at.astimezone(LUANDA).date()).days + 1
         return max(days, 1)
     return _nights_between(starts_at, ends_at)
+
+
+def _quote_unit(service: Service) -> str:
+    """What one unit of the rate is, for the screens: a slice of its duration, a period at its own hours, a night."""
+    if service.duration_minutes:
+        return "FATIA"
+    if service.stay_start_time is not None and service.stay_end_time is not None:
+        return "PERIODO"
+    return "NOITE"
+
+
+async def stay_quote(
+    db: AsyncSession, company_id: uuid.UUID, resource_id: uuid.UUID, service_id: uuid.UUID,
+    starts_at: datetime, ends_at: datetime,
+) -> dict:
+    """What a stay will cost before it is booked - the same count and price the check-in will put on the account:
+    how many times the rate (_stay_quantity), at the room's own price or the rate's. Excluding VAT, like the account's
+    lines; the VAT rate rides along for the screen. A moment without a zone is Luanda's (the form's date and hour)."""
+    starts_at = starts_at if starts_at.tzinfo else starts_at.replace(tzinfo=LUANDA)
+    ends_at = ends_at if ends_at.tzinfo else ends_at.replace(tzinfo=LUANDA)
+    resource = await get_resource_or_raise(db, company_id, resource_id)
+    service = await get_service_or_raise(db, company_id, service_id)
+    quantity = _stay_quantity(service, starts_at, ends_at) if ends_at > starts_at else 1
+    unit_price = await resource_rate_price(db, resource.id, service)
+    vat_rate = (await db.execute(select(VAT.rate).where(VAT.id == service.vat_id))).scalar_one_or_none()
+    return {
+        "quantity": quantity, "unit": _quote_unit(service), "unit_price": unit_price,
+        "own_price": unit_price != float(service.price or 0), "total": round(quantity * unit_price, 2),
+        "vat_rate": float(vat_rate or 0),
+    }
 
 
 def stay_end_from(service: Service, starts_at: datetime) -> datetime | None:

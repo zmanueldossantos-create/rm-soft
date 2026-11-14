@@ -12,11 +12,12 @@ from app.schemas.booking import (
     ResourceCreateRequest, ResourceUpdateRequest, ResourceResponse, RatePricesRequest,
     ResourceTypeCreateRequest, ResourceTypeUpdateRequest, ResourceTypeResponse,
     BookingCreateRequest, BookingRescheduleRequest, BookingStatusUpdateRequest, BookingResponse,
-    BookingChargeRequest, BookingChargeResponse, ResourceStatusResponse, ResourceHistoryResponse,
+    BookingChargeRequest, BookingChargeResponse, ResourceStatusResponse, ResourceHistoryResponse, StayQuoteResponse,
 )
 from app.services.resource_history_service import get_resource_history
 from app.services.booking_charge_service import charge_booking, BookingNotChargeableError
-from app.services.hotel_service import NoDefaultPosError
+from app.services.hotel_service import NoDefaultPosError, stay_quote
+from app.services.service_service import ServiceNotFoundError
 from app.services.fiscal_period_service import PeriodClosedError
 from app.services.invoice_service import (
     CustomerNotFoundError, DocumentTypeNotConfiguredError, PaymentAmountMismatchError, SeriesNotConfiguredError,
@@ -189,6 +190,22 @@ async def post_create_booking(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     except IncompatibleServiceError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.get("/bookings/quote", response_model=StayQuoteResponse)
+async def get_stay_quote(
+    resource_id: uuid.UUID,
+    service_id: uuid.UUID,
+    starts_at: datetime,
+    ends_at: datetime,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("bookings:view")),
+):
+    """The price of a booking before it is made: the form shows it as the dates, the room or the rate change."""
+    try:
+        return await stay_quote(db, current_user.company_id, resource_id, service_id, starts_at, ends_at)
+    except (ResourceNotFoundError, ServiceNotFoundError) as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
 @router.get("/bookings", response_model=list[BookingResponse])

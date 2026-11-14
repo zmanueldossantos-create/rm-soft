@@ -236,3 +236,13 @@ class ResourceHistorySummary(BaseModel):
 class ResourceHistoryResponse(BaseModel):
     entries: list[ResourceHistoryEntry]
     summary: list[ResourceHistorySummary]
+
+
+class StayQuoteResponse(BaseModel):
+    """What a booking will cost (Nova reserva): quantity x unit price, excluding VAT."""
+    quantity: int
+    unit: str  # NOITE, PERIODO (a rate with its own hours) or FATIA (a rate with a duration)
+    unit_price: float
+    own_price: bool  # the room's own price, not the rate's
+    total: float
+    vat_rate: float

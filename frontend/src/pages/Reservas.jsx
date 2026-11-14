@@ -4,7 +4,7 @@ import DateInput from '../components/DateInput';
 import { CalendarClock, Plus, Loader2, X, CheckCircle2, Pencil, ChevronLeft, ChevronRight, DoorOpen, Banknote, Globe } from 'lucide-react';
 import { useCan } from '../utils/permissions';
 import { listActivities } from '../api/activity';
-import { listResources, listBookings, createBooking, updateBookingStatus, rescheduleBooking, chargeBooking } from '../api/booking';
+import { listResources, listBookings, getStayQuote, createBooking, updateBookingStatus, rescheduleBooking, chargeBooking } from '../api/booking';
 import { listPointsOfSale } from '../api/activity';
 import { listResourceTypes } from '../api/booking';
 import { listCustomers, createCustomer } from '../api/customers';
@@ -197,6 +197,8 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
   const [posPickerSaving, setPosPickerSaving] = useState(false);
 
   const [formOpen, setFormOpen] = useState(false);
+  const [quote, setQuote] = useState(null);  // the booking's price before it is made
+  const [guestNameOpen, setGuestNameOpen] = useState(false);  // a guest other than the invoiced customer
   const [form, setForm] = useState({ activityId: '', resourceId: '', serviceId: '', customerId: '', date: todayIso(), endDate: todayIso(), startTime: '14:00', endTime: '12:00', notes: '', guestName: '', partySize: '', endTouched: false });
   const [formResources, setFormResources] = useState([]);
   const [editingBookingId, setEditingBookingId] = useState(null);
@@ -304,6 +306,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
     setEditingBookingId(null);
     setForm({ activityId: selectedActivityId, resourceId: '', serviceId: '', customerId: '', date: today, endDate: addDays(today, 1), startTime: '14:00', endTime: '12:00', notes: '', guestName: '', partySize: '', endTouched: false });
     setFormError('');
+    setGuestNameOpen(false);
     setFormOpen(true);
   }
 
@@ -326,6 +329,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
       partySize: b.party_size ? String(b.party_size) : '',
     });
     setFormError('');
+    setGuestNameOpen(false);
     setFormOpen(true);
   }
 
@@ -756,6 +760,28 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
     ? services.filter((s) => !s.resource_type_id || s.resource_type_id === selectedResource.resource_type_id)
     : services;
 
+  // The price as the room, the rate or the dates change - the backend counts it the way the check-in will
+  useEffect(() => {
+    const ready = formOpen && form.resourceId && form.serviceId && form.date && form.endDate && form.startTime && form.endTime;
+    if (!ready) { setQuote(null); return undefined; }
+    let alive = true;
+    const t = setTimeout(() => {
+      getStayQuote(form.resourceId, form.serviceId, form.date + 'T' + form.startTime + ':00', form.endDate + 'T' + form.endTime + ':00')
+        .then((q) => { if (alive) setQuote(q); })
+        .catch(() => { if (alive) setQuote(null); });
+    }, 250);
+    return () => { alive = false; clearTimeout(t); };
+  }, [formOpen, form.resourceId, form.serviceId, form.date, form.startTime, form.endDate, form.endTime]);
+
+  function quoteText(q) {
+    const service = services.find((x) => x.id === form.serviceId);
+    const many = q.quantity > 1;
+    const what = q.unit === 'NOITE' ? (many ? 'noites' : 'noite')
+      : q.unit === 'PERIODO' ? (many ? 'períodos' : 'período')
+      : (service?.duration_minutes ? service.duration_minutes + ' min' : 'fatia');
+    return q.quantity + ' ' + (q.unit === 'FATIA' ? '× ' + what : what) + ' × ' + formatKz(q.unit_price) + ' = ' + formatKz(q.total) + ' Kz';
+  }
+
   // Angola only ever operates in Africa/Luanda (UTC+1, no DST) - display must
   // show that time regardless of the viewing device's own system timezone, or a
   // browser/OS set to a different offset would render a misleading local hour
@@ -788,6 +814,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
       notes: '', guestName: '', partySize: '', endTouched: false,
     });
     setFormError('');
+    setGuestNameOpen(false);
     setFormOpen(true);
   }
 
@@ -1405,6 +1432,13 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
               options={availableServices.map((s) => ({ value: s.id, label: rateLabel(s) }))}
               placeholder="Nenhum"
             />
+            {quote && (
+              <p className="text-[12px] text-text-muted mt-1.5">
+                <span className="text-text-primary font-medium font-mono">{quoteText(quote)}</span>
+                {quote.own_price ? ' · preço próprio deste recurso' : ''}
+                {quote.vat_rate > 0 ? ' · + IVA ' + formatKz(quote.vat_rate).replace(/,00$/, '') + ' %' : ''}
+              </p>
+            )}
           </div>
           <div>
             <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">{personWord === 'hóspede' ? 'Hóspede' : 'Cliente'} (opcional)</label>
@@ -1422,10 +1456,20 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
               </button>
             </div>
           </div>
-          <div>
-            <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Nome do {personWord} (opcional)</label>
-            <input value={form.guestName} onChange={(e) => setForm((p) => ({ ...p, guestName: e.target.value }))} maxLength={150} placeholder="Ex: Família Silva" className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
-          </div>
+          {/* A name without a customer file (Família Silva); with a customer chosen, only when someone else stays
+              (the company pays, its employee sleeps) - behind a link, not a second field to wonder about */}
+          {!form.customerId || form.guestName || guestNameOpen ? (
+            <div>
+              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">
+                {form.customerId ? 'Quem fica (se não for o cliente)' : 'Nome do ' + personWord + ' (opcional)'}
+              </label>
+              <input value={form.guestName} onChange={(e) => setForm((p) => ({ ...p, guestName: e.target.value }))} maxLength={150} placeholder="Ex: Família Silva" className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
+            </div>
+          ) : (
+            <button type="button" onClick={() => setGuestNameOpen(true)} className="self-start -mt-2 text-[12px] text-accent hover:underline cursor-pointer">
+              + Fica outra pessoa (não o cliente)?
+            </button>
+          )}
           <div>
             <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Notas (opcional)</label>
             <input value={form.notes} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))} className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
