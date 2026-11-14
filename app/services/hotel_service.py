@@ -212,6 +212,7 @@ async def check_in(
         label=resource.name, resource_id=resource.id, customer_id=booking.customer_id, booking_id=booking.id,
     )
 
+    service = None
     if booking.service_id is not None:
         service_result = await db.execute(select(Service).where(Service.id == booking.service_id))
         service = service_result.scalar_one_or_none()
@@ -222,7 +223,11 @@ async def check_in(
 
     booking.status = BookingStatus.EM_CURSO
     from app.services.notification_service import notify_check_in  # Notificações: quarto ocupado
-    await notify_check_in(db, booking, resource.name, checking_in_user)
+    from app.services.open_account_service import _account_totals
+    await db.flush()
+    stay_total = (await _account_totals(db, [account.id])).get(account.id, (0, 0.0, 0.0, 0.0))[3]  # VAT included
+    await notify_check_in(db, booking, resource.name, checking_in_user, rate_name=service.name if service else None,
+                          stay_amount=stay_total, pos_name=pos.name if pos else None)
     await db.commit()
     await db.refresh(booking)
     await db.refresh(account)
@@ -313,7 +318,8 @@ async def walk_in(
     )
     db.add(booking)
     from app.services.notification_service import notify_check_in  # Notificações: quarto ocupado (entrada imediata)
-    await notify_check_in(db, booking, resource.name, selling_user, walk_in_service=service.name)
+    await notify_check_in(db, booking, resource.name, selling_user, rate_name=service.name, invoice=invoice,
+                          pos_name=pos.name)
     await db.commit()
     await db.refresh(booking)
     return booking, invoice

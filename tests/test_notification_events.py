@@ -129,15 +129,38 @@ async def test_a_hotel_stay(db, team):
     room, night = await _room(db, ctx)
     await open_session(db, ctx["company"].id, ctx["pos"].id, ctx["cashier"], 0)
     booking = await create_booking(db, ctx["company"].id, room.id, ctx["cashier"].id, BASE, BASE + timedelta(days=2),
-                                   service_id=night.id, guest_name="Ana Silva")
+                                   service_id=night.id, guest_name="Ana Silva", party_size=2)
     booking, account = await check_in(db, ctx["company"].id, booking.id, ctx["cashier"])
     await close_account(db, ctx["company"].id, account.id, ctx["cashier"],
                         [{"payment_method_id": ctx["pm_numerario"].id, "amount": 57000.0}])  # 2 nights + 14 %
     events = [(m.event, m.text) for m in await _messages(db)]
-    until = (BASE + timedelta(days=2)).strftime("%d/%m")
-    assert events[0] == ("CHECK_IN", f"Quarto 101 ocupado - Ana Silva\n2 noites, até {until} · João Caixa")
+    start, end = BASE.astimezone(LUANDA), (BASE + timedelta(days=2)).astimezone(LUANDA)
+    assert events[0] == ("CHECK_IN", "Quarto 101 ocupado - Ana Silva · 2 pessoas\n"
+                         f"Diária · {start:%d/%m %H:%M} → {end:%d/%m %H:%M} (2 noites)\n"
+                         f"Conta da estadia: 57 000,00 Kz - paga-se no check-out\n{ctx['pos'].name} · João Caixa")
     assert events[1][0] == "CHECK_OUT" and events[1][1].startswith("Quarto 101 libertado - Ana Silva\nTotal 57 000,00 Kz")
     assert len(events) == 2  # no «Mesa aberta» for the stay's account
+
+
+async def test_a_passage_paid_at_once(db, team):
+    """An Entrada: who (unnamed here), the rate and its times, what was paid and how, the till."""
+    from app.services.hotel_service import walk_in
+    ctx = team
+    room, _ = await _room(db, ctx)
+    hour = Service(company_id=ctx["company"].id, code="HTL-1H", name="Quarto 1 hora", price=5000, vat_id=ctx["vat_nor"].id,
+                   unit_of_measure_id=ctx["unit_un"].id, resource_type_id=room.resource_type_id, duration_minutes=60)
+    db.add(hour)
+    await db.commit()
+    await open_session(db, ctx["company"].id, ctx["pos"].id, ctx["cashier"], 0)
+    booking, invoice = await walk_in(db, ctx["company"].id, room.id, hour.id, ctx["cashier"], ctx["pos"].id,
+                                     [{"payment_method_id": ctx["pm_numerario"].id, "amount": 5700.0}], party_size=1,
+                                     now=BASE)
+    [text] = [m.text for m in await _messages(db, "CHECK_IN")]
+    start, end = BASE.astimezone(LUANDA), (BASE + timedelta(hours=1)).astimezone(LUANDA)
+    assert text == (f"Quarto 101 ocupado - hóspede sem nome · 1 pessoa\n"
+                    f"Quarto 1 hora · {start:%d/%m %H:%M} → {end:%d/%m %H:%M}\n"
+                    f"Pago 5 700,00 Kz ({invoice.series}/{invoice.number}) · {ctx['pm_numerario'].name} 5 700,00 Kz\n"
+                    f"{ctx['pos'].name} · João Caixa")
 
 
 async def test_a_check_out_with_nothing_to_pay(db, team):

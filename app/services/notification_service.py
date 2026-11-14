@@ -370,7 +370,7 @@ async def _guest(db: AsyncSession, booking) -> str:
         customer = await db.get(Customer, booking.customer_id)
         if customer is not None and not customer.is_final_consumer:
             return customer.name
-    return "Hóspede"
+    return "hóspede sem nome"
 
 
 def _document(invoice) -> str:
@@ -398,14 +398,22 @@ async def _sale_detail(db: AsyncSession, invoice) -> str:
     if len(lines) > MAX_SALE_LINES:
         hidden = len(lines) - MAX_SALE_LINES
         rows.append(f"+ {hidden} artigo{'s' if hidden > 1 else ''}")
+    paid = await _payments_text(db, invoice)
+    if paid:
+        rows.append("Pago: " + paid)
+    return "\n".join(rows)
+
+
+async def _payments_text(db: AsyncSession, invoice) -> str:
+    """How a document was paid: «Numerário 4 104,00 Kz + Cartão de débito 1 000,00 Kz» ('' when unpaid)."""
+    from app.models.payment import Payment
+    from app.models.payment_method_catalog import PaymentMethodCatalog
     payments = (await db.execute(
         select(PaymentMethodCatalog.name, Payment.amount)
         .join(PaymentMethodCatalog, PaymentMethodCatalog.id == Payment.payment_method_id)
         .where(Payment.invoice_id == invoice.id).order_by(Payment.created_at)
     )).all()
-    if payments:
-        rows.append("Pago: " + " + ".join(f"{name} {money(amount)}" for name, amount in payments))
-    return "\n".join(rows)
+    return " + ".join(f"{name} {money(amount)}" for name, amount in payments)
 
 
 @_safe
@@ -465,15 +473,29 @@ async def notify_table_closed(db: AsyncSession, account, invoice, user) -> None:
 
 
 @_safe
-async def notify_check_in(db: AsyncSession, booking, resource_name: str, user, walk_in_service: str | None = None) -> None:
+async def notify_check_in(db: AsyncSession, booking, resource_name: str, user, *, rate_name: str | None = None,
+                          invoice=None, stay_amount: float | None = None, pos_name: str | None = None) -> None:
+    """CHECK_IN - who, how many, which rate, from when to when, and the money: paid at once (an Entrada: the amount,
+    the document, how) or the stay's account opened (a check-in: paid at the check-out). E.g.:
+        Uíge ocupado - Paulo Mendes · 2 pessoas
+        Standard Pernoite · 14/11 22:05 → 15/11 07:30
+        Pago 8 000,00 Kz (FR 2026/12) · Cartão de débito 8 000,00 Kz
+        Receção · Joana Mendes"""
     guest = await _guest(db, booking)
-    if walk_in_service:
-        detail = f"{walk_in_service}, até às {_hour(booking.ends_at)}"
-    else:
-        nights = max(1, (booking.ends_at.astimezone(LUANDA_TZ).date() - booking.starts_at.astimezone(LUANDA_TZ).date()).days)
-        detail = f"{nights} noite{'s' if nights > 1 else ''}, até {_day(booking.ends_at)}"
-    await notify(db, booking.company_id, "CHECK_IN", f"{resource_name} ocupado - {guest}\n{detail} · {user.full_name}",
-                 actor=user)
+    people = f" · {booking.party_size} pessoa{'s' if booking.party_size > 1 else ''}" if booking.party_size else ""
+    start, end = booking.starts_at, booking.ends_at
+    when = f"{_day(start)} {_hour(start)} → {_day(end)} {_hour(end)}"
+    if invoice is None:
+        nights = max(1, (end.astimezone(LUANDA_TZ).date() - start.astimezone(LUANDA_TZ).date()).days)
+        when += f" ({nights} noite{'s' if nights > 1 else ''})"
+    lines = [f"{resource_name} ocupado - {guest}{people}", (f"{rate_name} · " if rate_name else "") + when]
+    if invoice is not None:
+        paid = await _payments_text(db, invoice)
+        lines.append(f"Pago {money(invoice.total)} ({_document(invoice)})" + (f" · {paid}" if paid else ""))
+    elif stay_amount:
+        lines.append(f"Conta da estadia: {money(stay_amount)} - paga-se no check-out")
+    lines.append(" · ".join(x for x in (pos_name, user.full_name) if x))
+    await notify(db, booking.company_id, "CHECK_IN", "\n".join(lines), actor=user)
 
 
 @_safe
