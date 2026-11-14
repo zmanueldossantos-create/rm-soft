@@ -2556,12 +2556,15 @@ export default function Caixa() {
               <Select
                 value={movementForm.movementType}
                 onChange={(v) => setMovementForm((p) => ({ ...p, movementType: v, otherPosId: '', reasonId: '', bankAccountId: '' }))}
+                // the till transfers and receives; cash crossing the company's border is the gestor's (or a role given it)
                 options={[
                   { value: 'TRANSFERENCIA', label: 'Transferência para outra caixa' },
-                  { value: 'DEPOSITO', label: 'Depósito no banco' },
-                  { value: 'LEVANTAMENTO', label: 'Levantamento do banco' },
-                  { value: 'ENTRADA_EXTERNA', label: 'Entrada externa' },
-                  { value: 'SAIDA_EXTERNA', label: 'Saída externa' },
+                  ...(can('tesouraria:external_movements') ? [
+                    { value: 'DEPOSITO', label: 'Depósito no banco' },
+                    { value: 'LEVANTAMENTO', label: 'Levantamento do banco' },
+                    { value: 'ENTRADA_EXTERNA', label: 'Entrada externa' },
+                    { value: 'SAIDA_EXTERNA', label: 'Saída externa' },
+                  ] : []),
                 ]}
               />
             </div>

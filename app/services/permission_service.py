@@ -117,7 +117,11 @@ PERMISSION_CATALOG: list[tuple[str, str, str, list[str]]] = [
     ("tesouraria:overview", "Ver a vista da tesouraria (posição, movimentos e fechos de todas as caixas)", "Tesouraria", []),
     ("tesouraria:banks_manage", "Definir o saldo inicial das contas bancárias e os terminais (TPA, Express)", "Tesouraria", []),
     ("tesouraria:bank_movements", "Registar e anular movimentos e transferências bancárias (comissões, entradas de capital...)", "Tesouraria", []),
-    ("tesouraria:record", "Registar movimentos de tesouraria", "Tesouraria", ["CAIXA"]),
+    ("tesouraria:record", "Registar movimentos de tesouraria (transferências entre caixas)", "Tesouraria", ["CAIXA"]),
+    # the cash that enters or leaves the company's tills from outside - the bank, a supplier paid in cash: the gestor's
+    # (the till only transfers between tills and receives what is sent to it)
+    ("tesouraria:external_movements", "Registar levantamentos e depósitos bancários e entradas/saídas externas numa caixa",
+     "Tesouraria", []),
     ("tesouraria:receive", "Receber movimentos de tesouraria pendentes", "Tesouraria", ["CAIXA"]),
     ("tesouraria:cancel_movement", "Cancelar movimentos de tesouraria", "Tesouraria", ["CAIXA"]),
     ("tesouraria:daily_report", "Ver relatório diário de tesouraria", "Tesouraria", ["CAIXA"]),

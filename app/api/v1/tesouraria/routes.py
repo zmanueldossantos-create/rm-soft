@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.api.deps import require_permission
+from app.services.permission_service import has_permission
 from app.models.user import User
 from app.models.movement_type import MovementDirection
 from app.models.cash_movement import CashMovementStatus, CashMovementType
@@ -173,6 +174,13 @@ async def post_cash_movement(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("tesouraria:record")),
 ):
+    # a till transfers between tills and receives what is sent to it; cash crossing the company's border (a bank
+    # withdrawal or deposit, an external entry or exit) is the gestor's - or a role given the right
+    if payload.movement_type != CashMovementType.TRANSFERENCIA.value and not await has_permission(
+            db, current_user.company_id, current_user.role.value, "tesouraria:external_movements"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail="A caixa faz transferências entre caixas e recebe os fundos enviados - os levantamentos, "
+                                   "depósitos e entradas/saídas externas registam-se pelo gestor")
     try:
         return await create_cash_movement(
             db, current_user.company_id,
