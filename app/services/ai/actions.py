@@ -1,6 +1,6 @@
 """
 What the AI assistant may DO, never by itself: it prepares an action (a Fatura, a Pró-forma or an Orçamento to issue, a
-document to send by email), the application checks it and shows it, and does it when the user confirms - or at once
+document to send by email, a supplier invoice to register), the application checks it and shows it, and does it when the user confirms - or at once
 when the gestor chose not to confirm (Definições da Empresa → Assistente IA). The document is issued by the usual
 invoicing services (stock, periods, series, AGT), in the user's name and within his permissions.
 
@@ -553,6 +553,221 @@ async def criar_artigo(db: AsyncSession, ctx: ActionContext, arguments: dict) ->
     return await _propose(db, ctx, "CREATE_ARTICLE", payload, summary, ctx.confirm_documents)
 
 
+# ---------- A supplier invoice (fatura de compra), its goods entering the stock
+
+async def _supplier(db: AsyncSession, company_id: uuid.UUID, text: str | None):
+    """The supplier by NIF or name - never created here (its NIF and country are checked on its screen)."""
+    from app.models.supplier import Supplier
+    text = " ".join(str(text or "").split())
+    if not text:
+        raise ActionError("Indique o fornecedor")
+    base = select(Supplier).where(Supplier.company_id == company_id, Supplier.is_active.is_(True))
+    by_nif = (await db.execute(base.where(Supplier.nif == text))).scalars().first()
+    if by_nif:
+        return by_nif
+    found = (await db.execute(base.where(or_(Supplier.name.ilike(f"%{text}%"), Supplier.trade_name.ilike(f"%{text}%")))
+                              .order_by(Supplier.name).limit(6))).scalars().all()
+    exact = [s for s in found if s.name.lower() == text.lower()]
+    if len(exact) == 1 or len(found) == 1:
+        return (exact or found)[0]
+    if not found:
+        raise ActionError(f"Fornecedor «{text}» não encontrado - crie-o primeiro em Fornecedores")
+    raise ActionError("Vários fornecedores correspondem: " + "; ".join(f"{s.name} (NIF {s.nif or '-'})" for s in found[:5])
+                      + " - indique qual")
+
+
+async def _purchased_article(db: AsyncSession, company_id: uuid.UUID, text: str) -> tuple[str, object]:
+    """A product (raw materials and internal-use goods included: they are bought too) or a service, by code, barcode
+    or name. Several matches: the AI asks."""
+    text = " ".join(str(text or "").split())
+    if not text:
+        raise ActionError("Uma linha sem artigo")
+    products = select(Product).where(Product.company_id == company_id, Product.is_active.is_(True))
+    services = select(Service).where(Service.company_id == company_id, Service.is_active.is_(True))
+    exact = (await db.execute(products.where(or_(func.upper(Product.code) == text.upper(), Product.barcode == text)))).scalars().first()
+    if exact:
+        return "product", exact
+    exact = (await db.execute(services.where(func.upper(Service.code) == text.upper()))).scalars().first()
+    if exact:
+        return "service", exact
+    found = [("product", p) for p in (await db.execute(products.where(Product.name.ilike(f"%{text}%")).limit(6))).scalars().all()]
+    found += [("service", s) for s in (await db.execute(services.where(Service.name.ilike(f"%{text}%")).limit(6))).scalars().all()]
+    same_name = [f for f in found if f[1].name.lower() == text.lower()]
+    if len(same_name) == 1 or len(found) == 1:
+        return (same_name or found)[0]
+    if not found:
+        raise ActionError(f"Artigo «{text}» não encontrado - crie-o primeiro (produto ou serviço)")
+    raise ActionError(f"Vários artigos correspondem a «{text}»: " + "; ".join(f"{a.name} ({a.code})" for _, a in found[:6])
+                      + " - indique qual")
+
+
+async def _purchase_unit(db: AsyncSession, company_id: uuid.UUID, product: Product, text: str | None):
+    """(sale unit id or None, unit code) - the unit the product was bought in: its base unit, or one of its units
+    (a sack, a box) named by code or name."""
+    from app.models.product_sale_unit import ProductSaleUnit
+    from app.models.unit_of_measure_catalog import UnitOfMeasureCatalog
+    base = await db.get(UnitOfMeasureCatalog, product.unit_of_measure_id) if product.unit_of_measure_id else None
+    said = " ".join(str(text or "").split()).lower()
+    if not said or (base is not None and said in (base.code.lower(), base.name.lower())):
+        return None, base.code if base else None
+    units = (await db.execute(select(ProductSaleUnit, UnitOfMeasureCatalog).join(
+        UnitOfMeasureCatalog, UnitOfMeasureCatalog.id == ProductSaleUnit.unit_of_measure_id).where(
+        ProductSaleUnit.product_id == product.id, ProductSaleUnit.company_id == company_id,
+        ProductSaleUnit.is_active.is_(True)))).all()
+    match = [(u, c) for u, c in units if said in (c.code.lower(), c.name.lower()) or c.name.lower().startswith(said)]
+    if len(match) == 1:
+        return str(match[0][0].id), match[0][1].code
+    options = [base.code] if base else []
+    options += [f"{c.code} ({float(u.factor):g} {base.code if base else ''})".strip() for u, c in units]
+    raise ActionError(f"Unidade «{text}» desconhecida para {product.name}: " + ", ".join(options))
+
+
+async def _purchase_vat(db: AsyncSession, text: str | None, motive: str | None):
+    """The VAT the supplier charged (14 by default, as the screen) - a legal rate, whatever the company's own regime -
+    and, for an exempt line, its exemption motive (M04...)."""
+    from app.models.legal_vat_rate import LegalVatRate
+    from app.models.vat_code import VatCode
+    rates = (await db.execute(select(LegalVatRate).where(LegalVatRate.is_active.is_(True)))).scalars().all()
+    said = str(text or "").strip().lower().replace("%", "").replace(",", ".")
+    if not said:
+        found = [r for r in rates if r.tax_category == "NOR"]
+    elif said in ("isento", "isenta", "ise"):
+        found = [r for r in rates if r.tax_category == "ISE"]
+    else:
+        try:
+            found = sorted([r for r in rates if float(r.rate) == float(said)], key=lambda r: r.tax_category != "ISE")
+        except ValueError:
+            found = []
+    if not found:
+        raise ActionError(f"IVA «{text}» desconhecido: " + ", ".join(f"{float(r.rate):g}%" for r in rates))
+    rate = found[0]
+    if float(rate.rate) != 0:
+        return rate, None
+    code = " ".join(str(motive or "").upper().split())
+    if not code:
+        raise ActionError("Uma linha isenta de IVA precisa do motivo de isenção indicado na fatura do fornecedor (ex.: M04)")
+    exemption = (await db.execute(select(VatCode).where(func.upper(VatCode.code) == code, VatCode.is_active.is_(True)))).scalars().first()
+    if exemption is None:
+        raise ActionError(f"Motivo de isenção «{code}» desconhecido")
+    return rate, exemption
+
+
+async def _warehouse(db: AsyncSession, company_id: uuid.UUID, text: str | None):
+    """The warehouse the goods enter: the one named; else the only one; else the «Armazém por defeito»."""
+    from app.models.warehouse import Warehouse
+    warehouses = (await db.execute(select(Warehouse).where(Warehouse.company_id == company_id, Warehouse.is_active.is_(True))
+                                   .order_by(Warehouse.name))).scalars().all()
+    if not warehouses:
+        raise ActionError("A empresa não tem nenhum armazém ativo")
+    said = " ".join(str(text or "").split()).lower()
+    if said:
+        match = [w for w in warehouses if w.name.lower() == said] or [w for w in warehouses if said in w.name.lower()]
+        if len(match) == 1:
+            return match[0]
+        raise ActionError(f"Armazém «{text}» não encontrado - " + ", ".join(w.name for w in warehouses))
+    if len(warehouses) == 1:
+        return warehouses[0]
+    default = [w for w in warehouses if w.is_default]
+    if default:
+        return default[0]
+    raise ActionError("Em que armazém entra a mercadoria? " + ", ".join(w.name for w in warehouses))
+
+
+def _day(text, name: str) -> date | None:
+    text = str(text or "").strip()
+    if not text:
+        return None
+    try:
+        return date.fromisoformat(text)
+    except ValueError:
+        raise ActionError(f"{name} inválida (AAAA-MM-DD)")
+
+
+async def registar_compra(db: AsyncSession, ctx: ActionContext, arguments: dict) -> dict:
+    """A supplier's invoice (FT, to pay later - the Pagamento is made on its screen: money leaving a till or a bank is
+    never done by the AI), checked as the Compras screen does; its products enter the warehouse on confirmation."""
+    from app.models.purchase_invoice import PurchaseInvoice, PurchaseInvoiceStatus
+    from app.services.purchase_invoice_service import _deductible_pct
+    if "purchases:manage" not in ctx.permissions:
+        raise ActionError("Não tem permissão para registar faturas de compra")
+    supplier = await _supplier(db, ctx.company_id, arguments.get("fornecedor"))
+    document = " ".join(str(arguments.get("documento") or "").split())
+    if not document:
+        raise ActionError("Indique o número da fatura do fornecedor (ex.: FT 45/2026)")
+    duplicate = (await db.execute(select(PurchaseInvoice.series, PurchaseInvoice.number).where(
+        PurchaseInvoice.company_id == ctx.company_id, PurchaseInvoice.supplier_id == supplier.id,
+        func.upper(PurchaseInvoice.supplier_document) == document.upper(),
+        PurchaseInvoice.status == PurchaseInvoiceStatus.REGISTADA))).first()
+    if duplicate is not None:
+        raise ActionError(f"O documento {document} de {supplier.name} já está registado ({duplicate[0]}/{duplicate[1]})")
+    document_date = _day(arguments.get("data"), "Data") or datetime.now(LUANDA).date()
+    if document_date > datetime.now(LUANDA).date():
+        raise ActionError("A data do documento não pode ser futura")
+    due_date = _day(arguments.get("vencimento"), "Data de vencimento")
+    if due_date is not None and due_date < document_date:
+        raise ActionError("O vencimento não pode ser anterior à data do documento")
+    given = arguments.get("linhas") or []
+    if not given:
+        raise ActionError("Indique os artigos comprados, com quantidade e custo unitário sem IVA")
+
+    wants_stock = arguments.get("entrada_stock", True) is not False
+    lines, shown, needs_lot = [], [], False
+    subtotal = vat_total = 0.0
+    for position, given_line in enumerate(given, start=1):
+        kind, article = await _purchased_article(db, ctx.company_id, given_line.get("artigo"))
+        try:
+            quantity = float(given_line.get("quantidade"))
+            unit_price = float(str(given_line.get("custo")).replace(" ", "").replace(",", "."))
+        except (TypeError, ValueError):
+            raise ActionError(f"{article.name}: indique a quantidade e o custo unitário sem IVA")
+        if quantity <= 0 or unit_price < 0:
+            raise ActionError(f"{article.name}: quantidade ou custo inválido")
+        rate, exemption = await _purchase_vat(db, given_line.get("iva"), given_line.get("motivo_isencao"))
+        line = {"product_id": str(article.id) if kind == "product" else None,
+                "service_id": str(article.id) if kind == "service" else None, "description": article.name,
+                "quantity": quantity, "unit_price": unit_price, "legal_vat_rate_id": str(rate.id),
+                "exemption_id": str(exemption.id) if exemption else None, "sale_unit_id": None}
+        unit_code = None
+        if kind == "product":
+            line["sale_unit_id"], unit_code = await _purchase_unit(db, ctx.company_id, article, given_line.get("unidade"))
+            if wants_stock and article.managed_by_stock and (article.managed_by_batch or article.managed_by_expiry):
+                lot = " ".join(str(given_line.get("lote") or "").split()) or None
+                expiry = _day(given_line.get("validade"), "Validade")
+                if (article.managed_by_batch and not lot) or (article.managed_by_expiry and expiry is None):
+                    raise ActionError(f"{article.name} é seguido por " + " e ".join(
+                        x for x, on in (("lote", article.managed_by_batch), ("validade", article.managed_by_expiry)) if on)
+                        + ": indique " + " e ".join(x for x, on in (("o n.º de lote", article.managed_by_batch),
+                                                                    ("a validade (AAAA-MM-DD)", article.managed_by_expiry)) if on))
+                line["lot_number"], line["expiry_date"] = lot, expiry.isoformat() if expiry else None
+                needs_lot = True
+        amount = _money(quantity * unit_price)
+        vat = _money(amount * float(rate.rate) / 100)
+        subtotal, vat_total = subtotal + amount, vat_total + vat
+        lines.append(line)
+        shown.append({"artigo": article.name, "quantidade": quantity, "unidade": unit_code, "preco": _money(unit_price),
+                      "iva": f"{float(rate.rate):g}%" + (f" {exemption.code}" if exemption else ""), "total": amount,
+                      "lote": line.get("lot_number")})
+
+    stocked = [l for l in lines if l["product_id"]]
+    warehouse = None
+    if wants_stock and stocked:
+        if "stock:receive" not in ctx.permissions:
+            raise ActionError("Não tem permissão para dar entrada em stock - registe sem entrada (entrada_stock falso) "
+                              "ou peça ao gestor")
+        warehouse = await _warehouse(db, ctx.company_id, arguments.get("armazem"))
+    pct = await _deductible_pct(db, ctx.company_id)
+    payload = {"supplier_id": str(supplier.id), "supplier_document": document, "document_date": document_date.isoformat(),
+               "due_date": due_date.isoformat() if due_date else None, "stock_entry": warehouse is not None,
+               "warehouse_id": str(warehouse.id) if warehouse else None, "lines": lines}
+    summary = {"titulo": f"Fatura de compra {document}", "fornecedor": supplier.name, "nif": supplier.nif,
+               "documento": document, "data": document_date.isoformat(), "vencimento": payload["due_date"],
+               "linhas": shown, "sem_iva": _money(subtotal), "iva": _money(vat_total),
+               "iva_dedutivel": _money(vat_total * pct / 100), "total": _money(subtotal + vat_total),
+               "armazem": warehouse.name if warehouse else None,
+               "stock": f"Entrada no armazém {warehouse.name}" if warehouse else "Sem entrada em stock"}
+    return await _propose(db, ctx, "REGISTER_PURCHASE", payload, summary, ctx.confirm_documents)
+
+
 # ---------- A document's PDF in the user's own chat (WhatsApp / Telegram)
 
 async def enviar_pdf_no_chat(db: AsyncSession, ctx: ActionContext, arguments: dict) -> dict:
@@ -588,6 +803,13 @@ def action_text(action: AiPendingAction) -> str:
     if action.kind == "CREATE_ARTICLE":
         lines = [f"**{s.get('titulo')}**", f"Código {s.get('codigo')} · {kz(s.get('preco'))} (sem IVA) · {s.get('iva')}",
                  " · ".join(x for x in (f"Unidade {s.get('unidade')}", s.get("grupo"), s.get("stock")) if x)]
+    elif action.kind == "REGISTER_PURCHASE":
+        lines = [f"**{s.get('titulo')}**", f"{s.get('fornecedor')}" + (f" · NIF {s['nif']}" if s.get("nif") else "")]
+        lines += [f"- {l['quantidade']:g}{' ' + l['unidade'] if l.get('unidade') else ''} × {l['artigo']} a {kz(l['preco'])}"
+                  f" — {kz(l['total'])} (IVA {l['iva']})" + (f" · lote {l['lote']}" if l.get("lote") else "")
+                  for l in s.get("linhas", [])]
+        lines.append(f"IVA {kz(s.get('iva'))} (dedutível {kz(s.get('iva_dedutivel'))}) · **Total {kz(s.get('total'))}** - a pagar")
+        lines.append(s.get("stock") or "")
     elif action.kind == "CONVERT_PROFORMA":
         lines = [f"**{s.get('titulo')}**", f"{s.get('cliente')}" + (f" · NIF {s['nif']}" if s.get("nif") else "")]
         lines += [f"- {l['quantidade']:g} × {l['artigo']} — {kz(l['total'])}" for l in s.get("linhas", [])]
@@ -635,7 +857,8 @@ async def execute_action(db: AsyncSession, action: AiPendingAction, user_id: uui
     from app.services.email_service import EmailError, send_email
     from app.services.invoice_pdf_service import render_invoice_pdf
     current_user_id.set(user_id)  # the document records who issued it, whatever the channel
-    company_id = action.company_id
+    # read now: a refusing service may roll the session back, which expires the action (no lazy load in async)
+    action_id, company_id = action.id, action.company_id
     try:
         if action.kind == "ISSUE_DOCUMENT":
             invoice = await _issue(db, company_id, action.payload, commit=True)
@@ -652,6 +875,23 @@ async def execute_action(db: AsyncSession, action: AiPendingAction, user_id: uui
             from app.services.invoice_service import convert_pro_forma_to_invoice
             invoice = await convert_pro_forma_to_invoice(db, company_id, uuid.UUID(action.payload["invoice_id"]), "FACTURA")
             action.result = {"documento": _reference(invoice), "invoice_id": str(invoice.id), "total": _money(invoice.total)}
+        elif action.kind == "REGISTER_PURCHASE":
+            from app.services.purchase_invoice_service import register_purchase_invoice
+            p = action.payload
+
+            def _id(value):
+                return uuid.UUID(value) if value else None
+            invoice = await register_purchase_invoice(
+                db, company_id, user_id, uuid.UUID(p["supplier_id"]), p["supplier_document"],
+                date.fromisoformat(p["document_date"]),
+                [{**l, "product_id": _id(l.get("product_id")), "service_id": _id(l.get("service_id")),
+                  "sale_unit_id": _id(l.get("sale_unit_id")), "legal_vat_rate_id": _id(l["legal_vat_rate_id"]),
+                  "exemption_id": _id(l.get("exemption_id")),
+                  "expiry_date": date.fromisoformat(l["expiry_date"]) if l.get("expiry_date") else None} for l in p["lines"]],
+                due_date=date.fromisoformat(p["due_date"]) if p.get("due_date") else None,
+                stock_entry=p["stock_entry"], warehouse_id=_id(p.get("warehouse_id")))
+            action.result = {"compra": f"{invoice.series}/{invoice.number}", "purchase_invoice_id": str(invoice.id),
+                             "total": _money(invoice.total), "armazem": (action.summary or {}).get("armazem")}
         elif action.kind == "CREATE_ARTICLE":
             p = action.payload
             if p["kind"] == "PRODUTO":
@@ -687,19 +927,18 @@ async def execute_action(db: AsyncSession, action: AiPendingAction, user_id: uui
             raise ActionError("Ação desconhecida")
         action.status = "FEITA"
     except (ActionError, EmailError) as e:
-        await _failed(db, action, str(e))
+        await _failed(db, action, action_id, str(e))
         return
     except Exception as e:
-        logger.warning("AI action %s failed: %s", action.id, e)
-        await _failed(db, action, str(e) or "A ação falhou")
+        logger.warning("AI action %s failed: %s", action_id, e)
+        await _failed(db, action, action_id, str(e) or "A ação falhou")
         return
     action.decided_at = datetime.now(LUANDA)
     await db.commit()
 
 
-async def _failed(db: AsyncSession, action: AiPendingAction, message: str) -> None:
+async def _failed(db: AsyncSession, action: AiPendingAction, action_id: uuid.UUID, message: str) -> None:
     """A refused creation rolled the session back: the action is written again with its failure."""
-    action_id = action.id
     await db.rollback()
     row = await db.get(AiPendingAction, action_id)
     target = row if row is not None else action
@@ -749,6 +988,11 @@ def outcome_text(action: AiPendingAction) -> str:
         return "Ação cancelada - nada foi feito."
     if action.status == "FALHOU":
         return f"Não foi possível concluir: {result.get('erro', 'erro desconhecido')}"
+    if action.kind == "REGISTER_PURCHASE":
+        total = f"{result.get('total', 0):,.2f}".replace(",", " ").replace(".", ",")
+        stock = f" A mercadoria entrou no armazém {result['armazem']}." if result.get("armazem") else ""
+        return (f"Fatura de compra **{result.get('compra')}** registada - {total} Kz a pagar (o pagamento faz-se em "
+                f"Pagamentos a fornecedores).{stock}")
     if action.kind == "CREATE_ARTICLE":
         return f"**{result.get('artigo')}** criado (código {result.get('codigo')})."
     if action.kind == "CONVERT_PROFORMA":
@@ -821,6 +1065,29 @@ ACTION_TOOLS = [
          "categoria": {"type": "string", "description": "Categoria (produto) ou tipo de serviço"},
          "codigo": {"type": "string"}, "controlo_stock": {"type": "boolean", "description": "Produto: controlar o stock (sim por omissão)"}},
       "required": ["tipo", "nome", "preco"]}),
+    ("registar_compra", ("purchases:manage",), registar_compra,
+     "Regista uma fatura de compra (FT de um fornecedor, a pagar depois): o fornecedor (nome ou NIF, já criado), o "
+     "número da fatura do fornecedor, a data (hoje por omissão), as linhas (artigo já criado, quantidade, custo "
+     "unitário SEM IVA, IVA cobrado pelo fornecedor - 14 por omissão; isento exige o motivo, ex.: M04; unidade de "
+     "compra, ex.: saco; lote e validade se o produto os seguir). Os produtos entram em stock no armazém indicado "
+     "(o único, ou o armazém por defeito). O pagamento nunca: faz-se no ecrã. Não inventes custos nem números: "
+     "pergunta-os. Confirmado pelo utilizador se a empresa o exigir.",
+     {"type": "object", "properties": {
+         "fornecedor": {"type": "string", "description": "Nome ou NIF do fornecedor"},
+         "documento": {"type": "string", "description": "N.º da fatura do fornecedor, ex.: FT 45/2026"},
+         "data": {"type": "string", "description": "Data da fatura AAAA-MM-DD (hoje por omissão)"},
+         "vencimento": {"type": "string", "description": "AAAA-MM-DD (opcional)"},
+         "linhas": {"type": "array", "items": {"type": "object", "properties": {
+             "artigo": {"type": "string", "description": "Nome ou código do produto/serviço"},
+             "quantidade": {"type": "number"}, "custo": {"type": "number", "description": "Custo unitário sem IVA"},
+             "unidade": {"type": "string", "description": "Unidade de compra (opcional), ex.: saco, caixa, KG"},
+             "iva": {"type": "string", "description": "14, 5, isento (14 por omissão)"},
+             "motivo_isencao": {"type": "string", "description": "Linha isenta: código do motivo, ex.: M04"},
+             "lote": {"type": "string"}, "validade": {"type": "string", "description": "AAAA-MM-DD"}},
+             "required": ["artigo", "quantidade", "custo"]}},
+         "armazem": {"type": "string", "description": "Armazém de entrada (opcional)"},
+         "entrada_stock": {"type": "boolean", "description": "Dar entrada dos produtos em stock (sim por omissão)"}},
+      "required": ["fornecedor", "documento", "linhas"]}),
     ("preparar_reserva", ("bookings:create",), preparar_reserva,
      "Prepara uma reserva de um recurso (quarto, mesa, praticante): o recurso, a tarifa (obrigatória para um quarto: "
      "Diária, Pernoite, 1 hora...), a data de entrada e a de saída OU o número de noites, o cliente (nome ou NIF) e/ou "

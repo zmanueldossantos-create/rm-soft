@@ -341,3 +341,59 @@ async def test_a_product_and_a_service_created(db, company_with_essentials):
     await decide_action(db, ctx["company"].id, ctx["gestor"].id, action_ctx.actions[-1], True)
     service = (await db.execute(select(Service).where(Service.name == "Entrega expresso"))).scalar_one()
     assert service.code == "ENT1" and float(service.price) == 3000.0
+
+
+@pytest.mark.asyncio
+async def test_a_supplier_invoice_registered_and_its_goods_received(db, company_with_essentials):
+    """«Regista a FT 45/2026 da Moagem, 10 sacos de farinha a 12 000»: the supplier and the articles found, 14 % VAT by
+    default, the goods entering the warehouse named - on confirmation; the same document is refused, as is an exempt
+    line without its motive, and the stock entry needs its permission."""
+    from app.models.legal_vat_rate import LegalVatRate
+    from app.models.purchase_invoice import PurchaseInvoice
+    from app.models.supplier import Supplier
+    ctx = company_with_essentials
+    company_id = ctx["company"].id
+    for category, rate in (("NOR", 14), ("ISE", 0)):
+        if (await db.execute(select(LegalVatRate).where(LegalVatRate.tax_category == category))).scalar_one_or_none() is None:
+            db.add(LegalVatRate(tax_category=category, name=category, rate=rate))
+    flour = Product(company_id=company_id, code="FAR1", name="Farinha de trigo", vat_id=ctx["vat_nor"].id, price=0,
+                    min_stock_threshold=0, product_type=ProductType.BEM, unit_of_measure_id=ctx["unit_un"].id,
+                    is_raw_material=True)
+    db.add_all([flour, Supplier(company_id=company_id, name="Moagem Lda", nif="5000222333")])
+    await db.commit()
+    warehouse_name, flour_id, gestor_id = ctx["activity_warehouse"].name, flour.id, ctx["gestor"].id
+    action_ctx = _ctx(ctx, permissions={"purchases:manage", "stock:receive"})
+    arguments = {"fornecedor": "Moagem", "documento": "FT 45/2026", "armazem": warehouse_name,
+                 "linhas": [{"artigo": "Farinha", "quantidade": 10, "custo": 12000}]}
+
+    answer = json.loads(await run_action_tool(db, action_ctx, "registar_compra", arguments))
+    assert answer["estado"] == "a_aguardar_confirmacao", answer
+    summary = answer["resumo"]
+    assert (summary["sem_iva"], summary["iva"], summary["total"]) == (120000.0, 16800.0, 136800.0)
+    assert summary["armazem"] == warehouse_name and summary["linhas"][0]["iva"] == "14%"
+    assert await _count(db, PurchaseInvoice, PurchaseInvoice.company_id == company_id) == 0  # nothing yet
+
+    # refused when it is done (no automatic entry type yet): the card says why, nothing is kept
+    failed, text = await decide_action(db, company_id, gestor_id, action_ctx.actions[-1], True)
+    assert failed.status == "FALHOU" and "movimento automático" in text, text
+    assert await _count(db, PurchaseInvoice, PurchaseInvoice.company_id == company_id) == 0
+    for row in (ctx["company"], ctx["gestor"], ctx["activity_warehouse"]):  # expired by the rolled-back attempt
+        await db.refresh(row)
+    from app.models.movement_type import MovementDirection, MovementType
+    db.add(MovementType(code="EAI", name="Entrada automática", direction=MovementDirection.ENTRADA, is_auto=True))
+    await db.commit()
+    json.loads(await run_action_tool(db, action_ctx, "registar_compra", arguments))
+    _, text = await decide_action(db, company_id, gestor_id, action_ctx.actions[-1], True)
+    assert "registada" in text and warehouse_name in text, text
+    assert await _stock(db, ctx, flour_id) == 10.0
+
+    twice = json.loads(await run_action_tool(db, action_ctx, "registar_compra", arguments))
+    assert "já está registado" in twice["erro"]
+    exempt = json.loads(await run_action_tool(db, action_ctx, "registar_compra", {
+        **arguments, "documento": "FT 46/2026", "linhas": [{"artigo": "FAR1", "quantidade": 1, "custo": 100, "iva": "isento"}]}))
+    assert "motivo de isenção" in exempt["erro"]
+    no_receive = json.loads(await run_action_tool(db, _ctx(ctx, permissions={"purchases:manage"}), "registar_compra",
+                                                  {**arguments, "documento": "FT 47/2026"}))
+    assert "entrada em stock" in no_receive["erro"]
+    unknown = json.loads(await run_action_tool(db, action_ctx, "registar_compra", {**arguments, "fornecedor": "Ninguém"}))
+    assert "não encontrado" in unknown["erro"]
