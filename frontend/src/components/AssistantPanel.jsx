@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Bot, X, Send, Loader2, Plus, MessageSquare, ChevronDown, Check, FileText, Mail, UserPlus } from 'lucide-react';
+import { Bot, X, Send, Loader2, Plus, MessageSquare, ChevronDown, Check, FileText, Mail, UserPlus, CalendarClock } from 'lucide-react';
 import { listAiConversations, getAiMessages, askAssistant, decideAiAction } from '../api/ai';
 import { extractErrorMessage } from '../utils/errors';
 import { formatKz } from '../utils/format';
@@ -115,7 +115,7 @@ function ActionCard({ action, onDecide, deciding }) {
   const s = action.summary || {};
   const expired = action.status === 'PENDENTE' && new Date(action.expires_at) < new Date();
   const [label, color] = ACTION_STATUS[expired ? 'EXPIRADA' : action.status] || [action.status, 'text-text-muted'];
-  const Icon = action.kind === 'SEND_EMAIL' ? Mail : action.kind === 'CREATE_CUSTOMER' ? UserPlus : FileText;
+  const Icon = action.kind === 'SEND_EMAIL' ? Mail : action.kind === 'CREATE_CUSTOMER' ? UserPlus : action.kind === 'CREATE_BOOKING' ? CalendarClock : FileText;
   return (
     <div className="mt-2 border border-border rounded-lg bg-bg-elevated overflow-hidden text-[12px]">
       <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
@@ -124,7 +124,15 @@ function ActionCard({ action, onDecide, deciding }) {
         <span className={'shrink-0 font-medium ' + color}>{label}</span>
       </div>
       <div className="px-3 py-2 flex flex-col gap-1.5">
-        {action.kind === 'CREATE_CUSTOMER' ? (
+        {action.kind === 'CREATE_BOOKING' ? (
+          <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+            {[['Entrada', s.entrada], ['Saída', s.saida], ['Tarifa', s.tarifa ? s.tarifa + (s.quantidade ? ' · ' + s.quantidade + ' ×' : '') : null],
+              ['Preço', s.total != null ? kz(s.total) + ' (sem IVA)' : null], ['Cliente', s.cliente], ['Hóspede', s.hospede], ['Pessoas', s.pessoas]]
+              .filter(([, v]) => v).map(([k, v]) => (
+                <span key={k} className="contents"><span className="text-text-muted">{k}</span><span className="text-text-primary font-mono">{v}</span></span>
+              ))}
+          </div>
+        ) : action.kind === 'CREATE_CUSTOMER' ? (
           <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
             {[['NIF', s.nif], ['Tipo', s.tipo], ['Telefone', s.telefone], ['Email', s.email], ['Morada', [s.morada, s.cidade].filter(Boolean).join(', ')]]
               .filter(([, v]) => v).map(([k, v]) => (
@@ -156,6 +164,7 @@ function ActionCard({ action, onDecide, deciding }) {
         )}
         {action.status === 'FEITA' && action.result?.documento && <p className="text-success font-medium">{action.result.documento} emitido</p>}
         {action.status === 'FEITA' && action.result?.codigo && <p className="text-success font-medium">Cliente criado - código {action.result.codigo}</p>}
+        {action.status === 'FEITA' && action.result?.booking_id && <p className="text-success font-medium">Reserva criada</p>}
         {action.status === 'FALHOU' && action.result?.erro && <p className="text-danger">{action.result.erro}</p>}
       </div>
       {action.status === 'PENDENTE' && !expired && (

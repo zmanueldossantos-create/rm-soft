@@ -306,6 +306,103 @@ async def criar_cliente(db: AsyncSession, ctx: ActionContext, arguments: dict) -
     return await _propose(db, ctx, "CREATE_CUSTOMER", payload, summary, ctx.confirm_documents)
 
 
+# ---------- A booking (a room, a table, a practitioner)
+
+def _when(day_text, hour_text, default_hour) -> datetime:
+    """A Luanda moment from «AAAA-MM-DD» and «HH:MM» (the default hour when none is given)."""
+    try:
+        day = date.fromisoformat(str(day_text).strip()[:10])
+    except ValueError:
+        raise ActionError(f"Data inválida: {day_text} (use AAAA-MM-DD)")
+    hour = str(hour_text or default_hour or "12:00").strip()[:5]
+    try:
+        hh, mm = (int(x) for x in hour.split(":"))
+    except ValueError:
+        raise ActionError(f"Hora inválida: {hour_text} (use HH:MM)")
+    return datetime(day.year, day.month, day.day, hh, mm, tzinfo=LUANDA)
+
+
+async def preparar_reserva(db: AsyncSession, ctx: ActionContext, arguments: dict) -> dict:
+    """A booking checked as the Nova reserva screen does (overlap, capacity, the rate of the room's type, a Pernoite one
+    night), priced as the check-in will count it, and created on confirmation. The hours: the rate's own (Pernoite),
+    its duration after the entry (1 hora), else the type's (a Diária 12:00 -> 12:00) - unless the user said them."""
+    from app.models.resource import Resource
+    from app.models.resource_type_catalog import ResourceTypeCatalog
+    from app.services.booking_service import create_booking
+    from app.services.hotel_service import stay_quote
+    if "bookings:create" not in ctx.permissions:
+        raise ActionError("Não tem permissão para criar reservas")
+    name = " ".join(str(arguments.get("recurso") or "").split())
+    if not name:
+        raise ActionError("Indique o recurso (o quarto, a mesa...)")
+    found = (await db.execute(select(Resource).where(
+        Resource.company_id == ctx.company_id, Resource.is_active.is_(True), Resource.name.ilike(f"%{name}%"))
+        .order_by(Resource.name).limit(6))).scalars().all()
+    exact = [r for r in found if r.name.lower() == name.lower()]
+    if not found:
+        raise ActionError(f"Recurso «{name}» não encontrado")
+    if len(exact) != 1 and len(found) > 1:
+        raise ActionError("Vários recursos correspondem: " + ", ".join(r.name for r in found) + " - indique qual")
+    resource = (exact or found)[0]
+    rtype = await db.get(ResourceTypeCatalog, resource.resource_type_id)
+    rates = (await db.execute(select(Service).where(
+        Service.company_id == ctx.company_id, Service.is_active.is_(True), Service.resource_type_id == resource.resource_type_id,
+    ).order_by(Service.name))).scalars().all()
+    rate_text = " ".join(str(arguments.get("tarifa") or "").split())
+    rate = None
+    if rate_text:
+        matches = [r for r in rates if rate_text.lower() in r.name.lower() or rate_text.upper() == (r.code or "").upper()]
+        if not matches:
+            raise ActionError(f"Tarifa «{rate_text}» não existe para {resource.name}: " + ", ".join(r.name for r in rates))
+        if len(matches) > 1:
+            raise ActionError("Várias tarifas correspondem: " + ", ".join(r.name for r in matches) + " - indique qual")
+        rate = matches[0]
+    elif rtype is not None and rtype.requires_service:
+        raise ActionError(f"Indique a tarifa de {resource.name}: " + ", ".join(r.name for r in rates))
+    if not arguments.get("data_entrada"):
+        raise ActionError("Indique a data de entrada")
+    own = (rate.stay_start_time, rate.stay_end_time) if rate is not None and rate.stay_start_time else None
+    type_hours = (rtype.default_start_time, rtype.default_end_time) if rtype is not None and rtype.default_start_time else None
+    start_default = (own or type_hours or (None, None))[0]
+    starts_at = _when(arguments["data_entrada"], arguments.get("hora_entrada"),
+                      start_default.strftime("%H:%M") if start_default else "12:00")
+    if rate is not None and rate.duration_minutes and not arguments.get("data_saida"):
+        ends_at = starts_at + timedelta(minutes=rate.duration_minutes) * max(int(arguments.get("quantidade") or 1), 1)
+    else:
+        end_default = (own or type_hours or (None, None))[1]
+        end_hour = end_default.strftime("%H:%M") if end_default else "12:00"
+        if arguments.get("data_saida"):
+            ends_at = _when(arguments["data_saida"], arguments.get("hora_saida"), end_hour)
+        else:
+            nights = max(int(arguments.get("noites") or 1), 1)
+            ends_at = _when((starts_at + timedelta(days=nights)).date().isoformat(), arguments.get("hora_saida"), end_hour)
+            if own and ends_at - timedelta(days=nights) > starts_at and own[1] > own[0]:
+                ends_at -= timedelta(days=nights)  # same-day hours of its own (a Day use): the same day
+    customer = await _customer(db, ctx.company_id, arguments.get("cliente"))
+    guest = " ".join(str(arguments.get("nome_hospede") or "").split()) or None
+    party = int(arguments["pessoas"]) if arguments.get("pessoas") else None
+    # every rule of the screen refuses here, before the user is asked: the creation tried, then rolled back
+    try:
+        async with db.begin_nested() as savepoint:
+            await create_booking(db, ctx.company_id, resource.id, ctx.user_id, starts_at, ends_at,
+                                 customer.id if customer else None, rate.id if rate else None, None, guest, party,
+                                 commit=False)
+            await savepoint.rollback()
+    except ActionError:
+        raise
+    except Exception as e:  # an overlap, the capacity, a Pernoite over two nights...
+        raise ActionError(str(e) or "A reserva não é possível")
+    quote = await stay_quote(db, ctx.company_id, resource.id, rate.id, starts_at, ends_at) if rate else None
+    payload = {"resource_id": str(resource.id), "service_id": str(rate.id) if rate else None,
+               "starts_at": starts_at.isoformat(), "ends_at": ends_at.isoformat(),
+               "customer_id": str(customer.id) if customer else None, "guest_name": guest, "party_size": party}
+    summary = {"titulo": f"Reserva: {resource.name}", "recurso": resource.name, "tarifa": rate.name if rate else None,
+               "entrada": starts_at.strftime("%d/%m/%Y %H:%M"), "saida": ends_at.strftime("%d/%m/%Y %H:%M"),
+               "cliente": customer.name if customer else None, "hospede": guest, "pessoas": party,
+               "quantidade": quote["quantity"] if quote else None, "total": quote["total"] if quote else None}
+    return await _propose(db, ctx, "CREATE_BOOKING", payload, summary, ctx.confirm_documents)
+
+
 # ---------- A document's PDF in the user's own chat (WhatsApp / Telegram)
 
 async def enviar_pdf_no_chat(db: AsyncSession, ctx: ActionContext, arguments: dict) -> dict:
@@ -338,7 +435,14 @@ def action_text(action: AiPendingAction) -> str:
 
     def kz(value) -> str:
         return f"{float(value or 0):,.2f}".replace(",", " ").replace(".", ",") + " Kz"
-    if action.kind == "CREATE_CUSTOMER":
+    if action.kind == "CREATE_BOOKING":
+        lines = [f"**{s.get('titulo')}**", f"{s.get('entrada')} → {s.get('saida')}"]
+        if s.get("tarifa"):
+            lines.append(f"{s['tarifa']}" + (f" · {s['quantidade']} × · {kz(s['total'])} (sem IVA)" if s.get("total") else ""))
+        who = " · ".join(str(x) for x in (s.get("cliente"), s.get("hospede"), f"{s['pessoas']} pessoas" if s.get("pessoas") else None) if x)
+        if who:
+            lines.append(who)
+    elif action.kind == "CREATE_CUSTOMER":
         lines = [f"**{s.get('titulo')}**", f"NIF {s.get('nif')} · {s.get('tipo')}"]
         lines += [v for v in (s.get("telefone"), s.get("email"), ", ".join(x for x in (s.get("morada"), s.get("cidade")) if x)) if v]
     elif action.kind == "ISSUE_DOCUMENT":
@@ -387,6 +491,14 @@ async def execute_action(db: AsyncSession, action: AiPendingAction, user_id: uui
                 address=p.get("address"), city=p.get("city"), legal_person_type=p["legal_person_type"],
                 customer_code=await suggest_next_customer_code(db, company_id))
             action.result = {"cliente": customer.name, "codigo": customer.customer_code, "customer_id": str(customer.id)}
+        elif action.kind == "CREATE_BOOKING":
+            from app.services.booking_service import create_booking
+            p = action.payload
+            booking = await create_booking(
+                db, company_id, uuid.UUID(p["resource_id"]), user_id, datetime.fromisoformat(p["starts_at"]),
+                datetime.fromisoformat(p["ends_at"]), uuid.UUID(p["customer_id"]) if p.get("customer_id") else None,
+                uuid.UUID(p["service_id"]) if p.get("service_id") else None, None, p.get("guest_name"), p.get("party_size"))
+            action.result = {"reserva": (action.summary or {}).get("recurso"), "booking_id": str(booking.id)}
         elif action.kind == "SEND_EMAIL":
             pdf, filename = await render_invoice_pdf(db, company_id, uuid.UUID(action.payload["invoice_id"]), "a4")
             await send_email(db, company_id, action.payload["to"], action.payload["subject"], action.payload["body"],
@@ -458,6 +570,8 @@ def outcome_text(action: AiPendingAction) -> str:
         return "Ação cancelada - nada foi feito."
     if action.status == "FALHOU":
         return f"Não foi possível concluir: {result.get('erro', 'erro desconhecido')}"
+    if action.kind == "CREATE_BOOKING":
+        return f"Reserva de **{result.get('reserva')}** criada - confirme-a e faça o check-in na chegada (Reservas → Mapa de reservas)."
     if action.kind == "CREATE_CUSTOMER":
         return f"Cliente **{result.get('cliente')}** criado (código {result.get('codigo')})."
     if action.kind == "ISSUE_DOCUMENT":
@@ -506,6 +620,24 @@ ACTION_TOOLS = [
          "telefone": {"type": "string"}, "email": {"type": "string"}, "morada": {"type": "string"},
          "cidade": {"type": "string"}},
       "required": ["nome", "nif"]}),
+    ("preparar_reserva", ("bookings:create",), preparar_reserva,
+     "Prepara uma reserva de um recurso (quarto, mesa, praticante): o recurso, a tarifa (obrigatória para um quarto: "
+     "Diária, Pernoite, 1 hora...), a data de entrada e a de saída OU o número de noites, o cliente (nome ou NIF) e/ou "
+     "o nome do hóspede, as pessoas. As horas seguem a tarifa (Pernoite 22:00-07:30, 1 hora a partir da entrada) ou o "
+     "tipo do recurso, salvo se o utilizador as disser. A aplicação verifica (recurso livre, capacidade) e mostra o "
+     "preço; o utilizador confirma. Não inventes datas nem tarifas: pergunta-as.",
+     {"type": "object", "properties": {
+         "recurso": {"type": "string", "description": "Nome do recurso, ex.: Luanda"},
+         "tarifa": {"type": "string", "description": "Nome ou código da tarifa, ex.: VIP Diária"},
+         "data_entrada": {"type": "string", "description": "AAAA-MM-DD"},
+         "hora_entrada": {"type": "string", "description": "HH:MM (opcional)"},
+         "data_saida": {"type": "string", "description": "AAAA-MM-DD (opcional se noites)"},
+         "hora_saida": {"type": "string", "description": "HH:MM (opcional)"},
+         "noites": {"type": "integer", "description": "Número de noites (se não houver data de saída)"},
+         "quantidade": {"type": "integer", "description": "Para uma tarifa por duração: quantas (2 = 2 horas numa tarifa de 1 hora)"},
+         "cliente": {"type": "string", "description": "Nome ou NIF do cliente (opcional)"},
+         "nome_hospede": {"type": "string"}, "pessoas": {"type": "integer"}},
+      "required": ["recurso", "data_entrada"]}),
     ("enviar_pdf_no_chat", ("invoices:view",), enviar_pdf_no_chat,
      "Envia o PDF de um documento ao próprio utilizador, nesta conversa de WhatsApp / Telegram (para ver ou reencaminhar).",
      {"type": "object", "properties": {"numero": {"type": "string", "description": "Ex.: FT2026/3"}}, "required": ["numero"]}),

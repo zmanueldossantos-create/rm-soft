@@ -100,3 +100,39 @@ async def test_the_assistant_sees_the_rooms_and_the_bookings(db, company_with_es
     assert occupation["ocupados"] == 1 and occupation["recursos"][0]["recurso"] == "Quarto 103"
     listed = await reservas(db, cid, {})
     assert [(r["recurso"], r["estado"], r["tarifa"]) for r in listed["reservas"]] == [("Quarto 103", "EM_CURSO", "Quarto 1 hora")]
+
+
+@pytest.mark.asyncio
+async def test_the_assistant_prepares_a_booking_then_makes_it(db, company_with_essentials):
+    """«Reserva o Quarto 103 em Diária para amanhã, 2 noites»: checked and priced first, created on confirmation; the
+    hours follow the rate; an impossible one (a Pernoite over two nights, a taken room) is refused before asking."""
+    import json
+    from datetime import date as _date, time as _time
+    from app.models.booking import Booking
+    from app.models.service import Service
+    from app.services.ai.actions import ActionContext, decide_action, run_action_tool
+    ctx = company_with_essentials
+    cid = ctx["company"].id
+    room, _, night = await _rooms(db, ctx)
+    db.add(Service(company_id=cid, code="PAS-PER", name="Pernoite", price=10000, vat_id=ctx["vat_nor"].id,
+                   unit_of_measure_id=ctx["unit_un"].id, resource_type_id=room.resource_type_id,
+                   stay_start_time=_time(22, 0), stay_end_time=_time(7, 30)))
+    await db.commit()
+    action_ctx = ActionContext(company_id=cid, user_id=ctx["gestor"].id, permissions={"bookings:create"},
+                               conversation_id=None, confirm_documents=True, confirm_sends=True)
+    day = (_date.today() + timedelta(days=3)).isoformat()
+    refused = json.loads(await run_action_tool(db, action_ctx, "preparar_reserva",
+                                               {"recurso": "Quarto 103", "tarifa": "Pernoite", "data_entrada": day, "noites": 2}))
+    assert "um só período" in refused["erro"]
+    answer = json.loads(await run_action_tool(db, action_ctx, "preparar_reserva",
+                                              {"recurso": "Quarto 103", "tarifa": "Diária", "data_entrada": day, "noites": 2,
+                                               "nome_hospede": "Ana", "pessoas": 2}))
+    assert answer["estado"] == "a_aguardar_confirmacao" and answer["resumo"]["total"] == 50000.0
+    assert (await db.execute(select(Booking))).scalars().all() == []  # nothing before the confirmation
+    action, text = await decide_action(db, cid, ctx["gestor"].id, action_ctx.actions[0], True)
+    assert action.status == "FEITA" and "criada" in text
+    booking = (await db.execute(select(Booking))).scalar_one()
+    assert booking.guest_name == "Ana" and (booking.ends_at - booking.starts_at).days == 2
+    taken = json.loads(await run_action_tool(db, action_ctx, "preparar_reserva",
+                                             {"recurso": "Quarto 103", "tarifa": "Diária", "data_entrada": day}))
+    assert "erro" in taken  # the room is taken those days
