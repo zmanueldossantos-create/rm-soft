@@ -367,21 +367,12 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
   }
 
   // When the chosen service has a default duration, the end time follows the start
-  // (start + duration, possibly on the next day) until the end is edited by hand.
-  // Never applied when editing an existing booking. UTC arithmetic on the naive
+  // (start + duration, possibly on the next day) until the end is edited by hand - or always when the rate has just
+  // been chosen (force). Not otherwise applied when editing an existing booking. UTC arithmetic on the naive
   // date/time strings, so browser daylight-saving rules cannot shift the result.
   // Without a duration (a night), an exit hour not after the entry hour means the next day: 14:00 -> 12:00 tomorrow.
-  // A rate with hours of its own (Pernoite 22:00 - 07:30): the booking takes them, until the times are edited by hand
-  // (withAutoEnd then puts the exit on the next day when it is not after the entry).
-  function withRateHours(next) {
-    if (editingBookingId || next.endTouched) return next;
-    const service = next.serviceId ? services.find((s) => s.id === next.serviceId) : null;
-    if (!service?.stay_start_time || !service?.stay_end_time) return next;
-    return { ...next, startTime: service.stay_start_time.slice(0, 5), endTime: service.stay_end_time.slice(0, 5), endDate: next.date };
-  }
-
-  function withAutoEnd(next) {
-    if (editingBookingId || next.endTouched) return next;
+  function withAutoEnd(next, force = false) {
+    if (!force && (editingBookingId || next.endTouched)) return next;
     const service = next.serviceId ? services.find((s) => s.id === next.serviceId) : null;
     if (!service || !service.duration_minutes || !next.date || !next.startTime) {
       if (next.date && next.startTime && next.endTime && next.endTime <= next.startTime && (!next.endDate || next.endDate <= next.date)) {
@@ -398,6 +389,26 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
       endDate: end.getUTCFullYear() + '-' + pad(end.getUTCMonth() + 1) + '-' + pad(end.getUTCDate()),
       endTime: pad(end.getUTCHours()) + ':' + pad(end.getUTCMinutes()),
     };
+  }
+
+  // A rate chosen (new booking or edit, times touched or not): an explicit choice, so the booking takes its hours -
+  // a timed rate ends after its duration; a rate with its own hours (Pernoite 22:00 -> 07:30) or a night at the
+  // type's hours (Diária 12:00 -> 12:00) takes those hours and keeps the nights already chosen (14 -> 16 stays 2
+  // nights), at least one. A rate without any (a table's service) leaves the times alone.
+  function withRateChosen(next) {
+    const service = next.serviceId ? services.find((s) => s.id === next.serviceId) : null;
+    if (!service || !next.date) return next;
+    if (service.duration_minutes) return withAutoEnd(next, true);
+    const resource = (editingBookingId ? resources : formResources).find((r) => r.id === next.resourceId);
+    const type = resourceTypesCatalog.find((rt) => rt.id === resource?.resource_type_id);
+    const start = service.stay_start_time || type?.default_start_time;
+    const end = service.stay_end_time || type?.default_end_time;
+    if (!start || !end) return next;
+    const startTime = start.slice(0, 5);
+    const endTime = end.slice(0, 5);
+    const overnight = endTime <= startTime;
+    const endDate = next.endDate > next.date ? next.endDate : (overnight ? addDays(next.date, 1) : next.date);
+    return { ...next, startTime, endTime, endDate };
   }
 
   async function handleSubmit(e) {
@@ -1436,7 +1447,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
             </label>
             <Select
               value={form.serviceId}
-              onChange={(v) => setForm((p) => withAutoEnd(withRateHours({ ...p, serviceId: v })))}
+              onChange={(v) => setForm((p) => withRateChosen({ ...p, serviceId: v }))}
               options={availableServices.map((s) => ({ value: s.id, label: rateLabel(s) }))}
               placeholder="Nenhum"
             />
