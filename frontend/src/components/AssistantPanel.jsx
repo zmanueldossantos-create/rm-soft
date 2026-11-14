@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Bot, X, Send, Loader2, Plus, MessageSquare, ChevronDown, Check, FileText, Mail, UserPlus, CalendarClock } from 'lucide-react';
+import { Bot, X, Send, Loader2, Plus, MessageSquare, ChevronDown, Check, FileText, Mail, UserPlus, CalendarClock, PackagePlus } from 'lucide-react';
 import { listAiConversations, getAiMessages, askAssistant, decideAiAction } from '../api/ai';
 import { extractErrorMessage } from '../utils/errors';
 import { formatKz } from '../utils/format';
@@ -115,7 +115,7 @@ function ActionCard({ action, onDecide, deciding }) {
   const s = action.summary || {};
   const expired = action.status === 'PENDENTE' && new Date(action.expires_at) < new Date();
   const [label, color] = ACTION_STATUS[expired ? 'EXPIRADA' : action.status] || [action.status, 'text-text-muted'];
-  const Icon = action.kind === 'SEND_EMAIL' ? Mail : action.kind === 'CREATE_CUSTOMER' ? UserPlus : action.kind === 'CREATE_BOOKING' ? CalendarClock : FileText;
+  const Icon = action.kind === 'SEND_EMAIL' ? Mail : action.kind === 'CREATE_CUSTOMER' ? UserPlus : action.kind === 'CREATE_BOOKING' ? CalendarClock : action.kind === 'CREATE_ARTICLE' ? PackagePlus : FileText;
   return (
     <div className="mt-2 border border-border rounded-lg bg-bg-elevated overflow-hidden text-[12px]">
       <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
@@ -124,7 +124,15 @@ function ActionCard({ action, onDecide, deciding }) {
         <span className={'shrink-0 font-medium ' + color}>{label}</span>
       </div>
       <div className="px-3 py-2 flex flex-col gap-1.5">
-        {action.kind === 'CREATE_BOOKING' ? (
+        {action.kind === 'CREATE_ARTICLE' ? (
+          <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+            {[['Código', s.codigo], ['Preço', s.preco != null ? kz(s.preco) + ' (sem IVA)' : null], ['IVA', s.iva], ['Unidade', s.unidade],
+              ['Grupo', s.grupo], ['Stock', s.stock]]
+              .filter(([, v]) => v).map(([k, v]) => (
+                <span key={k} className="contents"><span className="text-text-muted">{k}</span><span className="text-text-primary font-mono">{v}</span></span>
+              ))}
+          </div>
+        ) : action.kind === 'CREATE_BOOKING' ? (
           <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
             {[['Entrada', s.entrada], ['Saída', s.saida], ['Tarifa', s.tarifa ? s.tarifa + (s.quantidade ? ' · ' + s.quantidade : '') : null],
               ['Preço', s.total != null ? kz(s.total) + ' (sem IVA)' : null], ['Cliente', s.cliente], ['Hóspede', s.hospede], ['Pessoas', s.pessoas]]
@@ -139,9 +147,9 @@ function ActionCard({ action, onDecide, deciding }) {
                 <span key={k} className="contents"><span className="text-text-muted">{k}</span><span className="text-text-primary font-mono">{v}</span></span>
               ))}
           </div>
-        ) : action.kind === 'ISSUE_DOCUMENT' ? (
+        ) : action.kind === 'ISSUE_DOCUMENT' || action.kind === 'CONVERT_PROFORMA' ? (
           <>
-            <p className="text-text-muted">{s.cliente}{s.nif ? ' · NIF ' + s.nif : ''} · {s.atividade}{s.receita ? ' · Receita ' + s.receita : ''}</p>
+            <p className="text-text-muted">{s.cliente}{s.nif ? ' · NIF ' + s.nif : ''}{s.atividade ? ' · ' + s.atividade : ''}{s.origem ? ' · de ' + s.origem : ''}{s.receita ? ' · Receita ' + s.receita : ''}</p>
             <table className="w-full">
               <tbody>
                 {(s.linhas || []).map((l, i) => (
@@ -163,8 +171,9 @@ function ActionCard({ action, onDecide, deciding }) {
           <p className="text-text-primary">{s.documento} · {s.cliente} · {kz(s.total)}<br /><span className="text-text-muted">Para: {s.para}</span></p>
         )}
         {action.status === 'FEITA' && action.result?.documento && <p className="text-success font-medium">{action.result.documento} emitido</p>}
-        {action.status === 'FEITA' && action.result?.codigo && <p className="text-success font-medium">Cliente criado - código {action.result.codigo}</p>}
+        {action.status === 'FEITA' && action.kind === 'CREATE_CUSTOMER' && action.result?.codigo && <p className="text-success font-medium">Cliente criado - código {action.result.codigo}</p>}
         {action.status === 'FEITA' && action.result?.booking_id && <p className="text-success font-medium">Reserva criada</p>}
+        {action.status === 'FEITA' && action.kind === 'CREATE_ARTICLE' && <p className="text-success font-medium">Criado - código {action.result?.codigo}</p>}
         {action.status === 'FALHOU' && action.result?.erro && <p className="text-danger">{action.result.erro}</p>}
       </div>
       {action.status === 'PENDENTE' && !expired && (

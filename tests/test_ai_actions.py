@@ -295,3 +295,49 @@ async def test_a_customer_created_by_the_assistant(db, company_with_essentials):
     # a 14-character BI is a private person
     person = await tool({"nome": "Ana Paulo", "nif": "004512345LA041"})
     assert person["resumo"]["tipo"] == "Pessoa singular"
+
+
+@pytest.mark.asyncio
+async def test_a_pro_forma_accepted_becomes_a_fatura(db, company_with_essentials):
+    """«O cliente aceitou, converte em fatura»: the FP's lines and prices in a FT referenced to it, on confirmation -
+    once only; never a FR (money is received at a till)."""
+    ctx = company_with_essentials
+    product, _ = await _setup(db, ctx)
+    action_ctx = _ctx(ctx, permissions=ALL | {"invoices:proforma_convert"})
+    made = json.loads(await run_action_tool(db, action_ctx, "preparar_documento", {
+        "tipo": "PRO_FORMA", "cliente": "5417000001", "linhas": [{"artigo": product.code, "quantidade": 2}]}))
+    await decide_action(db, ctx["company"].id, ctx["gestor"].id, action_ctx.actions[-1], True)
+    pro_forma = (await db.execute(select(Invoice).where(Invoice.invoice_type == InvoiceType.PRO_FORMA))).scalar_one()
+    number = f"{pro_forma.series}/{pro_forma.number}"
+    answer = json.loads(await run_action_tool(db, action_ctx, "converter_proforma", {"numero": number}))
+    assert answer["estado"] == "a_aguardar_confirmacao" and answer["resumo"]["total"] == float(pro_forma.total)
+    action, text = await decide_action(db, ctx["company"].id, ctx["gestor"].id, action_ctx.actions[-1], True)
+    assert action.status == "FEITA" and "a receber" in text
+    fatura = (await db.execute(select(Invoice).where(Invoice.invoice_type == InvoiceType.FACTURA))).scalar_one()
+    assert float(fatura.total) == float(pro_forma.total)
+    again = json.loads(await run_action_tool(db, action_ctx, "converter_proforma", {"numero": number}))
+    assert "já foi convertido" in again["erro"]
+
+
+@pytest.mark.asyncio
+async def test_a_product_and_a_service_created(db, company_with_essentials):
+    """«Cria o produto Bolo de laranja a 2 500»: a code of its own, the VAT of the regime, created on confirmation;
+    a name already used is refused before asking."""
+    from app.models.service import Service
+    ctx = company_with_essentials
+    action_ctx = _ctx(ctx, permissions={"products:manage", "services:manage"})
+    answer = json.loads(await run_action_tool(db, action_ctx, "criar_artigo",
+                                              {"tipo": "PRODUTO", "nome": "Bolo de laranja", "preco": 2500, "iva": "14"}))
+    assert answer["estado"] == "a_aguardar_confirmacao", answer
+    assert answer["resumo"]["codigo"] == "BOL1" and answer["resumo"]["unidade"] == "UN"
+    await decide_action(db, ctx["company"].id, ctx["gestor"].id, action_ctx.actions[-1], True)
+    bolo = (await db.execute(select(Product).where(Product.name == "Bolo de laranja"))).scalar_one()
+    assert (bolo.code, float(bolo.price), bolo.vat_id, bolo.managed_by_stock) == ("BOL1", 2500.0, ctx["vat_nor"].id, True)
+    twice = json.loads(await run_action_tool(db, action_ctx, "criar_artigo",
+                                             {"tipo": "PRODUTO", "nome": "Bolo de laranja", "preco": 2500, "iva": "14"}))
+    assert "erro" in twice
+    json.loads(await run_action_tool(db, action_ctx, "criar_artigo",
+                                     {"tipo": "SERVICO", "nome": "Entrega expresso", "preco": 3000, "iva": "14"}))
+    await decide_action(db, ctx["company"].id, ctx["gestor"].id, action_ctx.actions[-1], True)
+    service = (await db.execute(select(Service).where(Service.name == "Entrega expresso"))).scalar_one()
+    assert service.code == "ENT1" and float(service.price) == 3000.0

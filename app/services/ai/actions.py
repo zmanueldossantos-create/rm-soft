@@ -413,6 +413,146 @@ async def preparar_reserva(db: AsyncSession, ctx: ActionContext, arguments: dict
     return await _propose(db, ctx, "CREATE_BOOKING", payload, summary, ctx.confirm_documents)
 
 
+# ---------- A pro-forma or a quote accepted: its Fatura (to be paid later - a FR is cashed at the till)
+
+async def converter_proforma(db: AsyncSession, ctx: ActionContext, arguments: dict) -> dict:
+    """The accepted pro-forma (or quote) becomes a Fatura with its very lines and prices, referenced to it - the
+    Converter of Faturas, as a FT only: a Fatura/Recibo says money was received, which happens at a till."""
+    from app.services.document_rules import get_document_rules
+    if "invoices:proforma_convert" not in ctx.permissions:
+        raise ActionError("Não tem permissão para converter pró-formas")
+    text = " ".join(str(arguments.get("numero") or "").upper().split())
+    if "/" not in text:
+        raise ActionError("Indique o número da pró-forma, por exemplo FP2026/1")
+    series, _, number = text.rpartition("/")
+    try:
+        number = int(number)
+    except ValueError:
+        raise ActionError("Número de documento inválido")
+    source = (await db.execute(select(Invoice).where(
+        Invoice.company_id == ctx.company_id, func.upper(Invoice.series) == series.split(" ")[-1], Invoice.number == number,
+    ))).scalars().first()
+    if source is None:
+        raise ActionError(f"Documento {text} não encontrado")
+    if not (await get_document_rules(db, source.invoice_type)).convertible:
+        raise ActionError(f"{_reference(source)} não é uma pró-forma nem um orçamento")
+    if source.converted_to_invoice_id is not None:
+        raise ActionError(f"{_reference(source)} já foi convertido numa fatura")
+    if source.valid_until is not None and source.valid_until < date.today():
+        raise ActionError(f"{_reference(source)} expirou em {source.valid_until.strftime('%d/%m/%Y')} - emita um novo")
+    customer = await db.get(Customer, source.customer_id) if source.customer_id else None
+    lines = (await db.execute(select(InvoiceLine).where(InvoiceLine.invoice_id == source.id)
+                              .order_by(InvoiceLine.line_number, InvoiceLine.created_at, InvoiceLine.id))).scalars().all()
+    summary = {"titulo": f"Fatura a partir de {_reference(source)}", "cliente": customer.name if customer else "Consumidor final",
+               "nif": customer.nif if customer else None, "origem": _reference(source),
+               "linhas": [{"artigo": l.product_name_snapshot, "quantidade": float(l.quantity), "preco": _money(l.unit_price),
+                           "total": _money(l.line_total)} for l in lines],
+               "sem_iva": _money(source.subtotal), "iva": _money(source.vat_total), "total": _money(source.total)}
+    return await _propose(db, ctx, "CONVERT_PROFORMA", {"invoice_id": str(source.id)}, summary, ctx.confirm_documents)
+
+
+# ---------- A product or a service of the catalogue
+
+def _code_from(name: str) -> str:
+    import unicodedata
+    letters = "".join(c for c in unicodedata.normalize("NFD", name).upper() if c.isalpha() and c.isascii())
+    return (letters[:3] or "ART")
+
+
+async def _vat_for(db: AsyncSession, company_id: uuid.UUID, text: str | None):
+    """The VAT rate the user said (14, 5, 0, «isento») among those the company's regime allows - the only allowed one
+    when he said none."""
+    from app.models.company import Company
+    from app.models.fiscal_regime import FiscalRegime
+    from app.models.vat import VAT
+    company = await db.get(Company, company_id)
+    regime = await db.get(FiscalRegime, company.fiscal_regime_id) if company and company.fiscal_regime_id else None
+    rates = [v for v in (await db.execute(select(VAT).where(VAT.company_id == company_id, VAT.is_active.is_(True)))).scalars().all()
+             if regime is None or getattr(regime, "allows_" + v.tax_category.lower(), False)]
+    said = str(text or "").strip().lower().replace("%", "")
+    if not said:
+        if len(rates) == 1:
+            return rates[0]
+        raise ActionError("Indique o IVA: " + ", ".join(f"{v.name} ({float(v.rate):g}%)" for v in rates))
+    if said in ("isento", "isenta", "0", "ise"):
+        found = [v for v in rates if v.tax_category == "ISE"] or [v for v in rates if float(v.rate) == 0]
+    else:
+        try:
+            found = [v for v in rates if float(v.rate) == float(said.replace(",", "."))]
+        except ValueError:
+            found = [v for v in rates if said in v.name.lower()]
+    if not found:
+        raise ActionError(f"IVA «{text}» não permitido pelo regime da empresa: " + ", ".join(f"{v.name} ({float(v.rate):g}%)" for v in rates))
+    return found[0]
+
+
+async def criar_artigo(db: AsyncSession, ctx: ActionContext, arguments: dict) -> dict:
+    """A new product (a good, with stock) or a service, checked as its screen does (code and name unique, the VAT of the
+    company's regime, the exemption motive it imposes), created on confirmation."""
+    from app.models.product_category import ProductCategory
+    from app.models.service_type import ServiceType
+    from app.models.unit_of_measure_catalog import UnitOfMeasureCatalog
+    from app.services.vat_rule_service import ArticleVatError, resolve_article_vat
+    kind = str(arguments.get("tipo") or "").upper()
+    if kind not in ("PRODUTO", "SERVICO"):
+        raise ActionError("Indique se é um PRODUTO (com stock) ou um SERVICO")
+    needed = "products:manage" if kind == "PRODUTO" else "services:manage"
+    if needed not in ctx.permissions:
+        raise ActionError("Não tem permissão para criar " + ("produtos" if kind == "PRODUTO" else "serviços"))
+    name = " ".join(str(arguments.get("nome") or "").split())
+    if len(name) < 2:
+        raise ActionError("Indique o nome do artigo")
+    try:
+        price = float(str(arguments.get("preco")).replace(" ", "").replace(",", "."))
+    except (TypeError, ValueError):
+        raise ActionError("Indique o preço de venda (sem IVA)")
+    if price < 0:
+        raise ActionError("O preço não pode ser negativo")
+    vat = await _vat_for(db, ctx.company_id, arguments.get("iva"))
+    try:
+        exemption_id = await resolve_article_vat(db, ctx.company_id, vat.id, None)
+    except ArticleVatError as e:
+        raise ActionError(f"{e} - crie este artigo no ecrã, onde se escolhe o motivo")
+    unit_code = str(arguments.get("unidade") or "UN").strip().upper()
+    unit = (await db.execute(select(UnitOfMeasureCatalog).where(
+        func.upper(UnitOfMeasureCatalog.code) == unit_code, UnitOfMeasureCatalog.is_active.is_(True)))).scalars().first()
+    if unit is None:
+        raise ActionError(f"Unidade «{unit_code}» desconhecida (ex.: UN, KG, L)")
+    group_id, group_name = None, None
+    group_text = " ".join(str(arguments.get("categoria") or "").split())
+    if group_text:
+        model = ProductCategory if kind == "PRODUTO" else ServiceType
+        group = (await db.execute(select(model).where(model.company_id == ctx.company_id, model.name.ilike(f"%{group_text}%"))
+                                  .order_by(model.name))).scalars().first()
+        if group is None:
+            raise ActionError(f"{'Categoria' if kind == 'PRODUTO' else 'Tipo de serviço'} «{group_text}» não encontrado")
+        group_id, group_name = str(group.id), group.name
+    code = " ".join(str(arguments.get("codigo") or "").upper().split())
+    model = Product if kind == "PRODUTO" else Service
+    if not code:  # the next free code of its three letters: BOL1, BOL2...
+        prefix = _code_from(name)
+        taken = set((await db.execute(select(model.code).where(model.company_id == ctx.company_id,
+                                                                model.code.ilike(prefix + "%")))).scalars().all())
+        code = next(f"{prefix}{n}" for n in range(1, 10000) if f"{prefix}{n}" not in taken)
+    try:
+        if kind == "PRODUTO":
+            from app.services.product_service import _check_all_fields_available
+            await _check_all_fields_available(db, ctx.company_id, code, name, None)
+        else:
+            from app.services.service_service import _check_fields_available
+            await _check_fields_available(db, ctx.company_id, code, name)
+    except Exception as e:
+        raise ActionError(f"{e} - escolha outro nome ou código")
+    stock = kind == "PRODUTO" and arguments.get("controlo_stock", True) is not False
+    payload = {"kind": kind, "code": code, "name": name, "price": price, "vat_id": str(vat.id),
+               "exemption_reason_id": str(exemption_id) if exemption_id else None, "unit_id": str(unit.id),
+               "group_id": group_id, "managed_by_stock": stock}
+    summary = {"titulo": f"Novo {'produto' if kind == 'PRODUTO' else 'serviço'}: {name}", "codigo": code, "nome": name,
+               "preco": _money(price), "iva": f"{vat.name} ({float(vat.rate):g}%)", "unidade": unit.code,
+               "grupo": group_name, "stock": ("Controlo de stock" if stock else "Sem controlo de stock") if kind == "PRODUTO" else None}
+    return await _propose(db, ctx, "CREATE_ARTICLE", payload, summary, ctx.confirm_documents)
+
+
 # ---------- A document's PDF in the user's own chat (WhatsApp / Telegram)
 
 async def enviar_pdf_no_chat(db: AsyncSession, ctx: ActionContext, arguments: dict) -> dict:
@@ -445,7 +585,14 @@ def action_text(action: AiPendingAction) -> str:
 
     def kz(value) -> str:
         return f"{float(value or 0):,.2f}".replace(",", " ").replace(".", ",") + " Kz"
-    if action.kind == "CREATE_BOOKING":
+    if action.kind == "CREATE_ARTICLE":
+        lines = [f"**{s.get('titulo')}**", f"Código {s.get('codigo')} · {kz(s.get('preco'))} (sem IVA) · {s.get('iva')}",
+                 " · ".join(x for x in (f"Unidade {s.get('unidade')}", s.get("grupo"), s.get("stock")) if x)]
+    elif action.kind == "CONVERT_PROFORMA":
+        lines = [f"**{s.get('titulo')}**", f"{s.get('cliente')}" + (f" · NIF {s['nif']}" if s.get("nif") else "")]
+        lines += [f"- {l['quantidade']:g} × {l['artigo']} — {kz(l['total'])}" for l in s.get("linhas", [])]
+        lines.append(f"IVA {kz(s.get('iva'))} · **Total {kz(s.get('total'))}** - a pagar (Fatura)")
+    elif action.kind == "CREATE_BOOKING":
         lines = [f"**{s.get('titulo')}**", f"{s.get('entrada')} → {s.get('saida')}"]
         if s.get("tarifa"):
             lines.append(f"{s['tarifa']}" + (f" · {s['quantidade']} · {kz(s['total'])} (sem IVA)" if s.get("total") else ""))
@@ -501,6 +648,28 @@ async def execute_action(db: AsyncSession, action: AiPendingAction, user_id: uui
                 address=p.get("address"), city=p.get("city"), legal_person_type=p["legal_person_type"],
                 customer_code=await suggest_next_customer_code(db, company_id))
             action.result = {"cliente": customer.name, "codigo": customer.customer_code, "customer_id": str(customer.id)}
+        elif action.kind == "CONVERT_PROFORMA":
+            from app.services.invoice_service import convert_pro_forma_to_invoice
+            invoice = await convert_pro_forma_to_invoice(db, company_id, uuid.UUID(action.payload["invoice_id"]), "FACTURA")
+            action.result = {"documento": _reference(invoice), "invoice_id": str(invoice.id), "total": _money(invoice.total)}
+        elif action.kind == "CREATE_ARTICLE":
+            p = action.payload
+            if p["kind"] == "PRODUTO":
+                from app.services.product_service import create_product
+                article = await create_product(
+                    db, company_id, p["code"], p["name"], None, uuid.UUID(p["vat_id"]), p["price"], 0,
+                    unit_of_measure_id=uuid.UUID(p["unit_id"]),
+                    category_id=uuid.UUID(p["group_id"]) if p.get("group_id") else None,
+                    managed_by_stock=p.get("managed_by_stock", True),
+                    exemption_reason_id=uuid.UUID(p["exemption_reason_id"]) if p.get("exemption_reason_id") else None)
+            else:
+                from app.services.service_service import create_service
+                article = await create_service(
+                    db, company_id, p["code"], p["name"], uuid.UUID(p["vat_id"]),
+                    service_type_id=uuid.UUID(p["group_id"]) if p.get("group_id") else None,
+                    unit_of_measure_id=uuid.UUID(p["unit_id"]), price=p["price"],
+                    exemption_reason_id=uuid.UUID(p["exemption_reason_id"]) if p.get("exemption_reason_id") else None)
+            action.result = {"artigo": article.name, "codigo": article.code}
         elif action.kind == "CREATE_BOOKING":
             from app.services.booking_service import create_booking
             p = action.payload
@@ -580,6 +749,11 @@ def outcome_text(action: AiPendingAction) -> str:
         return "Ação cancelada - nada foi feito."
     if action.status == "FALHOU":
         return f"Não foi possível concluir: {result.get('erro', 'erro desconhecido')}"
+    if action.kind == "CREATE_ARTICLE":
+        return f"**{result.get('artigo')}** criado (código {result.get('codigo')})."
+    if action.kind == "CONVERT_PROFORMA":
+        total = f"{result.get('total', 0):,.2f}".replace(",", " ").replace(".", ",")
+        return f"**{result.get('documento')}** emitida - {total} Kz, a receber (o pagamento regista-se com um Recibo)."
     if action.kind == "CREATE_BOOKING":
         return f"Reserva de **{result.get('reserva')}** criada - confirme-a e faça o check-in na chegada (Reservas → Mapa de reservas)."
     if action.kind == "CREATE_CUSTOMER":
@@ -630,6 +804,23 @@ ACTION_TOOLS = [
          "telefone": {"type": "string"}, "email": {"type": "string"}, "morada": {"type": "string"},
          "cidade": {"type": "string"}},
       "required": ["nome", "nif"]}),
+    ("converter_proforma", ("invoices:proforma_convert",), converter_proforma,
+     "Converte uma pró-forma ou um orçamento aceite numa Fatura (FT, a pagar depois), com as mesmas linhas e preços. "
+     "Nunca em Fatura/Recibo: o dinheiro recebe-se na Caixa (ecrã Faturas → Converter, ou a Caixa). Confirmado pelo "
+     "utilizador se a empresa o exigir.",
+     {"type": "object", "properties": {"numero": {"type": "string", "description": "Ex.: FP2026/1"}}, "required": ["numero"]}),
+    ("criar_artigo", ("products:manage", "services:manage"), criar_artigo,
+     "Cria um artigo novo no catálogo: PRODUTO (com stock) ou SERVICO; nome e preço de venda sem IVA obrigatórios; IVA "
+     "(14, 5, isento... - o regime da empresa decide os permitidos), unidade (UN por omissão; KG, L...), categoria do "
+     "produto ou tipo de serviço, código (gerado se não for dado). Pergunta o que faltar - não inventes preços. "
+     "Confirmado pelo utilizador se a empresa o exigir. O stock entra depois por uma fatura de compra.",
+     {"type": "object", "properties": {
+         "tipo": {"type": "string", "enum": ["PRODUTO", "SERVICO"]}, "nome": {"type": "string"},
+         "preco": {"type": "number", "description": "Preço de venda sem IVA"},
+         "iva": {"type": "string", "description": "Ex.: 14, 5, isento"}, "unidade": {"type": "string"},
+         "categoria": {"type": "string", "description": "Categoria (produto) ou tipo de serviço"},
+         "codigo": {"type": "string"}, "controlo_stock": {"type": "boolean", "description": "Produto: controlar o stock (sim por omissão)"}},
+      "required": ["tipo", "nome", "preco"]}),
     ("preparar_reserva", ("bookings:create",), preparar_reserva,
      "Prepara uma reserva de um recurso (quarto, mesa, praticante): o recurso, a tarifa (obrigatória para um quarto: "
      "Diária, Pernoite, 1 hora...), a data de entrada e a de saída OU o número de noites, o cliente (nome ou NIF) e/ou "
