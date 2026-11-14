@@ -29,8 +29,10 @@
   --accent-hover: #2F6BCC;
 }
 
-/* Dark theme (default) */
+/* Dark theme (default) - color-scheme: the browser's own controls (unticked checkboxes, radios, scrollbars, the
+   time/date pickers) drawn dark too, not white boxes on the dark surfaces */
 :root {
+  color-scheme: dark;
   --bg-primary: #12181A;
   --bg-elevated: #1B2326;
   --bg-inset: #0D1214;
@@ -43,6 +45,7 @@
 
 /* Light theme - surfaces/text invert, the accent deepens */
 :root.light {
+  color-scheme: light;
   --accent: #1F5FD1;
   --accent-hover: #1A4FB0;
   --bg-primary: #F7F6F3;

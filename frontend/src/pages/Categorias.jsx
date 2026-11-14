@@ -445,7 +445,7 @@ export default function Categorias() {
                     <input type="time" value={form.default_end_time} onChange={(e) => updateField('default_end_time', e.target.value)} className={inputClass} />
                   </div>
                 </div>
-                <p className="text-[11px] text-text-muted -mt-1">Opcional - propostas na reserva. Saída antes da entrada = dia seguinte (ex.: quarto 14:00 - 12:00).</p>
+                <p className="text-[11px] text-text-muted -mt-1">Opcional - propostas na reserva. Saída igual ou antes da entrada = dia seguinte (ex.: 14:00 - 12:00; 12:00 - 12:00 = 24 horas).</p>
               </div>
             ) : NAME_ONLY.includes(activeCatalog?.key) ? null : (
               <div className="flex flex-col gap-2">
