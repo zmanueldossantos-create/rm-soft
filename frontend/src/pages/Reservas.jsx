@@ -634,6 +634,10 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
 
   // the timed rates and the rates with hours (a Pernoite) of the chosen room's type (a night is a booking)
   const walkInRoom = resources.find((r) => r.id === walkInForm.resourceId);
+  // the same capacity rule as a booking: a room (its type needs a rate) takes no more guests than it holds
+  const walkInPax = parseInt(walkInForm.partySize, 10);
+  const walkInOverCapacity = !!(walkInRoom?.capacity && walkInPax > walkInRoom.capacity
+    && resourceTypesCatalog.find((t) => t.id === walkInRoom.resource_type_id)?.requires_service);
   const walkInServices = services.filter((s) => (s.duration_minutes || s.stay_end_time) && (!s.resource_type_id || s.resource_type_id === walkInRoom?.resource_type_id)).sort(byRateOrder);
   const walkInService = services.find((s) => s.id === walkInForm.serviceId);
   // What is sold: the Entrada's service once, or the charged marcação's service as many times as it lasts.
@@ -1343,8 +1347,13 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
               <input type="number" min="1" step="1" value={walkInForm.partySize} onChange={(e) => setWalkInForm((p) => ({ ...p, partySize: e.target.value }))} className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
             </div>
           </div>
+          {walkInOverCapacity && (
+            <p className="text-[12px] text-danger -mt-2">
+              {walkInRoom.name} leva no máximo {walkInRoom.capacity} {walkInRoom.capacity === 1 ? 'pessoa' : 'pessoas'} - reduza o número ou escolha outro quarto
+            </p>
+          )}
           {walkInService && renderPayment('Total a pagar (IVA incluído) - até ' + walkInEnd(walkInService).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Luanda' }))}
-          <button type="submit" disabled={walkInSaving || !walkInService || walkInTotal <= 0 || walkInRemaining !== 0} className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer">
+          <button type="submit" disabled={walkInSaving || !walkInService || walkInTotal <= 0 || walkInRemaining !== 0 || walkInOverCapacity} className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer">
             {walkInSaving ? <Loader2 size={17} className="animate-spin" /> : <DoorOpen size={17} />}
             {walkInSaving ? 'A registar...' : 'Receber e dar entrada'}
           </button>
