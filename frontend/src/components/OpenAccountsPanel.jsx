@@ -7,7 +7,8 @@ import { Wallet2, Plus, Loader2, X, Trash2, CheckCircle2, Search, Minus, ArrowRi
 import { useCan } from '../utils/permissions';
 import { listActivities } from '../api/activity';
 import { listPointsOfSale } from '../api/activity';
-import { listResources, listResourceStatuses } from '../api/booking';
+import { listResources, listResourceStatuses, listResourceTypes } from '../api/booking';
+import { listCustomers } from '../api/customers';
 import { listProducts } from '../api/products';
 import { listServices } from '../api/services';
 import { listPaymentMethodPreferences } from '../api/tesouraria';
@@ -55,6 +56,9 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
   const [selectedActivityId, setSelectedActivityId] = useState(activityId || '');
   const [pointsOfSale, setPointsOfSale] = useState([]);
   const [resources, setResources] = useState([]);
+  // a room (its type needs a rate) has its account opened by its check-in, never as a bare tab: kept out of «Nova conta»
+  const [stayTypeIds, setStayTypeIds] = useState(new Set());
+  const [customers, setCustomers] = useState([]);
   const [products, setProducts] = useState([]);
   const [services, setServices] = useState([]);
   const [paymentMethods, setPaymentMethods] = useState([]);
@@ -64,7 +68,7 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
   const [error, setError] = useToastState('error');
 
   const [newModalOpen, setNewModalOpen] = useState(false);
-  const [newForm, setNewForm] = useState({ label: '', resourceId: '', notes: '' });
+  const [newForm, setNewForm] = useState({ label: '', resourceId: '', customerId: '', notes: '' });
   const [newError, setNewError] = useToastState('error');
   const [newSaving, setNewSaving] = useState(false);
 
@@ -134,6 +138,11 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
     loadAccounts();
   }, [selectedActivityId]);
 
+  useEffect(() => {
+    listResourceTypes().then((types) => setStayTypeIds(new Set(types.filter((t) => t.requires_service).map((t) => t.id)))).catch(() => {});
+    listCustomers().then((data) => setCustomers(data.filter((c) => c.is_active !== false && !c.is_final_consumer))).catch(() => {});
+  }, []);
+
   async function loadAccounts() {
     setLoading(true);
     setError('');
@@ -155,7 +164,7 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
   }
 
   function openNewModal() {
-    setNewForm({ label: '', resourceId: '', notes: '' });
+    setNewForm({ label: '', resourceId: '', customerId: '', notes: '' });
     setNewError('');
     setNewModalOpen(true);
   }
@@ -165,7 +174,7 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
     setNewError('');
     // a table, a name (the counter: 'Paulo', 'Balcao 2'), or both (two groups at one table)
     if (!newForm.resourceId && !newForm.label.trim()) {
-      setNewError('Escolha uma mesa ou indique um nome para a conta');
+      setNewError('Escolha um recurso ou indique um nome para a conta');
       return;
     }
     setNewSaving(true);
@@ -175,6 +184,7 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
         activity_id: selectedActivityId,
         label: [resourceLabel, newForm.label.trim()].filter(Boolean).join(' - '),
         resource_id: newForm.resourceId || null,
+        customer_id: newForm.customerId || null,
         notes: newForm.notes || null,
       });
       setNewModalOpen(false);
@@ -534,6 +544,7 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
   // another rate added by hand would bill a second room. The extras (meals, laundry) are what the account takes.
   const filteredServices = services.filter((s) => offeredIn(s.activity_ids, accountActivityId) && !s.is_stay_rate && (!searchText || s.name.toLowerCase().includes(searchText)
     || (s.code || '').toLowerCase().includes(searchText)));
+  const tabResources = resources.filter((r) => !stayTypeIds.has(r.resource_type_id));
   const usedCategories = categories.filter((c) => categoryOffered(c.id) && products.some((p) => p.category_id === c.id));
   const anyProductHere = products.some((p) => categoryOffered(p.category_id));
 
@@ -588,7 +599,7 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
           >
             <span className="inline-flex items-center gap-1.5">
               <LayoutGrid size={14} />
-              Mesas / Recursos
+              Recursos
             </span>
           </button>
           {showTables && (
@@ -639,7 +650,7 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
                   </span>
                 </div>
                 {tb.capacity ? <p className="text-text-muted text-[12px]">{tb.capacity} lugares</p> : null}
-                {tb.status === 'OCUPADA' && (
+                {tb.status === 'OCUPADA' && tb.open_accounts > 0 && (
                   <p className="text-text-primary text-[12px] font-mono mt-1">
                     {tb.open_accounts} conta(s) - {formatKz(tb.open_total)} Kz
                   </p>
@@ -657,7 +668,7 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
                 )}
                 {tb.booking_id && (
                   <p className={'text-[11px] mt-1 ' + (tb.status === 'RESERVADA' ? 'text-accent font-medium' : 'text-text-muted')}>
-                    Reserva {formatTime(tb.booking_starts_at)}
+                    {tb.status === 'OCUPADA' ? 'Entrada' : 'Reserva'} {formatTime(tb.booking_starts_at)}
                     {tb.booking_guest_name ? ' - ' + tb.booking_guest_name : ''}
                     {tb.booking_party_size ? ' (' + tb.booking_party_size + ' pax)' : ''}
                   </p>
@@ -695,35 +706,44 @@ export default function OpenAccountsPanel({ posId = null, activityId = null, onC
 
       <Modal open={newModalOpen} onClose={() => setNewModalOpen(false)} title="Nova conta">
         <form onSubmit={handleNewSubmit} className="flex flex-col gap-4">
-          {resources.length > 0 && (
+          {tabResources.length > 0 && (
             <div>
-              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Mesa / Recurso</label>
+              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Recurso (opcional)</label>
               <Select
                 value={newForm.resourceId}
                 onChange={(v) => setNewForm((p) => ({ ...p, resourceId: v }))}
-                options={resources.map((r) => ({ value: r.id, label: r.name }))}
-                placeholder="Selecionar"
+                options={[{ value: '', label: 'Nenhum (conta ao balcão)' }, ...tabResources.map((r) => ({ value: r.id, label: r.name }))]}
+                placeholder="Nenhum (conta ao balcão)"
               />
             </div>
           )}
           {(
             <div>
-              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Nome da conta</label>
+              <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Nome da conta{newForm.resourceId ? ' (opcional)' : ' *'}</label>
               <input
                 value={newForm.label}
                 onChange={(e) => setNewForm((p) => ({ ...p, label: e.target.value }))}
-                placeholder="Ex: Joao - tab"
+                placeholder={newForm.resourceId ? 'Ex: grupo 2 (duas contas na mesma mesa)' : 'Ex: João, Balcão 2'}
                 autoFocus
                 className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors"
               />
             </div>
           )}
           <div>
-            <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Comentario (opcional)</label>
+            <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Cliente (opcional)</label>
+            <Select
+              value={newForm.customerId}
+              onChange={(v) => setNewForm((p) => ({ ...p, customerId: v }))}
+              options={[{ value: '', label: 'Consumidor final' }, ...customers.map((c) => ({ value: c.id, label: c.name }))]}
+              placeholder="Consumidor final"
+            />
+          </div>
+          <div>
+            <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Comentário (opcional)</label>
             <input
               value={newForm.notes}
               onChange={(e) => setNewForm((p) => ({ ...p, notes: e.target.value }))}
-              placeholder="Ex: 4 pessoas, sem gluten..."
+              placeholder="Ex: 4 pessoas, sem glúten..."
               className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors"
             />
           </div>
