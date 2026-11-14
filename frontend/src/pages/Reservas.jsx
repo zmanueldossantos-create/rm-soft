@@ -1393,7 +1393,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
         )}
       </Modal>
 
-      <Modal open={!!extendBooking} onClose={() => setExtendBooking(null)} title={'Prolongar estadia' + (extendBooking ? ' - ' + resourceName(extendBooking.resource_id) : '')} maxWidthClass="max-w-md">
+      <Modal open={!!extendBooking} onClose={() => setExtendBooking(null)} title={'Prolongar estadia' + (extendBooking ? ' - ' + resourceName(extendBooking.resource_id) : '')} maxWidthClass="max-w-xl">
         {extendBooking && (
           <form onSubmit={handleExtendSubmit} className="flex flex-col gap-4">
             <p className="text-text-muted text-[13px]">Entrada {formatDateTime(extendBooking.starts_at)} - saída prevista {formatDateTime(extendBooking.ends_at)}. A diária da conta segue a nova data.</p>
@@ -1408,14 +1408,26 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
               </div>
             </div>
             {extendQuote?.next.problem && <p className="text-[12px] text-danger -mt-1">{extendQuote.next.problem}</p>}
+            {/* the stay's rate today and with the new exit, the difference large: read at a glance before confirming */}
             {extendQuote && !extendQuote.next.problem && (() => {
               const diff = extendQuote.next.total - extendQuote.now.total;
+              const row = (label, q, strong) => (
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="text-[12px] text-text-muted">{label} <span className="font-mono">{quoteText(q, extendBooking.service_id).split(' = ')[0]}</span></span>
+                  <span className={'font-mono whitespace-nowrap ' + (strong ? 'text-text-primary text-lg font-semibold' : 'text-text-muted text-sm')}>{formatKz(q.total)} Kz</span>
+                </div>
+              );
               return (
-                <p className="text-[12px] text-text-muted -mt-1">
-                  <span className="text-text-primary font-medium font-mono">{quoteText(extendQuote.next, extendBooking.service_id)}</span>
-                  {diff !== 0 && <span className={'font-mono ' + (diff > 0 ? 'text-accent' : 'text-success')}> ({diff > 0 ? '+' : '-'}{formatKz(Math.abs(diff))} Kz)</span>}
-                  {extendQuote.next.vat_rate > 0 ? ' · + IVA ' + formatKz(extendQuote.next.vat_rate).replace(/,00$/, '') + ' %' : ''}
-                </p>
+                <div className="bg-bg-inset border border-border rounded-md px-4 py-3 flex flex-col gap-1.5">
+                  {row('Atual:', extendQuote.now, false)}
+                  {row('Com a nova saída:', extendQuote.next, true)}
+                  <div className="flex items-baseline justify-between gap-3 border-t border-border pt-2 mt-1">
+                    <span className="text-[12px] text-text-muted">Diferença{extendQuote.next.vat_rate > 0 ? ' (+ IVA ' + formatKz(extendQuote.next.vat_rate).replace(/,00$/, '') + ' %)' : ''}</span>
+                    <span className={'font-mono text-xl font-bold whitespace-nowrap ' + (diff > 0 ? 'text-accent' : diff < 0 ? 'text-success' : 'text-text-muted')}>
+                      {diff > 0 ? '+' : diff < 0 ? '-' : ''}{formatKz(Math.abs(diff))} Kz
+                    </span>
+                  </div>
+                </div>
               );
             })()}
             <button type="submit" disabled={extendSaving || !!extendQuote?.next.problem} className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer">
@@ -1501,8 +1513,8 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
             />
             {quote?.problem && <p className="text-[12px] text-danger mt-1.5">{quote.problem}</p>}
             {quote && !quote.problem && (
-              <p className="text-[12px] text-text-muted mt-1.5">
-                <span className="text-text-primary font-medium font-mono">{quoteText(quote)}</span>
+              <p className="text-[13px] text-text-muted mt-2">
+                <span className="text-text-primary font-semibold font-mono text-[15px]">{quoteText(quote)}</span>
                 {quote.own_price ? ' · preço próprio deste recurso' : ''}
                 {quote.vat_rate > 0 ? ' · + IVA ' + formatKz(quote.vat_rate).replace(/,00$/, '') + ' %' : ''}
               </p>
