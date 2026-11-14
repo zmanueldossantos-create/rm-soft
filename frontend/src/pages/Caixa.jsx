@@ -759,10 +759,9 @@ export default function Caixa() {
       || (p.barcode || '').includes(q) || (p.sale_units || []).some((u) => (u.barcode || '').includes(q));
   });
 
-  // a rate of a resource type (VIP Diária, 1 hora) is sold with its room - Reservas panel (check-in, Entrada) - never
-  // from the grid, where it would bill a night without occupying any room
+  // (a room's rate - is_stay_rate - is already left out when the services load: it is sold with its room, from the
+  // Reservas panel; a service of a type without a required rate - a table's - stays sellable here)
   const filteredServices = services.filter((s) => {
-    if (s.resource_type_id) return false;
     if (!offeredIn(s.activity_ids, tillActivityId)) return false;
     if (!productSearch.trim()) return true;
     const q = productSearch.toLowerCase();
