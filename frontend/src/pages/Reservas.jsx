@@ -902,6 +902,13 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
     return nights.length && extendQuote.next.total > nights[0].price ? nights[0] : null;
   })();
 
+  // the exit as it is now (to the minute): nothing to prolong
+  const extendUnchanged = (() => {
+    if (!extendBooking || !extendForm.date || !extendForm.time) return true;
+    const end = luandaDateParts(extendBooking.ends_at);
+    return extendForm.date === end.date && extendForm.time === end.time;
+  })();
+
   // a passage was paid at its Entrada: it is not shortened (its exit is the Saída)
   const passageShorter = (() => {
     if (!isPassage(extendBooking) || !extendForm.date || !extendForm.time) return false;
@@ -1595,7 +1602,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
               posId ? renderPayment('A pagar agora: ' + supplementSlices + ' × ' + (supplementService?.name || '') + ' (IVA incluído)')
                 : <p className="text-[12px] text-accent">Mais tempo numa passagem paga-se já - faça-o na Caixa, no painel Reservas.</p>
             )}
-            <button type="submit" disabled={extendSaving || extendBeforeEntry || passageShorter || !!extendQuote?.next.problem
+            <button type="submit" disabled={extendSaving || extendUnchanged || extendBeforeEntry || passageShorter || !!extendQuote?.next.problem
               || (isPassage(extendBooking) && supplementSlices > 0 && (!posId || walkInRemaining !== 0))} className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer">
               {extendSaving ? <Loader2 size={17} className="animate-spin" /> : <CalendarClock size={17} />}
               {extendSaving ? 'A guardar...' : 'Prolongar'}

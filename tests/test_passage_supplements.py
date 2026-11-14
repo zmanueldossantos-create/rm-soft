@@ -63,5 +63,9 @@ async def test_more_time_on_a_passage_is_paid_at_once(db, company_with_essential
     assert booking.ends_at == BASE + timedelta(hours=2)
     supplement = (await db.execute(select(BookingSupplement))).scalar_one()
     assert (supplement.kind, supplement.slices) == ("PROLONGAMENTO", 1)
+    # the same minute as its end (which carries seconds): no change, nothing charged, not «shortened»
+    same = await extend_stay(db, cid, booking.id, (booking.ends_at + timedelta(seconds=37)).replace(second=0),
+                             user=ctx["gestor"])
+    assert same.ends_at == BASE + timedelta(hours=2)
     with pytest.raises(InvalidStayStateError, match="não se encurta"):
         await extend_stay(db, cid, booking.id, BASE + timedelta(hours=1), user=ctx["gestor"])

@@ -425,6 +425,9 @@ async def extend_stay(db: AsyncSession, company_id: uuid.UUID, booking_id: uuid.
 
     from app.services.open_account_service import _account_totals
     old_end = booking.ends_at
+    # the screen sends minutes: an Entrada's end carries its seconds (17:24:37) - the same minute is no change
+    if ends_at.replace(second=0, microsecond=0) == old_end.replace(second=0, microsecond=0):
+        return booking
     account = await _open_stay_account(db, booking.id)
     total_before = (await _account_totals(db, [account.id])).get(account.id, (0, 0.0, 0.0, 0.0))[3] if account else None
     supplement_invoice, passage_rate = None, None
