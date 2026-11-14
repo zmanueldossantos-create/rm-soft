@@ -408,7 +408,8 @@ export default function Services() {
             </Field>
             {can('resource_types:view') && (
               <Field label="Tipo de recurso">
-                <Select value={form.resourceTypeId} onChange={(v) => updateField('resourceTypeId', v)} options={resourceTypes.map((t) => ({ value: t.id, label: t.name }))} placeholder="Nenhum - genérico" />
+                {/* "Nenhum" is an option too: a type chosen by mistake can be taken back (an extra is not a room rate) */}
+                <Select value={form.resourceTypeId} onChange={(v) => updateField('resourceTypeId', v)} options={[{ value: '', label: 'Nenhum - genérico' }, ...resourceTypes.map((t) => ({ value: t.id, label: t.name }))]} placeholder="Nenhum - genérico" />
               </Field>
             )}
             {/* a service without a room type: its duration only (a marcação of 45 min); a room's rate: the block below */}
