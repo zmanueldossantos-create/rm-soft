@@ -1,9 +1,9 @@
 import { formatKz } from '../utils/format';
-import { useState, useEffect } from 'react';
+import { Fragment, useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import DateInput from '../components/DateInput';
 import Select from '../components/Select';
-import { History, Loader2 } from 'lucide-react';
+import { History, Loader2, ChevronRight } from 'lucide-react';
 import { listActivities } from '../api/activity';
 import { listResources, getResourceHistory } from '../api/booking';
 import { extractErrorMessage } from '../utils/errors';
@@ -60,6 +60,7 @@ export default function HistoricoRecursos() {
   const [showNotUses, setShowNotUses] = useState(true);
   const [history, setHistory] = useState({ entries: [], summary: [] });
   const [loading, setLoading] = useState(true);
+  const [openRows, setOpenRows] = useState(new Set());  // the uses whose life (entry, changes, exit) is unfolded
   const [error, setError] = useToastState('error');
 
   useEffect(() => {
@@ -234,9 +235,21 @@ export default function HistoricoRecursos() {
                   </tr>
                 </thead>
                 <tbody>
-                  {entries.map((e) => (
-                    <tr key={(e.booking_id || e.account_id)} className="border-b border-border last:border-0 hover:bg-bg-inset/40 transition-colors">
-                      <td className={th + ' text-text-primary font-medium'}>{e.resource_name}</td>
+                  {entries.map((e) => {
+                    const key = e.booking_id || e.account_id;
+                    const unfoldable = (e.events || []).length > 1;
+                    const open = openRows.has(key);
+                    const toggle = () => setOpenRows((prev) => { const next = new Set(prev); if (next.has(key)) next.delete(key); else next.add(key); return next; });
+                    return (
+                    <Fragment key={key}>
+                    <tr onClick={unfoldable ? toggle : undefined} title={unfoldable ? 'Ver o histórico desta ocupação' : undefined}
+                      className={'border-b border-border last:border-0 hover:bg-bg-inset/40 transition-colors ' + (unfoldable ? 'cursor-pointer' : '')}>
+                      <td className={th + ' text-text-primary font-medium whitespace-nowrap'}>
+                        <span className="inline-flex items-center gap-1.5">
+                          {unfoldable ? <ChevronRight size={14} className={'text-text-muted transition-transform ' + (open ? 'rotate-90' : '')} /> : <span className="w-3.5" />}
+                          {e.resource_name}
+                        </span>
+                      </td>
                       <td className={th + ' text-text-muted'}>{KIND_LABELS[e.kind] || e.kind}</td>
                       <td className={th + ' text-text-muted'}>{[e.guest_name, e.customer_name].filter(Boolean).join(' - ') || '-'}{e.party_size ? ' (' + e.party_size + ' pax)' : ''}</td>
                       <td className={th + ' font-mono text-[12px] text-text-muted'}>{formatDate(e.starts_at)}</td>
@@ -252,7 +265,26 @@ export default function HistoricoRecursos() {
                       </td>
                       <td className={th + ' text-right font-mono text-text-primary font-semibold'}>{e.invoice_total != null ? formatKz(e.revenue) + ' Kz' : '-'}</td>
                     </tr>
-                  ))}
+                    {open && (
+                      <tr className="bg-bg-inset/60 border-b border-border">
+                        <td colSpan={hasStay ? 10 : 8} className="px-4 py-3">
+                          {/* the life of this occupation: each step, when, its document and amount */}
+                          <ol className="flex flex-col gap-1.5 pl-5 border-l border-border ml-1.5">
+                            {e.events.map((ev, i) => (
+                              <li key={i} className="grid grid-cols-[140px_minmax(0,1fr)_120px_130px] gap-3 items-baseline text-[12px]">
+                                <span className="font-mono text-text-muted">{formatDate(ev.at)}</span>
+                                <span className="text-text-primary">{ev.text}</span>
+                                <span className="font-mono text-text-muted">{ev.document || ''}</span>
+                                <span className="font-mono text-right text-text-primary">{ev.amount != null ? formatKz(ev.amount) + ' Kz' : ''}</span>
+                              </li>
+                            ))}
+                          </ol>
+                        </td>
+                      </tr>
+                    )}
+                    </Fragment>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

@@ -44,6 +44,43 @@ def _minutes(start: datetime, end: datetime | None) -> int:
     return int((end - start).total_seconds() // 60)
 
 
+def _events(booking, kind: str, invoice_id, changes: list, document) -> list[dict]:
+    """The life of one occupation, in order: its entry (a passage: paid there), each change of its exit (a
+    prolongation - paid at once for a passage - or a stay shortened), an excess at its exit (charged or let go, with
+    why), its exit (a stay: its account's document). Each step: when, what, its document and amount if it has one."""
+    from app.services.hotel_service import LUANDA
+
+    def at(moment):
+        return moment.astimezone(LUANDA).strftime("%d/%m %H:%M") if moment else "-"
+
+    def doc(invoice):
+        d = document(invoice)
+        return {"document": d["invoice_label"], "amount": d["invoice_total"]}
+
+    events = []
+    if kind == KIND_PASSAGE:
+        events.append({"at": booking.starts_at, "kind": "ENTRADA", "text": f"Entrada, paga até {at(booking.ends_at) if not changes else at(changes[0].ends_before or booking.ends_at)}", **doc(invoice_id)})
+    elif kind == KIND_STAY:
+        events.append({"at": booking.starts_at, "kind": "CHECK_IN", "text": "Check-in - conta da estadia aberta", "document": None, "amount": None})
+    else:
+        events.append({"at": booking.starts_at, "kind": "INICIO", "text": "Início", "document": None, "amount": None})
+    for c in changes:
+        if c.kind == "EXCESSO":
+            text = (f"Excesso de {c.minutes} min - {c.slices} a mais cobrada{'s' if c.slices > 1 else ''}" if c.invoice_id
+                    else f"Excesso de {c.minutes} min - não cobrado: {c.waived_reason}")
+        else:
+            verb = "Prolongada" if c.kind == "PROLONGAMENTO" else "Encurtada"
+            more = f" ({'+' if c.slices > 0 else ''}{c.slices})" if c.slices else ""
+            text = f"{verb}: saída {at(c.ends_before)} → {at(c.ends_after)}{more}"
+        events.append({"at": c.created_at, "kind": c.kind, "text": text,
+                       **(doc(c.invoice_id) if c.invoice_id else {"document": None, "amount": None})})
+    if booking.checked_out_at is not None:
+        stay_doc = doc(invoice_id) if kind == KIND_STAY and invoice_id else {"document": None, "amount": None}
+        events.append({"at": booking.checked_out_at, "kind": "SAIDA",
+                       "text": "Check-out - conta paga" if kind == KIND_STAY and invoice_id else "Saída", **stay_doc})
+    return events
+
+
 async def get_resource_history(
     db: AsyncSession, company_id: uuid.UUID, activity_id: uuid.UUID | None = None,
     resource_id: uuid.UUID | None = None, date_from: datetime | None = None, date_to: datetime | None = None,
@@ -85,13 +122,15 @@ async def get_resource_history(
 
     # a passage's supplements (an excess charged at its exit, a prolongation): their documents count with it
     from app.models.booking_supplement import BookingSupplement
-    supplements = defaultdict(list)
+    supplements, changes = defaultdict(list), defaultdict(list)
     if bookings:
-        for booking_id, supplement_invoice_id in (await db.execute(
-            select(BookingSupplement.booking_id, BookingSupplement.invoice_id).where(
-                BookingSupplement.booking_id.in_([b.id for b in bookings]), BookingSupplement.invoice_id.is_not(None))
-        )).all():
-            supplements[booking_id].append(supplement_invoice_id)
+        for row in (await db.execute(
+            select(BookingSupplement).where(BookingSupplement.booking_id.in_([b.id for b in bookings]))
+            .order_by(BookingSupplement.created_at)
+        )).scalars().all():
+            changes[row.booking_id].append(row)
+            if row.invoice_id is not None:
+                supplements[row.booking_id].append(row.invoice_id)
     invoice_ids = {b.invoice_id for b in bookings if b.invoice_id} | {a.invoice_id for a in stay_accounts.values() if a.invoice_id} \
         | {a.invoice_id for a in accounts if a.invoice_id} | {i for ids in supplements.values() for i in ids}
     invoices, credited = {}, defaultdict(float)
@@ -148,6 +187,7 @@ async def get_resource_history(
         })
         if supplements.get(b.id):  # the Entrada's document plus what its excess / prolongation sold
             entries[-1]["revenue"] = round(entries[-1]["revenue"] + sum(document(i)["revenue"] for i in supplements[b.id]), 2)
+        entries[-1]["events"] = _events(b, kind, invoice_id, changes.get(b.id, []), document)
     for a in accounts:
         entries.append({
             "kind": KIND_ACCOUNT, "booking_id": None, "account_id": a.id,
@@ -156,6 +196,7 @@ async def get_resource_history(
             "starts_at": a.opened_at, "ends_at": a.closed_at, "real_end_at": a.closed_at, "overstay_minutes": 0,
             "occupied_minutes": _minutes(a.opened_at, a.closed_at or now),
             "status": "EM_CURSO" if a.status == OpenAccountStatus.ABERTA else "CONCLUIDA", **document(a.invoice_id),
+            "events": [],
         })
     entries.sort(key=lambda e: e["starts_at"], reverse=True)
 

@@ -42,6 +42,8 @@ async def test_an_excess_is_charged_or_let_go_with_a_reason(db, company_with_ess
     assert (supplement.kind, supplement.slices, supplement.minutes) == ("EXCESSO", 1, 27) and supplement.invoice_id
     row = (await get_resource_history(db, cid, None, room.id, BASE - timedelta(hours=1), BASE + timedelta(hours=3)))["entries"][0]
     assert row["revenue"] == 11400.0  # the Entrada and its excess
+    assert [e["kind"] for e in row["events"]] == ["ENTRADA", "EXCESSO", "SAIDA"]
+    assert row["events"][1]["text"] == "Excesso de 27 min - 1 a mais cobrada" and row["events"][1]["amount"] == 5700.0
 
     # another passage, its excess let go: said why, nothing sold
     second, _ = await _enter(db, ctx, room, hour, now=BASE + timedelta(hours=3))
@@ -69,3 +71,18 @@ async def test_more_time_on_a_passage_is_paid_at_once(db, company_with_essential
     assert same.ends_at == BASE + timedelta(hours=2)
     with pytest.raises(InvalidStayStateError, match="não se encurta"):
         await extend_stay(db, cid, booking.id, BASE + timedelta(hours=1), user=ctx["gestor"])
+
+
+@pytest.mark.asyncio
+async def test_the_life_of_a_stay_in_its_history(db, company_with_essentials):
+    """A stay prolonged then shortened: each change of its exit is in its history, with the nights it moved."""
+    from tests.test_hotel_stay import _hotel, _stay
+    ctx = company_with_essentials
+    cid = ctx["company"].id
+    room, night, _ = await _hotel(db, ctx)
+    booking, _, _ = await _stay(db, ctx, room, night, BASE, BASE + timedelta(days=2))
+    await extend_stay(db, cid, booking.id, BASE + timedelta(days=3), user=ctx["gestor"])
+    await extend_stay(db, cid, booking.id, BASE + timedelta(days=1), user=ctx["gestor"])
+    row = (await get_resource_history(db, cid, None, room.id, BASE - timedelta(days=1), BASE + timedelta(days=4)))["entries"][0]
+    assert [e["kind"] for e in row["events"]] == ["CHECK_IN", "PROLONGAMENTO", "ENCURTAMENTO"]
+    assert row["events"][1]["text"].endswith("(+1)") and row["events"][2]["text"].endswith("(-2)")

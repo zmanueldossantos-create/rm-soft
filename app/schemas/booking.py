@@ -198,6 +198,15 @@ class ResourceStatusResponse(BaseModel):
 BookingChargeResponse.model_rebuild()
 
 
+class ResourceHistoryEvent(BaseModel):
+    """One step of an occupation's life: its entry, a change of its exit, an excess, its exit."""
+    at: datetime
+    kind: str  # ENTRADA | CHECK_IN | INICIO | PROLONGAMENTO | ENCURTAMENTO | EXCESSO | SAIDA
+    text: str
+    document: str | None = None
+    amount: float | None = None
+
+
 class ResourceHistoryEntry(BaseModel):
     """One use of a resource (see resource_history_service): a stay, a passage, a marcação, a reservation or a
     table's account - with its document and what it brought in (total minus credit notes)."""
@@ -220,6 +229,7 @@ class ResourceHistoryEntry(BaseModel):
     invoice_total: float | None
     credited: float
     revenue: float
+    events: list[ResourceHistoryEvent] = []
 
 
 class ResourceHistorySummary(BaseModel):

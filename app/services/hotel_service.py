@@ -117,7 +117,8 @@ async def passage_overstay(db: AsyncSession, company_id: uuid.UUID, booking_id: 
 
 async def _sell_supplement(db: AsyncSession, company_id: uuid.UUID, booking: Booking, service: Service, slices: int,
                            user, pos_id: uuid.UUID | None, payments: list[dict], terminal_id: uuid.UUID | None,
-                           kind: str, minutes: int | None, text: str) -> Invoice:
+                           kind: str, minutes: int | None, text: str, ends_before: datetime | None = None,
+                           ends_after: datetime | None = None) -> Invoice:
     """The supplement of a passage sold at once at the till, like its Entrada: the rate x slices at the room's own price,
     the passage's customer, an ordinary paid document; recorded on the booking (Histórico, notifications)."""
     from app.models.booking_supplement import BookingSupplement
@@ -134,7 +135,8 @@ async def _sell_supplement(db: AsyncSession, company_id: uuid.UUID, booking: Boo
         observations=f"{text} - {resource.name}", terminal_id=terminal_id,
     )
     db.add(BookingSupplement(company_id=company_id, booking_id=booking.id, kind=kind, slices=slices, minutes=minutes,
-                             invoice_id=invoice.id, created_by_user_id=getattr(user, "id", None)))
+                             invoice_id=invoice.id, created_by_user_id=getattr(user, "id", None),
+                             ends_before=ends_before, ends_after=ends_after))
     return invoice
 
 
@@ -446,7 +448,12 @@ async def extend_stay(db: AsyncSession, company_id: uuid.UUID, booking_id: uuid.
                         f"Mais tempo numa passagem paga-se já: {slices} × {rate.name}")
                 supplement_invoice = await _sell_supplement(
                     db, company_id, booking, rate, slices, user, pos_id, payments, terminal_id,
-                    KIND_PROLONGATION, None, f"Prolongamento até {ends_at.astimezone(LUANDA):%d/%m %H:%M}")
+                    KIND_PROLONGATION, None, f"Prolongamento até {ends_at.astimezone(LUANDA):%d/%m %H:%M}",
+                    ends_before=old_end, ends_after=ends_at)
+        if supplement_invoice is None:  # within the paid slice: nothing to sell, the change still kept
+            from app.models.booking_supplement import BookingSupplement
+            db.add(BookingSupplement(company_id=company_id, booking_id=booking.id, kind=KIND_PROLONGATION, slices=0,
+                                     ends_before=old_end, ends_after=ends_at, created_by_user_id=getattr(user, "id", None)))
     booking.ends_at = ends_at
     service, line, quantities = None, None, None
     if account is not None and booking.service_id is not None:
@@ -460,6 +467,12 @@ async def extend_stay(db: AsyncSession, company_id: uuid.UUID, booking_id: uuid.
         if service is not None and line is not None:
             quantities = (float(line.quantity), _stay_quantity(service, booking.starts_at, ends_at))
             line.quantity = quantities[1]
+    if account is not None:  # a stay: its change of exit kept in its history (the account recounted, no document)
+        from app.models.booking_supplement import BookingSupplement, KIND_PROLONGATION, KIND_SHORTENING
+        db.add(BookingSupplement(
+            company_id=company_id, booking_id=booking.id, kind=KIND_PROLONGATION if ends_at > old_end else KIND_SHORTENING,
+            slices=int(quantities[1] - quantities[0]) if quantities else 0, ends_before=old_end, ends_after=ends_at,
+            created_by_user_id=getattr(user, "id", None)))
 
     if user is not None and old_end != ends_at:  # Notificações: estadia prolongada / encurtada
         from app.services.notification_service import notify_stay_changed
