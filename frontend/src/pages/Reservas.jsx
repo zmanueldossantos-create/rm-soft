@@ -158,6 +158,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
   const [walkInSaving, setWalkInSaving] = useState(false);
   const [extendBooking, setExtendBooking] = useState(null);
   const [extendForm, setExtendForm] = useState({ date: '', time: '' });
+  const [extendQuote, setExtendQuote] = useState(null);  // { now, next }: the rate line today and with the new exit
   const [extendError, setExtendError] = useToastState('error');
   const [extendSaving, setExtendSaving] = useState(false);
   const can = useCan();
@@ -783,6 +784,21 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
   const overCapacity = !!(selectedResource?.capacity && formPax > selectedResource.capacity);
   const capacityBlocks = overCapacity && !!selectedResourceType?.requires_service;
 
+  // A prolongation priced before it is done: the stay's rate line now and with the new exit, the same count the
+  // server applies when it moves the end (and what it would refuse - a Pernoite into a second night)
+  useEffect(() => {
+    const b = extendBooking;
+    if (!b || !b.service_id || !extendForm.date || !extendForm.time) { setExtendQuote(null); return undefined; }
+    let alive = true;
+    const t = setTimeout(() => {
+      Promise.all([
+        getStayQuote(b.resource_id, b.service_id, b.starts_at, b.ends_at),
+        getStayQuote(b.resource_id, b.service_id, b.starts_at, extendForm.date + 'T' + extendForm.time + ':00'),
+      ]).then(([now, next]) => { if (alive) setExtendQuote({ now, next }); }).catch(() => { if (alive) setExtendQuote(null); });
+    }, 250);
+    return () => { alive = false; clearTimeout(t); };
+  }, [extendBooking, extendForm.date, extendForm.time]);
+
   // The price as the room, the rate or the dates change - the backend counts it the way the check-in will
   useEffect(() => {
     const ready = formOpen && form.resourceId && form.serviceId && form.date && form.endDate && form.startTime && form.endTime;
@@ -796,8 +812,8 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
     return () => { alive = false; clearTimeout(t); };
   }, [formOpen, form.resourceId, form.serviceId, form.date, form.startTime, form.endDate, form.endTime]);
 
-  function quoteText(q) {
-    const service = services.find((x) => x.id === form.serviceId);
+  function quoteText(q, serviceId = form.serviceId) {
+    const service = services.find((x) => x.id === serviceId);
     const many = q.quantity > 1;
     const what = q.unit === 'NOITE' ? (many ? 'noites' : 'noite')
       : q.unit === 'PERIODO' ? (many ? 'períodos' : 'período')
@@ -1391,7 +1407,18 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
                 <input type="time" value={extendForm.time} onChange={(e) => setExtendForm((p) => ({ ...p, time: e.target.value }))} required className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
               </div>
             </div>
-            <button type="submit" disabled={extendSaving} className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer">
+            {extendQuote?.next.problem && <p className="text-[12px] text-danger -mt-1">{extendQuote.next.problem}</p>}
+            {extendQuote && !extendQuote.next.problem && (() => {
+              const diff = extendQuote.next.total - extendQuote.now.total;
+              return (
+                <p className="text-[12px] text-text-muted -mt-1">
+                  <span className="text-text-primary font-medium font-mono">{quoteText(extendQuote.next, extendBooking.service_id)}</span>
+                  {diff !== 0 && <span className={'font-mono ' + (diff > 0 ? 'text-accent' : 'text-success')}> ({diff > 0 ? '+' : '-'}{formatKz(Math.abs(diff))} Kz)</span>}
+                  {extendQuote.next.vat_rate > 0 ? ' · + IVA ' + formatKz(extendQuote.next.vat_rate).replace(/,00$/, '') + ' %' : ''}
+                </p>
+              );
+            })()}
+            <button type="submit" disabled={extendSaving || !!extendQuote?.next.problem} className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer">
               {extendSaving ? <Loader2 size={17} className="animate-spin" /> : <CalendarClock size={17} />}
               {extendSaving ? 'A guardar...' : 'Prolongar'}
             </button>
