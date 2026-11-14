@@ -87,6 +87,13 @@ async def test_the_tools_answer_for_the_company_only(db, company_with_essentials
     found = json.loads(await tools.run_tool(db, company_id, {"customers:view"}, "consultar_clientes", {"pesquisa": "presid"}))
     assert [c["nome"] for c in found["clientes"]] == ["Hotel Presidente"]
     assert json.loads(await call("fornecedores_a_pagar"))["total_a_pagar"] == 0.0
+    from app.models.supplier import Supplier
+    db.add(Supplier(company_id=company_id, name="Moagem Lda", nif="5000222333", phone_number="+244923000111"))
+    await db.commit()
+    suppliers = json.loads(await tools.run_tool(db, company_id, {"suppliers:view"}, "consultar_fornecedores", {"pesquisa": "moag"}))
+    assert [(s["nome"], s["nif"], s["a_pagar"], s["ultima_compra"]) for s in suppliers["fornecedores"]] == [
+        ("Moagem Lda", "5000222333", 0.0, None)]
+    assert json.loads(await tools.run_tool(db, company_id, {"customers:view"}, "consultar_fornecedores", {})).get("erro")
 
     # refused arguments come back as an error for the AI, never an exception
     assert "erro" in json.loads(await call("resumo_vendas", data_inicio="ontem"))
@@ -106,6 +113,7 @@ async def test_the_tools_answer_for_the_company_only(db, company_with_essentials
     assert json.loads(await other_call("clientes_em_divida"))["clientes"] == []
     assert json.loads(await tools.run_tool(db, other_id, {"customers:view"}, "consultar_clientes", {"pesquisa": "Presidente"}))[
         "clientes"] == []
+    assert json.loads(await tools.run_tool(db, other_id, {"suppliers:view"}, "consultar_fornecedores", {}))["fornecedores"] == []
     assert json.loads(await other_call("alertas_stock"))["lotes_a_expirar"] == []
     assert "nota" in json.loads(await other_call("consultar_documento", numero=f"{ft.series}/{ft.number}"))
 

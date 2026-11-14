@@ -366,6 +366,37 @@ async def consultar_clientes(db: AsyncSession, company_id: uuid.UUID, arguments:
     }
 
 
+async def consultar_fornecedores(db: AsyncSession, company_id: uuid.UUID, arguments: dict) -> dict:
+    """The suppliers (all, or searched): contacts, payment terms, the last purchase and what is still owed to each."""
+    from app.services.supplier_payment_service import invoice_balances
+    search = " ".join(str(arguments.get("pesquisa") or "").split())
+    query = select(Supplier).where(Supplier.company_id == company_id)
+    if search:
+        pattern = f"%{search}%"
+        query = query.where(or_(Supplier.name.ilike(pattern), Supplier.trade_name.ilike(pattern), Supplier.nif == search,
+                                Supplier.email.ilike(pattern), Supplier.phone_number.ilike(pattern)))
+    total = (await db.execute(select(func.count()).select_from(query.subquery()))).scalar_one()
+    suppliers = (await db.execute(query.order_by(Supplier.is_active.desc(), Supplier.name).limit(30))).scalars().all()
+    due, last = {}, {}
+    if suppliers:
+        invoices = (await db.execute(select(PurchaseInvoice).where(
+            PurchaseInvoice.company_id == company_id, PurchaseInvoice.supplier_id.in_([s.id for s in suppliers]),
+            PurchaseInvoice.status == PurchaseInvoiceStatus.REGISTADA))).scalars().all()
+        balances = await invoice_balances(db, [i for i in invoices if i.purchase_type == "FT"])
+        for inv in invoices:
+            if inv.id in balances:
+                due[inv.supplier_id] = due.get(inv.supplier_id, 0.0) + balances[inv.id]["due"]
+            if inv.supplier_id not in last or inv.document_date > last[inv.supplier_id]:
+                last[inv.supplier_id] = inv.document_date
+    return {
+        "total_encontrados": total, "mostrados": len(suppliers),
+        "fornecedores": [{"nome": s.name, "nome_comercial": s.trade_name, "nif": s.nif, "telefone": s.phone_number,
+                          "email": s.email, "condicoes_pagamento": s.payment_terms, "ativo": s.is_active,
+                          "ultima_compra": last[s.id].isoformat() if s.id in last else None,
+                          "a_pagar": _money(due.get(s.id))} for s in suppliers],
+    }
+
+
 async def consultar_documento(db: AsyncSession, company_id: uuid.UUID, arguments: dict) -> dict:
     from app.services.invoice_service import attach_amount_due
     text = " ".join(str(arguments.get("numero") or "").upper().split())
@@ -446,6 +477,10 @@ TOOLS = [
     ("consultar_clientes", "customers:view", consultar_clientes,
      "Os clientes da empresa (todos, ou por nome, NIF, código, email ou telefone): contactos e o que cada um deve. "
      "Mostra no máximo 30 - com mais, indica o total e sugere uma pesquisa.",
+     {"type": "object", "properties": {"pesquisa": {"type": "string", "description": "Parte do nome, NIF... (vazio = todos)"}}}),
+    ("consultar_fornecedores", "suppliers:view", consultar_fornecedores,
+     "Os fornecedores da empresa (todos, ou por nome, NIF, email ou telefone): contactos, condições de pagamento, a "
+     "última compra e o que falta pagar a cada um. Mostra no máximo 30 - com mais, indica o total e sugere uma pesquisa.",
      {"type": "object", "properties": {"pesquisa": {"type": "string", "description": "Parte do nome, NIF... (vazio = todos)"}}}),
     # the guides the user may read (Ajuda) - run by run_tool itself, which knows his permissions and role
     ("consultar_ajuda", "assistant:use", None,
