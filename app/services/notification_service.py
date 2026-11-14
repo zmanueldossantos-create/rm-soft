@@ -503,7 +503,7 @@ async def notify_check_in(db: AsyncSession, booking, resource_name: str, user, *
 @_safe
 async def notify_stay_changed(db: AsyncSession, booking, resource_name: str, user, old_end, *,
                               rate_name: str | None = None, quantities: tuple | None = None,
-                              totals: tuple | None = None) -> None:
+                              totals: tuple | None = None, invoice=None) -> None:
     """ESTADIA_ALTERADA - the exit of a stay in progress moved (Prolongar). E.g.:
         Luanda - Paulo Mendes · 2 pessoas   (under the title «Estadia prolongada - MEL DA ROCHA»)
         Saída: 16/11 12:00 → 17/11 12:00
@@ -521,17 +521,50 @@ async def notify_stay_changed(db: AsyncSession, booking, resource_name: str, use
     rate_part = f"{rate_name}: {_qty(quantities[0])} → {_qty(quantities[1])}" if rate_name and quantities else ""
     if rate_part or money_part:
         lines.append(" · ".join(x for x in (rate_part, money_part) if x))
+    elif rate_name:
+        lines.append(rate_name)
+    if invoice is not None:  # a passage: the extra time paid at once
+        paid = await _payments_text(db, invoice)
+        lines.append(f"Pago {money(invoice.total)} ({_document(invoice)})" + (f" · {paid}" if paid else ""))
     lines.append(user.full_name)
     await notify(db, booking.company_id, "ESTADIA_ALTERADA", "\n".join(lines), actor=user,
                  subject=f"Estadia {what} - " + "{company}")
 
 
 @_safe
-async def notify_check_out(db: AsyncSession, booking, resource_name: str, user) -> None:
-    """A check-out with nothing left to pay (the one paid at the till comes from notify_table_closed)."""
+async def notify_check_out(db: AsyncSession, booking, resource_name: str, user, excess: dict | None = None) -> None:
+    """A check-out with nothing left to pay (the one paid at the till comes from notify_table_closed). A passage
+    says when it came in and really left, how long, what its Entrada paid and its excess - charged or let go. E.g.:
+        Benguela libertado - hóspede sem nome
+        VIP 1 hora · 14/11 14:38 → 16:05 (1 h 27 min)
+        Pago à entrada 5 000,00 Kz (FR 2026/3)
+        Excesso 27 min - cobrado 5 000,00 Kz (FR 2026/9) · Numerário 5 000,00 Kz
+        Joana Mendes"""
+    from app.models.invoice import Invoice
+    from app.models.service import Service
     guest = await _guest(db, booking)
-    await notify(db, booking.company_id, "CHECK_OUT",
-                 f"{resource_name} libertado - {guest}" + (f"\n{user.full_name}" if user else ""), actor=user)
+    lines = [f"{resource_name} libertado - {guest}"]
+    if booking.invoice_id is not None and booking.checked_out_at is not None:  # a passage
+        service = await db.get(Service, booking.service_id) if booking.service_id else None
+        start, left = booking.starts_at, booking.checked_out_at
+        total_minutes = max(int((left - start).total_seconds() // 60), 0)
+        hours, minutes = divmod(total_minutes, 60)
+        lasted = (f"{hours} h {minutes:02d} min" if hours else f"{minutes} min")
+        left_text = _hour(left) if _day(left) == _day(start) else f"{_day(left)} {_hour(left)}"
+        lines.append((f"{service.name} · " if service else "") + f"{_day(start)} {_hour(start)} → {left_text} ({lasted})")
+        entry = await db.get(Invoice, booking.invoice_id)
+        if entry is not None:
+            lines.append(f"Pago à entrada {money(entry.total)} ({_document(entry)})")
+    if excess:
+        if excess.get("invoice") is not None:
+            paid = await _payments_text(db, excess["invoice"])
+            lines.append(f"Excesso {excess['minutes']} min - cobrado {money(excess['invoice'].total)} "
+                         f"({_document(excess['invoice'])})" + (f" · {paid}" if paid else ""))
+        else:
+            lines.append(f"Excesso {excess['minutes']} min - NÃO cobrado: {excess.get('waived')}")
+    if user:
+        lines.append(user.full_name)
+    await notify(db, booking.company_id, "CHECK_OUT", "\n".join(lines), actor=user)
 
 
 @_safe

@@ -8,7 +8,7 @@ import { listResources, listBookings, getStayQuote, createBooking, updateBooking
 import { listPointsOfSale } from '../api/activity';
 import { listResourceTypes } from '../api/booking';
 import { listCustomers, createCustomer } from '../api/customers';
-import { checkIn, checkOut, extendStay, walkIn } from '../api/hotel';
+import { checkIn, checkOut, extendStay, getOverstay, walkIn } from '../api/hotel';
 import { listResourceStatuses } from '../api/booking';
 import { listPaymentMethodPreferences } from '../api/tesouraria';
 import { listVatRates } from '../api/vat';
@@ -192,6 +192,9 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
   const [error, setError] = useToastState('error');
   const [statusUpdatingId, setStatusUpdatingId] = useState(null);
   const [checkActionId, setCheckActionId] = useState(null);
+  // the exit of a passage past its paid time: { booking, minutes, slices } - charge the excess or let it go (a reason)
+  const [exitTarget, setExitTarget] = useState(null);
+  const [exitWaive, setExitWaive] = useState(null);  // null: not letting go; '' / text: the reason being written
   const [posPickerOpen, setPosPickerOpen] = useState(false);
   const [posPickerBookingId, setPosPickerBookingId] = useState(null);
   const [posPickerOptions, setPosPickerOptions] = useState([]);
@@ -529,16 +532,60 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
     }
   }
 
-  async function handleCheckOut(bookingId) {
-    setCheckActionId(bookingId);
+  // a passage: a room taken at once, paid at its Entrada - its document, no stay account
+  const isPassage = (b) => !!(b && b.invoice_id && !b.stay_account_id);
+
+  async function handleCheckOut(b) {
+    setCheckActionId(b.id);
     setError('');
     try {
-      await checkOut(bookingId);
+      // a passage past its paid time does not leave silently: its excess is charged or let go with a reason
+      if (isPassage(b)) {
+        const overstay = await getOverstay(b.id);
+        if (overstay.slices > 0) {
+          setWalkInOpen(false);
+          setWalkInForm({ resourceId: '', serviceId: '', customerId: b.customer_id || '', guestName: '', partySize: '' });
+          setWalkInPayments({});
+          setWalkInError('');
+          setExitWaive(null);
+          setExitTarget({ booking: b, ...overstay });
+          if (posId) await loadPaymentContext();
+          return;
+        }
+      }
+      await checkOut(b.id);
       await loadBookings();
     } catch (err) {
       setError(extractErrorMessage(err, 'Erro ao fazer check-out'));
     } finally {
       setCheckActionId(null);
+    }
+  }
+
+  async function handleExitSubmit(charge) {
+    if (charge) {
+      if (Math.abs(walkInPaid - walkInDue) > 0.009) {
+        setWalkInError('O pagamento (' + formatKz(walkInPaid) + ' Kz) deve ser igual ao valor a pagar (' + formatKz(walkInDue) + ' Kz)');
+        return;
+      }
+      if (terminalMissing(walkInTerminals, walkInMethods, walkInPaymentList, walkInTerminalId)) return;
+    } else if (!(exitWaive || '').trim()) {
+      setWalkInError('Indique porque não se cobra o excesso');
+      return;
+    }
+    setWalkInSaving(true);
+    try {
+      await checkOut(exitTarget.booking.id, charge ? {
+        pos_id: posId,
+        payments: Object.entries(walkInPayments).filter(([, v]) => Number(v) > 0).map(([id, v]) => ({ payment_method_id: id, amount: Number(v) })),
+        terminal_id: walkInTerminalId || null,
+      } : { waive_reason: exitWaive.trim() });
+      setExitTarget(null);
+      await loadBookings();
+    } catch (err) {
+      setWalkInError(extractErrorMessage(err, 'Erro ao registar a saída'));
+    } finally {
+      setWalkInSaving(false);
     }
   }
 
@@ -548,6 +595,11 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
     setExtendBooking(b);
     setExtendForm({ date: ends.date, time: ends.time });
     setExtendError('');
+    if (isPassage(b)) {  // its extra time is paid at once, as its Entrada was
+      setWalkInForm({ resourceId: '', serviceId: '', customerId: b.customer_id || '', guestName: '', partySize: '' });
+      setWalkInPayments({});
+      if (posId) loadPaymentContext().catch(() => {});
+    }
   }
 
   async function handleExtendSubmit(e) {
@@ -557,11 +609,27 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
       setExtendError('Indique a nova data e hora de saída');
       return;
     }
+    const paying = isPassage(extendBooking) && supplementSlices > 0;
+    if (paying) {
+      if (!posId) {
+        setExtendError('Mais tempo numa passagem paga-se já - faça-o na Caixa, no painel Reservas');
+        return;
+      }
+      if (Math.abs(walkInPaid - walkInDue) > 0.009) {
+        setExtendError('O pagamento (' + formatKz(walkInPaid) + ' Kz) deve ser igual ao valor a pagar (' + formatKz(walkInDue) + ' Kz)');
+        return;
+      }
+      if (terminalMissing(walkInTerminals, walkInMethods, walkInPaymentList, walkInTerminalId)) return;
+    }
     extendSubmitting.current = true;
     setExtendSaving(true);
     setExtendError('');
     try {
-      await extendStay(extendBooking.id, extendForm.date + 'T' + extendForm.time + ':00');
+      await extendStay(extendBooking.id, extendForm.date + 'T' + extendForm.time + ':00', paying ? {
+        pos_id: posId,
+        payments: Object.entries(walkInPayments).filter(([, v]) => Number(v) > 0).map(([id, v]) => ({ payment_method_id: id, amount: Number(v) })),
+        terminal_id: walkInTerminalId || null,
+      } : {});
       setExtendBooking(null);
       await loadBookings();
     } catch (err) {
@@ -647,10 +715,16 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
   const walkInService = services.find((s) => s.id === walkInForm.serviceId);
   // What is sold: the Entrada's service once, or the charged marcação's service as many times as it lasts.
   const chargeService = chargeTarget ? services.find((s) => s.id === chargeTarget.service_id) : null;
-  const saleService = chargeTarget ? chargeService : walkInService;
-  const saleQuantity = chargeTarget && chargeService ? bookingQuantity(chargeService, chargeTarget) : 1;
+  // a passage's supplement: the slices of its rate past the paid time (Saída) or bought more (Prolongar)
+  const supplementBooking = exitTarget ? exitTarget.booking : (isPassage(extendBooking) ? extendBooking : null);
+  const supplementSlices = exitTarget ? exitTarget.slices
+    : (extendQuote && !extendQuote.next.problem ? Math.max(extendQuote.next.quantity - extendQuote.now.quantity, 0) : 0);
+  const supplementService = supplementBooking ? services.find((s) => s.id === supplementBooking.service_id) : null;
+  const saleService = chargeTarget ? chargeService : supplementBooking ? supplementService : walkInService;
+  const saleQuantity = chargeTarget && chargeService ? bookingQuantity(chargeService, chargeTarget)
+    : supplementBooking ? supplementSlices : 1;
   // the price of the rate for this resource: its own (Recursos), else the rate's
-  const saleResourceId = chargeTarget ? chargeTarget.resource_id : walkInForm.resourceId;
+  const saleResourceId = chargeTarget ? chargeTarget.resource_id : supplementBooking ? supplementBooking.resource_id : walkInForm.resourceId;
   const ownPrice = saleService ? resources.find((r) => r.id === saleResourceId)?.rate_prices?.[saleService.id] : undefined;
   const salePrice = saleService ? (ownPrice != null ? Number(ownPrice) : Number(saleService.price || 0)) : 0;
   const saleSubtotal = saleService ? Math.round(salePrice * saleQuantity * 100) / 100 : 0;
@@ -815,6 +889,13 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
     }, 250);
     return () => { alive = false; clearTimeout(t); };
   }, [formOpen, form.resourceId, form.serviceId, form.date, form.startTime, form.endDate, form.endTime]);
+
+  // a passage was paid at its Entrada: it is not shortened (its exit is the Saída)
+  const passageShorter = (() => {
+    if (!isPassage(extendBooking) || !extendForm.date || !extendForm.time) return false;
+    const end = luandaDateParts(extendBooking.ends_at);
+    return (extendForm.date + 'T' + extendForm.time) < (end.date + 'T' + end.time);
+  })();
 
   const extendBeforeEntry = (() => {
     if (!extendBooking || !extendForm.date || !extendForm.time) return false;
@@ -1282,7 +1363,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
                       </span>
                     ) : (
                       <button
-                        onClick={() => handleCheckOut(b.id)}
+                        onClick={() => handleCheckOut(b)}
                         disabled={!can('hotel:checkout')}
                         className="flex items-center gap-1.5 bg-accent hover:bg-accent-hover text-white text-[12px] font-medium px-3 py-1.5 rounded-md transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                       >
@@ -1403,6 +1484,49 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
         )}
       </Modal>
 
+      <Modal open={!!exitTarget} onClose={() => setExitTarget(null)} title={'Saída' + (exitTarget ? ' - ' + resourceName(exitTarget.booking.resource_id) : '')} maxWidthClass="max-w-xl">
+        {exitTarget && (
+          <div className="flex flex-col gap-4">
+            <div className="bg-bg-inset border border-border rounded-md px-4 py-3 flex flex-col gap-1">
+              <p className="text-[13px] text-text-muted">Entrada {formatDateTime(exitTarget.booking.starts_at)} · pago até {formatDateTime(exitTarget.booking.ends_at)}</p>
+              <p className="text-danger text-lg font-semibold">Excedido {exitTarget.minutes} min</p>
+              <p className="text-[13px] text-text-primary">Começa {exitTarget.slices} {exitTarget.slices === 1 ? 'fatia' : 'fatias'} a mais: <span className="font-mono">{exitTarget.slices} × {supplementService?.name}</span></p>
+            </div>
+            {exitWaive === null ? (
+              <>
+                {posId ? renderPayment('Excesso a pagar (IVA incluído)')
+                  : <p className="text-[12px] text-accent">O excesso cobra-se na Caixa, no painel Reservas.</p>}
+                <button type="button" onClick={() => handleExitSubmit(true)} disabled={walkInSaving || !posId || walkInRemaining !== 0}
+                  className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer">
+                  {walkInSaving ? <Loader2 size={17} className="animate-spin" /> : <Banknote size={17} />}
+                  Cobrar e dar saída
+                </button>
+                <button type="button" onClick={() => setExitWaive('')} className="self-center text-[12px] text-text-muted hover:text-danger underline cursor-pointer">
+                  Dar saída sem cobrar o excesso
+                </button>
+              </>
+            ) : (
+              <>
+                <div>
+                  <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Porque não se cobra *</label>
+                  <input value={exitWaive} onChange={(e) => setExitWaive(e.target.value)} maxLength={255} autoFocus
+                    placeholder="Ex: cliente habitual, atraso da limpeza..."
+                    className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
+                  <p className="text-[11px] text-text-muted mt-1">Fica registado com o motivo, e segue na notificação «Quarto libertado».</p>
+                </div>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => setExitWaive(null)} className="flex-1 border border-border hover:border-accent text-text-primary text-sm font-medium rounded-md py-3 cursor-pointer">Voltar</button>
+                  <button type="button" onClick={() => handleExitSubmit(false)} disabled={walkInSaving || !exitWaive.trim()}
+                    className="flex-1 bg-danger hover:opacity-90 disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 cursor-pointer">
+                    Dar saída sem cobrar
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </Modal>
+
       <Modal open={!!extendBooking} onClose={() => setExtendBooking(null)} title={'Prolongar estadia' + (extendBooking ? ' - ' + resourceName(extendBooking.resource_id) : '')} maxWidthClass="max-w-xl">
         {extendBooking && (
           <form onSubmit={handleExtendSubmit} className="flex flex-col gap-4">
@@ -1420,6 +1544,9 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
             {/* the new exit must come after the entry - else nothing to prolong (the server refuses it too) */}
             {extendBeforeEntry && (
               <p className="text-[12px] text-danger -mt-1">A nova saída deve ser depois da entrada ({formatDateTime(extendBooking.starts_at)}) - para terminar já a estadia, use o Check-out</p>
+            )}
+            {!extendBeforeEntry && passageShorter && (
+              <p className="text-[12px] text-danger -mt-1">Uma passagem paga não se encurta - registe a Saída quando o cliente sair</p>
             )}
             {!extendBeforeEntry && extendQuote?.next.problem && <p className="text-[12px] text-danger -mt-1">{extendQuote.next.problem}</p>}
             {/* the stay's rate today and with the new exit, the difference large: read at a glance before confirming */}
@@ -1444,7 +1571,13 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
                 </div>
               );
             })()}
-            <button type="submit" disabled={extendSaving || extendBeforeEntry || !!extendQuote?.next.problem} className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer">
+            {/* a passage: the extra slices paid now, as its Entrada */}
+            {isPassage(extendBooking) && !passageShorter && !extendBeforeEntry && supplementSlices > 0 && (
+              posId ? renderPayment('A pagar agora: ' + supplementSlices + ' × ' + (supplementService?.name || '') + ' (IVA incluído)')
+                : <p className="text-[12px] text-accent">Mais tempo numa passagem paga-se já - faça-o na Caixa, no painel Reservas.</p>
+            )}
+            <button type="submit" disabled={extendSaving || extendBeforeEntry || passageShorter || !!extendQuote?.next.problem
+              || (isPassage(extendBooking) && supplementSlices > 0 && (!posId || walkInRemaining !== 0))} className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer">
               {extendSaving ? <Loader2 size={17} className="animate-spin" /> : <CalendarClock size={17} />}
               {extendSaving ? 'A guardar...' : 'Prolongar'}
             </button>

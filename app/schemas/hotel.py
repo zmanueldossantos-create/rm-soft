@@ -35,5 +35,24 @@ class WalkInResponse(BaseModel):
 
 
 class StayExtendRequest(BaseModel):
-    """The new end of a stay in progress (later to stay longer, earlier to leave sooner)."""
+    """The new end of a stay in progress (later to stay longer, earlier to leave sooner). A passage (paid at its
+    Entrada) pays its extra time at once: the till, the payments and the terminal, as at its Entrada."""
     ends_at: datetime
+    pos_id: uuid.UUID | None = None
+    payments: list[WalkInPaymentInput] = []
+    terminal_id: uuid.UUID | None = None
+
+
+class CheckOutRequest(BaseModel):
+    """The exit. A passage past its paid time: its excess charged (pos_id, payments, terminal_id) or let go with the
+    reason said (waive_reason). Nothing for any other exit."""
+    pos_id: uuid.UUID | None = None
+    payments: list[WalkInPaymentInput] = []
+    terminal_id: uuid.UUID | None = None
+    waive_reason: str | None = Field(default=None, max_length=255)
+
+
+class OverstayResponse(BaseModel):
+    """How long a passage has stayed past its paid end, and the slices of its rate that starts."""
+    minutes: int
+    slices: int

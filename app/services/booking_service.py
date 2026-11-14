@@ -272,6 +272,9 @@ async def update_booking_status(
     booking = await get_booking_or_raise(db, company_id, booking_id)
     if await _has_open_stay_account(db, booking.id):
         raise BookingNotEditableError("Esta reserva tem uma estadia em curso com conta aberta - o check-out faz-se na Caixa, com o pagamento")
+    if booking.status == BookingStatus.EM_CURSO and booking.invoice_id is not None and new_status != BookingStatus.EM_CURSO:
+        # a passage in the room ends by its exit (Saída): its time past the paid one is settled there
+        raise BookingNotEditableError("Esta passagem está em curso - termina com a Saída, onde se acerta o excesso")
     if new_status == BookingStatus.CONCLUIDA and booking.invoice_id is None and await _has_priced_service(db, booking):
         # concluded by hand, a priced marcação would end without its invoice: it is concluded by being charged
         raise BookingNotEditableError("Esta reserva tem um serviço com preço - conclui-se ao cobrar, na Caixa")

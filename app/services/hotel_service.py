@@ -83,6 +83,61 @@ class InvalidWalkInError(Exception):
     """A passage needs an active service with a duration (30 min, 1 hora...)."""
 
 
+class OverstayToSettleError(Exception):
+    """A passage leaving after its paid time: the started slices are charged, or let go with a reason said."""
+
+
+class SupplementPaymentRequiredError(Exception):
+    """More time on a passage is bought at once, as its Entrada was."""
+
+
+def _is_passage(booking: Booking, account) -> bool:
+    """A room taken at once and paid at its Entrada (walk_in): its document, no stay account."""
+    return booking.invoice_id is not None and account is None
+
+
+async def passage_overstay(db: AsyncSession, company_id: uuid.UUID, booking_id: uuid.UUID,
+                           now: datetime | None = None) -> dict:
+    """{minutes, slices}: how long a passage in progress has stayed past its paid end, and how many slices of its rate
+    (1 hora, 2 horas...) that starts - the same per-started-slice count as its sale. Nothing for a stay, a passage
+    still in its time, or a rate with hours of its own (a Pernoite ends at its hour)."""
+    booking = await get_booking_or_raise(db, company_id, booking_id)
+    now = now or datetime.now(timezone.utc)
+    account = await _open_stay_account(db, booking.id)
+    nothing = {"minutes": 0, "slices": 0}
+    if booking.status != BookingStatus.EM_CURSO or not _is_passage(booking, account) or now <= booking.ends_at:
+        return nothing
+    service = await db.get(Service, booking.service_id) if booking.service_id else None
+    minutes = int((now - booking.ends_at).total_seconds() // 60)
+    if service is None or not service.duration_minutes or minutes <= 0:
+        return {"minutes": max(minutes, 0), "slices": 0}
+    slices = _stay_quantity(service, booking.starts_at, now) - _stay_quantity(service, booking.starts_at, booking.ends_at)
+    return {"minutes": minutes, "slices": max(slices, 0)}
+
+
+async def _sell_supplement(db: AsyncSession, company_id: uuid.UUID, booking: Booking, service: Service, slices: int,
+                           user, pos_id: uuid.UUID | None, payments: list[dict], terminal_id: uuid.UUID | None,
+                           kind: str, minutes: int | None, text: str) -> Invoice:
+    """The supplement of a passage sold at once at the till, like its Entrada: the rate x slices at the room's own price,
+    the passage's customer, an ordinary paid document; recorded on the booking (Histórico, notifications)."""
+    from app.models.booking_supplement import BookingSupplement
+    resource = await get_resource_or_raise(db, company_id, booking.resource_id)
+    pos = (await db.execute(select(PointOfSale).where(
+        PointOfSale.id == pos_id, PointOfSale.activity_id == resource.activity_id))).scalar_one_or_none() if pos_id else None
+    if pos is None:
+        raise NoDefaultPosError("Este ponto de venda não pertence à atividade do quarto")
+    invoice = await checkout(
+        db, company_id, pos.id, user, booking.customer_id,
+        [{"product_id": None, "service_id": str(service.id), "quantity": float(slices), "sale_unit_id": None,
+          "_resource_price": await resource_rate_price(db, resource.id, service)}],
+        payments, invoice_type=await default_paid_on_issue_type(db), stay_sale=True,
+        observations=f"{text} - {resource.name}", terminal_id=terminal_id,
+    )
+    db.add(BookingSupplement(company_id=company_id, booking_id=booking.id, kind=kind, slices=slices, minutes=minutes,
+                             invoice_id=invoice.id, created_by_user_id=getattr(user, "id", None)))
+    return invoice
+
+
 def _nights_between(starts_at: datetime, ends_at: datetime) -> int:
     """Nights between two moments, on Luanda's calendar - at least one (a short stay is charged one night)."""
     nights = (ends_at.astimezone(LUANDA).date() - starts_at.astimezone(LUANDA).date()).days
@@ -235,13 +290,38 @@ async def check_in(
     return booking, account
 
 
-async def check_out(db: AsyncSession, company_id: uuid.UUID, booking_id: uuid.UUID, user: "User | None" = None) -> Booking:
+async def check_out(db: AsyncSession, company_id: uuid.UUID, booking_id: uuid.UUID, user: "User | None" = None, *,
+                    payments: list[dict] | None = None, pos_id: uuid.UUID | None = None,
+                    terminal_id: uuid.UUID | None = None, waive_reason: str | None = None,
+                    now: datetime | None = None) -> Booking:
     """Ends a stay with nothing left to pay. A stay whose account holds articles is paid at the till - closing
     that account concludes the booking (open_account_service.close_account) - so it is refused here: no money
-    ever leaves this path without a payment. An account without articles is closed without any document."""
+    ever leaves this path without a payment. An account without articles is closed without any document.
+    A passage that stayed past its paid time (passage_overstay): the started slices are sold here (payments, pos_id,
+    terminal_id, as at its Entrada) or let go with the reason said (waive_reason) - never silently."""
+    from app.models.booking_supplement import BookingSupplement, KIND_EXCESS
     booking = await get_booking_or_raise(db, company_id, booking_id)
+    await db.refresh(booking, with_for_update=True)  # two exits at once: one
     if booking.status != BookingStatus.EM_CURSO:
         raise InvalidStayStateError("Esta reserva não está em curso")
+    now = now or datetime.now(timezone.utc)
+    overstay = await passage_overstay(db, company_id, booking.id, now)
+    excess = None
+    if overstay["slices"]:
+        service = await db.get(Service, booking.service_id)
+        if payments:
+            invoice = await _sell_supplement(db, company_id, booking, service, overstay["slices"], user, pos_id, payments,
+                                             terminal_id, KIND_EXCESS, overstay["minutes"],
+                                             f"Excesso de {overstay['minutes']} min")
+            excess = {"minutes": overstay["minutes"], "invoice": invoice}
+        elif waive_reason and waive_reason.strip():
+            db.add(BookingSupplement(company_id=company_id, booking_id=booking.id, kind=KIND_EXCESS,
+                                     slices=overstay["slices"], minutes=overstay["minutes"],
+                                     waived_reason=waive_reason.strip()[:255], created_by_user_id=getattr(user, "id", None)))
+            excess = {"minutes": overstay["minutes"], "waived": waive_reason.strip()[:255]}
+        else:
+            raise OverstayToSettleError(
+                f"Excedeu {overstay['minutes']} min: cobre {overstay['slices']} × {service.name} ou indique porque não se cobra")
 
     account = await _open_stay_account(db, booking.id)
     if account is not None:
@@ -256,10 +336,10 @@ async def check_out(db: AsyncSession, company_id: uuid.UUID, booking_id: uuid.UU
         account.closed_at = func.now()
 
     booking.status = BookingStatus.CONCLUIDA
-    booking.checked_out_at = datetime.now(timezone.utc)
+    booking.checked_out_at = now
     from app.services.notification_service import notify_check_out  # Notificações: quarto libertado
     resource = await get_resource_or_raise(db, company_id, booking.resource_id)
-    await notify_check_out(db, booking, resource.name, user)
+    await notify_check_out(db, booking, resource.name, user, excess=excess)
     await db.commit()
     await db.refresh(booking)
     return booking
@@ -326,7 +406,8 @@ async def walk_in(
 
 
 async def extend_stay(db: AsyncSession, company_id: uuid.UUID, booking_id: uuid.UUID, ends_at: datetime,
-                      user=None) -> Booking:
+                      user=None, *, payments: list[dict] | None = None, pos_id: uuid.UUID | None = None,
+                      terminal_id: uuid.UUID | None = None) -> Booking:
     """Moves the end of a stay in progress - the guest stays longer, or leaves earlier - and recomputes the
     room-rate line of its account with the same rule as at check-in, so the bill always matches the stay.
     (reschedule_booking refuses a stay in progress: it would change the dates without the bill.)"""
@@ -346,6 +427,23 @@ async def extend_stay(db: AsyncSession, company_id: uuid.UUID, booking_id: uuid.
     old_end = booking.ends_at
     account = await _open_stay_account(db, booking.id)
     total_before = (await _account_totals(db, [account.id])).get(account.id, (0, 0.0, 0.0, 0.0))[3] if account else None
+    supplement_invoice, passage_rate = None, None
+    if _is_passage(booking, account):
+        # a passage was paid at its Entrada: more time is bought at once (the extra slices), less is not refunded
+        from app.models.booking_supplement import KIND_PROLONGATION
+        if ends_at < old_end:
+            raise InvalidStayStateError("Uma passagem paga não se encurta - registe a saída quando o cliente sair")
+        rate = passage_rate = await db.get(Service, booking.service_id) if booking.service_id else None
+        ensure_single_period(rate, booking.starts_at, ends_at)
+        if rate is not None and rate.duration_minutes and ends_at > old_end:
+            slices = _stay_quantity(rate, booking.starts_at, ends_at) - _stay_quantity(rate, booking.starts_at, old_end)
+            if slices > 0:
+                if not payments:
+                    raise SupplementPaymentRequiredError(
+                        f"Mais tempo numa passagem paga-se já: {slices} × {rate.name}")
+                supplement_invoice = await _sell_supplement(
+                    db, company_id, booking, rate, slices, user, pos_id, payments, terminal_id,
+                    KIND_PROLONGATION, None, f"Prolongamento até {ends_at.astimezone(LUANDA):%d/%m %H:%M}")
     booking.ends_at = ends_at
     service, line, quantities = None, None, None
     if account is not None and booking.service_id is not None:
@@ -365,8 +463,8 @@ async def extend_stay(db: AsyncSession, company_id: uuid.UUID, booking_id: uuid.
         await db.flush()
         total_after = (await _account_totals(db, [account.id])).get(account.id, (0, 0.0, 0.0, 0.0))[3] if account else None
         resource = await get_resource_or_raise(db, company_id, booking.resource_id)
-        await notify_stay_changed(db, booking, resource.name, user, old_end, rate_name=service.name if service else None,
-                                  quantities=quantities, totals=(total_before, total_after))
+        await notify_stay_changed(db, booking, resource.name, user, old_end, rate_name=(service or passage_rate).name if (service or passage_rate) else None,
+                                  quantities=quantities, totals=(total_before, total_after), invoice=supplement_invoice)
     await db.commit()
     await db.refresh(booking)
     return booking

@@ -83,8 +83,17 @@ async def get_resource_history(
         )).scalars().all():
             stay_accounts[account.booking_id] = account
 
+    # a passage's supplements (an excess charged at its exit, a prolongation): their documents count with it
+    from app.models.booking_supplement import BookingSupplement
+    supplements = defaultdict(list)
+    if bookings:
+        for booking_id, supplement_invoice_id in (await db.execute(
+            select(BookingSupplement.booking_id, BookingSupplement.invoice_id).where(
+                BookingSupplement.booking_id.in_([b.id for b in bookings]), BookingSupplement.invoice_id.is_not(None))
+        )).all():
+            supplements[booking_id].append(supplement_invoice_id)
     invoice_ids = {b.invoice_id for b in bookings if b.invoice_id} | {a.invoice_id for a in stay_accounts.values() if a.invoice_id} \
-        | {a.invoice_id for a in accounts if a.invoice_id}
+        | {a.invoice_id for a in accounts if a.invoice_id} | {i for ids in supplements.values() for i in ids}
     invoices, credited = {}, defaultdict(float)
     if invoice_ids:
         invoices = {i.id: i for i in (await db.execute(select(Invoice).where(Invoice.id.in_(invoice_ids)))).scalars().all()}
@@ -137,6 +146,8 @@ async def get_resource_history(
             "occupied_minutes": _minutes(b.starts_at, occupied_until),
             "status": b.status.value, **document(invoice_id),
         })
+        if supplements.get(b.id):  # the Entrada's document plus what its excess / prolongation sold
+            entries[-1]["revenue"] = round(entries[-1]["revenue"] + sum(document(i)["revenue"] for i in supplements[b.id]), 2)
     for a in accounts:
         entries.append({
             "kind": KIND_ACCOUNT, "booking_id": None, "account_id": a.id,

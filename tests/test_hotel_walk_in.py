@@ -91,7 +91,8 @@ async def test_the_exit_records_the_time_and_the_overstay_shows_in_the_history(d
     ctx = company_with_essentials
     room, hour, _ = await _rooms(db, ctx)
     booking, invoice = await _enter(db, ctx, room, hour, now=datetime.now(timezone.utc) - timedelta(hours=2))
-    booking = await check_out(db, ctx["company"].id, booking.id)  # prepaid: nothing left to pay
+    # prepaid, an hour over: the excess is charged or let go with a reason (tests/test_passage_supplements.py)
+    booking = await check_out(db, ctx["company"].id, booking.id, waive_reason="Saída tardia combinada")
     assert booking.status == BookingStatus.CONCLUIDA and booking.checked_out_at is not None
     entry = (await get_resource_history(db, ctx["company"].id))["entries"][0]
     assert entry["kind"] == "PASSAGEM"

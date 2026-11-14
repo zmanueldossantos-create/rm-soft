@@ -7,12 +7,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.api.deps import require_permission
 from app.models.user import User
-from app.schemas.hotel import CheckInResponse, StayExtendRequest, WalkInRequest, WalkInResponse
+from app.schemas.hotel import (
+    CheckInResponse, CheckOutRequest, OverstayResponse, StayExtendRequest, WalkInRequest, WalkInResponse,
+)
 from app.schemas.booking import BookingResponse
 from app.services.hotel_service import (
-    check_in, check_out, extend_stay, walk_in,
+    check_in, check_out, extend_stay, walk_in, passage_overstay,
     NoDefaultPosError, AlreadyCheckedInError, AmbiguousOpenSessionError, InvalidStayStateError, StayHasUnpaidAccountError,
-    InvalidWalkInError,
+    InvalidWalkInError, OverstayToSettleError, SupplementPaymentRequiredError,
 )
 from app.services.booking_service import (
     BookingNotFoundError, BookingOverlapError, InvalidBookingRangeError, IncompatibleServiceError,
@@ -56,21 +58,54 @@ async def post_check_in(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
 
 
-@router.post("/bookings/{booking_id}/check-out", response_model=BookingResponse)
-async def post_check_out(
+# the errors of a supplement sold at the till (an excess, a prolongation of a passage): those of its Entrada
+SALE_ERRORS = {
+    CustomerNotFoundError: status.HTTP_404_NOT_FOUND, PaymentAmountMismatchError: status.HTTP_422_UNPROCESSABLE_ENTITY,
+    DocumentTypeNotConfiguredError: status.HTTP_422_UNPROCESSABLE_ENTITY, NoDefaultPosError: status.HTTP_409_CONFLICT,
+    NoOpenSessionError: status.HTTP_409_CONFLICT, PeriodClosedError: status.HTTP_409_CONFLICT,
+    SeriesNotConfiguredError: status.HTTP_409_CONFLICT,
+}
+
+
+@router.get("/bookings/{booking_id}/overstay", response_model=OverstayResponse)
+async def get_overstay(
     booking_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("hotel:checkout")),
 ):
-    """Only a stay with nothing left to pay - a stay with articles is paid at the till, which concludes it."""
+    """The excess of a passage at its exit: the minutes past its paid end and the slices of its rate to charge."""
     try:
-        return await check_out(db, current_user.company_id, booking_id, current_user)
+        return await passage_overstay(db, current_user.company_id, booking_id)
+    except BookingNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.post("/bookings/{booking_id}/check-out", response_model=BookingResponse)
+async def post_check_out(
+    booking_id: uuid.UUID,
+    payload: CheckOutRequest | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("hotel:checkout")),
+):
+    """Only a stay with nothing left to pay - a stay with articles is paid at the till, which concludes it. A passage
+    past its time: its excess charged here or let go with a reason."""
+    payload = payload or CheckOutRequest()
+    try:
+        return await check_out(
+            db, current_user.company_id, booking_id, current_user,
+            payments=[{"payment_method_id": p.payment_method_id, "amount": p.amount} for p in payload.payments],
+            pos_id=payload.pos_id, terminal_id=payload.terminal_id, waive_reason=payload.waive_reason,
+        )
     except BookingNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except InvalidStayStateError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except StayHasUnpaidAccountError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except OverstayToSettleError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    except tuple(SALE_ERRORS) as e:
+        raise HTTPException(status_code=SALE_ERRORS[type(e)], detail=str(e))
 
 
 @router.post("/walk-in", response_model=WalkInResponse, status_code=status.HTTP_201_CREATED)
@@ -106,7 +141,11 @@ async def post_extend_stay(
 ):
     """New end of a stay in progress; the room-rate line of its account follows."""
     try:
-        return await extend_stay(db, current_user.company_id, booking_id, payload.ends_at, user=current_user)
+        return await extend_stay(
+            db, current_user.company_id, booking_id, payload.ends_at, user=current_user,
+            payments=[{"payment_method_id": p.payment_method_id, "amount": p.amount} for p in payload.payments],
+            pos_id=payload.pos_id, terminal_id=payload.terminal_id,
+        )
     except BookingNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except InvalidStayStateError as e:
@@ -115,3 +154,7 @@ async def post_extend_stay(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except InvalidBookingRangeError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    except SupplementPaymentRequiredError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    except tuple(SALE_ERRORS) as e:
+        raise HTTPException(status_code=SALE_ERRORS[type(e)], detail=str(e))
