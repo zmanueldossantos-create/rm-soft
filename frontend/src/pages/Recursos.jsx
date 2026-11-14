@@ -244,9 +244,11 @@ export default function Recursos() {
         </div>
       )}
 
-      <Modal open={formOpen} onClose={() => setFormOpen(false)} title={editingId ? 'Editar recurso' : 'Novo recurso'}>
+      <Modal open={formOpen} onClose={() => setFormOpen(false)} title={editingId ? 'Editar recurso' : 'Novo recurso'} maxWidthClass="max-w-3xl">
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          {/* two fields per row: the modal is wide rather than long */}
           {!editingId && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Atividade *</label>
               <Select
@@ -256,8 +258,6 @@ export default function Recursos() {
                 placeholder="Selecionar atividade"
               />
             </div>
-          )}
-          {!editingId && (
             <div>
               <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Tipo de recurso *</label>
               <Select
@@ -267,16 +267,18 @@ export default function Recursos() {
                 placeholder="Selecionar tipo"
               />
               {activeResourceTypes.length === 0 && (
-                <p className="text-[12px] text-text-muted mt-1.5">Nenhum tipo disponível - crie um em Configurações {'>'} Catalogos {'>'} Tipos de Recurso.</p>
+                <p className="text-[12px] text-text-muted mt-1.5">Nenhum tipo disponível - crie um em Administração {'>'} Tabelas e motivos {'>'} Tipos de Recurso.</p>
               )}
             </div>
+          </div>
           )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Nome *</label>
             <input
               value={form.name}
               onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-              placeholder="Ex: Quarto 101, Joao (cabeleireiro), Mesa 4"
+              placeholder="Ex: Quarto 101, João (cabeleireiro), Mesa 4"
               required
               autoFocus
               className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors"
@@ -291,21 +293,22 @@ export default function Recursos() {
               className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary font-mono outline-none focus:border-accent transition-colors"
             />
           </div>
+          </div>
           {rates.some((s) => s.resource_type_id === form.resourceTypeId) && (
             <div>
               <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Preços deste recurso (opcional)</label>
               <p className="text-[12px] text-text-muted mb-2">Vazio: o preço da tarifa. Preencha só quando este recurso tem o seu próprio preço.</p>
-              <div className="flex flex-col gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
                 {rates.filter((s) => s.resource_type_id === form.resourceTypeId)
                   .sort((a, b) => rateOrder(a) - rateOrder(b) || a.name.localeCompare(b.name)).map((s) => (
-                  <div key={s.id} className="grid grid-cols-[minmax(0,1fr)_140px] gap-3 items-center">
+                  <div key={s.id} className="grid grid-cols-[minmax(0,1fr)_130px] gap-3 items-center">
                     <span className="min-w-0">
-                      <span className="block text-[13px] text-text-primary truncate">
-                        {s.name}
-                        <span className="text-text-muted"> · {s.duration_minutes ? s.duration_minutes + ' min' : s.stay_start_time && s.stay_end_time ? s.stay_start_time.slice(0, 5) + ' - ' + s.stay_end_time.slice(0, 5) : 'horário do tipo'}</span>
+                      <span className="block text-[13px] text-text-primary truncate" title={s.name}>{s.name}</span>
+                      {/* how the rate counts and its own price beside this room's: the difference read at once */}
+                      <span className="block text-[11px] text-text-muted truncate">
+                        {s.duration_minutes ? s.duration_minutes + ' min' : s.stay_start_time && s.stay_end_time ? s.stay_start_time.slice(0, 5) + ' - ' + s.stay_end_time.slice(0, 5) : 'Horário do tipo'}
+                        {' · Tarifa: '}{formatKz(Number(s.price || 0))} Kz
                       </span>
-                      {/* the rate's own price beside this room's: the difference read at once */}
-                      <span className="block text-[11px] text-text-muted">Preço da tarifa: {formatKz(Number(s.price || 0))} Kz</span>
                     </span>
                     <input type="number" min="0" step="0.01" value={form.prices[s.id] ?? ''} placeholder={formatKz(Number(s.price || 0))}
                       onChange={(e) => setForm((p) => ({ ...p, prices: { ...p.prices, [s.id]: e.target.value } }))}
