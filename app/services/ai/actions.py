@@ -322,6 +322,16 @@ def _when(day_text, hour_text, default_hour) -> datetime:
     return datetime(day.year, day.month, day.day, hh, mm, tzinfo=LUANDA)
 
 
+def _count_text(quote: dict, rate) -> str:
+    """«2 noites», «1 período», «3 × 60 min» - how many times the rate, as the screens say it."""
+    many = quote["quantity"] > 1
+    if quote["unit"] == "NOITE":
+        return f"{quote['quantity']} noite{'s' if many else ''}"
+    if quote["unit"] == "PERIODO":
+        return f"{quote['quantity']} período{'s' if many else ''}"
+    return f"{quote['quantity']} × {rate.duration_minutes} min"
+
+
 async def preparar_reserva(db: AsyncSession, ctx: ActionContext, arguments: dict) -> dict:
     """A booking checked as the Nova reserva screen does (overlap, capacity, the rate of the room's type, a Pernoite one
     night), priced as the check-in will count it, and created on confirmation. The hours: the rate's own (Pernoite),
@@ -399,7 +409,7 @@ async def preparar_reserva(db: AsyncSession, ctx: ActionContext, arguments: dict
     summary = {"titulo": f"Reserva: {resource.name}", "recurso": resource.name, "tarifa": rate.name if rate else None,
                "entrada": starts_at.strftime("%d/%m/%Y %H:%M"), "saida": ends_at.strftime("%d/%m/%Y %H:%M"),
                "cliente": customer.name if customer else None, "hospede": guest, "pessoas": party,
-               "quantidade": quote["quantity"] if quote else None, "total": quote["total"] if quote else None}
+               "quantidade": _count_text(quote, rate) if quote else None, "total": quote["total"] if quote else None}
     return await _propose(db, ctx, "CREATE_BOOKING", payload, summary, ctx.confirm_documents)
 
 
@@ -438,7 +448,7 @@ def action_text(action: AiPendingAction) -> str:
     if action.kind == "CREATE_BOOKING":
         lines = [f"**{s.get('titulo')}**", f"{s.get('entrada')} → {s.get('saida')}"]
         if s.get("tarifa"):
-            lines.append(f"{s['tarifa']}" + (f" · {s['quantidade']} × · {kz(s['total'])} (sem IVA)" if s.get("total") else ""))
+            lines.append(f"{s['tarifa']}" + (f" · {s['quantidade']} · {kz(s['total'])} (sem IVA)" if s.get("total") else ""))
         who = " · ".join(str(x) for x in (s.get("cliente"), s.get("hospede"), f"{s['pessoas']} pessoas" if s.get("pessoas") else None) if x)
         if who:
             lines.append(who)

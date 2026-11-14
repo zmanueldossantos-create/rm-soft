@@ -126,7 +126,7 @@ function ActionCard({ action, onDecide, deciding }) {
       <div className="px-3 py-2 flex flex-col gap-1.5">
         {action.kind === 'CREATE_BOOKING' ? (
           <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-            {[['Entrada', s.entrada], ['Saída', s.saida], ['Tarifa', s.tarifa ? s.tarifa + (s.quantidade ? ' · ' + s.quantidade + ' ×' : '') : null],
+            {[['Entrada', s.entrada], ['Saída', s.saida], ['Tarifa', s.tarifa ? s.tarifa + (s.quantidade ? ' · ' + s.quantidade : '') : null],
               ['Preço', s.total != null ? kz(s.total) + ' (sem IVA)' : null], ['Cliente', s.cliente], ['Hóspede', s.hospede], ['Pessoas', s.pessoas]]
               .filter(([, v]) => v).map(([k, v]) => (
                 <span key={k} className="contents"><span className="text-text-muted">{k}</span><span className="text-text-primary font-mono">{v}</span></span>
