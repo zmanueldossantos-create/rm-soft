@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
+import { Fragment, useState, useEffect, useRef } from 'react';
 import { ChefHat, History as KitchenHistoryIcon } from 'lucide-react';
 import { Link, useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { createPortal } from 'react-dom';
-import { Building2, LogOut, LayoutDashboard, Sun, Moon, Package, Users, Calendar, Receipt, Settings, Package2, UserCog, History, FileText, Landmark, LayoutGrid, Store, Wheat, Factory, Wallet, SlidersHorizontal, Tags, Wrench, ChevronDown, Cog, Plus, ArrowLeftRight, Calculator, ClipboardList, Gauge, PiggyBank, CreditCard, Boxes, CalendarClock, Wallet2, PackageMinus, Truck, ShieldCheck, FileInput, Send, HandCoins, Bot, HelpCircle, LifeBuoy, BookOpen, Layers, Inbox, ListTree, BookText, Scale, FileBarChart, BookOpenText } from 'lucide-react';
+import { Building2, LogOut, LayoutDashboard, Sun, Moon, Package, Users, Calendar, Receipt, Settings, Package2, UserCog, History, FileText, Landmark, LayoutGrid, Store, Wheat, Factory, Wallet, SlidersHorizontal, Tags, Wrench, ChevronDown, Cog, Plus, ArrowLeftRight, Calculator, ClipboardList, Gauge, PiggyBank, CreditCard, Boxes, CalendarClock, Wallet2, PackageMinus, Truck, ShieldCheck, FileInput, Send, HandCoins, Bot, HelpCircle, LifeBuoy, BookOpen, Layers, Inbox, ListTree, BookText, Scale, FileBarChart, BookOpenText, Tag } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import apiClient from '../api/client';
 import { useThemeStore } from '../store/themeStore';
@@ -104,9 +104,11 @@ function NavGroup({ icon: Icon, label, items, isActive }) {
           style={{ position: 'fixed', top: coords.top, left: coords.left }}
           className="bg-bg-elevated border border-border rounded-md shadow-lg py-1 min-w-[180px] z-[100]"
         >
-          {items.map((item) => (
+          {items.map((item, i) => (
+            <Fragment key={item.to}>
+            {/* a line between two kinds of entries (daily use / set-up) */}
+            {item.separatorBefore && i > 0 && <div className="my-1 border-t border-border" />}
             <Link
-              key={item.to}
               to={item.to}
               onClick={() => setOpen(false)}
               className={
@@ -117,6 +119,7 @@ function NavGroup({ icon: Icon, label, items, isActive }) {
               <item.icon size={15} />
               {item.label}
             </Link>
+            </Fragment>
           ))}
         </div>,
         document.body
@@ -288,9 +291,11 @@ export default function Layout() {
     },
     {
       key: 'reservas', icon: CalendarClock, label: 'Reservas', items: visible([
-        { to: '/recursos', icon: Boxes, label: 'Recursos', show: can('resources:manage') },
-        { to: '/reservas', icon: CalendarClock, label: 'Reservas', show: can('bookings:view') },
+        // daily use first, then the set-up (the rooms and their rates side by side, where one thinks "hotel")
+        { to: '/reservas', icon: CalendarClock, label: 'Mapa de reservas', show: can('bookings:view') },
         { to: '/recursos/historico', icon: History, label: 'Histórico', show: can('resources:history') },
+        { to: '/recursos', icon: Boxes, label: 'Recursos', show: can('resources:manage'), separatorBefore: true },
+        { to: '/tarifas', icon: Tag, label: 'Tarifas', show: can('services:manage') && can('resource_types:view') },
       ]),
     },
     {

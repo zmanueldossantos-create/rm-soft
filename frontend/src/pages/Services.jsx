@@ -3,7 +3,7 @@ import VatReclassify from '../components/VatReclassify';
 import ActivityScopePicker from '../components/ActivityScopePicker';
 import ExemptionMotiveField from '../components/ExemptionMotiveField';
 import { useState, useEffect, useMemo } from 'react';
-import { Wrench, Plus, Loader2, Search, Pencil } from 'lucide-react';
+import { Wrench, Tag, Plus, Loader2, Search, Pencil } from 'lucide-react';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
 import { listServices, createService, updateService, toggleServiceStatus } from '../api/services';
@@ -46,7 +46,9 @@ const emptyForm = {
   stayStart: '', stayEnd: '',  // a rate's own hours (Pernoite 22:00 - 07:30)
 };
 
-export default function Services() {
+// ratesOnly (Reservas > Tarifas): the same screen, showing only the rates of the room types - the extras
+// (delivery, laundry) stay in Catálogo > Serviços
+export default function Services({ ratesOnly = false }) {
   const can = useCan();
   const [services, setServices] = useState([]);
   const [serviceTypes, setServiceTypes] = useState([]);
@@ -123,9 +125,10 @@ export default function Services() {
   // by code: the rates of a room type side by side (STD-1H, STD-2H...), the extras apart
   const filteredServices = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const shown = q ? services.filter((s) => s.code.toLowerCase().includes(q) || s.name.toLowerCase().includes(q)) : services;
+    const scoped = ratesOnly ? services.filter((s) => s.resource_type_id) : services;
+    const shown = q ? scoped.filter((s) => s.code.toLowerCase().includes(q) || s.name.toLowerCase().includes(q)) : scoped;
     return [...shown].sort((a, b) => a.code.localeCompare(b.code, 'pt', { numeric: true }));
-  }, [services, search]);
+  }, [services, search, ratesOnly]);
   // what a service is: its service type, or - a rate of a room type - that type, with its duration or its hours
   // how the rate in the form is counted: by its duration, its own hours, or the room type's hours (nothing typed)
   const rateMode = form.rateMode || (form.durationMinutes !== '' ? 'DURATION' : (form.stayStart || form.stayEnd) ? 'HOURS' : 'TYPE');
@@ -208,6 +211,10 @@ export default function Services() {
   async function handleSubmit(e) {
     e.preventDefault();
     setFormError('');
+    if (ratesOnly && !form.resourceTypeId) {  // a rate without a room type would leave this list: an extra, made in Serviços
+      setFormError('Escolha o tipo de recurso desta tarifa (um extra sem tipo cria-se em Catálogo > Serviços)');
+      return;
+    }
     if (form.resourceTypeId && rateMode === 'DURATION' && !(parseInt(form.durationMinutes, 10) > 0)) {
       setFormError('Indique a duração da tarifa em minutos (ou escolha outra forma de contar)');
       return;
@@ -274,10 +281,14 @@ export default function Services() {
   return (
     <main className="max-w-[1600px] mx-auto px-4 sm:px-6 md:px-8 py-6 sm:py-9">
       <h2 className="font-display font-semibold text-[22px] text-text-primary flex items-center gap-2.5 mb-1">
-        <Wrench size={22} className="text-accent" />
-        Serviços
+        {ratesOnly ? <Tag size={22} className="text-accent" /> : <Wrench size={22} className="text-accent" />}
+        {ratesOnly ? 'Tarifas' : 'Serviços'}
       </h2>
-      <p className="text-text-muted text-sm mb-6">Gerir a ficha de serviços da sua empresa</p>
+      <p className="text-text-muted text-sm mb-6">
+        {ratesOnly
+          ? 'Os preços de cada tipo de recurso (1 hora, pernoite, diária...). Os extras ficam em Catálogo > Serviços.'
+          : 'Gerir a ficha de serviços da sua empresa'}
+      </p>
 
       {vatRates.length === 0 && !loading && (
         <div className="bg-danger/10 border-l-2 border-danger text-danger px-4 py-3 text-sm rounded-r mb-5">
@@ -302,7 +313,7 @@ export default function Services() {
           className="flex items-center gap-2 bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-sm px-4 py-2.5 rounded-md transition-colors cursor-pointer"
         >
           <Plus size={17} />
-          Novo serviço
+          {ratesOnly ? 'Nova tarifa' : 'Novo serviço'}
         </button>
       </div>
 
@@ -316,7 +327,7 @@ export default function Services() {
         {error && <div className="px-6 py-4 text-danger text-sm bg-danger/10">{error}</div>}
         {!loading && !error && filteredServices.length === 0 && (
           <div className="text-center py-16 text-text-muted text-sm">
-            <span className="flex flex-col items-center gap-3">{search ? 'Nenhum serviço encontrado' : 'Nenhum serviço registado ainda'}<Search size={22} className="text-text-muted/40 mt-1" /></span>
+            <span className="flex flex-col items-center gap-3">{search ? (ratesOnly ? 'Nenhuma tarifa encontrada' : 'Nenhum serviço encontrado') : (ratesOnly ? 'Nenhuma tarifa registada ainda' : 'Nenhum serviço registado ainda')}<Search size={22} className="text-text-muted/40 mt-1" /></span>
           </div>
         )}
         <VatReclassify kind="services" selectedIds={selectedIds} setSelectedIds={setSelectedIds} vatRates={vatRates} vatCodes={vatCodes} articleVatRule={articleVatRule} onDone={loadData} />
@@ -371,7 +382,7 @@ export default function Services() {
         )}
       </div>
 
-      <Modal open={modalOpen} onClose={closeModal} title={editingId ? 'Editar serviço' : 'Novo serviço'} maxWidthClass="max-w-5xl">
+      <Modal open={modalOpen} onClose={closeModal} title={ratesOnly ? (editingId ? 'Editar tarifa' : 'Nova tarifa') : (editingId ? 'Editar serviço' : 'Novo serviço')} maxWidthClass="max-w-5xl">
         <form onSubmit={handleSubmit} className="flex flex-col gap-4 max-h-[70vh] overflow-y-auto scrollbar-thin pr-1">
           {/* 4 fields per line; the status is not edited here - the list's active/inactive switch does it. */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -492,7 +503,7 @@ export default function Services() {
             className="mt-1 bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors"
           >
             {saving ? <Loader2 size={17} className="animate-spin" /> : <Plus size={17} />}
-            {saving ? 'A guardar...' : editingId ? 'Guardar alterações' : 'Criar serviço'}
+            {saving ? 'A guardar...' : editingId ? 'Guardar alterações' : ratesOnly ? 'Criar tarifa' : 'Criar serviço'}
           </button>
         </form>
       </Modal>

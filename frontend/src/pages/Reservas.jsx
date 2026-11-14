@@ -1018,7 +1018,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
       {!embedded && (
         <h2 className="font-display font-semibold text-[22px] text-text-primary flex items-center gap-2.5 mb-1">
           <CalendarClock size={22} className="text-accent" />
-          Reservas
+          Mapa de reservas
         </h2>
       )}
       {!embedded && <p className="text-text-muted text-sm mb-6">Gerir reservas de quartos, praticantes, mesas ou qualquer outro recurso</p>}

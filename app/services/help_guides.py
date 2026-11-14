@@ -507,7 +507,19 @@ PAGES = [
         ],
     },
     {
-        "id": "reservas-pagina", "path": "/reservas", "title": "Reservas", "module": "reservas", "perms": ["bookings:view"],
+        "id": "tarifas", "path": "/tarifas", "title": "Tarifas", "module": "reservas",
+        "perms": ["services:manage"], "requires": ["resource_types:view"],
+        "intro": "Os preços de cada tipo de recurso (1 hora, pernoite, diária...): os mesmos serviços que em Catálogo → "
+                 "Serviços, só os que têm um tipo de recurso. Os extras (lavandaria, refeições) ficam em Serviços.",
+        "steps": [
+            "«Nova tarifa»: código, nome, preço, IVA e o tipo de recurso.",
+            "«Como se conta esta tarifa»: por duração (por fatia começada), horário próprio (uma vez por período, ex.: "
+            "pernoite 22:00 - 07:30) ou horário do tipo (por noite, às horas do tipo de recurso).",
+            "Um recurso com preço diferente: Reservas → Recursos → lápis do recurso → «Preços deste recurso».",
+        ],
+    },
+    {
+        "id": "reservas-pagina", "path": "/reservas", "title": "Mapa de reservas", "module": "reservas", "perms": ["bookings:view"],
         "intro": "As reservas de quartos, praticantes, mesas ou qualquer recurso - a mesma lista que a receção vê na caixa.",
         "steps": [
             "«Nova reserva»: o recurso, o cliente (ou «Novo cliente»), as datas e o serviço.",

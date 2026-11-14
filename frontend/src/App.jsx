@@ -112,6 +112,7 @@ export default function App() {
           <Route path="/pedidos" element={<SuperAdminRoute><Pedidos /></SuperAdminRoute>} />
           <Route path="/categorias" element={<RequirePermission anyOf={['product_categories:manage', 'service_types:manage', 'tesouraria:reasons_manage', 'resource_types:manage', 'consumption_reasons:manage', 'tesouraria:payment_prefs_manage']}><Categorias /></RequirePermission>} />
           <Route path="/services" element={<RequirePermission perm="services:manage"><Services /></RequirePermission>} />
+          <Route path="/tarifas" element={<RequirePermission perm="services:manage"><Services ratesOnly /></RequirePermission>} />
           <Route path="/customers" element={<RequirePermission perm="customers:manage"><Customers /></RequirePermission>} />
           <Route path="/fiscal-periods" element={<RequirePermission perm="fiscal_periods:view"><FiscalPeriods /></RequirePermission>} />
           <Route path="/contabilidade/plano-de-contas" element={<RequirePermission perm="accounting:chart_view"><PlanoContas /></RequirePermission>} />
