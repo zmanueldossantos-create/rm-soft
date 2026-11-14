@@ -333,6 +333,8 @@ async def extend_stay(db: AsyncSession, company_id: uuid.UUID, booking_id: uuid.
     if ends_at.tzinfo is None:  # the screen sends Luanda wall-clock time, as for every booking
         ends_at = ends_at.replace(tzinfo=LUANDA)
     booking = await get_booking_or_raise(db, company_id, booking_id)
+    # two prolongations at once (a double click, two screens): the second waits and reads the first one's end
+    await db.refresh(booking, with_for_update=True)
     if booking.status != BookingStatus.EM_CURSO:
         raise InvalidStayStateError("Só uma estadia em curso pode ser prolongada")
     if ends_at <= booking.starts_at:

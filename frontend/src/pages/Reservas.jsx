@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import DateInput from '../components/DateInput';
 import { CalendarClock, Plus, Loader2, X, CheckCircle2, Pencil, ChevronLeft, ChevronRight, DoorOpen, Banknote, Globe } from 'lucide-react';
 import { useCan } from '../utils/permissions';
@@ -158,6 +158,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
   const [walkInSaving, setWalkInSaving] = useState(false);
   const [extendBooking, setExtendBooking] = useState(null);
   const [extendForm, setExtendForm] = useState({ date: '', time: '' });
+  const extendSubmitting = useRef(false);
   const [extendQuote, setExtendQuote] = useState(null);  // { now, next }: the rate line today and with the new exit
   const [extendError, setExtendError] = useToastState('error');
   const [extendSaving, setExtendSaving] = useState(false);
@@ -551,10 +552,12 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
 
   async function handleExtendSubmit(e) {
     e.preventDefault();
+    if (extendSubmitting.current) return;  // a double click sends one prolongation, not two
     if (!extendForm.date || !extendForm.time) {
       setExtendError('Indique a nova data e hora de saída');
       return;
     }
+    extendSubmitting.current = true;
     setExtendSaving(true);
     setExtendError('');
     try {
@@ -565,6 +568,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
       setExtendError(extractErrorMessage(err, 'Erro ao prolongar a estadia'));
     } finally {
       setExtendSaving(false);
+      extendSubmitting.current = false;
     }
   }
 
@@ -811,6 +815,12 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
     }, 250);
     return () => { alive = false; clearTimeout(t); };
   }, [formOpen, form.resourceId, form.serviceId, form.date, form.startTime, form.endDate, form.endTime]);
+
+  const extendBeforeEntry = (() => {
+    if (!extendBooking || !extendForm.date || !extendForm.time) return false;
+    const start = luandaDateParts(extendBooking.starts_at);
+    return (extendForm.date + 'T' + extendForm.time) <= (start.date + 'T' + start.time);
+  })();
 
   function quoteText(q, serviceId = form.serviceId) {
     const service = services.find((x) => x.id === serviceId);
@@ -1407,9 +1417,13 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
                 <input type="time" value={extendForm.time} onChange={(e) => setExtendForm((p) => ({ ...p, time: e.target.value }))} required className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
               </div>
             </div>
-            {extendQuote?.next.problem && <p className="text-[12px] text-danger -mt-1">{extendQuote.next.problem}</p>}
+            {/* the new exit must come after the entry - else nothing to prolong (the server refuses it too) */}
+            {extendBeforeEntry && (
+              <p className="text-[12px] text-danger -mt-1">A nova saída deve ser depois da entrada ({formatDateTime(extendBooking.starts_at)}) - para terminar já a estadia, use o Check-out</p>
+            )}
+            {!extendBeforeEntry && extendQuote?.next.problem && <p className="text-[12px] text-danger -mt-1">{extendQuote.next.problem}</p>}
             {/* the stay's rate today and with the new exit, the difference large: read at a glance before confirming */}
-            {extendQuote && !extendQuote.next.problem && (() => {
+            {!extendBeforeEntry && extendQuote && !extendQuote.next.problem && (() => {
               const diff = extendQuote.next.total - extendQuote.now.total;
               const row = (label, q, strong) => (
                 <div className="flex items-baseline justify-between gap-3">
@@ -1430,7 +1444,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
                 </div>
               );
             })()}
-            <button type="submit" disabled={extendSaving || !!extendQuote?.next.problem} className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer">
+            <button type="submit" disabled={extendSaving || extendBeforeEntry || !!extendQuote?.next.problem} className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer">
               {extendSaving ? <Loader2 size={17} className="animate-spin" /> : <CalendarClock size={17} />}
               {extendSaving ? 'A guardar...' : 'Prolongar'}
             </button>
