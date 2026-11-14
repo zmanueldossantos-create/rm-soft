@@ -1,5 +1,6 @@
 import { formatKz } from '../utils/format';
-import { Fragment, useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
+import Modal from '../components/Modal';
 import { useSearchParams } from 'react-router-dom';
 import DateInput from '../components/DateInput';
 import Select from '../components/Select';
@@ -60,7 +61,7 @@ export default function HistoricoRecursos() {
   const [showNotUses, setShowNotUses] = useState(true);
   const [history, setHistory] = useState({ entries: [], summary: [] });
   const [loading, setLoading] = useState(true);
-  const [openRows, setOpenRows] = useState(new Set());  // the uses whose life (entry, changes, exit) is unfolded
+  const [detail, setDetail] = useState(null);  // the use whose life (entry, changes, exit) is shown in the modal
   const [error, setError] = useToastState('error');
 
   useEffect(() => {
@@ -238,15 +239,12 @@ export default function HistoricoRecursos() {
                   {entries.map((e) => {
                     const key = e.booking_id || e.account_id;
                     const unfoldable = (e.events || []).length > 1;
-                    const open = openRows.has(key);
-                    const toggle = () => setOpenRows((prev) => { const next = new Set(prev); if (next.has(key)) next.delete(key); else next.add(key); return next; });
                     return (
-                    <Fragment key={key}>
-                    <tr onClick={unfoldable ? toggle : undefined} title={unfoldable ? 'Ver o histórico desta ocupação' : undefined}
+                    <tr key={key} onClick={unfoldable ? () => setDetail(e) : undefined} title={unfoldable ? 'Ver o histórico desta ocupação' : undefined}
                       className={'border-b border-border last:border-0 hover:bg-bg-inset/40 transition-colors ' + (unfoldable ? 'cursor-pointer' : '')}>
                       <td className={th + ' text-text-primary font-medium whitespace-nowrap'}>
                         <span className="inline-flex items-center gap-1.5">
-                          {unfoldable ? <ChevronRight size={14} className={'text-text-muted transition-transform ' + (open ? 'rotate-90' : '')} /> : <span className="w-3.5" />}
+                          {unfoldable ? <ChevronRight size={14} className="text-text-muted" /> : <span className="w-3.5" />}
                           {e.resource_name}
                         </span>
                       </td>
@@ -265,24 +263,6 @@ export default function HistoricoRecursos() {
                       </td>
                       <td className={th + ' text-right font-mono text-text-primary font-semibold'}>{e.invoice_total != null ? formatKz(e.revenue) + ' Kz' : '-'}</td>
                     </tr>
-                    {open && (
-                      <tr className="bg-bg-inset/60 border-b border-border">
-                        <td colSpan={hasStay ? 10 : 8} className="px-4 py-3">
-                          {/* the life of this occupation: each step, when, its document and amount */}
-                          <ol className="flex flex-col gap-1.5 pl-5 border-l border-border ml-1.5">
-                            {e.events.map((ev, i) => (
-                              <li key={i} className="grid grid-cols-[140px_minmax(0,1fr)_120px_130px] gap-3 items-baseline text-[12px]">
-                                <span className="font-mono text-text-muted">{formatDate(ev.at)}</span>
-                                <span className="text-text-primary">{ev.text}</span>
-                                <span className="font-mono text-text-muted">{ev.document || ''}</span>
-                                <span className="font-mono text-right text-text-primary">{ev.amount != null ? formatKz(ev.amount) + ' Kz' : ''}</span>
-                              </li>
-                            ))}
-                          </ol>
-                        </td>
-                      </tr>
-                    )}
-                    </Fragment>
                     );
                   })}
                 </tbody>
@@ -291,6 +271,31 @@ export default function HistoricoRecursos() {
           )}
         </>
       )}
+      {/* the life of one occupation: its entry, each change of its exit, an excess, its exit - with documents */}
+      <Modal open={!!detail} onClose={() => setDetail(null)} maxWidthClass="max-w-3xl"
+        title={detail ? 'Ocupação - ' + detail.resource_name + ' (' + (KIND_LABELS[detail.kind] || detail.kind) + ')' : ''}>
+        {detail && (
+          <div className="flex flex-col gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-[12px]">
+              <div><p className="text-text-muted uppercase tracking-wide text-[10px] mb-0.5">Cliente</p><p className="text-text-primary">{[detail.guest_name, detail.customer_name].filter(Boolean).join(' - ') || '-'}{detail.party_size ? ' (' + detail.party_size + ' pax)' : ''}</p></div>
+              <div><p className="text-text-muted uppercase tracking-wide text-[10px] mb-0.5">Entrada</p><p className="text-text-primary font-mono">{formatDate(detail.starts_at)}</p></div>
+              <div><p className="text-text-muted uppercase tracking-wide text-[10px] mb-0.5">Saída real</p><p className="text-text-primary font-mono">{formatDate(detail.real_end_at)}</p></div>
+              <div><p className="text-text-muted uppercase tracking-wide text-[10px] mb-0.5">Receita</p><p className="text-text-primary font-mono font-semibold">{formatKz(detail.revenue)} Kz</p></div>
+            </div>
+            <ol className="flex flex-col border border-border rounded-md divide-y divide-border">
+              {detail.events.map((ev, i) => (
+                <li key={i} className="grid grid-cols-[140px_minmax(0,1fr)_110px_120px] gap-3 items-baseline px-3.5 py-2.5 text-[13px]">
+                  <span className="font-mono text-text-muted text-[12px]">{formatDate(ev.at)}</span>
+                  <span className="text-text-primary">{ev.text}</span>
+                  <span className="font-mono text-text-muted text-[12px]">{ev.document || ''}</span>
+                  <span className="font-mono text-right text-text-primary">{ev.amount != null ? formatKz(ev.amount) + ' Kz' : ''}</span>
+                </li>
+              ))}
+            </ol>
+            {detail.credited > 0 && <p className="text-[12px] text-danger">Notas de crédito: - {formatKz(detail.credited)} Kz</p>}
+          </div>
+        )}
+      </Modal>
     </main>
   );
 }
