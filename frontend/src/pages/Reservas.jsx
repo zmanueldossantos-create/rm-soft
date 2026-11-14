@@ -307,6 +307,17 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
     }
   }
 
+  // the reception's order: who is in the rooms now (the latest arrival first), then what is coming (the soonest
+  // first), then what is over (the latest first) - the done stays at the bottom
+  const BOOKING_GROUP = { EM_CURSO: 0, PENDENTE: 1, CONFIRMADA: 1 };
+  const sortedBookings = [...bookings].sort((a, b) => {
+    const ga = BOOKING_GROUP[a.status] ?? 2;
+    const gb = BOOKING_GROUP[b.status] ?? 2;
+    if (ga !== gb) return ga - gb;
+    const diff = new Date(a.starts_at) - new Date(b.starts_at);
+    return ga === 1 ? diff : -diff;
+  });
+
   function openCreateForm() {
     const today = todayIso();
     setEditingBookingId(null);
@@ -1317,7 +1328,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
         </div>
       ) : (
         <div className="flex flex-col gap-2">
-          {bookings.map((b) => (
+          {sortedBookings.map((b) => (
             <div key={b.id} className="bg-bg-elevated border border-border rounded-lg px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
               <div>
                 <p className="text-text-primary font-medium text-sm">{resourceName(b.resource_id)}</p>
