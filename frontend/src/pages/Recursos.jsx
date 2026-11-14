@@ -9,6 +9,7 @@ import { listResources, createResource, updateResource, toggleResourceStatus, li
 import { listServices } from '../api/services';
 import { extractErrorMessage } from '../utils/errors';
 import Modal from '../components/Modal';
+import { byRateOrder } from '../utils/rates';
 import { useToastState } from '../components/Toaster';
 import { useAuthStore } from '../store/authStore';
 import { rememberedActivity, writeLastActivity } from '../utils/lastActivity';
@@ -30,8 +31,6 @@ const STATUS_STYLE = {
   RESERVADA: 'text-accent bg-accent/10',
 };
 
-// the rates in the order a price list reads: by duration (1 hora, 2 horas), then those with hours, then the night
-const rateOrder = (s) => (s.duration_minutes ? s.duration_minutes : s.stay_start_time ? 100000 : 200000);
 
 export default function Recursos() {
   const can = useCan();
@@ -300,7 +299,7 @@ export default function Recursos() {
               <p className="text-[12px] text-text-muted mb-2">Vazio: o preço da tarifa. Preencha só quando este recurso tem o seu próprio preço.</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
                 {rates.filter((s) => s.resource_type_id === form.resourceTypeId)
-                  .sort((a, b) => rateOrder(a) - rateOrder(b) || a.name.localeCompare(b.name)).map((s) => (
+                  .sort(byRateOrder).map((s) => (
                   <div key={s.id} className="grid grid-cols-[minmax(0,1fr)_130px] gap-3 items-center">
                     <span className="min-w-0">
                       <span className="block text-[13px] text-text-primary truncate" title={s.name}>{s.name}</span>

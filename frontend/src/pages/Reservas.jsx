@@ -19,6 +19,7 @@ import { formatKz } from '../utils/format';
 import { listServices } from '../api/services';
 import { extractErrorMessage } from '../utils/errors';
 import Modal from '../components/Modal';
+import { byRateOrder } from '../utils/rates';
 import Select from '../components/Select';
 import TerminalPicker, { terminalMissing } from '../components/TerminalPicker';
 import { listPosTerminals } from '../api/pos';
@@ -622,7 +623,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
 
   // the timed rates and the rates with hours (a Pernoite) of the chosen room's type (a night is a booking)
   const walkInRoom = resources.find((r) => r.id === walkInForm.resourceId);
-  const walkInServices = services.filter((s) => (s.duration_minutes || s.stay_end_time) && (!s.resource_type_id || s.resource_type_id === walkInRoom?.resource_type_id));
+  const walkInServices = services.filter((s) => (s.duration_minutes || s.stay_end_time) && (!s.resource_type_id || s.resource_type_id === walkInRoom?.resource_type_id)).sort(byRateOrder);
   const walkInService = services.find((s) => s.id === walkInForm.serviceId);
   // What is sold: the Entrada's service once, or the charged marcação's service as many times as it lasts.
   const chargeService = chargeTarget ? services.find((s) => s.id === chargeTarget.service_id) : null;
@@ -760,8 +761,12 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
   // «Avaliação» of 30 min) - an extra without one (breakfast) goes on the stay's account, it is not booked
   const availableServices = selectedResource
     ? services.filter((s) => s.resource_type_id === selectedResource.resource_type_id
-      || (!s.resource_type_id && (!selectedResourceType?.requires_service || s.duration_minutes)))
+      || (!s.resource_type_id && (!selectedResourceType?.requires_service || s.duration_minutes))).sort(byRateOrder)
     : services;
+  // more guests than a room holds: refused by the server (a table stays flexible - a chair added), so not submittable
+  const formPax = parseInt(form.partySize, 10);
+  const overCapacity = !!(selectedResource?.capacity && formPax > selectedResource.capacity);
+  const capacityBlocks = overCapacity && !!selectedResourceType?.requires_service;
 
   // The price as the room, the rate or the dates change - the backend counts it the way the check-in will
   useEffect(() => {
@@ -1392,13 +1397,13 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
               <input type="number" min="1" step="1" value={form.partySize} onChange={(e) => setForm((p) => ({ ...p, partySize: e.target.value }))} className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
             </div>
           </div>
-          {(() => {
-            const res = (editingBookingId ? resources : formResources).find((r) => r.id === form.resourceId);
-            const pax = parseInt(form.partySize, 10);
-            return res?.capacity && pax > res.capacity ? (
-              <p className="text-accent text-[12px] -mt-2">Aviso: este recurso tem capacidade para {res.capacity} pessoas</p>
-            ) : null;
-          })()}
+          {overCapacity && (
+            <p className={'text-[12px] -mt-2 ' + (capacityBlocks ? 'text-danger' : 'text-accent')}>
+              {capacityBlocks
+                ? 'Este recurso leva no máximo ' + selectedResource.capacity + (selectedResource.capacity === 1 ? ' pessoa' : ' pessoas') + ' - reduza o número ou escolha outro'
+                : 'Aviso: este recurso tem capacidade para ' + selectedResource.capacity + ' pessoas'}
+            </p>
+          )}
           <div className="grid grid-cols-4 gap-3">
             <div>
               <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Data início *</label>
@@ -1479,7 +1484,7 @@ export function ReservasPanel({ posId = null, activityId = null, onPayStay = nul
           </div>
           <button
             type="submit"
-            disabled={saving}
+            disabled={saving || capacityBlocks}
             className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer"
           >
             {saving ? <Loader2 size={17} className="animate-spin" /> : <Plus size={17} />}
