@@ -29,5 +29,28 @@ class CustomerOrderStatusRequest(BaseModel):
     status: str  # ENCOMENDADA | EM_PRODUCAO | PRONTA
 
 
+class CustomerOrderRefund(BaseModel):
+    payment_method_id: uuid.UUID
+    pos_id: uuid.UUID | None = None  # cash: the till it leaves
+    bank_account_id: uuid.UUID | None = None  # a transfer: the account it leaves
+
+
 class CustomerOrderCancelRequest(BaseModel):
     reason: str
+    deposit: str | None = None  # an invoiced order already paid: DEVOLVER | RETER
+    refund: CustomerOrderRefund | None = None
+
+
+class CustomerOrderPayRequest(BaseModel):
+    pos_id: uuid.UUID
+    amount: float
+    payment_method_id: uuid.UUID
+    terminal_id: uuid.UUID | None = None
+
+
+class CustomerOrderDeliverRequest(BaseModel):
+    pos_id: uuid.UUID
+    payment_method_id: uuid.UUID | None = None
+    amount: float | None = None  # an order never invoiced: what its Fatura/Recibo is paid with
+    terminal_id: uuid.UUID | None = None
+    on_credit: bool = False  # «fica a dever»: nothing received, the Fatura stays to be received

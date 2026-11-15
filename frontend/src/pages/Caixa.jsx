@@ -23,7 +23,8 @@ import Modal from '../components/Modal';
 import PdfViewer from '../components/PdfViewer';
 import DenominationGrid, { denominationLines, denominationTotal } from '../components/DenominationGrid';
 import OpenAccountsPanel from '../components/OpenAccountsPanel';
-import { Wallet2 as OpenAccountsIcon, CalendarClock } from 'lucide-react';
+import { Wallet2 as OpenAccountsIcon, CalendarClock, CakeSlice } from 'lucide-react';
+import EncomendasPanel from '../components/EncomendasPanel';
 import { ReservasPanel } from './Reservas';
 import Select from '../components/Select';
 import { listActivities, listPointsOfSale } from '../api/activity';
@@ -232,6 +233,7 @@ export default function Caixa() {
         listActivities(), canViewProducts ? listProducts() : Promise.resolve([]), listCustomers(), getMyCashPointAssociation(),
       ]);
       const activeActivities = activitiesData.filter((a) => a.is_active);
+      setActivityCaps(Object.fromEntries(activeActivities.map((a) => [a.id, a.capabilities || []])));
       const posLists = await Promise.all(activeActivities.map((a) => listPointsOfSale(a.id)));
 
       const printMap = {};
@@ -779,6 +781,8 @@ export default function Caixa() {
   const [posStock, setPosStock] = useState(null);
   const [openAccountsModalOpen, setOpenAccountsModalOpen] = useState(false);
   const [reservasModalOpen, setReservasModalOpen] = useState(false);
+  const [encomendasModalOpen, setEncomendasModalOpen] = useState(false);
+  const [activityCaps, setActivityCaps] = useState({}); // what each activity's sector has (ORDERS: the Encomendas)
   const [stayAccountId, setStayAccountId] = useState(null); // a hotel stay sent from Reservas to be paid
   const stockLevels = posStock?.stock || {}; // shown on the product cards
   function refreshPosStock(posId) {
@@ -1420,7 +1424,7 @@ export default function Caixa() {
   // Sidebar drawers: one at a time. The open one is the active icon; clicking it again closes it.
   const activeSideDrawer = proFormaModalOpen ? 'docs' : articlesModalOpen ? 'articles' : moedeiroModalOpen ? 'moedeiro'
     : movementModalOpen ? 'movement' : dailyReportModalOpen ? 'report' : openAccountsModalOpen ? 'accounts'
-    : reservasModalOpen ? 'reservas' : null;
+    : reservasModalOpen ? 'reservas' : encomendasModalOpen ? 'encomendas' : null;
   function closeSideDrawers() {
     setProFormaModalOpen(false);
     setArticlesModalOpen(false);
@@ -1429,6 +1433,7 @@ export default function Caixa() {
     setDailyReportModalOpen(false);
     setOpenAccountsModalOpen(false);
     setReservasModalOpen(false);
+    setEncomendasModalOpen(false);
     setStayAccountId(null);
   }
   // A document issued outside the cart (an account closed, a passage sold at the entry) ends like a direct sale:
@@ -1486,6 +1491,13 @@ export default function Caixa() {
         <button onClick={() => toggleSideDrawer('reservas', () => setReservasModalOpen(true))} disabled={!selectedPosId} className={'group relative w-11 h-11 flex items-center justify-center rounded-lg border hover:border-accent hover:bg-accent/5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer ' + (activeSideDrawer === 'reservas' ? 'border-accent bg-accent/5' : 'border-accent/20 bg-bg-inset')}>
           <CalendarClock size={18} className="text-accent" />
           <span className="pointer-events-none absolute left-full ml-2 whitespace-nowrap rounded-md bg-bg-elevated border border-border px-2.5 py-1 text-[12px] text-text-primary shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-50">Reservas</span>
+        </button>
+        )}
+        {/* Encomendas of the till's activity: deposits and deliveries (sectors with the Encomendas). */}
+        {can('orders:view') && (!tillActivityId || !activityCaps[tillActivityId] || activityCaps[tillActivityId].includes('ORDERS')) && (
+        <button onClick={() => toggleSideDrawer('encomendas', () => setEncomendasModalOpen(true))} disabled={!selectedPosId} className={'group relative w-11 h-11 flex items-center justify-center rounded-lg border hover:border-accent hover:bg-accent/5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer ' + (activeSideDrawer === 'encomendas' ? 'border-accent bg-accent/5' : 'border-accent/20 bg-bg-inset')}>
+          <CakeSlice size={18} className="text-accent" />
+          <span className="pointer-events-none absolute left-full ml-2 whitespace-nowrap rounded-md bg-bg-elevated border border-border px-2.5 py-1 text-[12px] text-text-primary shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-50">Encomendas</span>
         </button>
         )}
         {customerDisplay.allowed && (
@@ -2919,6 +2931,20 @@ export default function Caixa() {
               setReservasModalOpen(false);
               setStayAccountId(accountId);
               setOpenAccountsModalOpen(true);
+            }}
+          />
+        )}
+      </Modal>
+
+      {/* Encomendas of this till's activity: the deposit and the delivery, printed like any sale - see EncomendasPanel. */}
+      <Modal variant="drawer" drawerLeftClass="left-16" open={encomendasModalOpen} onClose={() => setEncomendasModalOpen(false)} title="Encomendas" maxWidthClass="max-w-5xl">
+        {encomendasModalOpen && selectedPosId && (
+          <EncomendasPanel
+            posId={selectedPosId}
+            activityId={pointsOfSale.find((p) => p.id === selectedPosId)?.activity_id}
+            onDocument={async (invoiceId) => {
+              setEncomendasModalOpen(false);
+              await showIssuedDocument(invoiceId);
             }}
           />
         )}

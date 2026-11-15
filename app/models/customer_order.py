@@ -47,6 +47,11 @@ class CustomerOrder(Base):
     status: Mapped[CustomerOrderStatus] = mapped_column(
         SQLEnum(CustomerOrderStatus, name="customer_order_status"), nullable=False, default=CustomerOrderStatus.ENCOMENDADA)
     cancel_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # the money: its Fatura (FT with a deposit / delivered on credit, or the FR of a delivery paid at once) - the
+    # receipts (RC) reference it; a cancelled order's credit note, and what was done with the deposit
+    invoice_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("invoices.id"), nullable=True)
+    credit_note_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("invoices.id"), nullable=True)
+    deposit_outcome: Mapped[str | None] = mapped_column(String(12), nullable=True)  # DEVOLVIDO | RETIDO (cancelled)
     status_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

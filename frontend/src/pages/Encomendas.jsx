@@ -7,11 +7,15 @@ import { useCan } from '../utils/permissions';
 import { formatKz } from '../utils/format';
 import { extractErrorMessage } from '../utils/errors';
 import { toast } from '../store/toastStore';
-import { listOrders, getOrderOptions, createOrder, updateOrder, setOrderStatus, cancelOrder } from '../api/orders';
+import { listOrders, getOrderOptions, createOrder, updateOrder, setOrderStatus, cancelOrder, getOrderCancelInfo } from '../api/orders';
+import { listPaymentMethodPreferences } from '../api/tesouraria';
+import { getMyCompanyBankAccounts } from '../api/company';
+import { banksApi } from '../api/catalogs';
+import { useAuthStore } from '../store/authStore';
 
 // Encomendas: what customers ordered to be made and handed over later - by delivery date, with a production note per
-// line, moved through production (Encomendada -> Em produção -> Pronta). The money and the delivery are done at the
-// till (next step).
+// line, moved through production (Encomendada -> Em produção -> Pronta). The deposit and the delivery are done at the
+// till (Caixa → Encomendas); here an invoiced order is cancelled by the gestor, its deposit given back or kept.
 
 const STATUS_STYLE = {
   ENCOMENDADA: 'bg-sky-500/15 text-sky-400', EM_PRODUCAO: 'bg-amber-500/15 text-amber-500', PRONTA: 'bg-success/15 text-success',
@@ -64,6 +68,13 @@ export default function Encomendas() {
   const [saving, setSaving] = useState(false);
   const [cancelling, setCancelling] = useState(null);
   const [cancelReason, setCancelReason] = useState('');
+  const [cancelInfo, setCancelInfo] = useState(null); // invoiced? paid? the tills that can give cash back
+  const [deposit, setDeposit] = useState(''); // DEVOLVER | RETER
+  const [refund, setRefund] = useState({ methodId: '', posId: '', bankId: '' });
+  const [refundMethods, setRefundMethods] = useState([]);
+  const [bankAccounts, setBankAccounts] = useState([]);
+  const [banks, setBanks] = useState([]);
+  const isGestor = useAuthStore((st) => st.user?.role) === 'GESTOR';
 
   const params = useMemo(() => {
     if (filter === 'ABERTAS') return { status_filter: 'ABERTAS' };
@@ -208,11 +219,45 @@ export default function Encomendas() {
     }
   }
 
+  async function openCancel(order) {
+    setCancelReason('');
+    setDeposit('');
+    setRefund({ methodId: '', posId: '', bankId: '' });
+    setCancelInfo(null);
+    setCancelling(order);
+    try {
+      const info = await getOrderCancelInfo(order.id);
+      setCancelInfo(info);
+      if (info.invoiced && info.paid > 0) {
+        listPaymentMethodPreferences().then((m) => setRefundMethods(m.filter((x) => x.allows_payment))).catch(() => setRefundMethods([]));
+        getMyCompanyBankAccounts().then((a) => setBankAccounts(a.filter((x) => x.is_active))).catch(() => setBankAccounts([]));
+        banksApi.list().then(setBanks).catch(() => setBanks([]));
+      }
+    } catch (err) {
+      toast.error(extractErrorMessage(err, 'Erro ao preparar o cancelamento'));
+    }
+  }
+
+  const refundMethod = refundMethods.find((m) => m.id === refund.methodId);
+
   async function confirmCancel(e) {
     e.preventDefault();
+    const paid = cancelInfo?.invoiced ? cancelInfo.paid : 0;
+    if (paid > 0 && !deposit) {
+      toast.error('Escolha se o sinal é devolvido ou retido');
+      return;
+    }
+    let refundPayload = null;
+    if (paid > 0 && deposit === 'DEVOLVER') {
+      if (!refund.methodId) { toast.error('Escolha como o sinal é devolvido'); return; }
+      if (refundMethod?.is_cash && !refund.posId) { toast.error('Escolha a caixa de onde sai o numerário'); return; }
+      if (refundMethod?.uses_bank_account && !refund.bankId) { toast.error('Escolha a conta bancária de onde sai a devolução'); return; }
+      refundPayload = { payment_method_id: refund.methodId, pos_id: refundMethod?.is_cash ? refund.posId : null,
+        bank_account_id: refundMethod?.uses_bank_account ? refund.bankId : null };
+    }
     setBusyId(cancelling.id);
     try {
-      const saved = await cancelOrder(cancelling.id, cancelReason);
+      const saved = await cancelOrder(cancelling.id, cancelReason, paid > 0 ? deposit : null, refundPayload);
       toast.success('Encomenda cancelada: ' + saved.reference);
       setCancelling(null);
       setViewing(null);
@@ -250,6 +295,9 @@ export default function Encomendas() {
       </>
     );
   }
+
+  // an invoiced order: its lines are those of its Fatura - only the delivery, the contact and the notes change
+  const locked = !!editing?.lines_locked;
 
   return (
     <main className="max-w-[1600px] mx-auto px-4 sm:px-6 md:px-8 py-6 sm:py-9">
@@ -323,7 +371,14 @@ export default function Encomendas() {
                         <div key={l.id} className="truncate"><span className="text-text-primary">{l.quantity} × {l.description}</span>{l.production_note ? ' · ' + l.production_note : ''}</div>
                       ))}
                     </td>
-                    <td className="px-4 py-2.5 text-right font-mono whitespace-nowrap text-text-primary">{formatKz(o.total)} Kz</td>
+                    <td className="px-4 py-2.5 text-right font-mono whitespace-nowrap text-text-primary">
+                      {formatKz(o.total)} Kz
+                      {o.invoice_id && (
+                        <div className="text-[11.5px] text-text-muted">
+                          {o.invoice_reference} · {o.due > 0.005 ? <span className="text-amber-500">falta {formatKz(o.due)}</span> : <span className="text-success">pago</span>}
+                        </div>
+                      )}
+                    </td>
                     <td className="px-4 py-2.5"><span className={'inline-block px-2 py-0.5 rounded text-[11.5px] font-medium ' + STATUS_STYLE[o.status]}>{o.status_label}</span></td>
                     <td className="px-4 py-2.5 text-right whitespace-nowrap">
                       <div className="inline-flex items-center gap-1.5">
@@ -332,7 +387,7 @@ export default function Encomendas() {
                           {canManage && o.editable ? <Pencil size={13} /> : <Eye size={13} />}
                         </button>
                         {canManage && open(o) && (
-                          <button type="button" title="Cancelar" onClick={() => { setCancelling(o); setCancelReason(''); }} className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-border text-text-muted hover:text-danger hover:border-danger transition-colors cursor-pointer">
+                          <button type="button" title="Cancelar" onClick={() => openCancel(o)} className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-border text-text-muted hover:text-danger hover:border-danger transition-colors cursor-pointer">
                             <X size={14} />
                           </button>
                         )}
@@ -351,7 +406,7 @@ export default function Encomendas() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className={(options?.activities || []).length > 1 ? '' : 'sm:col-span-2'}>
               <label className={labelClass}>Cliente *</label>
-              <Select value={form.customerId} onChange={(v) => setForm((p) => ({ ...p, customerId: v }))} placeholder="Escolher o cliente"
+              <Select value={form.customerId} disabled={locked} onChange={(v) => setForm((p) => ({ ...p, customerId: v }))} placeholder="Escolher o cliente"
                 options={(options?.customers || []).map((c) => ({ value: c.id, label: c.name + (c.phone_number ? ' · ' + c.phone_number : '') }))} />
             </div>
             {(options?.activities || []).length > 1 ? (
@@ -403,26 +458,29 @@ export default function Encomendas() {
 
           <div>
             <p className={labelClass}>Artigos *</p>
+            {locked && (
+              <p className="text-[12.5px] text-amber-500 mb-2">Encomenda faturada ({editing.invoice_reference}): os artigos, as quantidades e os preços já não se alteram - só a entrega, o contacto e as notas.</p>
+            )}
             <div className="flex flex-col gap-2">
               {form.lines.map((l) => {
                 const a = articleById[l.article];
                 const amount = (Number(l.quantity) || 0) * (Number(l.price) || 0) * (1 + (a ? Number(a.vat_rate) : 0) / 100);
                 return (
                   <div key={l.key} className="grid grid-cols-12 gap-2 items-start bg-bg-inset/40 border border-border rounded-md p-2">
-                    <div className="col-span-12 md:col-span-4"><Select value={l.article} onChange={(v) => chooseArticle(l.key, v)} placeholder="Artigo" options={articleOptions} /></div>
-                    <input type="number" min="0" step="any" value={l.quantity} onChange={(e) => updateLine(l.key, { quantity: e.target.value })} title="Quantidade" className={inputClass + ' col-span-3 md:col-span-1 text-right'} />
-                    <input type="number" min="0" step="any" value={l.price} onChange={(e) => updateLine(l.key, { price: e.target.value })} title="Preço sem IVA" placeholder="Preço" className={inputClass + ' col-span-4 md:col-span-2 text-right'} />
+                    <div className="col-span-12 md:col-span-4"><Select value={l.article} disabled={locked} onChange={(v) => chooseArticle(l.key, v)} placeholder="Artigo" options={articleOptions} /></div>
+                    <input type="number" min="0" step="any" value={l.quantity} readOnly={locked} onChange={(e) => updateLine(l.key, { quantity: e.target.value })} title="Quantidade" className={inputClass + ' col-span-3 md:col-span-1 text-right'} />
+                    <input type="number" min="0" step="any" value={l.price} readOnly={locked || !isGestor} onChange={(e) => updateLine(l.key, { price: e.target.value })} title={isGestor ? 'Preço sem IVA' : 'Preço sem IVA (só o gestor o altera)'} placeholder="Preço" className={inputClass + ' col-span-4 md:col-span-2 text-right'} />
                     <input value={l.note} onChange={(e) => updateLine(l.key, { note: e.target.value })} placeholder="Nota de produção (ex.: Parabéns Ana)" className={inputClass + ' col-span-12 md:col-span-3 order-last md:order-none'} />
                     <div className="col-span-4 md:col-span-1 text-right font-mono text-[13px] text-text-primary pt-2.5 whitespace-nowrap">{formatKz(amount)}</div>
-                    <button type="button" disabled={form.lines.length === 1} onClick={() => setForm((p) => ({ ...p, lines: p.lines.filter((x) => x.key !== l.key) }))}
+                    <button type="button" disabled={locked || form.lines.length === 1} onClick={() => setForm((p) => ({ ...p, lines: p.lines.filter((x) => x.key !== l.key) }))}
                       className="col-span-1 inline-flex items-center justify-center h-[42px] rounded-md text-text-muted hover:text-danger disabled:opacity-30 cursor-pointer"><Trash2 size={15} /></button>
                   </div>
                 );
               })}
             </div>
-            <button type="button" onClick={() => setForm((p) => ({ ...p, lines: [...p.lines, emptyLine()] }))} className="mt-2 inline-flex items-center gap-1.5 text-sm text-accent hover:underline cursor-pointer">
+            {!locked && <button type="button" onClick={() => setForm((p) => ({ ...p, lines: [...p.lines, emptyLine()] }))} className="mt-2 inline-flex items-center gap-1.5 text-sm text-accent hover:underline cursor-pointer">
               <Plus size={14} /> Adicionar artigo
-            </button>
+            </button>}
           </div>
 
           <div>
@@ -453,7 +511,14 @@ export default function Encomendas() {
               <div><span className="text-text-muted">Entrega: </span><span className="text-text-primary font-mono">{when(viewing.delivery_at)}</span></div>
               <div><span className="text-text-muted">{viewing.delivery_mode === 'ENTREGA' ? 'Morada: ' : 'Modo: '}</span><span className="text-text-primary">{viewing.delivery_mode === 'ENTREGA' ? viewing.delivery_address : 'Levanta na loja'}</span></div>
               {(viewing.contact_name || viewing.contact_phone) && <div className="col-span-2"><span className="text-text-muted">Contacto: </span><span className="text-text-primary">{[viewing.contact_name, viewing.contact_phone].filter(Boolean).join(' · ')}</span></div>}
-              {viewing.cancel_reason && <div className="col-span-2 text-danger">Cancelada: {viewing.cancel_reason}</div>}
+              {viewing.invoice_id && (
+                <div className="col-span-2"><span className="text-text-muted">Fatura: </span><span className="text-text-primary font-mono">{viewing.invoice_reference}</span>
+                  <span className="text-text-muted"> · pago </span><span className="font-mono text-text-primary">{formatKz(viewing.paid)}</span>
+                  <span className="text-text-muted"> · falta </span><span className="font-mono text-text-primary">{formatKz(viewing.due)}</span>
+                  {viewing.credit_note_reference && <span className="text-text-muted"> · {viewing.credit_note_reference}</span>}
+                </div>
+              )}
+              {viewing.cancel_reason && <div className="col-span-2 text-danger">Cancelada: {viewing.cancel_reason}{viewing.deposit_outcome ? ' · sinal ' + viewing.deposit_outcome.toLowerCase() : ''}</div>}
             </div>
             <table className="w-full">
               <tbody>
@@ -474,16 +539,64 @@ export default function Encomendas() {
         )}
       </Modal>
 
-      <Modal open={!!cancelling} onClose={() => setCancelling(null)} title={cancelling ? 'Cancelar a encomenda ' + cancelling.reference : ''} maxWidthClass="max-w-md">
+      <Modal open={!!cancelling} onClose={() => setCancelling(null)} title={cancelling ? 'Cancelar a encomenda ' + cancelling.reference : ''} maxWidthClass="max-w-xl">
         <form onSubmit={confirmCancel} className="flex flex-col gap-3">
           <p className="text-sm text-text-muted">{cancelling?.customer_name} · entrega {cancelling ? when(cancelling.delivery_at) : ''}</p>
-          <div>
-            <label className={labelClass}>Motivo *</label>
-            <input value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} required minLength={3} autoFocus placeholder="Ex.: cliente desistiu" className={inputClass} />
-          </div>
-          <button type="submit" disabled={busyId === cancelling?.id} className="bg-danger hover:opacity-90 disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 cursor-pointer">
-            Cancelar a encomenda
-          </button>
+          {!cancelInfo ? (
+            <div className="flex items-center justify-center py-6 text-text-muted text-sm"><Loader2 size={16} className="animate-spin mr-2" />A carregar...</div>
+          ) : cancelInfo.invoiced && !can('orders:cancel_invoiced') ? (
+            <p className="text-sm text-amber-500">Esta encomenda já está faturada ({cancelling?.invoice_reference}): só o gestor a cancela - com a nota de crédito, e o sinal devolvido ou retido.</p>
+          ) : (
+            <>
+              {cancelInfo.invoiced && (
+                <p className="text-[12.5px] text-text-muted">Faturada ({cancelling?.invoice_reference}): será emitida uma nota de crédito.</p>
+              )}
+              <div>
+                <label className={labelClass}>Motivo *</label>
+                <input value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} required minLength={3} autoFocus placeholder="Ex.: cliente desistiu" className={inputClass} />
+              </div>
+              {cancelInfo.invoiced && cancelInfo.paid > 0 && (
+                <div className="flex flex-col gap-2.5">
+                  <p className={labelClass + ' mb-0'}>O cliente pagou {formatKz(cancelInfo.paid)} Kz - o sinal é *</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[['DEVOLVER', 'Devolvido ao cliente'], ['RETER', 'Retido pela empresa']].map(([value, label]) => (
+                      <button key={value} type="button" onClick={() => setDeposit(value)}
+                        className={'h-10 rounded-md border text-sm font-medium transition-colors cursor-pointer ' + (deposit === value ? 'border-accent bg-accent/10 text-accent' : 'border-border text-text-primary hover:border-accent')}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  {deposit === 'RETER' && <p className="text-[12px] text-text-muted">Só a parte não paga é creditada: a fatura fica com o valor do sinal.</p>}
+                  {deposit === 'DEVOLVER' && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className={labelClass}>Como é devolvido *</label>
+                        <Select value={refund.methodId} onChange={(v) => setRefund({ methodId: v, posId: '', bankId: '' })} placeholder="Escolher"
+                          options={refundMethods.map((m) => ({ value: m.id, label: m.name }))} />
+                      </div>
+                      {refundMethod?.is_cash && (
+                        <div>
+                          <label className={labelClass}>Caixa de onde sai *</label>
+                          <Select value={refund.posId} onChange={(v) => setRefund((r) => ({ ...r, posId: v }))} placeholder={cancelInfo.cash_points.length ? 'Escolher' : 'Nenhuma caixa aberta'}
+                            options={cancelInfo.cash_points.map((c) => ({ value: c.pos_id, label: c.name + ' · ' + formatKz(c.available_cash) }))} />
+                        </div>
+                      )}
+                      {refundMethod?.uses_bank_account && (
+                        <div>
+                          <label className={labelClass}>Conta de onde sai *</label>
+                          <Select value={refund.bankId} onChange={(v) => setRefund((r) => ({ ...r, bankId: v }))} placeholder="Escolher"
+                            options={bankAccounts.map((a) => ({ value: a.id, label: (banks.find((b) => b.id === a.bank_id)?.acronym || '?') + ' - ' + a.account_number }))} />
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+              <button type="submit" disabled={busyId === cancelling?.id} className="bg-danger hover:opacity-90 disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 cursor-pointer">
+                Cancelar a encomenda
+              </button>
+            </>
+          )}
         </form>
       </Modal>
     </main>

@@ -98,6 +98,8 @@ PERMISSION_CATALOG: list[tuple[str, str, str, list[str]]] = [
     ("orders:view", "Ver encomendas", "Encomendas", ["CAIXA", "ATENDENTE", "COZINHA"]),
     ("orders:manage", "Registar, alterar e cancelar encomendas", "Encomendas", ["CAIXA", "ATENDENTE"]),
     ("orders:production", "Mudar o estado de produção das encomendas (em produção, pronta)", "Encomendas", ["CAIXA", "COZINHA"]),
+    ("orders:charge", "Receber sinais e entregar encomendas na caixa", "Encomendas", ["CAIXA"]),
+    ("orders:cancel_invoiced", "Cancelar encomendas já faturadas (nota de crédito, sinal devolvido ou retido)", "Encomendas", []),
     ("bookings:view", "Ver reservas", "Recursos e Reservas", ["CAIXA"]),
     ("bookings:create", "Criar reservas", "Recursos e Reservas", ["CAIXA"]),
     ("bookings:update", "Alterar estado e reagendar reservas", "Recursos e Reservas", ["CAIXA"]),

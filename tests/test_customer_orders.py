@@ -111,3 +111,106 @@ async def test_no_order_where_the_sector_has_no_encomendas(db, company_with_esse
     assert (await order_options(db, ctx["company"].id))["activities"] == []
     with pytest.raises(CustomerOrderError, match="Nenhuma atividade"):
         await create_order(db, ctx["company"].id, ctx["gestor"].id, _order(customer, cake))
+
+
+# ---------- Step 2: the money, at a till of the order's activity
+
+async def _till(db, ctx):
+    from app.services.cash_session_service import get_open_session, open_session
+    await open_session(db, ctx["company"].id, ctx["pos"].id, ctx["gestor"], 0)
+    return ctx["pos"].id
+
+
+async def _cash_in_till(db, ctx):
+    from app.services.cash_session_service import get_current_expected_cash_balance, get_open_session
+    session = await get_open_session(db, ctx["company"].id, ctx["pos"].id)
+    return await get_current_expected_cash_balance(db, ctx["company"].id, ctx["pos"].id, session)
+
+
+@pytest.mark.asyncio
+async def test_a_deposit_then_the_delivery(db, company_with_essentials):
+    """The deposit issues the order's FT and a Recibo; the order's lines then stay as invoiced; the delivery receives
+    the rest with another Recibo - the till holds the whole price."""
+    from app.services.customer_order_service import deliver_order, pay_order
+    ctx = company_with_essentials
+    company_id, gestor = ctx["company"].id, ctx["gestor"]
+    _, cake, customer = await _setup(db, ctx)
+    pos_id = await _till(db, ctx)
+    cash = ctx["pm_numerario"].id
+    order = await create_order(db, company_id, gestor.id, _order(customer, cake))  # 2 x 10 000 + 14 % = 22 800
+
+    paid = await pay_order(db, company_id, gestor, order["id"], pos_id, 10000, cash)
+    assert paid["invoice_reference"].startswith("FT") and (paid["paid"], paid["due"]) == (10000.0, 12800.0)
+    assert paid["lines_locked"] is True and paid["document_id"] is not None
+    with pytest.raises(CustomerOrderError, match="maior do que o que falta"):
+        await pay_order(db, company_id, gestor, order["id"], pos_id, 20000, cash)
+    with pytest.raises(CustomerOrderError, match="já está faturada"):
+        await update_order(db, company_id, order["id"], _order(customer, cake, lines=[{"product_id": cake.id, "quantity": 3}]))
+    moved = await update_order(db, company_id, order["id"], _order(  # the date and the note still change
+        customer, cake, delivery_at=datetime.now(LUANDA) + timedelta(days=3),
+        lines=[{"product_id": cake.id, "quantity": 2, "production_note": "Parabéns Ana 31 anos"}]))
+    assert moved["lines"][0]["production_note"] == "Parabéns Ana 31 anos"
+
+    delivered = await deliver_order(db, company_id, gestor, order["id"], pos_id, cash)
+    assert (delivered["status"], delivered["paid"], delivered["due"]) == ("ENTREGUE", 22800.0, 0.0)
+    assert await _cash_in_till(db, ctx) == 22800.0
+
+
+@pytest.mark.asyncio
+async def test_a_delivery_paid_at_once_or_left_owing(db, company_with_essentials):
+    from app.services.customer_order_service import deliver_order
+    ctx = company_with_essentials
+    company_id, gestor = ctx["company"].id, ctx["gestor"]
+    _, cake, customer = await _setup(db, ctx)
+    pos_id = await _till(db, ctx)
+    first = await create_order(db, company_id, gestor.id, _order(customer, cake))
+    sold = await deliver_order(db, company_id, gestor, first["id"], pos_id, ctx["pm_numerario"].id, 22800)
+    assert sold["invoice_reference"].startswith("FR") and sold["status"] == "ENTREGUE"
+    owing = await create_order(db, company_id, gestor.id, _order(customer, cake))
+    left = await deliver_order(db, company_id, gestor, owing["id"], pos_id, on_credit=True)
+    assert left["invoice_reference"].startswith("FT") and left["due"] == 22800.0
+    assert await _cash_in_till(db, ctx) == 22800.0
+
+
+@pytest.mark.asyncio
+async def test_cancelling_an_invoiced_order_gives_the_deposit_back_or_keeps_it(db, company_with_essentials):
+    from app.services.customer_order_service import cancel_info, pay_order
+    ctx = company_with_essentials
+    company_id, gestor = ctx["company"].id, ctx["gestor"]
+    _, cake, customer = await _setup(db, ctx)
+    pos_id = await _till(db, ctx)
+    cash = ctx["pm_numerario"].id
+
+    kept = await create_order(db, company_id, gestor.id, _order(customer, cake))
+    await pay_order(db, company_id, gestor, kept["id"], pos_id, 5700, cash)  # a quarter of 22 800
+    with pytest.raises(CustomerOrderError, match="só o gestor"):
+        await cancel_order(db, company_id, kept["id"], "Cliente desistiu", may_cancel_invoiced=False)
+    with pytest.raises(CustomerOrderError, match="devolvido ou retido"):
+        await cancel_order(db, company_id, kept["id"], "Cliente desistiu")
+    info = await cancel_info(db, company_id, kept["id"])
+    assert (info["invoiced"], info["paid"]) == (True, 5700.0)
+    done = await cancel_order(db, company_id, kept["id"], "Cliente desistiu", deposit="RETER")
+    assert (done["status"], done["deposit_outcome"]) == ("CANCELADA", "RETIDO")
+    assert done["credit_note_reference"].startswith("NC") and abs(done["due"]) < 0.02  # the FT stands for the deposit
+
+    returned = await create_order(db, company_id, gestor.id, _order(customer, cake))
+    await pay_order(db, company_id, gestor, returned["id"], pos_id, 5000, cash)
+    back = await cancel_order(db, company_id, returned["id"], "Bolo errado", deposit="DEVOLVER",
+                              refund={"payment_method_id": cash, "pos_id": pos_id})
+    assert back["deposit_outcome"] == "DEVOLVIDO" and back["credit_note_reference"].startswith("NC")
+    assert await _cash_in_till(db, ctx) == 5700.0  # the kept deposit only
+
+
+@pytest.mark.asyncio
+async def test_only_the_gestor_changes_a_catalogue_price(db, company_with_essentials):
+    from types import SimpleNamespace
+    ctx = company_with_essentials
+    company_id = ctx["company"].id
+    _, cake, customer = await _setup(db, ctx)
+    cashier = SimpleNamespace(role="CAIXA")
+    cheaper = _order(customer, cake, lines=[{"product_id": cake.id, "quantity": 1, "unit_price": 8000}])
+    with pytest.raises(CustomerOrderError, match="só o gestor"):
+        await create_order(db, company_id, None, cheaper, user=cashier)
+    order = await create_order(db, company_id, None, cheaper, user=ctx["gestor"])
+    kept = await update_order(db, company_id, order["id"], {**cheaper, "notes": "Sem açúcar"}, user=cashier)  # agreed
+    assert kept["lines"][0]["unit_price"] == 8000.0

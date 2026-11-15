@@ -26,7 +26,24 @@ export async function setOrderStatus(orderId, status) {
   return res.data;
 }
 
-export async function cancelOrder(orderId, reason) {
-  const res = await apiClient.post('/orders/' + orderId + '/cancel', { reason });
+export async function cancelOrder(orderId, reason, deposit = null, refund = null) {
+  const res = await apiClient.post('/orders/' + orderId + '/cancel', { reason, deposit, refund });
+  return res.data;
+}
+
+export async function getOrderCancelInfo(orderId) {
+  const res = await apiClient.get('/orders/' + orderId + '/cancel-info');
+  return res.data;
+}
+
+// a deposit received at a till (the order's Fatura and a Recibo)
+export async function payOrder(orderId, payload) {
+  const res = await apiClient.post('/orders/' + orderId + '/pay', payload);
+  return res.data;
+}
+
+// handed over at a till: the rest received (Recibo / Fatura-Recibo) or left owing (on_credit)
+export async function deliverOrder(orderId, payload) {
+  const res = await apiClient.post('/orders/' + orderId + '/deliver', payload);
   return res.data;
 }
