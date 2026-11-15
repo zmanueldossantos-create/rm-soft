@@ -145,7 +145,7 @@ export default function EncomendasPanel({ posId, activityId, onDocument }) {
 
       <Modal open={!!action} onClose={() => setAction(null)} title={action ? (action.kind === 'pay' ? 'Receber sinal - ' : 'Entregar - ') + action.order.reference : ''} maxWidthClass="max-w-xl">
         {action && (
-          <form onSubmit={submit} className="flex flex-col gap-3.5">
+          <form noValidate onSubmit={submit} className="flex flex-col gap-3.5">
             <div className="grid grid-cols-3 gap-2 text-center">
               {[['Total', action.order.total], ['Pago', action.order.paid], ['Falta', dueOf(action.order)]].map(([label, value]) => (
                 <div key={label} className="bg-bg-inset border border-border rounded-md py-2.5">
@@ -165,7 +165,7 @@ export default function EncomendasPanel({ posId, activityId, onDocument }) {
                 {action.kind === 'pay' && (
                   <div>
                     <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Valor do sinal *</label>
-                    <input type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} autoFocus required
+                    <input type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} autoFocus
                       className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-lg font-mono text-right text-text-primary outline-none focus:border-accent" />
                   </div>
                 )}

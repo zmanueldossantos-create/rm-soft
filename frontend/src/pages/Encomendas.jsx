@@ -176,6 +176,14 @@ export default function Encomendas() {
       toast.error('Escolha o cliente da encomenda');
       return;
     }
+    if (!form.date || !form.time) {
+      toast.error('Indique a data e a hora da entrega');
+      return;
+    }
+    if (form.mode === 'ENTREGA' && !form.address.trim()) {
+      toast.error('Indique a morada de entrega');
+      return;
+    }
     const lines = form.lines.filter((l) => l.article);
     if (!lines.length) {
       toast.error('A encomenda deve ter pelo menos um artigo');
@@ -242,6 +250,10 @@ export default function Encomendas() {
 
   async function confirmCancel(e) {
     e.preventDefault();
+    if (cancelReason.trim().length < 3) {
+      toast.error('Indique o motivo do cancelamento');
+      return;
+    }
     const paid = cancelInfo?.invoiced ? cancelInfo.paid : 0;
     if (paid > 0 && !deposit) {
       toast.error('Escolha se o sinal é devolvido ou retido');
@@ -402,7 +414,7 @@ export default function Encomendas() {
       )}
 
       <Modal open={formOpen} onClose={() => setFormOpen(false)} title={editing ? 'Alterar encomenda ' + editing.reference : 'Nova encomenda'} maxWidthClass="max-w-5xl">
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <form noValidate onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className={(options?.activities || []).length > 1 ? '' : 'sm:col-span-2'}>
               <label className={labelClass}>Cliente *</label>
@@ -540,7 +552,7 @@ export default function Encomendas() {
       </Modal>
 
       <Modal open={!!cancelling} onClose={() => setCancelling(null)} title={cancelling ? 'Cancelar a encomenda ' + cancelling.reference : ''} maxWidthClass="max-w-xl">
-        <form onSubmit={confirmCancel} className="flex flex-col gap-3">
+        <form noValidate onSubmit={confirmCancel} className="flex flex-col gap-3">
           <p className="text-sm text-text-muted">{cancelling?.customer_name} · entrega {cancelling ? when(cancelling.delivery_at) : ''}</p>
           {!cancelInfo ? (
             <div className="flex items-center justify-center py-6 text-text-muted text-sm"><Loader2 size={16} className="animate-spin mr-2" />A carregar...</div>
@@ -553,7 +565,7 @@ export default function Encomendas() {
               )}
               <div>
                 <label className={labelClass}>Motivo *</label>
-                <input value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} required minLength={3} autoFocus placeholder="Ex.: cliente desistiu" className={inputClass} />
+                <input value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} autoFocus placeholder="Ex.: cliente desistiu" className={inputClass} />
               </div>
               {cancelInfo.invoiced && cancelInfo.paid > 0 && (
                 <div className="flex flex-col gap-2.5">
