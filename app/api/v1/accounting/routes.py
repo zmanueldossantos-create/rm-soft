@@ -578,9 +578,11 @@ async def get_financial_statements_pdf(date_from: date, date_to: date, which: st
                                        current_user: User = Depends(require_permission("accounting:entries_view"))):
     from app.utils.accounting_pdf import generate_statements_pdf
     data = await _statements(db, current_user.company_id, date_from, date_to)
-    pdf = generate_statements_pdf(data, await _company(db, current_user.company_id), which if which in ("balance", "income") else "both")
+    which = which if which in ("balance", "income") else "both"
+    pdf = generate_statements_pdf(data, await _company(db, current_user.company_id), which)
+    name = {"balance": "balanco", "income": "demonstracao-resultados"}.get(which, "demonstracoes")
     return Response(content=pdf, media_type="application/pdf",
-                    headers={"Content-Disposition": f'inline; filename="demonstracoes_{date_to}.pdf"'})
+                    headers={"Content-Disposition": f'inline; filename="{name}_{date_to}.pdf"'})
 
 
 # ---------- the closing of the year ----------

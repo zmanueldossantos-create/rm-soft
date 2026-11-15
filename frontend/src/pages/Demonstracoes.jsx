@@ -162,7 +162,9 @@ export default function Demonstracoes() {
 
   function download(kind) {
     const params = { date_from: dateFrom, date_to: dateTo, ...(kind === 'pdf' ? { which: view === 'balance' ? 'balance' : 'income' } : {}) };
-    downloadAccountingFile('/accounting/financial-statements/' + kind, params, 'demonstracoes_' + dateTo + '.xlsx', kind === 'pdf')
+    // the PDF is the statement on screen - named after it (balanco_2026-11-15.pdf, demonstracao-resultados_2026-11-15.pdf)
+    const name = kind === 'pdf' ? (view === 'balance' ? 'balanco_' : 'demonstracao-resultados_') : 'demonstracoes_';
+    downloadAccountingFile('/accounting/financial-statements/' + kind, params, name + dateTo + '.xlsx', kind === 'pdf')
       .catch(() => toast.error('Erro ao gerar o ficheiro'));
   }
 
