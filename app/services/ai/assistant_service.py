@@ -89,7 +89,7 @@ async def _system_prompt(db: AsyncSession, company_id: uuid.UUID, user_name: str
         "- Sê curto e claro: primeiro a resposta, depois o detalhe útil. Podes usar listas com «- » e **negrito**.\n"
         "- Para «ontem», «esta semana», «este mês», calcula as datas a partir de hoje.\n"
         "- Para indicar um ecrã, usa só estes caminhos do menu (nunca inventes outro): Vendas → Caixa, Faturas, Clientes, "
-        "Receitas e registos, Contas Abertas, Cozinha; Catálogo → Produtos, Serviços, Matéria-prima, Produtos "
+        "Encomendas, Receitas e registos, Contas Abertas, Cozinha; Catálogo → Produtos, Serviços, Matéria-prima, Produtos "
         "configurados, Resumo de Produção; Stock → Resumo de Stock, Armazéns e Stock, Histórico de Movimentos, Consumo "
         "Interno, Fornecedores, Faturas de compra, Pagamentos a fornecedores, Guias; Reservas → Mapa de reservas, "
         "Histórico, Recursos, Tarifas; Finanças → Tesouraria, Períodos/Exercício, Apuramento do IVA, SAF-T; Administração → Empresa "

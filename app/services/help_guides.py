@@ -519,6 +519,21 @@ PAGES = [
         ],
     },
     {
+        "id": "encomendas", "path": "/encomendas", "title": "Encomendas", "perms": ["orders:view"],
+        "intro": "O que os clientes encomendam para levantar ou receber mais tarde (um bolo de aniversário, pão para uma "
+                 "festa): a data e a hora da entrega, as notas de produção e o estado.",
+        "steps": [
+            "«Nova encomenda»: o cliente (identificado - não o consumidor final), a data e a hora, «Levanta na loja» ou "
+            "«Entrega na morada» (com a morada).",
+            "Os artigos com a quantidade e o preço (o do catálogo, pode ser alterado) e, em cada linha, a nota de produção "
+            "(ex.: «Parabéns Ana 30 anos»).",
+            "A produção avança com «Produzir» e «Pronta»; a seta volta ao estado anterior (um bolo a refazer).",
+            "Os filtros Hoje / Amanhã / Próximos 7 dias mostram o que preparar; uma encomenda atrasada fica a vermelho.",
+            "Alterar: enquanto estiver encomendada ou em produção. Cancelar: com o motivo.",
+        ],
+        "errors": [("«Uma encomenda precisa de um cliente identificado»", "Crie o cliente em Vendas → Clientes (nome e telefone).")],
+    },
+    {
         "id": "reservas-pagina", "path": "/reservas", "title": "Mapa de reservas", "module": "reservas", "perms": ["bookings:view"],
         "intro": "As reservas de quartos, praticantes, mesas ou qualquer recurso - a mesma lista que a receção vê na caixa.",
         "steps": [

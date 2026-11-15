@@ -66,6 +66,10 @@ CAPABILITIES: dict[str, Capability] = {
             ("hotel",), (),
         ),
         Capability(
+            "ORDERS", "Encomendas", "Encomendas de clientes: data de entrega, notas de produção, estados até à entrega", (),
+            ("orders",), ("/encomendas",),
+        ),
+        Capability(
             "ACCOUNTING", "Contabilidade", "Plano de contas, lançamentos, balancete e demonstrações financeiras", (),
             ("accounting",), ("/contabilidade/plano-de-contas", "/contabilidade/lancamentos", "/contabilidade/balancete", "/contabilidade/razao",
              "/contabilidade/demonstracoes"),
@@ -121,11 +125,11 @@ class Sector:
 
 SECTORS: tuple[Sector, ...] = (
     Sector("HOTEL", "Hotel", "Alojamento: quartos, reservas, estadias e extras", ("STOCK", "RESOURCES", "BOOKINGS", "OPEN_ACCOUNTS", "HOTEL_STAY")),
-    Sector("RESTAURANTE", "Restaurante", "Mesas, contas abertas, divisão e transferência, cozinha", ("STOCK", "RESOURCES", "BOOKINGS", "OPEN_ACCOUNTS", "KITCHEN")),
+    Sector("RESTAURANTE", "Restaurante", "Mesas, contas abertas, divisão e transferência, cozinha", ("STOCK", "RESOURCES", "BOOKINGS", "OPEN_ACCOUNTS", "KITCHEN", "ORDERS")),
     Sector("BAR", "Bar", "Venda ao balcão, mesas e contas abertas", ("STOCK", "RESOURCES", "OPEN_ACCOUNTS")),
-    Sector("PADARIA", "Padaria", "Venda ao balcão, stock e produção", ("STOCK", "PRODUCTION")),
+    Sector("PADARIA", "Padaria", "Venda ao balcão, stock, produção e encomendas", ("STOCK", "PRODUCTION", "ORDERS")),
     Sector("SPA_SALAO", "Spa / Salão / Consultório", "Marcações por praticante, duração dos serviços e agenda", ("RESOURCES", "BOOKINGS")),
-    Sector("COMERCIO", "Comércio geral", "Venda ao balcão e stock", ("STOCK",)),
+    Sector("COMERCIO", "Comércio geral", "Venda ao balcão e stock", ("STOCK", "ORDERS")),
     Sector("SERVICOS", "Prestação de serviços", "Faturação de serviços", ()),
     Sector("FARMACIA", "Farmácia", "Venda e stock de medicamentos, por lote e validade", ("STOCK", "PHARMACY")),
     Sector("CONTABILIDADE", "Contabilidade", "Plano de contas, lançamentos, balancete e demonstrações financeiras",

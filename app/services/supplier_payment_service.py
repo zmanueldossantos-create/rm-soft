@@ -261,6 +261,7 @@ async def cancel_supplier_payment(db: AsyncSession, company_id: uuid.UUID, payme
             movement = await create_cash_movement(
                 db, company_id, CashMovementType.ENTRADA_EXTERNA, user, amount, destination_pos_id=pos_id,
                 reason_id=entry.id, description=f"{payment_ref}: {reason}"[:300],
+                received=True,  # the cash comes back into the drawer it never left: nothing to receive
             )
         except _TILL_ERRORS as e:
             await db.rollback()

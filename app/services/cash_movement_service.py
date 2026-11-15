@@ -183,8 +183,11 @@ async def create_cash_movement(
     description: str | None = None,
     denomination_lines: list[dict] | None = None,
     bank_account_id: uuid.UUID | None = None,
+    received: bool = False,
 ) -> CashMovement:
-    """denomination_lines: the notes and coins sent ([{denomination_id, quantity}]) - required for a transfer from a
+    """received: cash that never left the drawer, put back by the system (a cash payment cancelled) - counted at once,
+    nothing for the till to receive.
+    denomination_lines: the notes and coins sent ([{denomination_id, quantity}]) - required for a transfer from a
     till with billetage, ignored otherwise.
     bank_account_id: a deposit (SAIDA_EXTERNA) or a withdrawal (ENTRADA_EXTERNA) with a bank account of the company -
     see the CashMovement docstring; no reason then."""
@@ -249,7 +252,8 @@ async def create_cash_movement(
     # cash brought to a till - from another till, from the bank, from outside - is counted there before it counts: the
     # till receives it (receive_cash_movement); cash leaving a till leaves at once
     initial_status = CashMovementStatus.PENDENTE \
-        if movement_type in (CashMovementType.TRANSFERENCIA, CashMovementType.ENTRADA_EXTERNA) else CashMovementStatus.RECEBIDO
+        if movement_type in (CashMovementType.TRANSFERENCIA, CashMovementType.ENTRADA_EXTERNA) and not received \
+        else CashMovementStatus.RECEBIDO
     movement = CashMovement(
         company_id=company_id,
         movement_type=movement_type,

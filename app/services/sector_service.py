@@ -34,6 +34,7 @@ DATA_COUNT_SQL = {
     "KITCHEN": "SELECT company_id, count(*) FROM kitchen_orders GROUP BY company_id",
     "PHARMACY": "SELECT company_id, count(*) FROM products WHERE is_medicine GROUP BY company_id",
     "ACCOUNTING": "SELECT company_id, count(*) FROM accounts GROUP BY company_id",
+    "ORDERS": "SELECT company_id, count(*) FROM customer_orders GROUP BY company_id",
 }
 
 

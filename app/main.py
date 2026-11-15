@@ -24,6 +24,7 @@ from app.api.v1.saf_t.routes import router as saf_t_router
 from app.api.v1.dashboard.routes import router as dashboard_router
 from app.api.v1.activities.routes import router as activities_router
 from app.api.v1.bookings.routes import router as bookings_router
+from app.api.v1.orders.routes import router as orders_router
 from app.api.v1.open_accounts.routes import router as open_accounts_router
 from app.api.v1.kitchen.routes import router as kitchen_router
 from app.api.v1.hotel.routes import router as hotel_router
@@ -195,6 +196,7 @@ app.include_router(saf_t_router)
 app.include_router(dashboard_router)
 app.include_router(activities_router)
 app.include_router(bookings_router)
+app.include_router(orders_router)
 app.include_router(open_accounts_router)
 app.include_router(kitchen_router)
 app.include_router(hotel_router)

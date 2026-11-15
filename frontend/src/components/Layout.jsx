@@ -1,5 +1,5 @@
 import { Fragment, useState, useEffect, useRef } from 'react';
-import { ChefHat, History as KitchenHistoryIcon } from 'lucide-react';
+import { ChefHat, History as KitchenHistoryIcon, CakeSlice } from 'lucide-react';
 import { Link, useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { Building2, LogOut, LayoutDashboard, Sun, Moon, Package, Users, Calendar, Receipt, Settings, Package2, UserCog, History, FileText, Landmark, LayoutGrid, Store, Wheat, Factory, Wallet, SlidersHorizontal, Tags, Wrench, ChevronDown, Cog, Plus, ArrowLeftRight, Calculator, ClipboardList, Gauge, PiggyBank, CreditCard, Boxes, CalendarClock, Wallet2, PackageMinus, Truck, ShieldCheck, FileInput, Send, HandCoins, Bot, HelpCircle, LifeBuoy, BookOpen, Layers, Inbox, ListTree, BookText, Scale, FileBarChart, BookOpenText, Tag } from 'lucide-react';
@@ -262,6 +262,7 @@ export default function Layout() {
         { to: '/caixa', icon: Wallet, label: 'Caixa', show: can('pos:view') },
         { to: '/invoices', icon: Receipt, label: 'Faturas', show: user?.role === 'GESTOR' && can('invoices:view') },
         { to: '/customers', icon: Users, label: 'Clientes', show: can('customers:manage') },
+        { to: '/encomendas', icon: CakeSlice, label: 'Encomendas', show: can('orders:view') },
         { to: '/receitas', icon: FileText, label: 'Receitas e registos', show: pharmacyEnabled && can('pharmacy:registers') },
         { to: '/contas-abertas', icon: Wallet2, label: 'Contas Abertas', show: can('open_accounts:view') },
         { to: '/cozinha', icon: ChefHat, label: 'Cozinha - pedidos em curso', show: can('kitchen:view') },

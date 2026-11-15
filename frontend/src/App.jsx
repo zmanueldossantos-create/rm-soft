@@ -42,6 +42,7 @@ import PagamentosFornecedores from './pages/PagamentosFornecedores';
 import Guias from './pages/Guias';
 import Recursos from './pages/Recursos';
 import Reservas from './pages/Reservas';
+import Encomendas from './pages/Encomendas';
 import HistoricoRecursos from './pages/HistoricoRecursos';
 import ConsumoInterno from './pages/ConsumoInterno';
 import Fornecedores from './pages/Fornecedores';
@@ -132,6 +133,7 @@ export default function App() {
           <Route path="/receitas" element={<RequirePermission perm="pharmacy:registers"><Receitas /></RequirePermission>} />
           <Route path="/recursos" element={<RequirePermission perm="resources:manage"><Recursos /></RequirePermission>} />
           <Route path="/reservas" element={<RequirePermission perm="bookings:view"><Reservas /></RequirePermission>} />
+          <Route path="/encomendas" element={<RequirePermission perm="orders:view"><Encomendas /></RequirePermission>} />
           <Route path="/recursos/historico" element={<RequirePermission perm="resources:history"><HistoricoRecursos /></RequirePermission>} />
           <Route path="/consumo-interno" element={<RequirePermission perm="internal_consumption:view"><ConsumoInterno /></RequirePermission>} />
           <Route path="/fornecedores" element={<RequirePermission anyOf={['suppliers:manage', 'suppliers:view']}><Fornecedores /></RequirePermission>} />
