@@ -382,8 +382,11 @@ export default function Encomendas() {
                 ))}
               </div>
             </div>
+          </div>
+          {/* the address (a delivery) and the contact on one line */}
+          <div className={'grid grid-cols-1 gap-3 ' + (form.mode === 'ENTREGA' ? 'sm:grid-cols-3' : 'sm:grid-cols-2')}>
             {form.mode === 'ENTREGA' && (
-              <div className="sm:col-span-2">
+              <div>
                 <label className={labelClass}>Morada de entrega *</label>
                 <input value={form.address} onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))} required className={inputClass} />
               </div>
