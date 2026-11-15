@@ -529,11 +529,11 @@ PAGES = [
             "(ex.: «Parabéns Ana 30 anos»).",
             "A produção avança com «Produzir» e «Pronta»; a seta volta ao estado anterior (um bolo a refazer).",
             "Os filtros Hoje / Amanhã / Próximos 7 dias mostram o que preparar; uma encomenda atrasada fica a vermelho.",
-            "O dinheiro recebe-se na Caixa → ícone Encomendas: «Receber sinal» emite a fatura da encomenda e um recibo do "
-            "valor; «Entregar» recebe o que falta (recibo), ou emite a fatura/recibo de uma encomenda sem sinal, ou fica a "
+            "O dinheiro recebe-se na Caixa → ícone Encomendas: «Receber pagamento» (um sinal ou tudo de uma vez) emite a fatura "
+            "da encomenda e um recibo do valor; «Entregar» recebe o que falta (recibo), ou emite a fatura/recibo de uma encomenda sem nada pago, ou fica a "
             "dever (a fatura fica por receber).",
             "Alterar: enquanto estiver encomendada ou em produção; depois de faturada, só a entrega, o contacto e as notas.",
-            "Cancelar: com o motivo. Já faturada, só o gestor: é emitida a nota de crédito e o sinal é devolvido (pela "
+            "Cancelar: com o motivo. Já faturada, só o gestor: é emitida a nota de crédito e o valor pago é devolvido (pela "
             "caixa ou pelo banco) ou retido (só a parte não paga é creditada).",
         ],
         "errors": [("«Uma encomenda precisa de um cliente identificado»", "Crie o cliente em Vendas → Clientes (nome e telefone).")],

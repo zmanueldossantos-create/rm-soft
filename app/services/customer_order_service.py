@@ -290,11 +290,11 @@ async def cancel_order(db: AsyncSession, company_id: uuid.UUID, order_id: uuid.U
     if invoice is not None:
         if not may_cancel_invoiced:
             raise CustomerOrderError(f"A encomenda {reference(order)} já está faturada: só o gestor a cancela "
-                                     "(nota de crédito, sinal devolvido ou retido)")
+                                     "(nota de crédito, valor pago devolvido ou retido)")
         paid = _money(invoice.amount_received)
         cash_due_total = float(invoice.total) - float(invoice.retention_total or 0)
         if paid > 0.005 and deposit not in ("DEVOLVER", "RETER"):
-            raise CustomerOrderError(f"O cliente já pagou {_kz(paid)}: escolha se o sinal é devolvido ou retido")
+            raise CustomerOrderError(f"O cliente já pagou {_kz(paid)}: escolha se o valor pago é devolvido ou retido")
         keep = paid > 0.005 and deposit == "RETER"
         share = 1.0 if not keep else max(0.0, 1 - paid / cash_due_total) if cash_due_total > 0 else 0.0
         order_ref = reference(order)
@@ -305,7 +305,7 @@ async def cancel_order(db: AsyncSession, company_id: uuid.UUID, order_id: uuid.U
             if paid > 0.005 and not keep:
                 refund = refund or {}
                 if not refund.get("payment_method_id"):
-                    raise CustomerOrderError("Indique como o sinal é devolvido (forma de pagamento)")
+                    raise CustomerOrderError("Indique como o valor pago é devolvido (forma de pagamento)")
                 refunds = [{"payment_method_id": refund["payment_method_id"], "amount": paid}]
                 refund_pos_id, refund_bank_id = refund.get("pos_id"), refund.get("bank_account_id")
             try:

@@ -256,12 +256,12 @@ export default function Encomendas() {
     }
     const paid = cancelInfo?.invoiced ? cancelInfo.paid : 0;
     if (paid > 0 && !deposit) {
-      toast.error('Escolha se o sinal é devolvido ou retido');
+      toast.error('Escolha se o valor pago é devolvido ou retido');
       return;
     }
     let refundPayload = null;
     if (paid > 0 && deposit === 'DEVOLVER') {
-      if (!refund.methodId) { toast.error('Escolha como o sinal é devolvido'); return; }
+      if (!refund.methodId) { toast.error('Escolha como o valor pago é devolvido'); return; }
       if (refundMethod?.is_cash && !refund.posId) { toast.error('Escolha a caixa de onde sai o numerário'); return; }
       if (refundMethod?.uses_bank_account && !refund.bankId) { toast.error('Escolha a conta bancária de onde sai a devolução'); return; }
       refundPayload = { payment_method_id: refund.methodId, pos_id: refundMethod?.is_cash ? refund.posId : null,
@@ -530,7 +530,7 @@ export default function Encomendas() {
                   {viewing.credit_note_reference && <span className="text-text-muted"> · {viewing.credit_note_reference}</span>}
                 </div>
               )}
-              {viewing.cancel_reason && <div className="col-span-2 text-danger">Cancelada: {viewing.cancel_reason}{viewing.deposit_outcome ? ' · sinal ' + viewing.deposit_outcome.toLowerCase() : ''}</div>}
+              {viewing.cancel_reason && <div className="col-span-2 text-danger">Cancelada: {viewing.cancel_reason}{viewing.deposit_outcome ? ' · valor pago ' + viewing.deposit_outcome.toLowerCase() : ''}</div>}
             </div>
             <table className="w-full">
               <tbody>
@@ -557,7 +557,7 @@ export default function Encomendas() {
           {!cancelInfo ? (
             <div className="flex items-center justify-center py-6 text-text-muted text-sm"><Loader2 size={16} className="animate-spin mr-2" />A carregar...</div>
           ) : cancelInfo.invoiced && !can('orders:cancel_invoiced') ? (
-            <p className="text-sm text-amber-500">Esta encomenda já está faturada ({cancelling?.invoice_reference}): só o gestor a cancela - com a nota de crédito, e o sinal devolvido ou retido.</p>
+            <p className="text-sm text-amber-500">Esta encomenda já está faturada ({cancelling?.invoice_reference}): só o gestor a cancela - com a nota de crédito, e o valor pago devolvido ou retido.</p>
           ) : (
             <>
               {cancelInfo.invoiced && (
@@ -569,7 +569,7 @@ export default function Encomendas() {
               </div>
               {cancelInfo.invoiced && cancelInfo.paid > 0 && (
                 <div className="flex flex-col gap-2.5">
-                  <p className={labelClass + ' mb-0'}>O cliente pagou {formatKz(cancelInfo.paid)} Kz - o sinal é *</p>
+                  <p className={labelClass + ' mb-0'}>O cliente pagou {formatKz(cancelInfo.paid)} Kz - esse valor é *</p>
                   <div className="grid grid-cols-2 gap-2">
                     {[['DEVOLVER', 'Devolvido ao cliente'], ['RETER', 'Retido pela empresa']].map(([value, label]) => (
                       <button key={value} type="button" onClick={() => setDeposit(value)}
@@ -578,7 +578,7 @@ export default function Encomendas() {
                       </button>
                     ))}
                   </div>
-                  {deposit === 'RETER' && <p className="text-[12px] text-text-muted">Só a parte não paga é creditada: a fatura fica com o valor do sinal.</p>}
+                  {deposit === 'RETER' && <p className="text-[12px] text-text-muted">Só a parte não paga é creditada: a fatura fica com o valor pago.</p>}
                   {deposit === 'DEVOLVER' && (
                     <div className="grid grid-cols-2 gap-2">
                       <div>

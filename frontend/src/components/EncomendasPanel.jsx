@@ -10,7 +10,7 @@ import { formatKz } from '../utils/format';
 import { extractErrorMessage } from '../utils/errors';
 import { toast } from '../store/toastStore';
 
-// The Encomendas of this till's activity, at the till: receive a deposit (the order's Fatura and a Recibo) and hand
+// The Encomendas of this till's activity, at the till: receive a payment (the order's Fatura and a Recibo) and hand
 // the order over (a Recibo for the rest, a Fatura/Recibo for an order never invoiced, or «fica a dever»). Each
 // document issued is shown and printed like any sale of the till (onDocument).
 
@@ -87,7 +87,7 @@ export default function EncomendasPanel({ posId, activityId, onDocument }) {
         ? await payOrder(o.id, { pos_id: posId, amount: toPay, payment_method_id: methodId, terminal_id: terminalId || null })
         : await deliverOrder(o.id, { pos_id: posId, payment_method_id: needsMoney ? methodId : null, amount: needsMoney ? toPay : null,
           terminal_id: terminalId || null, on_credit: onCredit });
-      toast.success(action.kind === 'pay' ? 'Sinal recebido: ' + result.reference : 'Encomenda entregue: ' + result.reference);
+      toast.success(action.kind === 'pay' ? 'Pagamento recebido: ' + result.reference : 'Encomenda entregue: ' + result.reference);
       setAction(null);
       await load();
       if (result.document_id && onDocument) await onDocument(result.document_id);
@@ -126,13 +126,13 @@ export default function EncomendasPanel({ posId, activityId, onDocument }) {
             <div className="text-right whitespace-nowrap">
               <div className="font-mono font-semibold text-[17px] text-text-primary">{formatKz(o.total)} Kz</div>
               <div className="text-[12px] font-mono text-text-muted">
-                {o.invoice_id ? <>Pago {formatKz(o.paid)} · <span className={o.due > 0.005 ? 'text-amber-500' : 'text-success'}>Falta {formatKz(o.due)}</span></> : 'Sem sinal'}
+                {o.invoice_id ? <>Pago {formatKz(o.paid)} · <span className={o.due > 0.005 ? 'text-amber-500' : 'text-success'}>Falta {formatKz(o.due)}</span></> : 'Nada pago'}
               </div>
             </div>
             {can('orders:charge') && (
               <div className="flex gap-2 whitespace-nowrap">
                 <button type="button" disabled={!!o.invoice_id && o.due <= 0.005} onClick={() => open('pay', o)} className={btn + 'border-border text-text-primary hover:border-accent hover:text-accent'}>
-                  <Banknote size={14} /> Receber sinal
+                  <Banknote size={14} /> Receber pagamento
                 </button>
                 <button type="button" onClick={() => open('deliver', o)} className={btn + 'border-success/50 text-success hover:bg-success/10'}>
                   <PackageCheck size={14} /> Entregar
@@ -143,7 +143,7 @@ export default function EncomendasPanel({ posId, activityId, onDocument }) {
         );
       })}
 
-      <Modal open={!!action} onClose={() => setAction(null)} title={action ? (action.kind === 'pay' ? 'Receber sinal - ' : 'Entregar - ') + action.order.reference : ''} maxWidthClass="max-w-xl">
+      <Modal open={!!action} onClose={() => setAction(null)} title={action ? (action.kind === 'pay' ? 'Receber pagamento - ' : 'Entregar - ') + action.order.reference : ''} maxWidthClass="max-w-xl">
         {action && (
           <form noValidate onSubmit={submit} className="flex flex-col gap-3.5">
             <div className="grid grid-cols-3 gap-2 text-center">
@@ -164,7 +164,7 @@ export default function EncomendasPanel({ posId, activityId, onDocument }) {
               <>
                 {action.kind === 'pay' && (
                   <div>
-                    <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Valor do sinal *</label>
+                    <label className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block">Valor recebido *</label>
                     <input type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} autoFocus
                       className="w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-lg font-mono text-right text-text-primary outline-none focus:border-accent" />
                   </div>
@@ -185,7 +185,7 @@ export default function EncomendasPanel({ posId, activityId, onDocument }) {
             )}
             <button type="submit" disabled={saving} className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 cursor-pointer">
               {saving && <Loader2 size={16} className="animate-spin" />}
-              {action.kind === 'pay' ? 'Receber o sinal' : onCredit || dueOf(action.order) <= 0.005 ? 'Entregar' : 'Receber ' + formatKz(dueOf(action.order)) + ' Kz e entregar'}
+              {action.kind === 'pay' ? 'Receber o pagamento' : onCredit || dueOf(action.order) <= 0.005 ? 'Entregar' : 'Receber ' + formatKz(dueOf(action.order)) + ' Kz e entregar'}
             </button>
           </form>
         )}
