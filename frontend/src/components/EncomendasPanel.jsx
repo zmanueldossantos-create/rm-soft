@@ -111,26 +111,26 @@ export default function EncomendasPanel({ posId, activityId, onDocument }) {
       ) : orders.map((o) => {
         const late = new Date(o.delivery_at).getTime() < Date.now();
         return (
-          <div key={o.id} className="bg-bg-elevated border border-border rounded-lg p-3.5 flex flex-wrap items-center gap-x-5 gap-y-2">
-            <div className="min-w-[150px]">
+          <div key={o.id} className="bg-bg-elevated border border-border rounded-lg p-3.5 grid grid-cols-[130px_minmax(0,1fr)_auto_auto_auto] items-center gap-x-5">
+            <div>
               <div className={'font-mono text-[14px] ' + (late ? 'text-danger font-semibold' : 'text-text-primary')}>{when(o.delivery_at)}</div>
               <div className="text-[11.5px] text-text-muted flex items-center gap-1">
                 {o.delivery_mode === 'ENTREGA' ? <><Truck size={12} /> Entrega</> : <><Store size={12} /> Levanta na loja</>}
               </div>
             </div>
-            <div className="flex-1 min-w-[200px]">
-              <div className="text-text-primary font-medium">{o.customer_name} <span className="font-mono text-[12px] text-text-muted">· {o.reference}</span></div>
+            <div className="min-w-0">
+              <div className="text-text-primary font-medium truncate">{o.customer_name} <span className="font-mono text-[12px] text-text-muted">· {o.reference}</span></div>
               <div className="text-[12.5px] text-text-muted truncate">{o.lines.map((l) => l.quantity + ' × ' + l.description).join(', ')}</div>
             </div>
             <span className={'px-2 py-0.5 rounded text-[11.5px] font-medium ' + (STATUS_STYLE[o.status] || '')}>{o.status_label}</span>
-            <div className="text-right min-w-[150px]">
+            <div className="text-right whitespace-nowrap">
               <div className="font-mono font-semibold text-[17px] text-text-primary">{formatKz(o.total)} Kz</div>
               <div className="text-[12px] font-mono text-text-muted">
                 {o.invoice_id ? <>Pago {formatKz(o.paid)} · <span className={o.due > 0.005 ? 'text-amber-500' : 'text-success'}>Falta {formatKz(o.due)}</span></> : 'Sem sinal'}
               </div>
             </div>
             {can('orders:charge') && (
-              <div className="flex gap-2">
+              <div className="flex gap-2 whitespace-nowrap">
                 <button type="button" disabled={!!o.invoice_id && o.due <= 0.005} onClick={() => open('pay', o)} className={btn + 'border-border text-text-primary hover:border-accent hover:text-accent'}>
                   <Banknote size={14} /> Receber sinal
                 </button>
