@@ -87,8 +87,11 @@ async def checkout(
     prescription: dict | None = None,
     insurance: dict | None = None,
     terminal_id: uuid.UUID | None = None,
+    deduct_stock: bool = True,
 ) -> Invoice:
     """
+    deduct_stock=False: the goods are not handed over now (an Encomenda's Fatura issued with its deposit) - they leave
+    the stock at the delivery (customer_order_service.deliver_order).
     terminal_id: the TPA / Multicaixa Express the cashier chose for the bank payments - its bank account becomes the
     document's (see payment_terminal_service.resolve_terminal: when only one terminal fits it is taken by itself).
     prescription: the receita of a pharmacy sale (see pharmacy_service.check_prescription).
@@ -151,6 +154,7 @@ async def checkout(
         bank_account_id=bank_account_id,
         due_date=due_date,
         prescription=prescription,
+        deduct_stock=deduct_stock,
     )
     if terminal is not None:
         invoice.terminal_id = terminal.id

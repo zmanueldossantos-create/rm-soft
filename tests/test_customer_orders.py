@@ -214,3 +214,33 @@ async def test_only_the_gestor_changes_a_catalogue_price(db, company_with_essent
     order = await create_order(db, company_id, None, cheaper, user=ctx["gestor"])
     kept = await update_order(db, company_id, order["id"], {**cheaper, "notes": "Sem açúcar"}, user=cashier)  # agreed
     assert kept["lines"][0]["unit_price"] == 8000.0
+
+
+@pytest.mark.asyncio
+async def test_the_goods_of_a_deposit_leave_the_stock_at_the_delivery(db, company_with_essentials):
+    """A deposit invoices goods not made yet: nothing leaves the stock then; the delivery takes them - refused while
+    they are not in stock (produce them first)."""
+    from sqlalchemy import select as sql_select
+    from app.models.stock import Stock
+    from app.services.customer_order_service import deliver_order, pay_order
+    from app.services.stock_service import receive_stock
+    ctx = company_with_essentials
+    company_id, gestor = ctx["company"].id, ctx["gestor"]
+    _, cake, customer = await _setup(db, ctx)
+    cake.managed_by_stock = True
+    await db.commit()
+    cake_id, warehouse_id = cake.id, ctx["activity_warehouse"].id  # the refused delivery rolls the session back
+    pos_id = await _till(db, ctx)
+    cash = ctx["pm_numerario"].id
+    order = await create_order(db, company_id, gestor.id, _order(customer, cake))
+    paid = await pay_order(db, company_id, gestor, order["id"], pos_id, 10000, cash)  # 0 in stock: still accepted
+    assert paid["paid"] == 10000.0
+    with pytest.raises(CustomerOrderError, match="registe a produção"):
+        await deliver_order(db, company_id, gestor, order["id"], pos_id, cash)
+    await receive_stock(db, company_id, cake_id, 5, warehouse_id=warehouse_id)
+    await db.refresh(gestor)
+    delivered = await deliver_order(db, company_id, gestor, order["id"], pos_id, cash)
+    assert (delivered["status"], delivered["due"]) == ("ENTREGUE", 0.0)
+    left = (await db.execute(sql_select(Stock.quantity).where(
+        Stock.product_id == cake_id, Stock.warehouse_id == warehouse_id))).scalar_one()
+    assert float(left) == 3.0

@@ -3,12 +3,13 @@ Encomendas (capability ORDERS): a customer's order to be made and handed over la
 what (with a production note per line) and where it stands.
 
 The money goes through the usual documents, at a till of the order's activity (pay_order, deliver_order):
-- a deposit (sinal): the order's Fatura (FT, the whole order) is issued with it, and a Recibo (RC) for the amount;
+- a deposit (sinal): the order's Fatura (FT, the whole order) is issued with it, and a Recibo (RC) for the amount -
+  the goods are not handed over yet (often not even made): they leave the stock at the delivery;
 - the delivery: a Recibo for what is still due (or nothing: «fica a dever», the FT stays to be received); an order
   never invoiced is sold at once - a Fatura/Recibo (FR), or a FT on credit;
 - cancelled after its FT (gestor only): a credit note, and the deposit given back (DEVOLVIDO: the whole FT credited,
   the money refunded from a till or a bank account) or kept (RETIDO: only the part not paid is credited - the FT then
-  stands for the deposit).
+  stands for the deposit). Never delivered, nothing left the stock: nothing goes back.
 Once invoiced, an order's lines no longer change (its delivery, contact and notes still do).
 
 Rules:
@@ -276,8 +277,7 @@ async def cancel_order(db: AsyncSession, company_id: uuid.UUID, order_id: uuid.U
                        deposit: str | None = None, refund: dict | None = None, may_cancel_invoiced: bool = True) -> dict:
     """An order not invoiced is simply cancelled. Invoiced (may_cancel_invoiced: the gestor): its credit note is
     issued - deposit DEVOLVER (the whole FT credited, refund = {payment_method_id, pos_id | bank_account_id} for what
-    was paid) or RETER (only the part not paid is credited; nothing paid: the whole FT). The goods go back to stock
-    only when the order was never put in production and is wholly credited."""
+    was paid) or RETER (only the part not paid is credited; nothing paid: the whole FT)."""
     from app.models.invoice_line import InvoiceLine
     from app.services.invoice_service import create_credit_note
     order = await get_order(db, company_id, order_id, lock=True)
@@ -297,14 +297,10 @@ async def cancel_order(db: AsyncSession, company_id: uuid.UUID, order_id: uuid.U
             raise CustomerOrderError(f"O cliente já pagou {_kz(paid)}: escolha se o sinal é devolvido ou retido")
         keep = paid > 0.005 and deposit == "RETER"
         share = 1.0 if not keep else max(0.0, 1 - paid / cash_due_total) if cash_due_total > 0 else 0.0
-        order_status = order.status
         order_ref = reference(order)
         if share > 0.0005:
             lines = (await db.execute(select(InvoiceLine).where(InvoiceLine.invoice_id == invoice.id)
                                       .order_by(InvoiceLine.line_number))).scalars().all()
-            # back to stock only goods that left it (a cake made to order usually has no stock control)
-            stocked = any(p is not None and p.managed_by_stock for p in [
-                await db.get(Product, l.product_id) for l in lines if l.product_id is not None])
             refunds, refund_pos_id, refund_bank_id = [], None, None
             if paid > 0.005 and not keep:
                 refund = refund or {}
@@ -317,7 +313,7 @@ async def cancel_order(db: AsyncSession, company_id: uuid.UUID, order_id: uuid.U
                     db, company_id, order.activity_id, invoice.id, "ANL",
                     f"Encomenda {order_ref} cancelada: {reason}"[:200],
                     [{"invoice_line_id": l.id, "quantity": round(float(l.quantity) * share, 3)} for l in lines],
-                    restock=share >= 0.9995 and order_status == CustomerOrderStatus.ENCOMENDADA and stocked,
+                    restock=False,  # an order not delivered: its goods never left the stock
                     refunds=refunds, refund_pos_id=refund_pos_id, refund_bank_account_id=refund_bank_id,
                 )
             except CustomerOrderError:
@@ -379,10 +375,11 @@ def _observations(order: CustomerOrder) -> str:
 
 
 async def _invoice_order(db: AsyncSession, company_id: uuid.UUID, user, order: CustomerOrder, pos, invoice_type: str,
-                         payments: list[dict], terminal_id: uuid.UUID | None):
+                         payments: list[dict], terminal_id: uuid.UUID | None, deduct_stock: bool = True):
     from app.services.pos_service import checkout
     invoice = await checkout(db, company_id, pos.id, user, order.customer_id, await _sale_lines(db, order), payments,
-                             invoice_type=invoice_type, observations=_observations(order), terminal_id=terminal_id)
+                             invoice_type=invoice_type, observations=_observations(order), terminal_id=terminal_id,
+                             deduct_stock=deduct_stock)
     order = await get_order(db, company_id, order.id, lock=True)
     order.invoice_id = invoice.id
     await db.commit()
@@ -404,6 +401,26 @@ async def _receive(db: AsyncSession, company_id: uuid.UUID, order: CustomerOrder
         receipt.terminal_id = terminal.id
         await db.commit()
     return receipt
+
+
+async def _goods_out(db: AsyncSession, company_id: uuid.UUID, order: CustomerOrder, invoice) -> None:
+    """The goods of an order invoiced with its deposit leave the activity's warehouse at the delivery - the same
+    movement as a sale, under its Fatura's reference (a product without stock control moves nothing). Not enough
+    in stock: refused, nothing delivered (produce it first)."""
+    from app.services.document_rules import DOC_CODE_BY_INVOICE_TYPE
+    from app.services.stock_service import InsufficientStockError, deduct_stock_for_sale
+    activity = await db.get(Activity, order.activity_id)
+    reference_text = f"{DOC_CODE_BY_INVOICE_TYPE.get(invoice.invoice_type.value, 'FT')} {invoice.series}/{invoice.number}"
+    lines = (await db.execute(select(CustomerOrderLine).where(
+        CustomerOrderLine.order_id == order.id, CustomerOrderLine.product_id.is_not(None)))).scalars().all()
+    try:
+        for line in lines:
+            await deduct_stock_for_sale(db, company_id=company_id, warehouse_id=activity.warehouse_id,
+                                        product_id=line.product_id, quantity=float(line.quantity), reference=reference_text)
+        await db.flush()
+    except InsufficientStockError as e:
+        await db.rollback()
+        raise CustomerOrderError(f"{e} - registe a produção antes de entregar")
 
 
 def _refused(e: Exception) -> CustomerOrderError:
@@ -428,7 +445,8 @@ async def pay_order(db: AsyncSession, company_id: uuid.UUID, user, order_id: uui
     try:
         invoice = await _invoice_of(db, order)
         if invoice is None:
-            order, invoice = await _invoice_order(db, company_id, user, order, pos, "FACTURA", [], None)
+            # the goods are handed over at the delivery: nothing leaves the stock now
+            order, invoice = await _invoice_order(db, company_id, user, order, pos, "FACTURA", [], None, deduct_stock=False)
             invoice = await _invoice_of(db, order)
         if amount > float(invoice.amount_due) + 0.005:
             raise CustomerOrderError(f"O valor ({_kz(amount)}) é maior do que o que falta pagar ({_kz(invoice.amount_due)})")
@@ -463,12 +481,14 @@ async def deliver_order(db: AsyncSession, company_id: uuid.UUID, user, order_id:
                     db, company_id, user, order, pos, await default_paid_on_issue_type(db),
                     [{"payment_method_id": str(payment_method_id), "amount": float(amount or 0)}], terminal_id)
             document_id = invoice.id
-        elif float(invoice.amount_due) > 0.005 and not on_credit:
-            if not payment_method_id:
+        else:
+            if float(invoice.amount_due) > 0.005 and not on_credit and not payment_method_id:
                 raise CustomerOrderError("Escolha a forma de pagamento")
-            receipt = await _receive(db, company_id, order, invoice, pos, round(float(invoice.amount_due), 2),
-                                     payment_method_id, terminal_id)
-            document_id = receipt.id
+            await _goods_out(db, company_id, order, invoice)  # invoiced with its deposit: the goods leave now
+            if float(invoice.amount_due) > 0.005 and not on_credit:
+                receipt = await _receive(db, company_id, order, invoice, pos, round(float(invoice.amount_due), 2),
+                                         payment_method_id, terminal_id)
+                document_id = receipt.id
     except Exception as e:
         raise _refused(e)
     order = await get_order(db, company_id, order_id, lock=True)
