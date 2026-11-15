@@ -30,6 +30,10 @@ EVENTS: dict[str, Event] = {e.code: e for e in (
           "a confirmar na receção", "BOOKINGS", by_others=False),
     Event("MESA_ABERTA", "Mesa aberta", "Uma conta de mesa aberta: a mesa, quem a abriu", "OPEN_ACCOUNTS"),
     Event("MESA_FECHADA", "Mesa fechada", "Uma conta de mesa fechada: a mesa, o total, o documento", "OPEN_ACCOUNTS"),
+    Event("ENCOMENDA_NOVA", "Nova encomenda", "Uma encomenda registada: o cliente, a entrega, os artigos e as notas de "
+          "produção, o total", "ORDERS"),
+    Event("ENCOMENDAS_AMANHA", "Encomendas para amanhã", "Todos os dias, à hora escolhida: as encomendas a entregar no dia "
+          "seguinte, com os artigos a produzir", "ORDERS", by_others=False),
     Event("VENDA", "Venda", "Cada venda (ou só acima do montante mínimo escolhido): o documento, o total, a caixa"),
     Event("PRECO_ALTERADO", "Preço alterado", "Uma venda com um preço livre (diferente do catálogo): o artigo, o "
           "preço do catálogo e o aplicado, a caixa, quem vendeu"),

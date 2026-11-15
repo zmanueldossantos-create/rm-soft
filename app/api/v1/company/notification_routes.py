@@ -18,6 +18,7 @@ class SettingsRequest(BaseModel):
     enabled: bool = True
     include_gestor_actions: bool = False
     sale_min_amount: float | None = None
+    orders_digest_hour: int | None = None  # Encomendas para amanhã: the hour they are sent (0-23)
 
 
 class RecipientRequest(BaseModel):
@@ -48,7 +49,7 @@ async def write_settings(payload: SettingsRequest, db: AsyncSession = Depends(ge
     await require_option(db, current_user.company_id, notifications.OPTION)
     try:
         await notifications.update_settings(db, current_user.company_id, payload.enabled, payload.include_gestor_actions,
-                                            payload.sale_min_amount)
+                                            payload.sale_min_amount, payload.orders_digest_hour)
     except notifications.NotificationError as e:
         raise _refused(e)
     return {"ok": True}

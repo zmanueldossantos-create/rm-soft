@@ -47,3 +47,9 @@ export async function deliverOrder(orderId, payload) {
   const res = await apiClient.post('/orders/' + orderId + '/deliver', payload);
   return res.data;
 }
+
+// the production list of a day (A4): an object URL for the PDF viewer
+export async function fetchProductionListBlob(day) {
+  const res = await apiClient.get('/orders/production-list', { params: { day }, responseType: 'blob' });
+  return URL.createObjectURL(res.data);
+}

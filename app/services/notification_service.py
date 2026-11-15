@@ -95,7 +95,8 @@ async def overview(db: AsyncSession, company_id: uuid.UUID) -> dict:
     await db.commit()
     return {
         "settings": {"enabled": settings.enabled, "include_gestor_actions": settings.include_gestor_actions,
-                     "sale_min_amount": float(settings.sale_min_amount) if settings.sale_min_amount is not None else None},
+                     "sale_min_amount": float(settings.sale_min_amount) if settings.sale_min_amount is not None else None,
+                     "orders_digest_hour": settings.orders_digest_hour},
         "events": [{"code": EVENTS[c].code, "label": EVENTS[c].label, "description": EVENTS[c].description,
                     "by_others": EVENTS[c].by_others} for c in events],
         "channels": {"EMAIL": bool(email.get("is_active") and email.get("smtp_host")), "TELEGRAM": link_base is not None,
@@ -109,10 +110,14 @@ async def overview(db: AsyncSession, company_id: uuid.UUID) -> dict:
 
 
 async def update_settings(db: AsyncSession, company_id: uuid.UUID, enabled: bool, include_gestor_actions: bool,
-                          sale_min_amount: float | None) -> None:
+                          sale_min_amount: float | None, orders_digest_hour: int | None = None) -> None:
     if sale_min_amount is not None and sale_min_amount < 0:
         raise NotificationError("O montante mínimo não pode ser negativo")
+    if orders_digest_hour is not None and not 0 <= orders_digest_hour <= 23:
+        raise NotificationError("A hora das encomendas de amanhã deve estar entre 0 e 23")
     row = await get_settings_row(db, company_id)
+    if orders_digest_hour is not None:
+        row.orders_digest_hour = orders_digest_hour
     row.enabled = bool(enabled)
     row.include_gestor_actions = bool(include_gestor_actions)
     row.sale_min_amount = Decimal(str(sale_min_amount)) if sale_min_amount else None
@@ -297,7 +302,8 @@ STALE_CHECK_EVERY = timedelta(minutes=10)
 
 async def notification_loop() -> None:
     """Started with the server: every 10 seconds (at once after a new message), what is due; every 10 minutes, the
-    bank transfers still em trânsito for too long (bank_transfer_service.check_stale)."""
+    bank transfers still em trânsito for too long (bank_transfer_service.check_stale) and the next day's orders
+    (send_orders_digests)."""
     from app.core.database import AsyncSessionLocal
     stale_checked_at: datetime | None = None
     while True:
@@ -309,6 +315,7 @@ async def notification_loop() -> None:
                     stale_checked_at = now
                     from app.services.bank_transfer_service import check_stale
                     await check_stale(db, now)
+                    await send_orders_digests(db, now)
                 await send_due(db)
         except Exception:  # noqa: BLE001 - the loop never stops on one failure
             log.exception("notification loop failed")
@@ -614,3 +621,65 @@ async def notify_low_stock(db: AsyncSession, company_id, product, warehouse, bef
         unit = row.code if row else unit
     await notify(db, company_id, "STOCK_BAIXO",
                  f"{product.name}: {_qty(after)} {unit} (mínimo {_qty(minimum)})" + (f" - {warehouse.name}" if warehouse else ""))
+
+
+# ------------------------------------------------------------------------------------------------ Encomendas (ORDERS)
+
+def _order_lines_text(lines) -> str:
+    return "\n".join(f"- {_qty(l.quantity)} × {l.description}" + (f" «{l.production_note}»" if l.production_note else "")
+                     for l in lines)
+
+
+@_safe
+async def notify_new_order(db: AsyncSession, order, lines, user) -> None:
+    """ENCOMENDA_NOVA: who, when and how it is delivered, what (with the production notes), the total."""
+    from app.models.customer import Customer
+    from app.services.customer_order_service import reference
+    customer = await db.get(Customer, order.customer_id)
+    how = f"entrega em {order.delivery_address}" if order.delivery_mode == "ENTREGA" else "levanta na loja"
+    total = sum(float(l.quantity) * float(l.unit_price) * (1 + float(l.vat_rate or 0) / 100) for l in lines)
+    by = f" · registada por {user.full_name}" if getattr(user, "full_name", None) else ""
+    await notify(db, order.company_id, "ENCOMENDA_NOVA",
+                 f"{reference(order)} - {customer.name if customer else '-'}\nEntrega {_day(order.delivery_at)} "
+                 f"{_hour(order.delivery_at)} · {how}\n{_order_lines_text(lines)}\nTotal {money(total)}{by}",
+                 actor=user, subject="Nova encomenda - {company}")
+
+
+def orders_digest_text(orders: list[dict], totals: list[dict]) -> str:
+    """The next day's orders: the total of each article, then each order (hour, customer, delivery, lines)."""
+    parts = ["**A produzir**"] + [f"- {t['name']}: {_qty(t['quantity'])}{' ' + t['unit'] if t.get('unit') else ''}"
+                                  for t in totals]
+    for o in orders:
+        how = f"entrega: {o['delivery_address']}" if o["delivery_mode"] == "ENTREGA" else "levanta na loja"
+        due = f" · falta {money(o['due'])}" if o.get("due") else (" · nada pago" if not o.get("invoice_id") else "")
+        parts.append(f"\n**{_hour(o['delivery_at'])} {o['reference']}** - {o['customer_name']} ({how}){due}")
+        parts += [f"- {_qty(l['quantity'])} × {l['description']}" + (f" «{l['production_note']}»" if l.get("production_note") else "")
+                  for l in o["lines"]]
+    return "\n".join(parts)
+
+
+async def send_orders_digests(db: AsyncSession, now: datetime | None = None) -> int:
+    """ENCOMENDAS_AMANHA: once a day, from the hour each company chose (18 h by default), the orders to deliver the
+    next day - to the recipients who receive it. Nothing to deliver: nothing sent (the day is still marked done).
+    Returns how many companies were sent one."""
+    from app.services.customer_order_service import production_list
+    now = now or datetime.now(timezone.utc)
+    local = now.astimezone(LUANDA_TZ)
+    company_ids = (await db.execute(select(NotificationRecipient.company_id).where(
+        NotificationRecipient.is_active.is_(True), NotificationRecipient.events.any("ENCOMENDAS_AMANHA")).distinct()
+    )).scalars().all()
+    sent = 0
+    for company_id in company_ids:
+        settings = await get_settings_row(db, company_id)
+        if local.hour < settings.orders_digest_hour or settings.orders_digest_sent_on == local.date():
+            continue
+        settings.orders_digest_sent_on = local.date()
+        tomorrow = local.date() + timedelta(days=1)
+        data = await production_list(db, company_id, tomorrow)
+        if data["orders"]:
+            count = len(data["orders"])
+            await notify(db, company_id, "ENCOMENDAS_AMANHA", orders_digest_text(data["orders"], data["totals"]),
+                         subject=f"{count} encomenda{'s' if count > 1 else ''} para amanhã ({tomorrow.strftime('%d/%m')}) - {{company}}")
+            sent += 1
+        await db.commit()
+    return sent

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { CakeSlice, Plus, Pencil, Loader2, Search, X, Trash2, Store, Truck, ChefHat, CheckCircle2, Undo2, Eye } from 'lucide-react';
+import { CakeSlice, Plus, Pencil, Loader2, Search, X, Trash2, Store, Truck, ChefHat, CheckCircle2, Undo2, Eye, ClipboardList } from 'lucide-react';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
 import DateInput from '../components/DateInput';
@@ -7,7 +7,8 @@ import { useCan } from '../utils/permissions';
 import { formatKz } from '../utils/format';
 import { extractErrorMessage } from '../utils/errors';
 import { toast } from '../store/toastStore';
-import { listOrders, getOrderOptions, createOrder, updateOrder, setOrderStatus, cancelOrder, getOrderCancelInfo } from '../api/orders';
+import { listOrders, getOrderOptions, createOrder, updateOrder, setOrderStatus, cancelOrder, getOrderCancelInfo, fetchProductionListBlob } from '../api/orders';
+import { openPdf } from '../store/pdfViewerStore';
 import { listPaymentMethodPreferences } from '../api/tesouraria';
 import { getMyCompanyBankAccounts } from '../api/company';
 import { banksApi } from '../api/catalogs';
@@ -59,6 +60,9 @@ export default function Encomendas() {
   const [filter, setFilter] = useState('ABERTAS');
   const [search, setSearch] = useState('');
   const [busyId, setBusyId] = useState(null);
+  const [listOpen, setListOpen] = useState(false); // the production list: the day chosen
+  const [listDay, setListDay] = useState(isoDay(1));
+  const [listLoading, setListLoading] = useState(false);
 
   const [options, setOptions] = useState(null);
   const [formOpen, setFormOpen] = useState(false);
@@ -105,6 +109,26 @@ export default function Encomendas() {
     const data = await getOrderOptions();
     setOptions(data);
     return data;
+  }
+
+  // the production list of a day: what the workshop makes for the orders delivered that day (A4, to print)
+  async function openProductionList(e) {
+    e.preventDefault();
+    if (!listDay) {
+      toast.error('Escolha o dia de entrega');
+      return;
+    }
+    setListLoading(true);
+    try {
+      const url = await fetchProductionListBlob(listDay);
+      const [y, m, d] = listDay.split('-');
+      openPdf({ url, title: 'Lista de produção ' + d + '/' + m + '/' + y, fileName: 'lista-producao_' + listDay });
+      setListOpen(false);
+    } catch (err) {
+      toast.error(extractErrorMessage(err, 'Erro ao gerar a lista de produção'));
+    } finally {
+      setListLoading(false);
+    }
   }
 
   async function openNew() {
@@ -333,11 +357,17 @@ export default function Encomendas() {
               className="w-full bg-bg-elevated border border-border rounded-md pl-10 pr-4 py-2 text-sm text-text-primary outline-none focus:border-accent transition-colors" />
           </div>
         </div>
-        {canManage && (
-          <button type="button" onClick={openNew} className="flex items-center gap-2 bg-accent hover:bg-accent-hover text-white font-medium text-sm px-4 py-2 rounded-md transition-colors cursor-pointer">
-            <Plus size={16} /> Nova encomenda
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={() => { setListDay(filter === 'HOJE' ? isoDay(0) : isoDay(1)); setListOpen(true); }}
+            className="flex items-center gap-2 border border-border hover:border-accent hover:text-accent text-text-primary font-medium text-sm px-4 py-2 rounded-md transition-colors cursor-pointer">
+            <ClipboardList size={16} /> Lista de produção
           </button>
-        )}
+          {canManage && (
+            <button type="button" onClick={openNew} className="flex items-center gap-2 bg-accent hover:bg-accent-hover text-white font-medium text-sm px-4 py-2 rounded-md transition-colors cursor-pointer">
+              <Plus size={16} /> Nova encomenda
+            </button>
+          )}
+        </div>
       </div>
 
       {loading ? (
@@ -549,6 +579,19 @@ export default function Encomendas() {
             </div>
           </div>
         )}
+      </Modal>
+
+      <Modal open={listOpen} onClose={() => setListOpen(false)} title="Lista de produção" maxWidthClass="max-w-sm">
+        <form noValidate onSubmit={openProductionList} className="flex flex-col gap-3">
+          <p className="text-sm text-text-muted">O que produzir para as encomendas a entregar neste dia: o total de cada artigo e cada encomenda com as suas notas.</p>
+          <div>
+            <label className={labelClass}>Dia de entrega</label>
+            <DateInput value={listDay} onChange={(e) => setListDay(e.target.value)} className={inputClass} />
+          </div>
+          <button type="submit" disabled={listLoading} className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 cursor-pointer">
+            {listLoading ? <Loader2 size={16} className="animate-spin" /> : <ClipboardList size={16} />} Abrir a lista
+          </button>
+        </form>
       </Modal>
 
       <Modal open={!!cancelling} onClose={() => setCancelling(null)} title={cancelling ? 'Cancelar a encomenda ' + cancelling.reference : ''} maxWidthClass="max-w-xl">

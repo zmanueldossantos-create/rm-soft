@@ -15,7 +15,7 @@ from app.schemas.customer_order import (
 )
 from app.services.customer_order_service import (
     CustomerOrderError, CustomerOrderNotFoundError, cancel_info, cancel_order, create_order, deliver_order, list_orders,
-    order_detail, order_options, pay_order, set_production_status, update_order,
+    order_detail, order_options, pay_order, production_list, set_production_status, update_order,
 )
 from app.services.permission_service import has_permission
 
@@ -42,6 +42,21 @@ async def get_orders(date_from: date | None = None, date_to: date | None = None,
 async def get_order_options(db: AsyncSession = Depends(get_db),
                             current_user: User = Depends(require_permission("orders:manage"))):
     return await order_options(db, current_user.company_id)
+
+
+@router.get("/production-list")
+async def get_production_list(day: date, activity_id: uuid.UUID | None = None, db: AsyncSession = Depends(get_db),
+                              current_user: User = Depends(require_permission("orders:view"))):
+    """The production list of a day, in A4: what to make for the orders delivered that day."""
+    from fastapi import Response
+    from app.models.company import Company
+    from app.services.cash_report_service import _company_dict
+    from app.utils.production_list_pdf import generate_production_list_pdf
+    data = await production_list(db, current_user.company_id, day, activity_id)
+    company = await db.get(Company, current_user.company_id)
+    pdf = generate_production_list_pdf(data, _company_dict(company))
+    return Response(content=pdf, media_type="application/pdf",
+                    headers={"Content-Disposition": f'inline; filename="lista-producao_{day.isoformat()}.pdf"'})
 
 
 @router.get("/{order_id}")

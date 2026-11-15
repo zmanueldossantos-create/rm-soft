@@ -336,6 +336,32 @@ async def reservas(db: AsyncSession, company_id: uuid.UUID, arguments: dict) -> 
         for b in bookings][:60]}
 
 
+async def encomendas(db: AsyncSession, company_id: uuid.UUID, arguments: dict) -> dict:
+    """The customers' orders to deliver in a period (today and the next 7 days by default; not delivered nor
+    cancelled unless asked): hour, customer, delivery, articles with their production notes, paid / still due -
+    and the total of each article to produce."""
+    from app.services.customer_order_service import list_orders
+    try:
+        start = date.fromisoformat(arguments["data_inicio"]) if arguments.get("data_inicio") else date.today()
+        end = date.fromisoformat(arguments["data_fim"]) if arguments.get("data_fim") else start + timedelta(days=7)
+    except ValueError:
+        raise ToolError("Datas inválidas - use o formato AAAA-MM-DD")
+    orders = await list_orders(db, company_id, start, end, None if arguments.get("todas") else "ABERTAS")
+    totals: dict = {}
+    for o in orders:
+        if o["status"] in ("ENTREGUE", "CANCELADA"):
+            continue
+        for l in o["lines"]:
+            totals[l["description"]] = totals.get(l["description"], 0) + l["quantity"]
+    return {"de": start.isoformat(), "ate": end.isoformat(), "a_produzir": totals, "encomendas": [
+        {"numero": o["reference"], "entrega": _local(o["delivery_at"]), "cliente": o["customer_name"],
+         "modo": "entrega em " + (o["delivery_address"] or "") if o["delivery_mode"] == "ENTREGA" else "levanta na loja",
+         "estado": o["status_label"], "total": o["total"], "pago": o["paid"],
+         "falta": o["due"] if o["due"] is not None else o["total"],
+         "artigos": [{"artigo": l["description"], "quantidade": l["quantity"], "nota": l["production_note"]} for l in o["lines"]]}
+        for o in orders][:60]}
+
+
 async def consultar_clientes(db: AsyncSession, company_id: uuid.UUID, arguments: dict) -> dict:
     from app.services.invoice_service import attach_amount_due
     search = " ".join(str(arguments.get("pesquisa") or "").split())
@@ -474,6 +500,13 @@ TOOLS = [
      "entrada e saída, estado, tarifa e conta da estadia em curso.",
      {"type": "object", "properties": {"data_inicio": {"type": "string", "description": "AAAA-MM-DD (hoje por omissão)"},
                                        "data_fim": {"type": "string", "description": "AAAA-MM-DD (7 dias depois por omissão)"}}}),
+    ("encomendas", "orders:view", encomendas,
+     "As encomendas de clientes a entregar num período (hoje e os próximos 7 dias por omissão; «amanhã» = data_inicio e "
+     "data_fim de amanhã): hora, cliente, entrega ou levantamento, artigos com notas de produção, pago e em falta, e o "
+     "total de cada artigo a produzir. Só as por entregar, salvo «todas».",
+     {"type": "object", "properties": {"data_inicio": {"type": "string", "description": "AAAA-MM-DD (hoje por omissão)"},
+                                       "data_fim": {"type": "string", "description": "AAAA-MM-DD (7 dias depois por omissão)"},
+                                       "todas": {"type": "boolean", "description": "Incluir as entregues e canceladas"}}}),
     ("consultar_clientes", "customers:view", consultar_clientes,
      "Os clientes da empresa (todos, ou por nome, NIF, código, email ou telefone): contactos e o que cada um deve. "
      "Mostra no máximo 30 - com mais, indica o total e sugere uma pesquisa.",

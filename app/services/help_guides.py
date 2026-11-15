@@ -528,7 +528,10 @@ PAGES = [
             "Os artigos com a quantidade e o preço (o do catálogo, pode ser alterado) e, em cada linha, a nota de produção "
             "(ex.: «Parabéns Ana 30 anos»).",
             "A produção avança com «Produzir» e «Pronta»; a seta volta ao estado anterior (um bolo a refazer).",
-            "Os filtros Hoje / Amanhã / Próximos 7 dias mostram o que preparar; uma encomenda atrasada fica a vermelho.",
+            "Os filtros Hoje / Amanhã / Próximos 7 dias mostram o que preparar; uma encomenda atrasada fica a vermelho. "
+            "«Lista de produção»: o PDF de um dia (o total de cada artigo e cada encomenda com as notas), para a oficina.",
+            "Avisos (Administração → Empresa → Notificações): «Nova encomenda» e «Encomendas para amanhã», enviadas "
+            "todos os dias à hora escolhida (18:00 por omissão).",
             "O dinheiro recebe-se na Caixa → ícone Encomendas: «Receber pagamento» (um sinal ou tudo de uma vez) emite a fatura "
             "da encomenda e um recibo do valor; «Entregar» recebe o que falta (recibo), ou emite a fatura/recibo de uma encomenda sem nada pago, ou fica a "
             "dever (a fatura fica por receber).",

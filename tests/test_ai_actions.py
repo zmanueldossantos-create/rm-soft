@@ -397,3 +397,40 @@ async def test_a_supplier_invoice_registered_and_its_goods_received(db, company_
     assert "entrada em stock" in no_receive["erro"]
     unknown = json.loads(await run_action_tool(db, action_ctx, "registar_compra", {**arguments, "fornecedor": "Ninguém"}))
     assert "não encontrado" in unknown["erro"]
+
+
+@pytest.mark.asyncio
+async def test_an_order_prepared_by_the_assistant(db, company_with_essentials):
+    """«Encomenda de um bolo para a Ana amanhã às 15h, Parabéns Ana»: checked as the screen does, registered on SIM;
+    then «que encomendas temos amanhã?» lists it with what to produce."""
+    from datetime import date as _date, timedelta as _td
+    from app.models.activity import Activity
+    from app.models.module_capability import ModuleCapability
+    from app.services.ai import tools
+    ctx = company_with_essentials
+    company_id = ctx["company"].id
+    activity = await db.get(Activity, ctx["activity"].id)
+    db.add(ModuleCapability(module_id=activity.module_id, capability="ORDERS", is_enabled=True))
+    cake = Product(company_id=company_id, code="BOLA", name="Bolo de aniversário", vat_id=ctx["vat_nor"].id, price=10000,
+                   min_stock_threshold=0, product_type=ProductType.BEM, unit_of_measure_id=ctx["unit_un"].id,
+                   managed_by_stock=False)
+    db.add(cake)
+    await db.commit()
+    await create_customer(db, company_id, "Ana Silva", "002614524LA055")
+    tomorrow = (_date.today() + _td(days=1)).isoformat()
+    action_ctx = _ctx(ctx, permissions={"orders:manage", "orders:view"})
+    answer = json.loads(await run_action_tool(db, action_ctx, "preparar_encomenda", {
+        "cliente": "Ana Silva", "data_entrega": tomorrow, "hora_entrega": "15:00",
+        "linhas": [{"artigo": "Bolo de aniversário", "quantidade": 1, "nota": "Parabéns Ana"}]}))
+    assert answer["estado"] == "a_aguardar_confirmacao", answer
+    assert answer["resumo"]["total"] == 11400.0 and answer["resumo"]["modo"] == "Levanta na loja"
+    _, text = await decide_action(db, company_id, ctx["gestor"].id, action_ctx.actions[-1], True)
+    assert "registada" in text, text
+    listed = json.loads(await tools.run_tool(db, company_id, {"orders:view"}, "encomendas",
+                                             {"data_inicio": tomorrow, "data_fim": tomorrow}))
+    assert listed["a_produzir"] == {"Bolo de aniversário": 1.0}
+    assert listed["encomendas"][0]["artigos"][0]["nota"] == "Parabéns Ana"
+    refused = json.loads(await run_action_tool(db, action_ctx, "preparar_encomenda", {
+        "cliente": "Ana Silva", "data_entrega": tomorrow, "modo": "ENTREGA",
+        "linhas": [{"artigo": "Bolo de aniversário", "quantidade": 1}]}))
+    assert "morada" in refused["erro"]

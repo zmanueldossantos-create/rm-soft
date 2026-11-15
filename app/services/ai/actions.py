@@ -768,6 +768,62 @@ async def registar_compra(db: AsyncSession, ctx: ActionContext, arguments: dict)
     return await _propose(db, ctx, "REGISTER_PURCHASE", payload, summary, ctx.confirm_documents)
 
 
+# ---------- An order (Encomenda) to make and hand over later
+
+async def preparar_encomenda(db: AsyncSession, ctx: ActionContext, arguments: dict) -> dict:
+    """A customer's order checked as its screen does (an identified customer, a delivery not past, an address for a
+    delivery, articles of the catalogue at their price), registered on confirmation. The money is received at the
+    till (Caixa → Encomendas)."""
+    from app.services.customer_order_service import CustomerOrderError, _check_header, _check_lines, order_activities
+    if "orders:manage" not in ctx.permissions:
+        raise ActionError("Não tem permissão para registar encomendas")
+    customer = await _customer(db, ctx.company_id, arguments.get("cliente"))
+    if customer is None:
+        raise ActionError("Uma encomenda precisa de um cliente identificado (nome ou NIF) - não o consumidor final")
+    day = str(arguments.get("data_entrega") or "").strip()
+    if not day:
+        raise ActionError("Indique a data de entrega (AAAA-MM-DD)")
+    delivery_at = _when(day, arguments.get("hora_entrega"), "10:00")
+    activity_id = None
+    if arguments.get("atividade"):
+        wanted = " ".join(str(arguments["atividade"]).split()).lower()
+        match = [a for a in await order_activities(db, ctx.company_id) if wanted in a.name.lower()]
+        if len(match) != 1:
+            raise ActionError("Atividade «" + str(arguments["atividade"]) + "» não encontrada entre as que têm encomendas")
+        activity_id = match[0].id
+    given = arguments.get("linhas") or []
+    if not given:
+        raise ActionError("Indique os artigos encomendados e as quantidades")
+    lines, shown = [], []
+    for line in given:
+        kind, article = await _article(db, ctx.company_id, line.get("artigo"))
+        lines.append({"product_id" if kind == "product" else "service_id": article.id,
+                      "quantity": line.get("quantidade"), "production_note": line.get("nota")})
+    mode = "ENTREGA" if str(arguments.get("modo") or "").upper().startswith("ENTREG") else "LOJA"
+    data = {"customer_id": customer.id, "activity_id": activity_id, "delivery_at": delivery_at, "delivery_mode": mode,
+            "delivery_address": arguments.get("morada"), "contact_name": arguments.get("contacto"),
+            "contact_phone": arguments.get("telefone"), "notes": arguments.get("observacoes"), "lines": lines}
+    try:
+        header = await _check_header(db, ctx.company_id, data, creating=True)
+        rows = await _check_lines(db, ctx.company_id, lines)
+    except CustomerOrderError as e:
+        raise ActionError(str(e))
+    total = 0.0
+    for row in rows:
+        amount = float(row.quantity) * float(row.unit_price) * (1 + float(row.vat_rate) / 100)
+        total += amount
+        shown.append({"artigo": row.description, "quantidade": float(row.quantity), "preco": _money(row.unit_price),
+                      "total": _money(amount), "nota": row.production_note})
+    payload = {**{k: (str(v) if isinstance(v, uuid.UUID) else v) for k, v in data.items() if k != "lines"},
+               "activity_id": str(header["activity_id"]), "delivery_at": header["delivery_at"].isoformat(),
+               "lines": [{k: (str(v) if isinstance(v, uuid.UUID) else v) for k, v in l.items()} for l in lines]}
+    summary = {"titulo": f"Encomenda de {customer.name}", "cliente": customer.name,
+               "entrega": header["delivery_at"].astimezone(LUANDA).strftime("%d/%m/%Y %H:%M"),
+               "modo": f"Entrega em {header['delivery_address']}" if mode == "ENTREGA" else "Levanta na loja",
+               "linhas": shown, "total": _money(total)}
+    return await _propose(db, ctx, "CREATE_ORDER", payload, summary, ctx.confirm_documents)
+
+
 # ---------- A document's PDF in the user's own chat (WhatsApp / Telegram)
 
 async def enviar_pdf_no_chat(db: AsyncSession, ctx: ActionContext, arguments: dict) -> dict:
@@ -803,6 +859,11 @@ def action_text(action: AiPendingAction) -> str:
     if action.kind == "CREATE_ARTICLE":
         lines = [f"**{s.get('titulo')}**", f"Código {s.get('codigo')} · {kz(s.get('preco'))} (sem IVA) · {s.get('iva')}",
                  " · ".join(x for x in (f"Unidade {s.get('unidade')}", s.get("grupo"), s.get("stock")) if x)]
+    elif action.kind == "CREATE_ORDER":
+        lines = [f"**{s.get('titulo')}**", f"{s.get('entrega')} · {s.get('modo')}"]
+        lines += [f"- {l['quantidade']:g} × {l['artigo']} — {kz(l['total'])}" + (f" «{l['nota']}»" if l.get("nota") else "")
+                  for l in s.get("linhas", [])]
+        lines.append(f"**Total {kz(s.get('total'))}** - pago na caixa (Encomendas)")
     elif action.kind == "REGISTER_PURCHASE":
         lines = [f"**{s.get('titulo')}**", f"{s.get('fornecedor')}" + (f" · NIF {s['nif']}" if s.get("nif") else "")]
         lines += [f"- {l['quantidade']:g}{' ' + l['unidade'] if l.get('unidade') else ''} × {l['artigo']} a {kz(l['preco'])}"
@@ -875,6 +936,20 @@ async def execute_action(db: AsyncSession, action: AiPendingAction, user_id: uui
             from app.services.invoice_service import convert_pro_forma_to_invoice
             invoice = await convert_pro_forma_to_invoice(db, company_id, uuid.UUID(action.payload["invoice_id"]), "FACTURA")
             action.result = {"documento": _reference(invoice), "invoice_id": str(invoice.id), "total": _money(invoice.total)}
+        elif action.kind == "CREATE_ORDER":
+            from app.models.user import User
+            from app.services.customer_order_service import CustomerOrderError, create_order
+            p = action.payload
+            data = {**p, "customer_id": uuid.UUID(p["customer_id"]), "activity_id": uuid.UUID(p["activity_id"]),
+                    "delivery_at": datetime.fromisoformat(p["delivery_at"]),
+                    "lines": [{**l, "product_id": uuid.UUID(l["product_id"]) if l.get("product_id") else None,
+                               "service_id": uuid.UUID(l["service_id"]) if l.get("service_id") else None}
+                              for l in p["lines"]]}
+            try:
+                order = await create_order(db, company_id, user_id, data, user=await db.get(User, user_id))
+            except CustomerOrderError as e:
+                raise ActionError(str(e))
+            action.result = {"encomenda": order["reference"], "order_id": str(order["id"]), "total": order["total"]}
         elif action.kind == "REGISTER_PURCHASE":
             from app.services.purchase_invoice_service import register_purchase_invoice
             p = action.payload
@@ -988,6 +1063,10 @@ def outcome_text(action: AiPendingAction) -> str:
         return "Ação cancelada - nada foi feito."
     if action.status == "FALHOU":
         return f"Não foi possível concluir: {result.get('erro', 'erro desconhecido')}"
+    if action.kind == "CREATE_ORDER":
+        total = f"{result.get('total', 0):,.2f}".replace(",", " ").replace(".", ",")
+        return (f"Encomenda **{result.get('encomenda')}** registada - {total} Kz. O pagamento (sinal ou total) e a "
+                "entrega fazem-se na Caixa → Encomendas.")
     if action.kind == "REGISTER_PURCHASE":
         total = f"{result.get('total', 0):,.2f}".replace(",", " ").replace(".", ",")
         stock = f" A mercadoria entrou no armazém {result['armazem']}." if result.get("armazem") else ""
@@ -1065,6 +1144,26 @@ ACTION_TOOLS = [
          "categoria": {"type": "string", "description": "Categoria (produto) ou tipo de serviço"},
          "codigo": {"type": "string"}, "controlo_stock": {"type": "boolean", "description": "Produto: controlar o stock (sim por omissão)"}},
       "required": ["tipo", "nome", "preco"]}),
+    ("preparar_encomenda", ("orders:manage",), preparar_encomenda,
+     "Prepara uma encomenda de cliente (um bolo, pão para uma festa...) a entregar mais tarde: o cliente identificado "
+     "(nome ou NIF - nunca o consumidor final), a data e a hora de entrega, levanta na loja (LOJA) ou entrega na morada "
+     "(ENTREGA, com a morada), os artigos do catálogo com a quantidade e, por linha, a nota de produção (ex.: «Parabéns "
+     "Ana»). Preço do catálogo. O pagamento e a entrega fazem-se na Caixa. Pergunta o que faltar - não inventes datas.",
+     {"type": "object", "properties": {
+         "cliente": {"type": "string", "description": "Nome ou NIF do cliente"},
+         "data_entrega": {"type": "string", "description": "AAAA-MM-DD"},
+         "hora_entrega": {"type": "string", "description": "HH:MM (10:00 por omissão)"},
+         "modo": {"type": "string", "enum": ["LOJA", "ENTREGA"]},
+         "morada": {"type": "string", "description": "Morada de entrega (modo ENTREGA)"},
+         "contacto": {"type": "string", "description": "Quem levanta / recebe (opcional)"},
+         "telefone": {"type": "string"},
+         "atividade": {"type": "string", "description": "A atividade, se várias tiverem encomendas"},
+         "linhas": {"type": "array", "items": {"type": "object", "properties": {
+             "artigo": {"type": "string", "description": "Nome ou código do produto/serviço"},
+             "quantidade": {"type": "number"}, "nota": {"type": "string", "description": "Nota de produção"}},
+             "required": ["artigo", "quantidade"]}},
+         "observacoes": {"type": "string"}},
+      "required": ["cliente", "data_entrega", "linhas"]}),
     ("registar_compra", ("purchases:manage",), registar_compra,
      "Regista uma fatura de compra (FT de um fornecedor, a pagar depois): o fornecedor (nome ou NIF, já criado), o "
      "número da fatura do fornecedor, a data (hoje por omissão), as linhas (artigo já criado, quantidade, custo "

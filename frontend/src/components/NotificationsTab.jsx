@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import Select from './Select';
 import { BellRing, Check, Copy, ExternalLink, Loader2, Mail, Pencil, Plus, Save, Send, Trash2 } from 'lucide-react';
 import Modal from './Modal';
 import ConfirmDialog from './ConfirmDialog';
@@ -97,6 +98,7 @@ export default function NotificationsTab({ canManage, onAllowed }) {
   }
   const eventLabel = Object.fromEntries(data.events.map((e) => [e.code, e.label]));
   const showSaleMin = data.events.some((e) => e.code === 'VENDA');
+  const showOrdersDigest = data.events.some((e) => e.code === 'ENCOMENDAS_AMANHA');
 
   return (
     <div className="flex flex-col gap-5">
@@ -121,6 +123,14 @@ export default function NotificationsTab({ canManage, onAllowed }) {
               <label className={labelClass}>Vendas: só acima de (Kz)</label>
               <input type="number" min="0" value={settings.sale_min_amount} onChange={(e) => setSettings((s) => ({ ...s, sale_min_amount: e.target.value }))}
                 disabled={!canManage} placeholder="Todas as vendas" className={inputClass + ' font-mono'} />
+            </div>
+          )}
+          {showOrdersDigest && (
+            <div className="max-w-xs">
+              <label className={labelClass}>Encomendas para amanhã: enviar às</label>
+              <Select value={String(settings.orders_digest_hour ?? 18)} disabled={!canManage}
+                onChange={(v) => setSettings((s) => ({ ...s, orders_digest_hour: Number(v) }))}
+                options={Array.from({ length: 24 }, (_, h) => ({ value: String(h), label: String(h).padStart(2, '0') + ':00' }))} />
             </div>
           )}
           {canManage && (

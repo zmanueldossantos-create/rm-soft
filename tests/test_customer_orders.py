@@ -244,3 +244,60 @@ async def test_the_goods_of_a_deposit_leave_the_stock_at_the_delivery(db, compan
     left = (await db.execute(sql_select(Stock.quantity).where(
         Stock.product_id == cake_id, Stock.warehouse_id == warehouse_id))).scalar_one()
     assert float(left) == 3.0
+
+
+# ---------- Step 3: the production list, the notifications
+
+@pytest.mark.asyncio
+async def test_the_production_list_and_the_next_day_orders(db, company_with_essentials):
+    from datetime import timezone
+    from app.models.notification import NotificationOutbox, NotificationRecipient
+    from app.services.customer_order_service import production_list
+    from app.services.notification_service import get_settings_row, send_orders_digests
+    from app.utils.production_list_pdf import generate_production_list_pdf
+    from sqlalchemy import select as sql_select
+    ctx = company_with_essentials
+    company_id, gestor = ctx["company"].id, ctx["gestor"]
+    _, cake, customer = await _setup(db, ctx)
+    tomorrow = (datetime.now(LUANDA) + timedelta(days=1)).replace(hour=10, minute=0, second=0, microsecond=0)
+    await create_order(db, company_id, gestor.id, _order(customer, cake, delivery_at=tomorrow))
+    await create_order(db, company_id, gestor.id, _order(customer, cake, delivery_at=tomorrow.replace(hour=16),
+                                                          lines=[{"product_id": cake.id, "quantity": 3}]))
+    data = await production_list(db, company_id, tomorrow.date())
+    assert [(t["name"], t["quantity"]) for t in data["totals"]] == [("Bolo de chocolate", 5.0)]
+    assert [o["delivery_at"].astimezone(LUANDA).hour for o in data["orders"]] == [10, 16]
+    assert generate_production_list_pdf(data, {"name": "Teste", "nif": "1"}).startswith(b"%PDF")
+
+    db.add(NotificationRecipient(company_id=company_id, name="Gestor", channel="TELEGRAM", address="123",
+                                 events=["ENCOMENDAS_AMANHA"], is_active=True))
+    await db.commit()
+    from unittest.mock import patch
+    with patch("app.services.plan_service.has_option", return_value=True):
+        today = datetime.now(LUANDA).replace(hour=17, minute=0)
+        assert await send_orders_digests(db, today.astimezone(timezone.utc)) == 0  # before 18 h
+        evening = today.replace(hour=18, minute=5)
+        assert await send_orders_digests(db, evening.astimezone(timezone.utc)) == 1
+        assert await send_orders_digests(db, evening.replace(hour=21).astimezone(timezone.utc)) == 0  # once a day
+    message = (await db.execute(sql_select(NotificationOutbox).where(NotificationOutbox.event == "ENCOMENDAS_AMANHA"))).scalar_one()
+    assert "2 encomendas para amanhã" in message.subject and "Bolo de chocolate: 5 UN" in message.text
+    assert (await get_settings_row(db, company_id)).orders_digest_sent_on == today.date()
+
+
+@pytest.mark.asyncio
+async def test_a_new_order_is_notified(db, company_with_essentials):
+    from types import SimpleNamespace
+    from unittest.mock import patch
+    from sqlalchemy import select as sql_select
+    from app.models.notification import NotificationOutbox, NotificationRecipient
+    ctx = company_with_essentials
+    company_id = ctx["company"].id
+    _, cake, customer = await _setup(db, ctx)
+    db.add(NotificationRecipient(company_id=company_id, name="Gestor", channel="TELEGRAM", address="123",
+                                 events=["ENCOMENDA_NOVA"], is_active=True))
+    await db.commit()
+    cashier = SimpleNamespace(role="CAIXA", full_name="Joana Mendes")
+    with patch("app.services.plan_service.has_option", return_value=True):
+        await create_order(db, company_id, None, _order(customer, cake), user=cashier)
+    message = (await db.execute(sql_select(NotificationOutbox).where(NotificationOutbox.event == "ENCOMENDA_NOVA"))).scalar_one()
+    assert message.subject.startswith("Nova encomenda") and "Parabéns Ana 30 anos" in message.text
+    assert "registada por Joana Mendes" in message.text

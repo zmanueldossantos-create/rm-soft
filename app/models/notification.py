@@ -4,10 +4,10 @@ email, a Telegram chat, a WhatsApp number - people, not user accounts) with the 
 outbox the server sends from (app/services/notification_service.py) - a sale never waits for an email.
 """
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, func
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, func
 from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -21,6 +21,9 @@ class NotificationSettings(Base):
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
     include_gestor_actions: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     sale_min_amount: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)  # VENDA: only above this
+    # ENCOMENDAS_AMANHA: the hour (Luanda) the next day's orders are sent, and the last day they were
+    orders_digest_hour: Mapped[int] = mapped_column(Integer, nullable=False, default=18, server_default="18")
+    orders_digest_sent_on: Mapped[date | None] = mapped_column(Date, nullable=True)
 
 
 class NotificationRecipient(Base):

@@ -187,6 +187,8 @@ async def create_order(db: AsyncSession, company_id: uuid.UUID, user_id: uuid.UU
     for row in lines:
         row.order_id = order.id
         db.add(row)
+    from app.services.notification_service import notify_new_order
+    await notify_new_order(db, order, lines, user)
     await db.commit()
     return await order_detail(db, company_id, order.id)
 
@@ -309,8 +311,8 @@ async def cancel_order(db: AsyncSession, company_id: uuid.UUID, order_id: uuid.U
                 refunds = [{"payment_method_id": refund["payment_method_id"], "amount": paid}]
                 refund_pos_id, refund_bank_id = refund.get("pos_id"), refund.get("bank_account_id")
             try:
-                note = await create_credit_note(
-                    db, company_id, order.activity_id, invoice.id, "ANL",
+                note = await create_credit_note(  # the whole FT: an annulment; a part (the payment kept): a rectification
+                    db, company_id, order.activity_id, invoice.id, "ANL" if share >= 0.9995 else "RTF",
                     f"Encomenda {order_ref} cancelada: {reason}"[:200],
                     [{"invoice_line_id": l.id, "quantity": round(float(l.quantity) * share, 3)} for l in lines],
                     restock=False,  # an order not delivered: its goods never left the stock
@@ -623,3 +625,27 @@ async def order_options(db: AsyncSession, company_id: uuid.UUID) -> dict:
                     + [{"kind": "service", "id": s.id, "code": s.code, "name": s.name, "price": _money(s.price),
                         "vat_rate": float(rates.get(s.vat_id) or 0)} for s in services],
     }
+
+
+async def production_list(db: AsyncSession, company_id: uuid.UUID, day: date, activity_id: uuid.UUID | None = None) -> dict:
+    """What to make for the orders delivered that day (not delivered nor cancelled): each article's total, then the
+    orders by hour with their production notes."""
+    from app.models.unit_of_measure_catalog import UnitOfMeasureCatalog
+    orders = [o for o in await list_orders(db, company_id, day, day, activity_id=activity_id)
+              if o["status"] in (s.value for s in OPEN)]
+    orders.sort(key=lambda o: o["delivery_at"])
+    units = {}
+    product_ids = {l["product_id"] for o in orders for l in o["lines"] if l["product_id"]}
+    if product_ids:
+        rows = (await db.execute(select(Product.id, UnitOfMeasureCatalog.code).join(
+            UnitOfMeasureCatalog, UnitOfMeasureCatalog.id == Product.unit_of_measure_id, isouter=True).where(
+            Product.id.in_(product_ids)))).all()
+        units = dict(rows)
+    totals: dict = {}
+    for order in orders:
+        for line in order["lines"]:
+            key = (line["product_id"], line["service_id"])
+            entry = totals.setdefault(key, {"name": line["description"], "quantity": 0.0,
+                                            "unit": units.get(line["product_id"])})
+            entry["quantity"] += float(line["quantity"])
+    return {"day": day, "orders": orders, "totals": sorted(totals.values(), key=lambda t: t["name"].lower())}

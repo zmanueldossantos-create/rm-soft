@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Bot, X, Send, Loader2, Plus, MessageSquare, ChevronDown, Check, FileText, Mail, UserPlus, CalendarClock, PackagePlus, Truck } from 'lucide-react';
+import { Bot, X, Send, Loader2, Plus, MessageSquare, ChevronDown, Check, FileText, Mail, UserPlus, CalendarClock, PackagePlus, Truck, CakeSlice } from 'lucide-react';
 import { listAiConversations, getAiMessages, askAssistant, decideAiAction } from '../api/ai';
 import { extractErrorMessage } from '../utils/errors';
 import { formatKz } from '../utils/format';
@@ -115,7 +115,7 @@ function ActionCard({ action, onDecide, deciding }) {
   const s = action.summary || {};
   const expired = action.status === 'PENDENTE' && new Date(action.expires_at) < new Date();
   const [label, color] = ACTION_STATUS[expired ? 'EXPIRADA' : action.status] || [action.status, 'text-text-muted'];
-  const Icon = action.kind === 'SEND_EMAIL' ? Mail : action.kind === 'CREATE_CUSTOMER' ? UserPlus : action.kind === 'CREATE_BOOKING' ? CalendarClock : action.kind === 'CREATE_ARTICLE' ? PackagePlus : action.kind === 'REGISTER_PURCHASE' ? Truck : FileText;
+  const Icon = action.kind === 'SEND_EMAIL' ? Mail : action.kind === 'CREATE_CUSTOMER' ? UserPlus : action.kind === 'CREATE_BOOKING' ? CalendarClock : action.kind === 'CREATE_ARTICLE' ? PackagePlus : action.kind === 'REGISTER_PURCHASE' ? Truck : action.kind === 'CREATE_ORDER' ? CakeSlice : FileText;
   return (
     <div className="mt-2 border border-border rounded-lg bg-bg-elevated overflow-hidden text-[12px]">
       <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
@@ -132,6 +132,24 @@ function ActionCard({ action, onDecide, deciding }) {
                 <span key={k} className="contents"><span className="text-text-muted">{k}</span><span className="text-text-primary font-mono">{v}</span></span>
               ))}
           </div>
+        ) : action.kind === 'CREATE_ORDER' ? (
+          <>
+            <p className="text-text-muted">{s.cliente} · {s.entrega} · {s.modo}</p>
+            <table className="w-full">
+              <tbody>
+                {(s.linhas || []).map((l, i) => (
+                  <tr key={i} className="border-t border-border first:border-0">
+                    <td className="py-1 pr-2 text-text-primary">{l.quantidade} × {l.artigo}{l.nota ? <span className="text-amber-500"> «{l.nota}»</span> : null}</td>
+                    <td className="py-1 text-right font-mono text-text-primary whitespace-nowrap">{kz(l.total)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="flex justify-between items-baseline border-t border-border pt-1.5">
+              <span className="text-text-muted">Pago na caixa (Encomendas)</span>
+              <span className="font-mono font-semibold text-sm text-text-primary">{kz(s.total)}</span>
+            </div>
+          </>
         ) : action.kind === 'REGISTER_PURCHASE' ? (
           <>
             <p className="text-text-muted">{s.fornecedor}{s.nif ? ' · NIF ' + s.nif : ''} · {day(s.data)}</p>
@@ -193,6 +211,7 @@ function ActionCard({ action, onDecide, deciding }) {
         {action.status === 'FEITA' && action.result?.documento && <p className="text-success font-medium">{action.result.documento} emitido</p>}
         {action.status === 'FEITA' && action.kind === 'CREATE_CUSTOMER' && action.result?.codigo && <p className="text-success font-medium">Cliente criado - código {action.result.codigo}</p>}
         {action.status === 'FEITA' && action.result?.booking_id && <p className="text-success font-medium">Reserva criada</p>}
+        {action.status === 'FEITA' && action.kind === 'CREATE_ORDER' && <p className="text-success font-medium">Registada - {action.result?.encomenda}</p>}
         {action.status === 'FEITA' && action.kind === 'REGISTER_PURCHASE' && <p className="text-success font-medium">Registada - {action.result?.compra}{action.result?.armazem ? ' · stock no ' + action.result.armazem : ''}</p>}
         {action.status === 'FEITA' && action.kind === 'CREATE_ARTICLE' && <p className="text-success font-medium">Criado - código {action.result?.codigo}</p>}
         {action.status === 'FALHOU' && action.result?.erro && <p className="text-danger">{action.result.erro}</p>}
