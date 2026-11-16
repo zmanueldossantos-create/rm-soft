@@ -415,7 +415,14 @@ export default function Encomendas() {
                     </td>
                     <td className="px-4 py-2.5 text-right font-mono whitespace-nowrap text-text-primary">
                       {formatKz(o.total)} Kz
-                      {o.invoice_id && (
+                      {o.invoice_id && o.status === 'CANCELADA' ? (
+                        // cancelled after its Fatura: its credit note, and the money kept or given back
+                        <div className="text-[11.5px] text-text-muted">
+                          {o.credit_note_reference || o.invoice_reference}
+                          {o.deposit_outcome === 'RETIDO' && <> · <span className="text-amber-500">retido {formatKz(o.paid)}</span></>}
+                          {o.deposit_outcome === 'DEVOLVIDO' && <> · devolvido {formatKz(o.paid)}</>}
+                        </div>
+                      ) : o.invoice_id && (
                         <div className="text-[11.5px] text-text-muted">
                           {o.invoice_reference} · {o.due > 0.005 ? <span className="text-amber-500">falta {formatKz(o.due)}</span> : <span className="text-success">pago</span>}
                         </div>
