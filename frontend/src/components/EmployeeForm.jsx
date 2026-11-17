@@ -1,14 +1,17 @@
 import { useEffect, useState } from 'react';
-import { Loader2, Save, IdCard, Briefcase, Banknote, GraduationCap } from 'lucide-react';
+import { Loader2, Save, IdCard, Briefcase, Banknote, GraduationCap, FolderOpen, Printer } from 'lucide-react';
 import Modal from './Modal';
 import Select from './Select';
 import DateInput from './DateInput';
-import { createEmployee, updateEmployee } from '../api/hr';
+import { createEmployee, updateEmployee, fetchEmployeePdfUrl } from '../api/hr';
+import { EmployeePhoto, EmployeeDocuments } from './EmployeeFiles';
+import { openPdf } from '../store/pdfViewerStore';
 import { extractErrorMessage } from '../utils/errors';
 import { toast } from '../store/toastStore';
 
-// The employee's file, in 4 tabs (Identificação, Profissional, Remuneração, Habilitações). The checks are the
-// server's (required fields, dates, IBAN, uniqueness): a refusal comes back as a toast and opens the tab of the field.
+// The employee's file, in tabs (Identificação with the photo, Profissional, Remuneração, Habilitações, Documentos). The
+// checks are the server's (required fields, dates, IBAN, uniqueness): a refusal comes back as a toast and opens the tab
+// of the field. A new file stays open once registered, for its photo and documents.
 const inputClass = 'w-full bg-bg-inset border border-border rounded-md px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent transition-colors';
 const labelClass = 'text-[11px] font-medium uppercase tracking-wide text-text-muted mb-1.5 block';
 
@@ -17,11 +20,12 @@ const TABS = [
   { key: 'PRO', label: 'Profissional', icon: Briefcase },
   { key: 'PAY', label: 'Remuneração', icon: Banknote },
   { key: 'EDU', label: 'Habilitações', icon: GraduationCap },
+  { key: 'DOC', label: 'Documentos', icon: FolderOpen, existing: true },
 ];
 
 // the tab where each message's field is, so the user lands on it
 const TAB_OF_MESSAGE = [
-  [/admissão|contrato|experimental|departamento|categoria|função|horário|local/i, 'PRO'],
+  [/admissão|contrato|experimental|departamento|categoria|função|horário|local|conta/i, 'PRO'],
   [/salário|iban|pagamento|banco|transferência/i, 'PAY'],
   [/escolaridade/i, 'EDU'],
 ];
@@ -31,7 +35,7 @@ const FIELDS = [
   'id_document_type', 'id_document_number', 'id_issued_on', 'id_expires_on', 'nif', 'social_security_number', 'address',
   'phone', 'email', 'department_id', 'category_id', 'job_title_id', 'establishment_id', 'hired_on', 'contract_type_id',
   'contract_ends_on', 'probation_ends_on', 'work_schedule_id', 'base_salary', 'payment_method', 'bank_id', 'iban',
-  'education_level_id', 'training', 'experience', 'notes',
+  'education_level_id', 'training', 'experience', 'notes', 'user_id',
 ];
 
 function emptyForm(options) {
@@ -48,7 +52,10 @@ export default function EmployeeForm({ open, onClose, onSaved, employee, options
   const [form, setForm] = useState(() => emptyForm(options));
   const [tab, setTab] = useState('ID');
   const [saving, setSaving] = useState(false);
+  const [current, setCurrent] = useState(employee); // the file being edited (its photo changes here)
+  const [printing, setPrinting] = useState(false);
 
+  useEffect(() => { setCurrent(employee); }, [employee]);
   useEffect(() => {
     if (!open) return;
     setTab('ID');
@@ -67,6 +74,23 @@ export default function EmployeeForm({ open, onClose, onSaved, employee, options
     return [{ value: '', label: '-' }, ...values.filter((v) => v.is_active || v.id === form[field]).map((v) => ({ value: v.id, label: v.name + (v.is_active ? '' : ' (desativado)') }))];
   }
   const pairs = (list) => (list || []).map((o) => ({ value: o.value, label: o.label }));
+  // the company's accounts not yet linked to another employee
+  const ROLE_NAMES = { GESTOR: 'Gestor', CAIXA: 'Caixa', ATENDENTE: 'Atendente', COZINHA: 'Cozinha', ARMAZENISTA: 'Armazenista', CONTABILISTA: 'Contabilista', RH: 'RH' };
+  const userOptions = [{ value: '', label: 'Sem conta' }, ...(options?.users || [])
+    .filter((u) => !u.employee_id || u.employee_id === employee?.id)
+    .map((u) => ({ value: u.id, label: `${u.name} (${ROLE_NAMES[u.role] || u.role})${u.is_active ? '' : ' - inativa'}` }))];
+
+  async function printFile() {
+    setPrinting(true);
+    try {
+      const url = await fetchEmployeePdfUrl(employee.id);
+      openPdf({ url, title: `Ficha de ${employee.full_name}`, fileName: `ficha-colaborador_${employee.number}` });
+    } catch (err) {
+      toast.error(extractErrorMessage(err, 'Erro ao gerar a ficha'));
+    } finally {
+      setPrinting(false);
+    }
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -76,8 +100,8 @@ export default function EmployeeForm({ open, onClose, onSaved, employee, options
     setSaving(true);
     try {
       const saved = employee ? await updateEmployee(employee.id, payload) : await createEmployee(payload);
-      toast.success(employee ? 'Ficha guardada' : `Colaborador ${saved.number} registado`);
-      onSaved(saved);
+      toast.success(employee ? 'Ficha guardada' : `Colaborador ${saved.number} registado - junte a fotografia e os documentos`);
+      onSaved(saved, !employee); // a new file stays open for its photo and documents
     } catch (err) {
       const message = extractErrorMessage(err, 'Erro ao guardar a ficha');
       const found = TAB_OF_MESSAGE.find(([pattern]) => pattern.test(message));
@@ -114,16 +138,21 @@ export default function EmployeeForm({ open, onClose, onSaved, employee, options
       subtitle={employee ? `Matrícula ${employee.number}` : 'Nome, data de admissão e salário base são obrigatórios'}
       footer={(
         <div className="px-6 py-3 flex justify-end gap-2">
+          {employee && (
+            <button type="button" onClick={printFile} disabled={printing} className="h-10 px-4 mr-auto rounded-md border border-border text-sm text-text-primary hover:border-accent hover:text-accent flex items-center gap-2 cursor-pointer">
+              {printing ? <Loader2 size={15} className="animate-spin" /> : <Printer size={15} />} Ficha PDF
+            </button>
+          )}
           <button type="button" onClick={onClose} className="h-10 px-4 rounded-md border border-border text-sm text-text-muted hover:text-text-primary cursor-pointer">{readOnly ? 'Fechar' : 'Cancelar'}</button>
-          {!readOnly && <button type="submit" form="employee-form" disabled={saving} className="h-10 px-5 rounded-md bg-accent hover:bg-accent-hover disabled:opacity-50 text-white text-sm font-semibold flex items-center gap-2 cursor-pointer">
+          {!readOnly && tab !== 'DOC' && <button type="submit" form="employee-form" disabled={saving} className="h-10 px-5 rounded-md bg-accent hover:bg-accent-hover disabled:opacity-50 text-white text-sm font-semibold flex items-center gap-2 cursor-pointer">
             {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
             {saving ? 'A guardar...' : employee ? 'Guardar alterações' : 'Registar colaborador'}
           </button>}
         </div>
       )}>
-      <form id="employee-form" noValidate onSubmit={handleSubmit} className="flex flex-col gap-5">
+      <div className="flex flex-col gap-5">
         <div className="flex gap-1 border-b border-border -mt-1 overflow-x-auto">
-          {TABS.map((t) => (
+          {TABS.filter((t) => !t.existing || employee).map((t) => (
             <button key={t.key} type="button" onClick={() => setTab(t.key)}
               className={'flex items-center gap-2 px-4 h-10 text-sm font-medium border-b-2 -mb-px whitespace-nowrap cursor-pointer transition-colors ' + (tab === t.key ? 'border-accent text-accent' : 'border-transparent text-text-muted hover:text-text-primary')}>
               <t.icon size={15} /> {t.label}
@@ -131,7 +160,11 @@ export default function EmployeeForm({ open, onClose, onSaved, employee, options
           ))}
         </div>
 
+        <form id="employee-form" noValidate onSubmit={handleSubmit} className="contents">
         <fieldset disabled={readOnly} className="contents">
+        {tab === 'ID' && current && (
+          <EmployeePhoto employee={current} canManage={!readOnly} onChanged={(change) => setCurrent((p) => ({ ...p, ...change }))} />
+        )}
         {tab === 'ID' && (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {field('Matrícula', 'number', { mono: true, maxLength: 20 })}
@@ -165,6 +198,8 @@ export default function EmployeeForm({ open, onClose, onSaved, employee, options
             {date('Fim do contrato', 'contract_ends_on')}
             {date('Fim do período experimental', 'probation_ends_on')}
             {select('Horário de trabalho', 'work_schedule_id', tableOptions('HORARIO', 'work_schedule_id'))}
+            {select('Conta de utilizador', 'user_id', userOptions)}
+            <p className="sm:col-span-2 self-end text-[12px] text-text-muted pb-3">A conta é desativada quando o colaborador sai da empresa (nunca a do gestor).</p>
           </div>
         )}
 
@@ -196,7 +231,9 @@ export default function EmployeeForm({ open, onClose, onSaved, employee, options
           </div>
         )}
         </fieldset>
-      </form>
+        </form>
+        {tab === 'DOC' && employee && <EmployeeDocuments employee={employee} canManage={!readOnly} />}
+      </div>
     </Modal>
   );
 }

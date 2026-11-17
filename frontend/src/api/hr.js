@@ -49,3 +49,52 @@ export async function updateHrReference(referenceId, name, isActive) {
 export async function deleteHrReference(referenceId) {
   await apiClient.delete('/hr/references/' + referenceId);
 }
+
+const MULTIPART = { headers: { 'Content-Type': 'multipart/form-data' } };
+
+// the photo and the documents of the file - personal data, read with the session (never a public address)
+export async function fetchEmployeePhotoUrl(employeeId) {
+  const res = await apiClient.get('/hr/employees/' + employeeId + '/photo', { responseType: 'blob' });
+  return URL.createObjectURL(res.data);
+}
+
+export async function uploadEmployeePhoto(employeeId, file) {
+  const form = new FormData();
+  form.append('file', file);
+  const res = await apiClient.put('/hr/employees/' + employeeId + '/photo', form, MULTIPART);
+  return res.data;
+}
+
+export async function deleteEmployeePhoto(employeeId) {
+  await apiClient.delete('/hr/employees/' + employeeId + '/photo');
+}
+
+export async function listEmployeeDocuments(employeeId) {
+  const res = await apiClient.get('/hr/employees/' + employeeId + '/documents');
+  return res.data;
+}
+
+export async function addEmployeeDocument(employeeId, { documentTypeId, description, deliveredOn, expiresOn, file }) {
+  const form = new FormData();
+  if (documentTypeId) form.append('document_type_id', documentTypeId);
+  if (description) form.append('description', description);
+  if (deliveredOn) form.append('delivered_on', deliveredOn);
+  if (expiresOn) form.append('expires_on', expiresOn);
+  if (file) form.append('file', file);
+  const res = await apiClient.post('/hr/employees/' + employeeId + '/documents', form, MULTIPART);
+  return res.data;
+}
+
+export async function deleteEmployeeDocument(employeeId, documentId) {
+  await apiClient.delete('/hr/employees/' + employeeId + '/documents/' + documentId);
+}
+
+export async function fetchEmployeeDocumentUrl(employeeId, documentId) {
+  const res = await apiClient.get('/hr/employees/' + employeeId + '/documents/' + documentId + '/file', { responseType: 'blob' });
+  return URL.createObjectURL(res.data);
+}
+
+export async function fetchEmployeePdfUrl(employeeId) {
+  const res = await apiClient.get('/hr/employees/' + employeeId + '/pdf', { responseType: 'blob' });
+  return URL.createObjectURL(res.data);
+}

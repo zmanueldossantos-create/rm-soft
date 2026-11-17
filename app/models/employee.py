@@ -7,14 +7,19 @@ contract types, work schedules, education levels, document types. Renamed or swi
 
 Employee - the employee's file: identification, professional data, pay, qualifications; numbered (matrícula) per
 company. A departure (left_on + reason) keeps the file: it leaves the active list and can be readmitted. The countries
-(nationality), banks and establishments (place of work) are the existing catalogs, not copies.
+(nationality), banks and establishments (place of work) are the existing catalogs, not copies. An employee may have
+a user account (user_id): his departure switches it off.
+
+EmployeeFile - his photo (one) and the documents of his file (BI, contract, medical certificate...): a type, the day
+it was handed in, its validity, and the scanned file when there is one. Personal data: kept in the database (never in
+the public /uploads), read only with the HR rights, carried by the backups like any other row.
 """
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Integer, Numeric, String, Text, func
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Integer, LargeBinary, Numeric, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, deferred, mapped_column
 
 from app.core.database import Base
 
@@ -116,6 +121,9 @@ class Employee(Base):
     leaving_reason: Mapped[str | None] = mapped_column(String(25), nullable=True)
     leaving_note: Mapped[str | None] = mapped_column(String(300), nullable=True)
 
+    # his account in RM SOFT, if he has one (a cashier, a cook...): switched off when he leaves
+    user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+
     created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -128,3 +136,28 @@ Index("uq_employees_id_document", Employee.company_id, func.lower(Employee.id_do
 Index("uq_employees_nif", Employee.company_id, func.lower(Employee.nif), unique=True, postgresql_where=Employee.nif.isnot(None))
 Index("uq_employees_social_security", Employee.company_id, Employee.social_security_number, unique=True,
       postgresql_where=Employee.social_security_number.isnot(None))
+Index("uq_employees_user", Employee.user_id, unique=True, postgresql_where=Employee.user_id.isnot(None))
+
+FILE_PHOTO = "FOTO"
+FILE_DOCUMENT = "DOCUMENTO"
+
+
+class EmployeeFile(Base):
+    __tablename__ = "employee_files"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    company_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("companies.id"), nullable=False, index=True)
+    employee_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("employees.id", ondelete="CASCADE"),
+                                                   nullable=False, index=True)
+    kind: Mapped[str] = mapped_column(String(10), nullable=False)  # FOTO | DOCUMENTO
+    document_type_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("hr_references.id"), nullable=True)
+    description: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    delivered_on: Mapped[date | None] = mapped_column(Date, nullable=True)
+    expires_on: Mapped[date | None] = mapped_column(Date, nullable=True)
+    # the scanned file (none: handed in on paper only)
+    file_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    content_type: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    size: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    content: Mapped[bytes | None] = deferred(mapped_column(LargeBinary, nullable=True))
+    uploaded_by_user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

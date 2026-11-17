@@ -166,7 +166,7 @@ export default function Users() {
         </h2>
       </div>
       <p className="text-text-muted text-sm mb-6">
-        Gerir a equipa com acesso ao sistema - caixas, atendentes, cozinha, armazenistas e contabilistas
+        Gerir a equipa com acesso ao sistema - caixas, atendentes, cozinha, armazenistas, contabilistas e recursos humanos
       </p>
 
       <div className="flex items-center justify-between gap-3 flex-wrap mb-5">

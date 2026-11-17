@@ -11,7 +11,10 @@ Rules:
   check digits verified); dates make sense (born before today, document valid after its issue, contract ending after
   the admission);
 - a departure keeps the file: the date (never before the admission) and the reason, the employee leaves the active
-  list; a readmission brings him back with a new admission date.
+  list; a readmission brings him back with a new admission date;
+- an employee may be linked to one user account of the company (one employee per account): his departure switches
+  the account off (never the gestor's - the company would be locked out); a readmission does not switch it back on,
+  the gestor does it in Utilizadores if he wants.
 """
 import re
 import uuid
@@ -26,6 +29,7 @@ from app.models.employee import (
     GENDERS, ID_DOCUMENT_TYPES, LEAVING_REASONS, MARITAL_STATUSES, PAYMENT_METHODS, REFERENCE_KINDS, Employee, HrReference,
 )
 from app.models.establishment import Establishment
+from app.models.user import User, UserRole
 
 # the starting set of the tables, given once per company (the departments, categories, titles and schedules are the
 # company's own: they start empty)
@@ -34,8 +38,7 @@ DEFAULT_REFERENCES: dict[str, tuple[str, ...]] = {
     "ESCOLARIDADE": ("Ensino primário", "I ciclo do ensino secundário", "II ciclo do ensino secundário / médio",
                      "Bacharelato", "Licenciatura", "Mestrado", "Doutoramento"),
     "TIPO_DOCUMENTO": ("Bilhete de identidade", "Cartão de contribuinte (NIF)", "Cartão de segurança social",
-                       "Certificado de habilitações", "Curriculum vitae", "Atestado médico", "Contrato assinado",
-                       "Fotografia"),
+                       "Certificado de habilitações", "Curriculum vitae", "Atestado médico", "Contrato assinado"),
 }
 
 # HrReference columns of the file, with the kind each one takes
@@ -196,7 +199,17 @@ async def employee_options(db: AsyncSession, company_id: uuid.UUID) -> dict:
         "genders": pairs(GENDERS), "marital_statuses": pairs(MARITAL_STATUSES), "id_document_types": pairs(ID_DOCUMENT_TYPES),
         "payment_methods": pairs(PAYMENT_METHODS), "leaving_reasons": pairs(LEAVING_REASONS),
         "next_number": await next_number(db, company_id),
+        "users": await _linkable_users(db, company_id),
     }
+
+
+async def _linkable_users(db: AsyncSession, company_id: uuid.UUID) -> list[dict]:
+    """The company's accounts, with the employee each is already linked to."""
+    users = (await db.execute(select(User).where(User.company_id == company_id).order_by(User.full_name))).scalars().all()
+    linked = dict((await db.execute(select(Employee.user_id, Employee.id).where(
+        Employee.company_id == company_id, Employee.user_id.isnot(None)))).all())
+    return [{"id": u.id, "name": u.full_name, "phone": u.phone_number, "role": u.role.value, "is_active": u.is_active,
+             "employee_id": linked.get(u.id)} for u in users]
 
 
 def _iban_ok(iban: str) -> bool:
@@ -325,6 +338,19 @@ async def _check(db: AsyncSession, company_id: uuid.UUID, data: dict, current: E
         raise EmployeeError("Banco inválido")
     clean["bank_id"] = bank
 
+    # his account: one of the company, not already another employee's
+    account = data.get("user_id") or None
+    if account is not None:
+        user = (await db.execute(select(User).where(User.id == account, User.company_id == company_id))).scalar_one_or_none()
+        if user is None:
+            raise EmployeeError("Conta de utilizador inválida")
+        other = (await db.execute(select(Employee.full_name).where(
+            Employee.user_id == user.id, *([Employee.id != current.id] if current is not None else [])))).scalar_one_or_none()
+        if other is not None:
+            raise EmployeeError(f"A conta de {user.full_name} já está ligada a {other}")
+        account = user.id
+    clean["user_id"] = account
+
     # unique per company
     exclude = [Employee.id != current.id] if current is not None else []
     for field, label, value in (
@@ -354,7 +380,8 @@ async def _names(db: AsyncSession, company_id: uuid.UUID) -> dict:
     banks = dict((await db.execute(select(Bank.id, Bank.acronym))).all())
     establishments = dict((await db.execute(select(Establishment.id, Establishment.name).where(
         Establishment.company_id == company_id))).all())
-    return {"refs": refs, "countries": countries, "banks": banks, "establishments": establishments}
+    users = dict((await db.execute(select(User.id, User.full_name).where(User.company_id == company_id))).all())
+    return {"refs": refs, "countries": countries, "banks": banks, "establishments": establishments, "users": users}
 
 
 def _employee(e: Employee, names: dict) -> dict:
@@ -366,13 +393,17 @@ def _employee(e: Employee, names: dict) -> dict:
         "contract_type": refs.get(e.contract_type_id), "work_schedule": refs.get(e.work_schedule_id),
         "education_level": refs.get(e.education_level_id), "nationality": names["countries"].get(e.nationality_id),
         "bank": names["banks"].get(e.bank_id), "establishment": names["establishments"].get(e.establishment_id),
-        "leaving_reason_label": LEAVING_REASONS.get(e.leaving_reason),
+        "leaving_reason_label": LEAVING_REASONS.get(e.leaving_reason), "user_name": names["users"].get(e.user_id),
+        "has_photo": e.id in names.get("photos", ()),
     })
     return out
 
 
 async def employee_detail(db: AsyncSession, company_id: uuid.UUID, employee_id: uuid.UUID) -> dict:
-    return _employee(await get_employee(db, company_id, employee_id), await _names(db, company_id))
+    from app.services.employee_file_service import has_photo
+    names = await _names(db, company_id)
+    names["photos"] = await has_photo(db, [employee_id])
+    return _employee(await get_employee(db, company_id, employee_id), names)
 
 
 async def create_employee(db: AsyncSession, company_id: uuid.UUID, user_id: uuid.UUID | None, data: dict) -> dict:
@@ -413,8 +444,14 @@ async def register_departure(db: AsyncSession, company_id: uuid.UUID, employee_i
     if reason == "OUTRO" and not note:
         raise EmployeeError("Descreva o motivo da saída")
     employee.is_active, employee.left_on, employee.leaving_reason, employee.leaving_note = False, left_on, reason, note
+    # his account closes with him (never the gestor's: nobody could open the company any more)
+    account_closed = False
+    if employee.user_id is not None:
+        user = await db.get(User, employee.user_id)
+        if user is not None and user.is_active and user.role != UserRole.GESTOR:
+            user.is_active, account_closed = False, True
     await db.commit()
-    return await employee_detail(db, company_id, employee_id)
+    return {**await employee_detail(db, company_id, employee_id), "account_closed": account_closed}
 
 
 async def readmit_employee(db: AsyncSession, company_id: uuid.UUID, employee_id: uuid.UUID, hired_on) -> dict:
@@ -451,7 +488,9 @@ async def list_employees(db: AsyncSession, company_id: uuid.UUID, status: str = 
                                 func.lower(func.coalesce(Employee.id_document_number, "")).like(q),
                                 func.coalesce(Employee.phone, "").like(q)))
     rows = (await db.execute(query.order_by(Employee.number))).scalars().all()
+    from app.services.employee_file_service import has_photo
     names = await _names(db, company_id)
+    names["photos"] = await has_photo(db, [e.id for e in rows])
     counts = dict((await db.execute(select(Employee.is_active, func.count()).where(
         Employee.company_id == company_id).group_by(Employee.is_active))).all())
     return {"employees": [_employee(e, names) for e in rows],

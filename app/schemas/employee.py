@@ -41,6 +41,7 @@ class EmployeeRequest(BaseModel):
     training: str | None = None
     experience: str | None = None
     notes: str | None = None
+    user_id: uuid.UUID | None = None
 
 
 class DepartureRequest(BaseModel):

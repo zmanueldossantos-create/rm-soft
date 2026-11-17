@@ -147,3 +147,96 @@ async def test_each_company_has_its_own_files(db, company_with_essentials):
     # a value of another list is refused
     with pytest.raises(EmployeeError, match="Departamentos: valor inválido"):
         await create_employee(db, company_id, user_id, _file(full_name="Outro", department_id=other_ref.id))
+
+
+# --- the photo, the documents, the user account, the PDF ------------------------------------------------------------
+
+PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
+PDF = b"%PDF-1.4\n%fake\n"
+
+
+@pytest.mark.asyncio
+async def test_the_photo_and_the_documents(db, company_with_essentials):
+    from app.services.employee_file_service import (
+        add_document, delete_document, get_document_file, get_photo, list_documents, set_photo,
+    )
+    ctx = company_with_essentials
+    company_id, user_id = ctx["company"].id, ctx["gestor"].id
+    maria = await create_employee(db, company_id, user_id, _file())
+
+    with pytest.raises(EmployeeError, match="JPEG, PNG ou WebP"):
+        await set_photo(db, company_id, user_id, maria["id"], "foto.png", PDF)  # the name lies: the bytes decide
+    await set_photo(db, company_id, user_id, maria["id"], "foto.png", PNG)
+    await set_photo(db, company_id, user_id, maria["id"], "nova.png", PNG + b"1")  # replaces the first
+    assert (await get_photo(db, company_id, maria["id"])) == (PNG + b"1", "image/png")
+    assert (await list_employees(db, company_id))["employees"][0]["has_photo"]
+
+    docs = await list_documents(db, company_id, maria["id"])
+    bi = next(item for item in docs["checklist"] if item["name"] == "Bilhete de identidade")
+    assert not bi["delivered"] and docs["documents"] == []
+    scanned = await add_document(db, company_id, user_id, maria["id"], bi["document_type_id"], None, date(2024, 3, 1),
+                                 date(2030, 1, 1), "C:\\scans\\bi maria.pdf", PDF)
+    assert scanned["name"] == "Bilhete de identidade" and scanned["has_file"] and scanned["file_name"] == "bi maria.pdf"
+    paper = await add_document(db, company_id, user_id, maria["id"], None, "Declaração de residência", date(2024, 3, 1), None)
+    assert not paper["has_file"]
+    docs = await list_documents(db, company_id, maria["id"])
+    assert len(docs["documents"]) == 2
+    assert next(item for item in docs["checklist"] if item["name"] == "Bilhete de identidade")["delivered"]
+    assert (await get_document_file(db, company_id, maria["id"], scanned["id"]))[:2] == (PDF, "application/pdf")
+    with pytest.raises(EmployeeError, match="em papel"):
+        await get_document_file(db, company_id, maria["id"], paper["id"])
+
+    for args, message in (
+        ((None, None, None, None), "tipo de documento"),
+        ((None, "X", date.today() + timedelta(days=1), None), "futura"),
+        ((None, "X", date(2024, 3, 1), date(2024, 1, 1)), "anterior à data de entrega"),
+        ((None, "X", None, None, "a.exe", b"MZ\x90\x00"), "PDF ou uma imagem"),
+    ):
+        with pytest.raises(EmployeeError, match=message):
+            await add_document(db, company_id, user_id, maria["id"], *args)
+    await delete_document(db, company_id, maria["id"], paper["id"])
+    assert len((await list_documents(db, company_id, maria["id"]))["documents"]) == 1
+
+    # nobody else's
+    with pytest.raises(EmployeeError):
+        await get_document_file(db, uuid.uuid4(), maria["id"], scanned["id"])
+
+    from app.utils.employee_pdf import generate_employee_pdf
+    from app.services.employee_service import employee_detail
+    pdf = generate_employee_pdf(await employee_detail(db, company_id, maria["id"]), await list_documents(db, company_id, maria["id"]),
+                                None, {"name": "Empresa", "nif": "5000000000"})
+    assert pdf.startswith(b"%PDF")
+
+
+@pytest.mark.asyncio
+async def test_the_account_closes_with_the_departure(db, company_with_essentials):
+    from app.core.security import hash_password
+    from app.models.user import User
+    ctx = company_with_essentials
+    company_id, user_id = ctx["company"].id, ctx["gestor"].id
+    cashier = User(company_id=company_id, full_name="Joana Caixa", phone_number="+244923" + uuid.uuid4().hex[:6].translate(str.maketrans("abcdef", "123456")),
+                   password_hash=hash_password("Teste@2026"), role=UserRole.CAIXA)
+    db.add(cashier)
+    await db.commit()
+    cashier_id = cashier.id
+
+    users = (await employee_options(db, company_id))["users"]
+    assert {u["id"] for u in users} >= {cashier_id, user_id}
+    joana = await create_employee(db, company_id, user_id, _file(full_name="Joana Mendes", user_id=cashier_id))
+    assert joana["user_name"] == "Joana Caixa"
+    with pytest.raises(EmployeeError, match="já está ligada a Joana Mendes"):
+        await create_employee(db, company_id, user_id, _file(full_name="Outra", user_id=cashier_id))
+    with pytest.raises(EmployeeError, match="Conta de utilizador inválida"):
+        await create_employee(db, company_id, user_id, _file(full_name="Outra", user_id=uuid.uuid4()))
+
+    gone = await register_departure(db, company_id, joana["id"], date(2026, 6, 30), "FIM_CONTRATO")
+    assert gone["account_closed"]
+    await db.refresh(cashier)
+    assert not cashier.is_active
+    back = await readmit_employee(db, company_id, joana["id"], date(2026, 8, 1))
+    await db.refresh(cashier)
+    assert back["is_active"] and not cashier.is_active  # the gestor switches the account back on himself
+
+    # the gestor's own account is never closed (the company would be locked out)
+    boss = await create_employee(db, company_id, user_id, _file(full_name="O Gestor", user_id=user_id))
+    assert not (await register_departure(db, company_id, boss["id"], date(2026, 6, 30), "OUTRO", "Vendeu a empresa"))["account_closed"]

@@ -58,8 +58,10 @@ export default function Colaboradores() {
   function openNew() { setEditing(null); setFormOpen(true); }
   function openFile(employee) { setEditing(employee); setFormOpen(true); }
 
-  async function saved() {
-    setFormOpen(false);
+  // a new file stays open (its photo and documents are added once it exists)
+  async function saved(employee, keepOpen) {
+    if (keepOpen) setEditing(employee);
+    else setFormOpen(false);
     await Promise.all([load(), loadOptions()]);
   }
 
@@ -69,8 +71,8 @@ export default function Colaboradores() {
     if (!leaving.reason) { toast.error('Escolha o motivo da saída'); return; }
     setBusy(true);
     try {
-      await registerDeparture(leaving.employee.id, { left_on: leaving.left_on, reason: leaving.reason, note: leaving.note || null });
-      toast.success(`Saída de ${leaving.employee.full_name} registada`);
+      const gone = await registerDeparture(leaving.employee.id, { left_on: leaving.left_on, reason: leaving.reason, note: leaving.note || null });
+      toast.success(`Saída de ${leaving.employee.full_name} registada` + (gone.account_closed ? ` - a conta de ${gone.user_name} foi desativada` : ''));
       setLeaving(null);
       await load();
     } catch (err) {
@@ -219,7 +221,8 @@ export default function Colaboradores() {
               <label className={labelClass}>{leaving.reason === 'OUTRO' ? 'Descrição *' : 'Observação'}</label>
               <input value={leaving.note} maxLength={300} onChange={(e) => setLeaving((p) => ({ ...p, note: e.target.value }))} className={inputClass} />
             </div>
-            <p className="text-[12px] text-text-muted">A ficha fica guardada; o colaborador sai da lista dos ativos e pode ser readmitido.</p>
+            <p className="text-[12px] text-text-muted">A ficha fica guardada; o colaborador sai da lista dos ativos e pode ser readmitido.
+              {leaving.employee.user_name && options?.users?.find((u) => u.id === leaving.employee.user_id)?.role !== 'GESTOR' ? ` A conta de utilizador (${leaving.employee.user_name}) é desativada.` : ''}</p>
             <button type="submit" disabled={busy} className="bg-danger hover:opacity-90 disabled:opacity-50 text-white font-semibold text-sm rounded-md py-2.5 flex items-center justify-center gap-2 cursor-pointer">
               {busy ? <Loader2 size={16} className="animate-spin" /> : <LogOut size={16} />} Registar saída
             </button>
@@ -234,7 +237,8 @@ export default function Colaboradores() {
               <label className={labelClass}>Nova data de admissão *</label>
               <DateInput value={readmitting.hired_on} onChange={(e) => setReadmitting((p) => ({ ...p, hired_on: e.target.value }))} className={inputClass} />
             </div>
-            <p className="text-[12px] text-text-muted">Saiu em {formatDate(readmitting.employee.left_on)}. O fim do contrato e do período experimental ficam por indicar na ficha.</p>
+            <p className="text-[12px] text-text-muted">Saiu em {formatDate(readmitting.employee.left_on)}. O fim do contrato e do período experimental ficam por indicar na ficha.
+              {readmitting.employee.user_name ? ` A conta de utilizador (${readmitting.employee.user_name}) reativa-se em Administração → Utilizadores.` : ''}</p>
             <button type="submit" disabled={busy} className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-2.5 flex items-center justify-center gap-2 cursor-pointer">
               {busy ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={16} />} Readmitir
             </button>
