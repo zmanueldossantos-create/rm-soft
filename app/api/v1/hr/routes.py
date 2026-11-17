@@ -10,7 +10,9 @@ from app.api.deps import require_permission
 from app.core.database import get_db
 from app.models.user import User
 from app.schemas.employee import (
-    DepartureRequest, EmployeeRequest, HrReferenceCreateRequest, HrReferenceUpdateRequest, ReadmissionRequest,
+    DepartureRequest, EmployeePayrollItemsRequest, EmployeeRequest, FormulaCheckRequest, HrReferenceCreateRequest,
+    HrReferenceUpdateRequest, IrtTableRequest, PayrollItemRequest, PayrollSettingsRequest, ReadmissionRequest,
+    SimulationRequest,
 )
 from app.services.employee_service import (
     EmployeeError, EmployeeNotFoundError, create_employee, create_reference, delete_reference, employee_detail,
@@ -20,6 +22,11 @@ from app.services.employee_service import (
 
 from app.services.employee_file_service import (
     DOCUMENT_MAX, add_document, delete_document, delete_photo, get_document_file, get_photo, list_documents, set_photo,
+)
+
+from app.services.payroll_settings_service import (
+    check_formula, create_item, delete_irt_table, delete_item, employee_items, get_payroll_settings, list_irt_tables,
+    list_items, save_irt_table, set_employee_items, simulate_payslip, update_item, update_payroll_settings,
 )
 
 router = APIRouter(prefix="/api/v1/hr", tags=["hr"])
@@ -213,5 +220,122 @@ async def remove_reference(reference_id: uuid.UUID, db: AsyncSession = Depends(g
                            current_user: User = Depends(require_permission("hr:settings"))):
     try:
         await delete_reference(db, current_user.company_id, reference_id)
+    except EmployeeError as e:
+        raise _refused(e)
+
+
+# --- payroll settings (step 2) -------------------------------------------------------------------------------------
+
+@router.get("/payroll/settings")
+async def get_settings(db: AsyncSession = Depends(get_db), current_user: User = Depends(require_permission("hr:view"))):
+    return await get_payroll_settings(db, current_user.company_id)
+
+
+@router.put("/payroll/settings")
+async def put_settings(payload: PayrollSettingsRequest, db: AsyncSession = Depends(get_db),
+                       current_user: User = Depends(require_permission("hr:payroll_settings"))):
+    try:
+        return await update_payroll_settings(db, current_user.company_id, payload.model_dump())
+    except EmployeeError as e:
+        raise _refused(e)
+
+
+@router.get("/payroll/irt-tables")
+async def get_irt_tables(db: AsyncSession = Depends(get_db), current_user: User = Depends(require_permission("hr:view"))):
+    return await list_irt_tables(db, current_user.company_id)
+
+
+@router.post("/payroll/irt-tables", status_code=status.HTTP_201_CREATED)
+async def post_irt_table(payload: IrtTableRequest, db: AsyncSession = Depends(get_db),
+                         current_user: User = Depends(require_permission("hr:payroll_settings"))):
+    try:
+        return await save_irt_table(db, current_user.company_id, None, payload.model_dump())
+    except EmployeeError as e:
+        raise _refused(e)
+
+
+@router.put("/payroll/irt-tables/{table_id}")
+async def put_irt_table(table_id: uuid.UUID, payload: IrtTableRequest, db: AsyncSession = Depends(get_db),
+                        current_user: User = Depends(require_permission("hr:payroll_settings"))):
+    try:
+        return await save_irt_table(db, current_user.company_id, table_id, payload.model_dump())
+    except EmployeeError as e:
+        raise _refused(e)
+
+
+@router.delete("/payroll/irt-tables/{table_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_irt_table(table_id: uuid.UUID, db: AsyncSession = Depends(get_db),
+                           current_user: User = Depends(require_permission("hr:payroll_settings"))):
+    try:
+        await delete_irt_table(db, current_user.company_id, table_id)
+    except EmployeeError as e:
+        raise _refused(e)
+
+
+@router.get("/payroll/items")
+async def get_items(db: AsyncSession = Depends(get_db), current_user: User = Depends(require_permission("hr:view"))):
+    return await list_items(db, current_user.company_id)
+
+
+@router.post("/payroll/items", status_code=status.HTTP_201_CREATED)
+async def post_item(payload: PayrollItemRequest, db: AsyncSession = Depends(get_db),
+                    current_user: User = Depends(require_permission("hr:payroll_settings"))):
+    try:
+        return await create_item(db, current_user.company_id, payload.model_dump())
+    except EmployeeError as e:
+        raise _refused(e)
+
+
+@router.put("/payroll/items/{item_id}")
+async def put_item(item_id: uuid.UUID, payload: PayrollItemRequest, db: AsyncSession = Depends(get_db),
+                   current_user: User = Depends(require_permission("hr:payroll_settings"))):
+    try:
+        return await update_item(db, current_user.company_id, item_id, payload.model_dump())
+    except EmployeeError as e:
+        raise _refused(e)
+
+
+@router.delete("/payroll/items/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_item(item_id: uuid.UUID, db: AsyncSession = Depends(get_db),
+                      current_user: User = Depends(require_permission("hr:payroll_settings"))):
+    try:
+        await delete_item(db, current_user.company_id, item_id)
+    except EmployeeError as e:
+        raise _refused(e)
+
+
+@router.post("/payroll/formula-check")
+async def post_formula_check(payload: FormulaCheckRequest, db: AsyncSession = Depends(get_db),
+                             current_user: User = Depends(require_permission("hr:payroll_settings"))):
+    try:
+        return await check_formula(db, current_user.company_id, payload.formula, payload.code, payload.salary)
+    except EmployeeError as e:
+        raise _refused(e)
+
+
+@router.get("/employees/{employee_id}/payroll-items")
+async def get_employee_payroll_items(employee_id: uuid.UUID, db: AsyncSession = Depends(get_db),
+                                     current_user: User = Depends(require_permission("hr:view"))):
+    try:
+        return await employee_items(db, current_user.company_id, employee_id)
+    except EmployeeError as e:
+        raise _refused(e)
+
+
+@router.put("/employees/{employee_id}/payroll-items")
+async def put_employee_payroll_items(employee_id: uuid.UUID, payload: EmployeePayrollItemsRequest,
+                                     db: AsyncSession = Depends(get_db),
+                                     current_user: User = Depends(require_permission("hr:manage"))):
+    try:
+        return await set_employee_items(db, current_user.company_id, employee_id, payload.items)
+    except EmployeeError as e:
+        raise _refused(e)
+
+
+@router.post("/employees/{employee_id}/simulation")
+async def post_simulation(employee_id: uuid.UUID, payload: SimulationRequest, db: AsyncSession = Depends(get_db),
+                          current_user: User = Depends(require_permission("hr:view"))):
+    try:
+        return await simulate_payslip(db, current_user.company_id, employee_id, payload.month_values)
     except EmployeeError as e:
         raise _refused(e)

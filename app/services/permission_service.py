@@ -144,6 +144,7 @@ PERMISSION_CATALOG: list[tuple[str, str, str, list[str]]] = [
     ("hr:view", "Ver os colaboradores e as suas fichas", "Recursos Humanos", ["RH"]),
     ("hr:manage", "Registar e alterar colaboradores, registar saídas e readmissões", "Recursos Humanos", ["RH"]),
     ("hr:settings", "Configurar as tabelas de RH (departamentos, categorias, funções, contratos, horários...)", "Recursos Humanos", ["RH"]),
+    ("hr:payroll_settings", "Configurar os parâmetros salariais (INSS, tabela de IRT, rubricas e fórmulas)", "Recursos Humanos", ["RH"]),
     ("accounting:chart_view", "Ver o plano de contas", "Contabilidade", ["CONTABILISTA"]),
     ("accounting:chart_manage", "Configurar o plano de contas (PGC, importação, contas)", "Contabilidade", ["CONTABILISTA"]),
     ("accounting:entries_view", "Ver os lançamentos contabilísticos e os diários", "Contabilidade", ["CONTABILISTA"]),

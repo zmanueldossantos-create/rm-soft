@@ -98,3 +98,52 @@ export async function fetchEmployeePdfUrl(employeeId) {
   const res = await apiClient.get('/hr/employees/' + employeeId + '/pdf', { responseType: 'blob' });
   return URL.createObjectURL(res.data);
 }
+
+// the payroll settings (step 2): INSS, IRT tables, rubricas, the rubricas of an employee and his payslip simulation
+export async function getPayrollSettings() {
+  return (await apiClient.get('/hr/payroll/settings')).data;
+}
+
+export async function updatePayrollSettings(payload) {
+  return (await apiClient.put('/hr/payroll/settings', payload)).data;
+}
+
+export async function listIrtTables() {
+  return (await apiClient.get('/hr/payroll/irt-tables')).data;
+}
+
+export async function saveIrtTable(tableId, payload) {
+  return (tableId ? await apiClient.put('/hr/payroll/irt-tables/' + tableId, payload) : await apiClient.post('/hr/payroll/irt-tables', payload)).data;
+}
+
+export async function deleteIrtTable(tableId) {
+  await apiClient.delete('/hr/payroll/irt-tables/' + tableId);
+}
+
+export async function listPayrollItems() {
+  return (await apiClient.get('/hr/payroll/items')).data;
+}
+
+export async function savePayrollItem(itemId, payload) {
+  return (itemId ? await apiClient.put('/hr/payroll/items/' + itemId, payload) : await apiClient.post('/hr/payroll/items', payload)).data;
+}
+
+export async function deletePayrollItem(itemId) {
+  await apiClient.delete('/hr/payroll/items/' + itemId);
+}
+
+export async function checkFormula(formula, code) {
+  return (await apiClient.post('/hr/payroll/formula-check', { formula, code })).data;
+}
+
+export async function getEmployeePayrollItems(employeeId) {
+  return (await apiClient.get('/hr/employees/' + employeeId + '/payroll-items')).data;
+}
+
+export async function setEmployeePayrollItems(employeeId, items) {
+  return (await apiClient.put('/hr/employees/' + employeeId + '/payroll-items', { items })).data;
+}
+
+export async function simulatePayslip(employeeId, monthValues = {}) {
+  return (await apiClient.post('/hr/employees/' + employeeId + '/simulation', { month_values: monthValues })).data;
+}

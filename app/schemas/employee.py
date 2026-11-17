@@ -62,3 +62,47 @@ class HrReferenceCreateRequest(BaseModel):
 class HrReferenceUpdateRequest(BaseModel):
     name: str
     is_active: bool = True
+
+
+class PayrollSettingsRequest(BaseModel):
+    inss_employee_rate: float | None = None
+    inss_employer_rate: float | None = None
+    monthly_hours: float | None = None
+    monthly_days: float | None = None
+    inss_deducted_from_irt: bool = True
+
+
+class IrtTableRequest(BaseModel):
+    name: str = ""
+    valid_from: date | None = None
+    brackets: list[dict] = []
+
+
+class PayrollItemRequest(BaseModel):
+    code: str = ""
+    name: str = ""
+    nature: str = ""
+    calc_method: str = ""
+    amount: float | None = None
+    rate: float | None = None
+    formula: str | None = None
+    subject_inss: bool = True
+    subject_irt: bool = True
+    irt_exempt_limit: float | None = None
+    applies_to_all: bool = False
+    is_active: bool = True
+    notes: str | None = None
+
+
+class FormulaCheckRequest(BaseModel):
+    formula: str = ""
+    code: str | None = None
+    salary: float = 100000
+
+
+class EmployeePayrollItemsRequest(BaseModel):
+    items: list[dict] = []
+
+
+class SimulationRequest(BaseModel):
+    month_values: dict[str, float] = {}

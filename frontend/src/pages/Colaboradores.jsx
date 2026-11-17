@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Users2, Plus, Pencil, Eye, Loader2, Search, LogOut, UserPlus, Settings2 } from 'lucide-react';
+import { Users2, Plus, Pencil, Eye, Loader2, Search, LogOut, UserPlus, Settings2, Calculator } from 'lucide-react';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
 import DateInput from '../components/DateInput';
 import EmployeeForm from '../components/EmployeeForm';
 import HrTablesModal from '../components/HrTablesModal';
+import PayrollSettingsModal from '../components/PayrollSettingsModal';
 import { listEmployees, getEmployeeOptions, registerDeparture, readmitEmployee } from '../api/hr';
 import { useCan } from '../utils/permissions';
 import { formatDate, formatKz } from '../utils/format';
@@ -31,6 +32,7 @@ export default function Colaboradores() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [tablesOpen, setTablesOpen] = useState(false);
+  const [payrollOpen, setPayrollOpen] = useState(false);
   const [leaving, setLeaving] = useState(null); // { employee, left_on, reason, note }
   const [readmitting, setReadmitting] = useState(null); // { employee, hired_on }
   const [busy, setBusy] = useState(false);
@@ -124,6 +126,11 @@ export default function Colaboradores() {
           )}
         </div>
         <div className="flex items-center gap-2">
+          {can('hr:payroll_settings') && (
+            <button type="button" onClick={() => setPayrollOpen(true)} className="flex items-center gap-2 h-9 px-3.5 rounded-md border border-border text-sm text-text-primary hover:border-accent hover:text-accent cursor-pointer">
+              <Calculator size={15} /> Parâmetros salariais
+            </button>
+          )}
           {can('hr:settings') && (
             <button type="button" onClick={() => setTablesOpen(true)} className="flex items-center gap-2 h-9 px-3.5 rounded-md border border-border text-sm text-text-primary hover:border-accent hover:text-accent cursor-pointer">
               <Settings2 size={15} /> Tabelas de RH
@@ -203,6 +210,7 @@ export default function Colaboradores() {
       )}
 
       <EmployeeForm open={formOpen} onClose={() => setFormOpen(false)} onSaved={saved} employee={editing} options={options} readOnly={!canManage} />
+      <PayrollSettingsModal open={payrollOpen} onClose={() => setPayrollOpen(false)} canEdit={can('hr:payroll_settings')} />
       <HrTablesModal open={tablesOpen} onClose={() => setTablesOpen(false)} onChanged={() => { loadOptions(); load(); }} />
 
       <Modal open={!!leaving} onClose={() => setLeaving(null)} title="Registar saída" subtitle={leaving?.employee.full_name}>

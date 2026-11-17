@@ -555,6 +555,12 @@ PAGES = [
             "«Registar saída»: a data e o motivo; «Readmitir» traz o colaborador de volta com uma nova data de admissão.",
             {"text": "«Tabelas de RH»: os departamentos, categorias, funções, tipos de contrato, horários, níveis de escolaridade "
                      "e documentos da empresa - renomear, acrescentar, desativar.", "perms": ["hr:settings"]},
+            {"text": "«Parâmetros salariais»: as taxas de INSS, as horas e dias de um mês, a tabela de IRT (uma nova lei é uma "
+                     "nova tabela a partir da sua data) e as rubricas - abonos e descontos de valor fixo, percentagem do "
+                     "salário, fórmula (ex.: SE(ANTIGUIDADE >= 5; SB * 5%; 0)) ou indicados em cada mês, com a base do INSS, "
+                     "a base do IRT e o limite isento.", "perms": ["hr:payroll_settings"]},
+            "Ficha → Remuneração: as rubricas próprias do colaborador (ex.: subsídio de transporte de 15 000 Kz) e a "
+            "«Simulação do recibo» - ilíquido, INSS, IRT e líquido com os parâmetros atuais.",
         ],
         "errors": [("«... já tem a matrícula ...»", "A matrícula, o documento, o NIF e o n.º de segurança social são únicos na empresa."),
                    ("Um valor não pode ser apagado", "Está na ficha de um colaborador: desative-o (a ficha guarda-o, uma nova ficha já não o propõe).")],

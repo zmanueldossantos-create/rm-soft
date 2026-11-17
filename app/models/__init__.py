@@ -110,3 +110,4 @@ from app.models.relay import RelayAgentSettings, RelayLink, RelayRequest  # noqa
 from app.models.agt_call import AgtCall  # noqa: E402,F401 - the journal of the calls to the AGT
 from app.models.agt_test_taxpayer import AgtTestTaxpayer  # noqa: E402,F401 - the AGT test NIFs (homologação)
 from app.models.employee import Employee, EmployeeFile, HrReference  # noqa: E402,F401 - Recursos Humanos: colaboradores and their tables
+from app.models.payroll import EmployeePayrollItem, IrtTable, PayrollItem, PayrollSettings  # noqa: E402,F401 - Recursos Humanos: payroll settings

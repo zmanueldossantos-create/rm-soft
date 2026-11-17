@@ -5,6 +5,7 @@ import Select from './Select';
 import DateInput from './DateInput';
 import { createEmployee, updateEmployee, fetchEmployeePdfUrl } from '../api/hr';
 import { EmployeePhoto, EmployeeDocuments } from './EmployeeFiles';
+import EmployeePayroll from './EmployeePayroll';
 import { openPdf } from '../store/pdfViewerStore';
 import { extractErrorMessage } from '../utils/errors';
 import { toast } from '../store/toastStore';
@@ -209,9 +210,10 @@ export default function EmployeeForm({ open, onClose, onSaved, employee, options
             {select('Forma de pagamento', 'payment_method', pairs(options?.payment_methods))}
             {select('Banco', 'bank_id', [{ value: '', label: '-' }, ...(options?.banks || []).map((b) => ({ value: b.id, label: b.name }))])}
             {field(form.payment_method === 'TRANSFERENCIA' ? 'IBAN *' : 'IBAN', 'iban', { wide: true, mono: true, maxLength: 40, placeholder: 'AO06 0000 0000 0000 0000 0000 0' })}
-            <p className="sm:col-span-3 text-[12px] text-text-muted">Os subsídios, o INSS e o IRT configuram-se com o processamento salarial.</p>
+            {!employee && <p className="sm:col-span-3 text-[12px] text-text-muted">Os subsídios e a simulação do recibo ficam disponíveis depois de registar o colaborador.</p>}
           </div>
         )}
+        {tab === 'PAY' && employee && <EmployeePayroll employee={employee} canManage={!readOnly} />}
 
         {tab === 'EDU' && (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
