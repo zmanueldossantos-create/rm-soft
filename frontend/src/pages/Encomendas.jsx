@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { CakeSlice, Plus, Pencil, Loader2, Search, X, Trash2, Store, Truck, ChefHat, CheckCircle2, Undo2, Eye, ClipboardList } from 'lucide-react';
+import { CakeSlice, Plus, Pencil, Loader2, Search, X, Store, Truck, ChefHat, CheckCircle2, Undo2, Eye, ClipboardList } from 'lucide-react';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
 import DateInput from '../components/DateInput';
@@ -7,12 +7,12 @@ import { useCan } from '../utils/permissions';
 import { formatKz } from '../utils/format';
 import { extractErrorMessage } from '../utils/errors';
 import { toast } from '../store/toastStore';
-import { listOrders, getOrderOptions, createOrder, updateOrder, setOrderStatus, cancelOrder, getOrderCancelInfo, fetchProductionListBlob } from '../api/orders';
+import EncomendaForm from '../components/EncomendaForm';
+import { listOrders, setOrderStatus, cancelOrder, getOrderCancelInfo, fetchProductionListBlob } from '../api/orders';
 import { openPdf } from '../store/pdfViewerStore';
 import { listPaymentMethodPreferences } from '../api/tesouraria';
 import { getMyCompanyBankAccounts } from '../api/company';
 import { banksApi } from '../api/catalogs';
-import { useAuthStore } from '../store/authStore';
 
 // Encomendas: what customers ordered to be made and handed over later - by delivery date, with a production note per
 // line, moved through production (Encomendada -> Em produção -> Pronta). The deposit and the delivery are done at the
@@ -42,15 +42,6 @@ function when(value) {
   return p(d.getDate()) + '/' + p(d.getMonth() + 1) + '/' + d.getFullYear() + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
 }
 
-function localParts(value) {
-  const d = new Date(value);
-  const p = (n) => String(n).padStart(2, '0');
-  return { date: d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()), time: p(d.getHours()) + ':' + p(d.getMinutes()) };
-}
-
-const emptyLine = () => ({ key: Math.random().toString(36).slice(2), article: '', quantity: '1', price: '', note: '' });
-const emptyForm = () => ({ customerId: '', activityId: '', date: isoDay(1), time: '10:00', mode: 'LOJA', address: '', contactName: '', contactPhone: '', notes: '', lines: [emptyLine()] });
-
 export default function Encomendas() {
   const can = useCan();
   const canManage = can('orders:manage');
@@ -64,12 +55,9 @@ export default function Encomendas() {
   const [listDay, setListDay] = useState(isoDay(1));
   const [listLoading, setListLoading] = useState(false);
 
-  const [options, setOptions] = useState(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState(null); // the order changed, or null for a new one
   const [viewing, setViewing] = useState(null); // an order only shown (not editable)
-  const [form, setForm] = useState(emptyForm);
-  const [saving, setSaving] = useState(false);
   const [cancelling, setCancelling] = useState(null);
   const [cancelReason, setCancelReason] = useState('');
   const [cancelInfo, setCancelInfo] = useState(null); // invoiced? paid? the tills that can give cash back
@@ -78,7 +66,6 @@ export default function Encomendas() {
   const [refundMethods, setRefundMethods] = useState([]);
   const [bankAccounts, setBankAccounts] = useState([]);
   const [banks, setBanks] = useState([]);
-  const isGestor = useAuthStore((st) => st.user?.role) === 'GESTOR';
 
   const params = useMemo(() => {
     if (filter === 'ABERTAS') return { status_filter: 'ABERTAS' };
@@ -104,13 +91,6 @@ export default function Encomendas() {
     return () => clearTimeout(t);
   }, [params, search]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function ensureOptions() {
-    if (options) return options;
-    const data = await getOrderOptions();
-    setOptions(data);
-    return data;
-  }
-
   // the production list of a day: what the workshop makes for the orders delivered that day (A4, to print)
   async function openProductionList(e) {
     e.preventDefault();
@@ -131,110 +111,18 @@ export default function Encomendas() {
     }
   }
 
-  async function openNew() {
-    try {
-      const data = await ensureOptions();
-      if (!data.activities.length) {
-        toast.error('Nenhuma atividade da empresa tem as Encomendas');
-        return;
-      }
-      setEditing(null);
-      setForm({ ...emptyForm(), activityId: data.activities.length === 1 ? data.activities[0].id : '' });
-      setFormOpen(true);
-    } catch (err) {
-      toast.error(extractErrorMessage(err, 'Erro ao abrir o formulário'));
-    }
+  function openNew() {
+    setEditing(null);
+    setFormOpen(true);
   }
 
-  async function openOrder(order) {
+  function openOrder(order) {
     if (!(canManage && order.editable)) {
       setViewing(order);
       return;
     }
-    try {
-      await ensureOptions();
-      const { date, time } = localParts(order.delivery_at);
-      setEditing(order);
-      setForm({
-        customerId: order.customer_id, activityId: order.activity_id, date, time, mode: order.delivery_mode,
-        address: order.delivery_address || '', contactName: order.contact_name || '', contactPhone: order.contact_phone || '',
-        notes: order.notes || '',
-        lines: order.lines.map((l) => ({ key: l.id, article: (l.product_id ? 'product:' + l.product_id : 'service:' + l.service_id),
-          quantity: String(l.quantity), price: String(l.unit_price), note: l.production_note || '' })),
-      });
-      setFormOpen(true);
-    } catch (err) {
-      toast.error(extractErrorMessage(err, 'Erro ao abrir a encomenda'));
-    }
-  }
-
-  const articleById = useMemo(() => Object.fromEntries((options?.articles || []).map((a) => [a.kind + ':' + a.id, a])), [options]);
-  const articleOptions = useMemo(() => (options?.articles || []).map((a) => ({
-    value: a.kind + ':' + a.id, label: a.name + (a.code ? ' (' + a.code + ')' : '') + (a.kind === 'service' ? ' · serviço' : ''),
-  })), [options]);
-
-  function updateLine(key, patch) {
-    setForm((f) => ({ ...f, lines: f.lines.map((l) => (l.key === key ? { ...l, ...patch } : l)) }));
-  }
-
-  function chooseArticle(key, value) {
-    const article = articleById[value];
-    updateLine(key, { article: value, price: article ? String(article.price) : '' });
-  }
-
-  const totals = useMemo(() => {
-    let subtotal = 0;
-    let vat = 0;
-    for (const l of form.lines) {
-      const a = articleById[l.article];
-      const amount = (Number(l.quantity) || 0) * (Number(l.price) || 0);
-      subtotal += amount;
-      vat += a ? amount * Number(a.vat_rate) / 100 : 0;
-    }
-    return { subtotal, vat, total: subtotal + vat };
-  }, [form.lines, articleById]);
-
-  async function handleSubmit(e) {
-    e.preventDefault();
-    if (!form.customerId) {
-      toast.error('Escolha o cliente da encomenda');
-      return;
-    }
-    if (!form.date || !form.time) {
-      toast.error('Indique a data e a hora da entrega');
-      return;
-    }
-    if (form.mode === 'ENTREGA' && !form.address.trim()) {
-      toast.error('Indique a morada de entrega');
-      return;
-    }
-    const lines = form.lines.filter((l) => l.article);
-    if (!lines.length) {
-      toast.error('A encomenda deve ter pelo menos um artigo');
-      return;
-    }
-    const payload = {
-      customer_id: form.customerId, activity_id: form.activityId || null,
-      delivery_at: form.date + 'T' + form.time + ':00+01:00', delivery_mode: form.mode,
-      delivery_address: form.mode === 'ENTREGA' ? form.address : null,
-      contact_name: form.contactName || null, contact_phone: form.contactPhone || null, notes: form.notes || null,
-      lines: lines.map((l) => {
-        const [kind, id] = l.article.split(':');
-        return { [kind === 'product' ? 'product_id' : 'service_id']: id, quantity: Number(l.quantity),
-          unit_price: l.price === '' ? null : Number(l.price), production_note: l.note || null };
-      }),
-    };
-    setSaving(true);
-    try {
-      const saved = editing ? await updateOrder(editing.id, payload) : await createOrder(payload);
-      toast.success((editing ? 'Encomenda alterada: ' : 'Encomenda registada: ') + saved.reference);
-      setFormOpen(false);
-      await load();
-    } catch (err) {
-      toast.error(extractErrorMessage(err, 'Erro ao guardar a encomenda'));
-    } finally {
-      setSaving(false);
-    }
+    setEditing(order);
+    setFormOpen(true);
   }
 
   async function changeStatus(order, status) {
@@ -331,9 +219,6 @@ export default function Encomendas() {
       </>
     );
   }
-
-  // an invoiced order: its lines are those of its Fatura - only the delivery, the contact and the notes change
-  const locked = !!editing?.lines_locked;
 
   return (
     <main className="max-w-[1600px] mx-auto px-4 sm:px-6 md:px-8 py-6 sm:py-9">
@@ -450,106 +335,8 @@ export default function Encomendas() {
         </div>
       )}
 
-      <Modal open={formOpen} onClose={() => setFormOpen(false)} title={editing ? 'Alterar encomenda ' + editing.reference : 'Nova encomenda'} maxWidthClass="max-w-5xl">
-        <form noValidate onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className={(options?.activities || []).length > 1 ? '' : 'sm:col-span-2'}>
-              <label className={labelClass}>Cliente *</label>
-              <Select value={form.customerId} disabled={locked} onChange={(v) => setForm((p) => ({ ...p, customerId: v }))} placeholder="Escolher o cliente"
-                options={(options?.customers || []).map((c) => ({ value: c.id, label: c.name + (c.phone_number ? ' · ' + c.phone_number : '') }))} />
-            </div>
-            {(options?.activities || []).length > 1 ? (
-              <div>
-                <label className={labelClass}>Atividade *</label>
-                <Select value={form.activityId} onChange={(v) => setForm((p) => ({ ...p, activityId: v }))} placeholder="Escolher"
-                  options={options.activities.map((a) => ({ value: a.id, label: a.name }))} />
-              </div>
-            ) : null}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className={labelClass}>Data de entrega *</label>
-                <DateInput value={form.date} onChange={(e) => setForm((p) => ({ ...p, date: e.target.value }))} required className={inputClass} />
-              </div>
-              <div>
-                <label className={labelClass}>Hora *</label>
-                <input type="time" value={form.time} onChange={(e) => setForm((p) => ({ ...p, time: e.target.value }))} required className={inputClass} />
-              </div>
-            </div>
-            <div>
-              <label className={labelClass}>Como é entregue</label>
-              <div className="grid grid-cols-2 gap-2">
-                {[['LOJA', 'Levanta na loja', Store], ['ENTREGA', 'Entrega na morada', Truck]].map(([value, label, Icon]) => (
-                  <button key={value} type="button" onClick={() => setForm((p) => ({ ...p, mode: value }))}
-                    className={'flex items-center justify-center gap-2 h-[42px] rounded-md border text-sm font-medium transition-colors cursor-pointer ' + (form.mode === value ? 'border-accent bg-accent/10 text-accent' : 'border-border text-text-muted hover:text-text-primary')}>
-                    <Icon size={15} /> {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-          {/* the address (a delivery) and the contact on one line */}
-          <div className={'grid grid-cols-1 gap-3 ' + (form.mode === 'ENTREGA' ? 'sm:grid-cols-3' : 'sm:grid-cols-2')}>
-            {form.mode === 'ENTREGA' && (
-              <div>
-                <label className={labelClass}>Morada de entrega *</label>
-                <input value={form.address} onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))} required className={inputClass} />
-              </div>
-            )}
-            <div>
-              <label className={labelClass}>Quem levanta / recebe (opcional)</label>
-              <input value={form.contactName} onChange={(e) => setForm((p) => ({ ...p, contactName: e.target.value }))} className={inputClass} />
-            </div>
-            <div>
-              <label className={labelClass}>Telefone de contacto (opcional)</label>
-              <input value={form.contactPhone} onChange={(e) => setForm((p) => ({ ...p, contactPhone: e.target.value }))} placeholder="+244..." className={inputClass} />
-            </div>
-          </div>
-
-          <div>
-            <p className={labelClass}>Artigos *</p>
-            {locked && (
-              <p className="text-[12.5px] text-amber-500 mb-2">Encomenda faturada ({editing.invoice_reference}): os artigos, as quantidades e os preços já não se alteram - só a entrega, o contacto e as notas.</p>
-            )}
-            <div className="flex flex-col gap-2">
-              {form.lines.map((l) => {
-                const a = articleById[l.article];
-                const amount = (Number(l.quantity) || 0) * (Number(l.price) || 0) * (1 + (a ? Number(a.vat_rate) : 0) / 100);
-                return (
-                  <div key={l.key} className="grid grid-cols-12 gap-2 items-start bg-bg-inset/40 border border-border rounded-md p-2">
-                    <div className="col-span-12 md:col-span-4"><Select value={l.article} disabled={locked} onChange={(v) => chooseArticle(l.key, v)} placeholder="Artigo" options={articleOptions} /></div>
-                    <input type="number" min="0" step="any" value={l.quantity} readOnly={locked} onChange={(e) => updateLine(l.key, { quantity: e.target.value })} title="Quantidade" className={inputClass + ' col-span-3 md:col-span-1 text-right'} />
-                    <input type="number" min="0" step="any" value={l.price} readOnly={locked || !isGestor} onChange={(e) => updateLine(l.key, { price: e.target.value })} title={isGestor ? 'Preço sem IVA' : 'Preço sem IVA (só o gestor o altera)'} placeholder="Preço" className={inputClass + ' col-span-4 md:col-span-2 text-right'} />
-                    <input value={l.note} onChange={(e) => updateLine(l.key, { note: e.target.value })} placeholder="Nota de produção (ex.: Parabéns Ana)" className={inputClass + ' col-span-12 md:col-span-3 order-last md:order-none'} />
-                    <div className="col-span-4 md:col-span-1 text-right font-mono text-[13px] text-text-primary pt-2.5 whitespace-nowrap">{formatKz(amount)}</div>
-                    <button type="button" disabled={locked || form.lines.length === 1} onClick={() => setForm((p) => ({ ...p, lines: p.lines.filter((x) => x.key !== l.key) }))}
-                      className="col-span-1 inline-flex items-center justify-center h-[42px] rounded-md text-text-muted hover:text-danger disabled:opacity-30 cursor-pointer"><Trash2 size={15} /></button>
-                  </div>
-                );
-              })}
-            </div>
-            {!locked && <button type="button" onClick={() => setForm((p) => ({ ...p, lines: [...p.lines, emptyLine()] }))} className="mt-2 inline-flex items-center gap-1.5 text-sm text-accent hover:underline cursor-pointer">
-              <Plus size={14} /> Adicionar artigo
-            </button>}
-          </div>
-
-          <div>
-            <label className={labelClass}>Observações (opcional)</label>
-            <textarea value={form.notes} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))} rows={2} className={inputClass} />
-          </div>
-
-          <div className="flex items-end justify-between gap-4 border-t border-border pt-3 flex-wrap">
-            <div className="text-sm text-text-muted font-mono">Sem IVA {formatKz(totals.subtotal)} · IVA {formatKz(totals.vat)}</div>
-            <div className="text-right">
-              <div className="text-[11px] uppercase tracking-wide text-text-muted">Total da encomenda</div>
-              <div className="font-mono font-semibold text-2xl text-text-primary">{formatKz(totals.total)} Kz</div>
-            </div>
-          </div>
-          <button type="submit" disabled={saving} className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold text-sm rounded-md py-3 flex items-center justify-center gap-2 transition-colors cursor-pointer">
-            {saving ? <Loader2 size={17} className="animate-spin" /> : <Plus size={17} />}
-            {saving ? 'A guardar...' : editing ? 'Guardar alterações' : 'Registar encomenda'}
-          </button>
-        </form>
-      </Modal>
+      <EncomendaForm open={formOpen} onClose={() => setFormOpen(false)} editing={editing}
+        onSaved={async () => { setFormOpen(false); await load(); }} />
 
       <Modal open={!!viewing} onClose={() => setViewing(null)} title={viewing ? 'Encomenda ' + viewing.reference : ''} maxWidthClass="max-w-3xl">
         {viewing && (

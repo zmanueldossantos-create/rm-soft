@@ -524,7 +524,7 @@ PAGES = [
                  "festa): a data e a hora da entrega, as notas de produção e o estado.",
         "steps": [
             "«Nova encomenda»: o cliente (identificado - não o consumidor final), a data e a hora, «Levanta na loja» ou "
-            "«Entrega na morada» (com a morada).",
+            "«Entrega na morada» (com a morada). O caixa regista-a na Caixa → ícone Encomendas → «Nova encomenda».",
             "Os artigos com a quantidade e o preço (o do catálogo, pode ser alterado) e, em cada linha, a nota de produção "
             "(ex.: «Parabéns Ana 30 anos»).",
             "A produção avança com «Produzir» e «Pronta»; a seta volta ao estado anterior (um bolo a refazer).",
