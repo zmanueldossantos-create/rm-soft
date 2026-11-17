@@ -25,7 +25,7 @@ def _day(value) -> str:
     return value.strftime("%d/%m/%Y")
 
 
-def _fields(p: _Page, pairs: list[tuple[str, str]], width: float = CONTENT_W, columns: int = 2) -> None:
+def _fields(p: _Page, pairs: list[tuple[str, str]], width: float = CONTENT_W, columns: int = 3) -> None:
     """Label / value pairs on columns, row after row; an empty value shows «-»."""
     c = p.c
     col_w = width / columns
@@ -40,6 +40,12 @@ def _fields(p: _Page, pairs: list[tuple[str, str]], width: float = CONTENT_W, co
             c.setFont("Helvetica", 9.5)
             c.drawString(x, p.y - 4 * mm, _fit(c, str(value or "-"), "Helvetica", 9.5, col_w - 4 * mm))
         p.y -= 8.5 * mm
+
+
+def _section(p: _Page, title: str) -> None:
+    """A section title, a little apart from the block above."""
+    p.y -= 2 * mm
+    _section_title(p, title)
 
 
 def _paragraph(p: _Page, label: str, text: str | None) -> None:
@@ -75,7 +81,7 @@ def generate_employee_pdf(e: dict, documents: dict, photo: bytes | None, company
     _draw_header(p, company, "FICHA DO COLABORADOR", [e["full_name"], f"Matrícula {e['number']}"],
                  [("Admissão", _day(e["hired_on"])), ("Estado", state), ("Impresso em", _when(datetime.now(LUANDA)))])
 
-    _section_title(p, "Identificação")
+    _section(p, "Identificação")
     top = p.y
     if photo:
         try:
@@ -84,18 +90,20 @@ def generate_employee_pdf(e: dict, documents: dict, photo: bytes | None, company
         except Exception:  # an unreadable image never stops the file
             pass
     document = ID_DOCUMENT_TYPES.get(e.get("id_document_type") or "", "Documento")
+    width = CONTENT_W - (PHOTO_W + 4 * mm if photo else 0)
+    _fields(p, [("Nome completo", e["full_name"])], width=width, columns=1)
     _fields(p, [
-        ("Nome completo", e["full_name"]), ("Género", GENDERS.get(e.get("gender") or "")),
+        ("Género", GENDERS.get(e.get("gender") or "")),
         ("Data de nascimento", _day(e.get("birth_date"))), ("Estado civil", MARITAL_STATUSES.get(e.get("marital_status") or "")),
         ("Nacionalidade", e.get("nationality")), ("NIF", e.get("nif")),
         (document, e.get("id_document_number")), ("Válido até", _day(e.get("id_expires_on"))),
         ("N.º de segurança social", e.get("social_security_number")), ("Telefone", e.get("phone")),
-    ], width=CONTENT_W - (PHOTO_W + 4 * mm if photo else 0))
+    ], width=width)
     p.y = min(p.y, top - PHOTO_H - 2 * mm) if photo else p.y
-    _fields(p, [("Nome do pai", e.get("father_name")), ("Nome da mãe", e.get("mother_name")),
-                ("Email", e.get("email")), ("Morada", e.get("address"))])
+    _fields(p, [("Nome do pai", e.get("father_name")), ("Nome da mãe", e.get("mother_name")), ("Email", e.get("email"))])
+    _paragraph(p, "Morada", e.get("address"))
 
-    _section_title(p, "Dados profissionais")
+    _section(p, "Dados profissionais")
     _fields(p, [
         ("Departamento", e.get("department")), ("Categoria profissional", e.get("category")),
         ("Função / cargo", e.get("job_title")), ("Local de trabalho", e.get("establishment")),
@@ -107,18 +115,18 @@ def generate_employee_pdf(e: dict, documents: dict, photo: bytes | None, company
         _fields(p, [("Data de saída", _day(e.get("left_on"))), ("Motivo da saída", e.get("leaving_reason_label"))])
         _paragraph(p, "Observação da saída", e.get("leaving_note"))
 
-    _section_title(p, "Remuneração")
-    _fields(p, [("Salário base mensal", kz(e["base_salary"]) + " Kz"),
+    _section(p, "Remuneração")
+    _fields(p, [("Salário base mensal", kz(e["base_salary"])),
                 ("Forma de pagamento", PAYMENT_METHODS.get(e.get("payment_method") or "")),
                 ("Banco", e.get("bank")), ("IBAN", " ".join((e.get("iban") or "")[i:i + 4] for i in range(0, len(e.get("iban") or ""), 4)))])
 
-    _section_title(p, "Habilitações")
+    _section(p, "Habilitações")
     _fields(p, [("Nível de escolaridade", e.get("education_level"))], columns=1)
     _paragraph(p, "Formação profissional", e.get("training"))
     _paragraph(p, "Experiência anterior", e.get("experience"))
     _paragraph(p, "Observações", e.get("notes"))
 
-    _section_title(p, "Documentos do processo")
+    _section(p, "Documentos do processo")
     rows = [[_fit(c, d["name"] or "-", "Helvetica", 9, 0.42 * CONTENT_W), _day(d["delivered_on"]),
              _day(d["expires_on"]) + (" (expirado)" if d.get("expired") else ""), "Sim" if d["has_file"] else "Papel"]
             for d in documents["documents"]]
