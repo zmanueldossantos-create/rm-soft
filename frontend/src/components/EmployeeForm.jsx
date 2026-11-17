@@ -150,7 +150,7 @@ export default function EmployeeForm({ open, onClose, onSaved, employee, options
             {field('N.º de segurança social (INSS)', 'social_security_number', { mono: true, maxLength: 20 })}
             {field('Telefone', 'phone', { maxLength: 20, inputMode: 'tel' })}
             {field('Email', 'email', { maxLength: 120, type: 'email' })}
-            {field('Morada', 'address', { wide: true, maxLength: 300 })}
+            {field('Morada', 'address', { maxLength: 300 })}
           </div>
         )}
 
