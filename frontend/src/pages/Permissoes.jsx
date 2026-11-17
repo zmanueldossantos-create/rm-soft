@@ -4,8 +4,8 @@ import { getPermissionMatrix, setRolePermission } from '../api/permissions';
 import { extractErrorMessage } from '../utils/errors';
 import { useToastState } from '../components/Toaster';
 
-const ROLES = ['GESTOR', 'CAIXA', 'ATENDENTE', 'COZINHA', 'ARMAZENISTA', 'CONTABILISTA'];
-const ROLE_LABELS = { GESTOR: 'Gestor', CAIXA: 'Caixa', ATENDENTE: 'Atendente', COZINHA: 'Cozinha', ARMAZENISTA: 'Armazenista', CONTABILISTA: 'Contabilista' };
+const ROLES = ['GESTOR', 'CAIXA', 'ATENDENTE', 'COZINHA', 'ARMAZENISTA', 'CONTABILISTA', 'RH'];
+const ROLE_LABELS = { GESTOR: 'Gestor', CAIXA: 'Caixa', ATENDENTE: 'Atendente', COZINHA: 'Cozinha', ARMAZENISTA: 'Armazenista', CONTABILISTA: 'Contabilista', RH: 'RH' };
 
 export default function Permissoes() {
   const [entries, setEntries] = useState([]);

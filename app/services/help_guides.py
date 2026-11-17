@@ -542,6 +542,24 @@ PAGES = [
         "errors": [("«Uma encomenda precisa de um cliente identificado»", "Crie o cliente em Vendas → Clientes (nome e telefone).")],
     },
     {
+        "id": "colaboradores", "path": "/rh/colaboradores", "title": "Colaboradores", "perms": ["hr:view"],
+        "intro": "A ficha de cada colaborador: identificação, dados profissionais, remuneração e habilitações. Quem sai da "
+                 "empresa sai da lista dos ativos, mas a ficha fica (e pode ser readmitido).",
+        "steps": [
+            "«Novo colaborador»: a matrícula é proposta (0001, 0002...) e pode ser alterada; o nome, a data de admissão e o "
+            "salário base são obrigatórios.",
+            "Separadores da ficha: Identificação (documento, NIF, n.º de segurança social, filiação), Profissional "
+            "(departamento, categoria, função, local, contrato, horário), Remuneração (salário base, forma de pagamento, "
+            "banco e IBAN) e Habilitações.",
+            "Uma transferência bancária precisa do IBAN (Angola: AO06 seguido de 21 algarismos).",
+            "«Registar saída»: a data e o motivo; «Readmitir» traz o colaborador de volta com uma nova data de admissão.",
+            {"text": "«Tabelas de RH»: os departamentos, categorias, funções, tipos de contrato, horários, níveis de escolaridade "
+                     "e documentos da empresa - renomear, acrescentar, desativar.", "perms": ["hr:settings"]},
+        ],
+        "errors": [("«... já tem a matrícula ...»", "A matrícula, o documento, o NIF e o n.º de segurança social são únicos na empresa."),
+                   ("Um valor não pode ser apagado", "Está na ficha de um colaborador: desative-o (a ficha guarda-o, uma nova ficha já não o propõe).")],
+    },
+    {
         "id": "reservas-pagina", "path": "/reservas", "title": "Mapa de reservas", "module": "reservas", "perms": ["bookings:view"],
         "intro": "As reservas de quartos, praticantes, mesas ou qualquer recurso - a mesma lista que a receção vê na caixa.",
         "steps": [

@@ -70,6 +70,10 @@ CAPABILITIES: dict[str, Capability] = {
             ("orders",), ("/encomendas",),
         ),
         Capability(
+            "HR", "Recursos Humanos", "Colaboradores: ficha, contrato, remuneração e as tabelas de RH", (),
+            ("hr",), ("/rh/colaboradores",),
+        ),
+        Capability(
             "ACCOUNTING", "Contabilidade", "Plano de contas, lançamentos, balancete e demonstrações financeiras", (),
             ("accounting",), ("/contabilidade/plano-de-contas", "/contabilidade/lancamentos", "/contabilidade/balancete", "/contabilidade/razao",
              "/contabilidade/demonstracoes"),
@@ -134,7 +138,7 @@ SECTORS: tuple[Sector, ...] = (
     Sector("FARMACIA", "Farmácia", "Venda e stock de medicamentos, por lote e validade", ("STOCK", "PHARMACY")),
     Sector("CONTABILIDADE", "Contabilidade", "Plano de contas, lançamentos, balancete e demonstrações financeiras",
            ("ACCOUNTING",), sells=False),
-    Sector("RH", "Recursos Humanos", "Gestão de colaboradores e salários", (), False, "Em desenvolvimento", sells=False),
+    Sector("RH", "Recursos Humanos", "Colaboradores e as tabelas de RH (os salários vêm a seguir)", ("HR",), sells=False),
     Sector("HOSPITAL", "Hospital", "Pacientes, consultas e faturação", (), False, "Em desenvolvimento"),
     Sector("ESCOLA", "Escola", "Alunos, matrículas e propinas", (), False, "Em desenvolvimento"),
 )

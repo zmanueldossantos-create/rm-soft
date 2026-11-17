@@ -24,6 +24,7 @@ class UserRole(str, enum.Enum):
     CONTABILISTA = "CONTABILISTA"  # was COMPTABLE
     ATENDENTE = "ATENDENTE"  # contas abertas sans fecho
     COZINHA = "COZINHA"  # the kitchen screen: moves dishes forward, never cashes
+    RH = "RH"  # Recursos Humanos: the employees' files (and later the payroll)
 
 
 class User(Base):

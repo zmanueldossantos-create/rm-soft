@@ -25,6 +25,7 @@ const ROLE_OPTIONS = [
   { value: 'COZINHA', label: 'Cozinha' },
   { value: 'ARMAZENISTA', label: 'Armazenista' },
   { value: 'CONTABILISTA', label: 'Contabilista' },
+  { value: 'RH', label: 'Recursos Humanos' },
 ];
 
 const emptyForm = { fullName: '', phone: '', password: '', role: '' };

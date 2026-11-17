@@ -27,7 +27,7 @@ from app.models.role_permission import RolePermission
 from app.models.user import UserRole
 
 ALWAYS_ALLOWED_ROLE = "GESTOR"
-EDITABLE_ROLES = ("CAIXA", "ATENDENTE", "COZINHA", "ARMAZENISTA", "CONTABILISTA")
+EDITABLE_ROLES = ("CAIXA", "ATENDENTE", "COZINHA", "ARMAZENISTA", "CONTABILISTA", "RH")
 
 # (code, label, category, default_roles) - GESTOR is implicit, never listed.
 PERMISSION_CATALOG: list[tuple[str, str, str, list[str]]] = [
@@ -141,6 +141,9 @@ PERMISSION_CATALOG: list[tuple[str, str, str, list[str]]] = [
     ("fiscal_periods:close", "Fechar exercicios e períodos fiscais", "Contabilidade", []),
     ("fiscal_periods:current", "Ver o período fiscal corrente", "Contabilidade", ["CAIXA", "ARMAZENISTA", "CONTABILISTA", "ATENDENTE", "COZINHA"]),
     ("saf_t:export", "Exportar SAF-T", "Contabilidade", []),
+    ("hr:view", "Ver os colaboradores e as suas fichas", "Recursos Humanos", ["RH"]),
+    ("hr:manage", "Registar e alterar colaboradores, registar saídas e readmissões", "Recursos Humanos", ["RH"]),
+    ("hr:settings", "Configurar as tabelas de RH (departamentos, categorias, funções, contratos, horários...)", "Recursos Humanos", ["RH"]),
     ("accounting:chart_view", "Ver o plano de contas", "Contabilidade", ["CONTABILISTA"]),
     ("accounting:chart_manage", "Configurar o plano de contas (PGC, importação, contas)", "Contabilidade", ["CONTABILISTA"]),
     ("accounting:entries_view", "Ver os lançamentos contabilísticos e os diários", "Contabilidade", ["CONTABILISTA"]),
