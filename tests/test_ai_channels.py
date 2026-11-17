@@ -215,3 +215,13 @@ async def test_saas_registers_the_telegram_webhook(db, monkeypatch):
     secret = (await get_or_create_platform_settings(db)).telegram_webhook_secret
     assert calls[-1] == ("setWebhook", {"url": "https://admin.rmsystem.co.ao/api/v1/channels/telegram/webhook",
                                         "secret_token": secret, "allowed_updates": ["message"]})
+
+
+
+def test_italics_reach_telegram_as_italics():
+    """«(Nota: *Parabéns João*)» was shown with its stars: one star or one underscore is an italic - never a lone
+    star (2 * 3) nor an underscore inside a word."""
+    from app.services.ai.telegram import to_html
+    assert to_html("Nota: *Parabéns João*") == "Nota: <i>Parabéns João</i>"
+    assert to_html("2 * 3 = 6, codigo_de_artigo, _nota_") == "2 * 3 = 6, codigo_de_artigo, <i>nota</i>"
+    assert to_html("- **Total** e *pago*") == "• <b>Total</b> e <i>pago</i>"

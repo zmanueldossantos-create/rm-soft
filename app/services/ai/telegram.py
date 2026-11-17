@@ -92,7 +92,8 @@ async def ensure_webhook() -> None:
 # ---------- Telegram's HTML
 
 def to_html(markdown: str) -> str:
-    """The panel's little markdown in Telegram's HTML: **bold**, «- » bullets, # titles, | tables | as lines."""
+    """The panel's little markdown in Telegram's HTML: **bold**, *italic* / _italic_, «- » bullets, # titles,
+    | tables | as lines."""
     lines = []
     for line in markdown.split("\n"):
         stripped = line.strip()
@@ -105,7 +106,10 @@ def to_html(markdown: str) -> str:
         stripped = re.sub(r"^[-*•]\s+", "• ", stripped)
         lines.append(stripped)
     text = html.escape("\n".join(lines), quote=False)
-    return re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", text)
+    text = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", text)
+    # an italic: one star (or underscore) around words, never a lone star (2 * 3) nor inside a word (snake_case)
+    text = re.sub(r"(?<![\w*])\*(?=\S)([^*\n]+?)(?<=\S)\*(?![\w*])", r"<i>\1</i>", text)
+    return re.sub(r"(?<![\w_])_(?=\S)([^_\n]+?)(?<=\S)_(?![\w_])", r"<i>\1</i>", text)
 
 
 def _chunks(text: str) -> list[str]:
