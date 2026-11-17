@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Loader2, Save, Plus, Pencil, Trash2, Percent, TableProperties, ListOrdered, CheckCircle2, ArrowLeft, Copy } from 'lucide-react';
+import { Loader2, Save, Plus, Pencil, Trash2, Percent, TableProperties, ListOrdered, CheckCircle2, ArrowLeft, Copy, CalendarDays, CalendarX } from 'lucide-react';
+import { HolidaysTab, AbsenceTypesTab } from './HrCalendarTabs';
 import Modal from './Modal';
 import Select from './Select';
 import DateInput from './DateInput';
@@ -11,7 +12,7 @@ import { formatDate, formatKz } from '../utils/format';
 import { extractErrorMessage } from '../utils/errors';
 import { toast } from '../store/toastStore';
 
-// Parâmetros salariais (RH, step 2): everything the payslip reads, nothing coded - the INSS and the hours and days of a
+// Parâmetros de RH (steps 2 and 3a/3b): everything the payslip reads, nothing coded - the INSS and the hours and days of a
 // month, the IRT tables (valid from a date: a new law is a new table), the rubricas (allowances and deductions, with
 // their INSS / IRT base and exempt limit, fixed, % of the salary, formula or typed each month).
 const inputClass = 'w-full bg-bg-inset border border-border rounded-md px-3 py-2 text-sm text-text-primary outline-none focus:border-accent transition-colors';
@@ -22,7 +23,10 @@ const TABS = [
   { key: 'GERAL', label: 'INSS e horário', icon: Percent },
   { key: 'IRT', label: 'Tabela de IRT', icon: TableProperties },
   { key: 'RUB', label: 'Rubricas', icon: ListOrdered },
+  { key: 'FER', label: 'Feriados', icon: CalendarDays },
+  { key: 'AUS', label: 'Tipos de ausência', icon: CalendarX },
 ];
+const WEEKDAYS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
 
 function Check({ checked, onChange, label, hint }) {
   return (
@@ -36,7 +40,7 @@ function Check({ checked, onChange, label, hint }) {
 function GeneralTab({ canEdit }) {
   const [form, setForm] = useState(null);
   const [busy, setBusy] = useState(false);
-  useEffect(() => { getPayrollSettings().then((s) => setForm(Object.fromEntries(Object.entries(s).map(([k, v]) => [k, typeof v === 'boolean' ? v : String(v)])))).catch((e) => toast.error(extractErrorMessage(e, 'Erro ao carregar'))); }, []);
+  useEffect(() => { getPayrollSettings().then((s) => setForm(Object.fromEntries(Object.entries(s).map(([k, v]) => [k, typeof v === 'boolean' || Array.isArray(v) ? v : String(v)])))).catch((e) => toast.error(extractErrorMessage(e, 'Erro ao carregar'))); }, []);
   if (!form) return <Loader2 size={18} className="animate-spin text-text-muted mx-auto my-10" />;
   const field = (label, key, hint) => (
     <div>
@@ -50,7 +54,8 @@ function GeneralTab({ canEdit }) {
     setBusy(true);
     try {
       await updatePayrollSettings({ inss_employee_rate: num(form.inss_employee_rate), inss_employer_rate: num(form.inss_employer_rate),
-        monthly_hours: num(form.monthly_hours), monthly_days: num(form.monthly_days), inss_deducted_from_irt: form.inss_deducted_from_irt });
+        monthly_hours: num(form.monthly_hours), monthly_days: num(form.monthly_days), inss_deducted_from_irt: form.inss_deducted_from_irt,
+        work_weekdays: form.work_weekdays });
       toast.success('Parâmetros guardados');
     } catch (err) {
       toast.error(extractErrorMessage(err, 'Erro ao guardar'));
@@ -65,6 +70,22 @@ function GeneralTab({ canEdit }) {
         {field('INSS da entidade empregadora (%)', 'inss_employer_rate', 'Encargo da empresa')}
         {field('Horas de trabalho por mês', 'monthly_hours', 'Valor da hora (VH) = salário base / horas')}
         {field('Dias de trabalho por mês', 'monthly_days', 'Valor do dia (VD) = salário base / dias')}
+      </div>
+      <div>
+        <label className={labelClass}>Dias de trabalho da semana</label>
+        <div className="flex flex-wrap gap-1.5">
+          {WEEKDAYS.map((label, d) => {
+            const on = (form.work_weekdays || []).includes(d);
+            return (
+              <button key={d} type="button" disabled={!canEdit}
+                onClick={() => setForm((p) => ({ ...p, work_weekdays: on ? p.work_weekdays.filter((x) => x !== d) : [...p.work_weekdays, d].sort() }))}
+                className={'h-9 w-14 rounded-md border text-sm font-medium cursor-pointer transition-colors ' + (on ? 'bg-accent border-accent text-white' : 'border-border text-text-muted hover:text-text-primary')}>
+                {label}
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-[11px] text-text-muted mt-1">As ausências e as férias contam-se nestes dias, sem os feriados.</p>
       </div>
       <Check checked={form.inss_deducted_from_irt} onChange={(v) => canEdit && setForm((p) => ({ ...p, inss_deducted_from_irt: v }))}
         label="O INSS do trabalhador é deduzido da base do IRT" hint="Matéria colectável = rendimentos tributáveis - INSS" />
@@ -338,7 +359,7 @@ export default function PayrollSettingsModal({ open, onClose, canEdit }) {
   const [tab, setTab] = useState('GERAL');
   useEffect(() => { if (open) setTab('GERAL'); }, [open]);
   return (
-    <Modal open={open} onClose={onClose} title="Parâmetros salariais" subtitle="O que o processamento salarial lê: nada está escrito no programa" maxWidthClass="max-w-5xl" size="full">
+    <Modal open={open} onClose={onClose} title="Parâmetros de RH" subtitle="O que os salários e as ausências leem: nada está escrito no programa" maxWidthClass="max-w-5xl" size="full">
       <div className="flex gap-1 border-b border-border -mt-1 mb-5 overflow-x-auto">
         {TABS.map((t) => (
           <button key={t.key} type="button" onClick={() => setTab(t.key)}
@@ -350,6 +371,8 @@ export default function PayrollSettingsModal({ open, onClose, canEdit }) {
       {open && tab === 'GERAL' && <GeneralTab canEdit={canEdit} />}
       {open && tab === 'IRT' && <IrtTab canEdit={canEdit} />}
       {open && tab === 'RUB' && <ItemsTab canEdit={canEdit} />}
+      {open && tab === 'FER' && <HolidaysTab canEdit={canEdit} />}
+      {open && tab === 'AUS' && <AbsenceTypesTab canEdit={canEdit} />}
     </Modal>
   );
 }

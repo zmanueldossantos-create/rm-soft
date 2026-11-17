@@ -127,6 +127,7 @@ async def test_the_payslip_simulation(db, company_with_essentials):
     assert slip["gross"] == 249000 and slip["inss_base"] == 243000  # 249 000 - 6 000 of absences
     assert slip["deductions"][0]["code"] == "FALTAS"
     assert slip["net"] == round(slip["gross"] - slip["inss_employee"] - slip["irt"] - 6000, 2)
+    assert slip["employer_cost"] == round(slip["gross"] - 6000 + slip["inss_employer"], 2)  # the absence is not paid
 
     await set_employee_items(db, company_id, maria["id"], [])
     assert await employee_items(db, company_id, maria["id"]) == []

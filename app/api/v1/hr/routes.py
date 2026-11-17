@@ -10,7 +10,7 @@ from app.api.deps import require_permission
 from app.core.database import get_db
 from app.models.user import User
 from app.schemas.employee import (
-    DepartureRequest, EmployeePayrollItemsRequest, EmployeeRequest, FormulaCheckRequest, HrReferenceCreateRequest,
+    AbsenceTypeRequest, DepartureRequest, EmployeePayrollItemsRequest, HolidayRequest, EmployeeRequest, FormulaCheckRequest, HrReferenceCreateRequest,
     HrReferenceUpdateRequest, IrtTableRequest, PayrollItemRequest, PayrollSettingsRequest, ReadmissionRequest,
     SimulationRequest,
 )
@@ -27,6 +27,11 @@ from app.services.employee_file_service import (
 from app.services.payroll_settings_service import (
     check_formula, create_item, delete_irt_table, delete_item, employee_items, get_payroll_settings, list_irt_tables,
     list_items, save_irt_table, set_employee_items, simulate_payslip, update_item, update_payroll_settings,
+)
+
+from app.services.hr_calendar_service import (
+    count_days, delete_absence_type, delete_holiday, generate_holidays, list_absence_types, list_holidays,
+    save_absence_type, save_holiday,
 )
 
 router = APIRouter(prefix="/api/v1/hr", tags=["hr"])
@@ -337,5 +342,89 @@ async def post_simulation(employee_id: uuid.UUID, payload: SimulationRequest, db
                           current_user: User = Depends(require_permission("hr:view"))):
     try:
         return await simulate_payslip(db, current_user.company_id, employee_id, payload.month_values)
+    except EmployeeError as e:
+        raise _refused(e)
+
+
+# --- the work calendar and the absence types (step 3a / 3b) -----------------------------------------------------
+
+@router.get("/calendar/holidays")
+async def get_holidays(year: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_permission("hr:view"))):
+    return await list_holidays(db, current_user.company_id, year)
+
+
+@router.post("/calendar/holidays/generate")
+async def post_generate_holidays(year: int, db: AsyncSession = Depends(get_db),
+                                 current_user: User = Depends(require_permission("hr:payroll_settings"))):
+    try:
+        return await generate_holidays(db, current_user.company_id, year)
+    except EmployeeError as e:
+        raise _refused(e)
+
+
+@router.post("/calendar/holidays", status_code=status.HTTP_201_CREATED)
+async def post_holiday(payload: HolidayRequest, db: AsyncSession = Depends(get_db),
+                       current_user: User = Depends(require_permission("hr:payroll_settings"))):
+    try:
+        return await save_holiday(db, current_user.company_id, None, payload.model_dump())
+    except EmployeeError as e:
+        raise _refused(e)
+
+
+@router.put("/calendar/holidays/{holiday_id}")
+async def put_holiday(holiday_id: uuid.UUID, payload: HolidayRequest, db: AsyncSession = Depends(get_db),
+                      current_user: User = Depends(require_permission("hr:payroll_settings"))):
+    try:
+        return await save_holiday(db, current_user.company_id, holiday_id, payload.model_dump())
+    except EmployeeError as e:
+        raise _refused(e)
+
+
+@router.delete("/calendar/holidays/{holiday_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_holiday(holiday_id: uuid.UUID, db: AsyncSession = Depends(get_db),
+                         current_user: User = Depends(require_permission("hr:payroll_settings"))):
+    try:
+        await delete_holiday(db, current_user.company_id, holiday_id)
+    except EmployeeError as e:
+        raise _refused(e)
+
+
+@router.get("/calendar/count")
+async def get_count_days(start: date, end: date, working_days: bool = True, db: AsyncSession = Depends(get_db),
+                         current_user: User = Depends(require_permission("hr:view"))):
+    try:
+        return await count_days(db, current_user.company_id, start, end, working_days)
+    except EmployeeError as e:
+        raise _refused(e)
+
+
+@router.get("/absence-types")
+async def get_absence_types(db: AsyncSession = Depends(get_db), current_user: User = Depends(require_permission("hr:view"))):
+    return await list_absence_types(db, current_user.company_id)
+
+
+@router.post("/absence-types", status_code=status.HTTP_201_CREATED)
+async def post_absence_type(payload: AbsenceTypeRequest, db: AsyncSession = Depends(get_db),
+                            current_user: User = Depends(require_permission("hr:payroll_settings"))):
+    try:
+        return await save_absence_type(db, current_user.company_id, None, payload.model_dump())
+    except EmployeeError as e:
+        raise _refused(e)
+
+
+@router.put("/absence-types/{type_id}")
+async def put_absence_type(type_id: uuid.UUID, payload: AbsenceTypeRequest, db: AsyncSession = Depends(get_db),
+                           current_user: User = Depends(require_permission("hr:payroll_settings"))):
+    try:
+        return await save_absence_type(db, current_user.company_id, type_id, payload.model_dump())
+    except EmployeeError as e:
+        raise _refused(e)
+
+
+@router.delete("/absence-types/{type_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_absence_type(type_id: uuid.UUID, db: AsyncSession = Depends(get_db),
+                              current_user: User = Depends(require_permission("hr:payroll_settings"))):
+    try:
+        await delete_absence_type(db, current_user.company_id, type_id)
     except EmployeeError as e:
         raise _refused(e)

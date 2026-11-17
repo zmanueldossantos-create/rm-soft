@@ -128,7 +128,7 @@ export default function Colaboradores() {
         <div className="flex items-center gap-2">
           {can('hr:payroll_settings') && (
             <button type="button" onClick={() => setPayrollOpen(true)} className="flex items-center gap-2 h-9 px-3.5 rounded-md border border-border text-sm text-text-primary hover:border-accent hover:text-accent cursor-pointer">
-              <Calculator size={15} /> Parâmetros salariais
+              <Calculator size={15} /> Parâmetros de RH
             </button>
           )}
           {can('hr:settings') && (

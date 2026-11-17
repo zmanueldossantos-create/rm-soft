@@ -147,3 +147,32 @@ export async function setEmployeePayrollItems(employeeId, items) {
 export async function simulatePayslip(employeeId, monthValues = {}) {
   return (await apiClient.post('/hr/employees/' + employeeId + '/simulation', { month_values: monthValues })).data;
 }
+
+// the work calendar and the absence types (step 3a / 3b)
+export async function listHolidays(year) {
+  return (await apiClient.get('/hr/calendar/holidays', { params: { year } })).data;
+}
+
+export async function generateHolidays(year) {
+  return (await apiClient.post('/hr/calendar/holidays/generate', null, { params: { year } })).data;
+}
+
+export async function saveHoliday(holidayId, payload) {
+  return (holidayId ? await apiClient.put('/hr/calendar/holidays/' + holidayId, payload) : await apiClient.post('/hr/calendar/holidays', payload)).data;
+}
+
+export async function deleteHoliday(holidayId) {
+  await apiClient.delete('/hr/calendar/holidays/' + holidayId);
+}
+
+export async function listAbsenceTypes() {
+  return (await apiClient.get('/hr/absence-types')).data;
+}
+
+export async function saveAbsenceType(typeId, payload) {
+  return (typeId ? await apiClient.put('/hr/absence-types/' + typeId, payload) : await apiClient.post('/hr/absence-types', payload)).data;
+}
+
+export async function deleteAbsenceType(typeId) {
+  await apiClient.delete('/hr/absence-types/' + typeId);
+}

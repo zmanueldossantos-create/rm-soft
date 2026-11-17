@@ -91,7 +91,7 @@ async def ensure_payroll_defaults(db: AsyncSession, company_id: uuid.UUID) -> Pa
     if settings is not None:
         return settings
     settings = PayrollSettings(company_id=company_id, inss_employee_rate=3, inss_employer_rate=8, monthly_hours=190.66,
-                               monthly_days=22, inss_deducted_from_irt=True)
+                               monthly_days=22, inss_deducted_from_irt=True, work_weekdays=[0, 1, 2, 3, 4])
     db.add(settings)
     if not (await db.execute(select(IrtTable.id).where(IrtTable.company_id == company_id))).first():
         db.add(IrtTable(company_id=company_id, **DEFAULT_IRT_TABLE))
@@ -109,7 +109,7 @@ async def ensure_payroll_defaults(db: AsyncSession, company_id: uuid.UUID) -> Pa
 def _settings(s: PayrollSettings) -> dict:
     return {"inss_employee_rate": float(s.inss_employee_rate), "inss_employer_rate": float(s.inss_employer_rate),
             "monthly_hours": float(s.monthly_hours), "monthly_days": float(s.monthly_days),
-            "inss_deducted_from_irt": s.inss_deducted_from_irt}
+            "inss_deducted_from_irt": s.inss_deducted_from_irt, "work_weekdays": list(s.work_weekdays or [0, 1, 2, 3, 4])}
 
 
 def _number(value, label: str, low: float = 0, high: float | None = None, allow_low: bool = True) -> float:
@@ -133,6 +133,11 @@ async def update_payroll_settings(db: AsyncSession, company_id: uuid.UUID, data:
     s.monthly_hours = _number(data.get("monthly_hours"), "Horas por mês", 0, 744, allow_low=False)
     s.monthly_days = _number(data.get("monthly_days"), "Dias por mês", 0, 31, allow_low=False)
     s.inss_deducted_from_irt = bool(data.get("inss_deducted_from_irt", True))
+    if data.get("work_weekdays") is not None:
+        weekdays = sorted({int(d) for d in data["work_weekdays"] if str(d).isdigit() and 0 <= int(d) <= 6})
+        if not weekdays:
+            raise PayrollError("Escolha pelo menos um dia de trabalho na semana")
+        s.work_weekdays = weekdays
     await db.commit()
     await db.refresh(s)
     return _settings(s)
@@ -521,7 +526,8 @@ def compute_payslip(salary: float, settings: dict, brackets: list[dict] | None, 
         "base_salary": round2(salary), "allowances": allowances, "deductions": deductions, "gross": gross,
         "inss_base": inss_base, "inss_employee": inss_employee, "inss_employer": inss_employer,
         "irt_base": irt_base, "irt": irt, "total_deductions": total_deductions, "net": round2(gross - total_deductions),
-        "employer_cost": round2(gross + inss_employer),
+        # what the month costs: what is paid (the deductions «reduz a base» - an unpaid absence - are not) + employer INSS
+        "employer_cost": round2(gross - sum(line["value"] for line in deductions if line["subject_inss"]) + inss_employer),
     }
 
 

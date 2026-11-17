@@ -70,6 +70,7 @@ class PayrollSettingsRequest(BaseModel):
     monthly_hours: float | None = None
     monthly_days: float | None = None
     inss_deducted_from_irt: bool = True
+    work_weekdays: list[int] | None = None
 
 
 class IrtTableRequest(BaseModel):
@@ -106,3 +107,21 @@ class EmployeePayrollItemsRequest(BaseModel):
 
 class SimulationRequest(BaseModel):
     month_values: dict[str, float] = {}
+
+
+class HolidayRequest(BaseModel):
+    day: date | None = None
+    name: str = ""
+    kind: str = "FERIADO"
+
+
+class AbsenceTypeRequest(BaseModel):
+    name: str = ""
+    category: str = ""
+    paid: bool = True
+    takes_holiday_days: bool = False
+    working_days: bool = True
+    max_days: int | None = None
+    requires_document: bool = False
+    is_active: bool = True
+    notes: str | None = None

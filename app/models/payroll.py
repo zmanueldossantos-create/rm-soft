@@ -2,7 +2,7 @@
 Recursos Humanos - the payroll settings of a company (step 2: everything the salary calculation reads, nothing coded):
 
 PayrollSettings - one per company: the INSS rates (employee / employer), the hours and days of a month (hourly and
-daily value), whether the employee's INSS is deducted from the IRT base.
+daily value), whether the employee's INSS is deducted from the IRT base, the working days of the week.
 
 IrtTable - the IRT table, valid from a date: its brackets (from, to, fixed amount, rate, applied above). A new law
 (the next OGE, the IRPS) is a new table from its date; the months already paid keep theirs.
@@ -48,6 +48,8 @@ class PayrollSettings(Base):
     monthly_hours: Mapped[float] = mapped_column(Numeric(6, 2), nullable=False, default=190.66)  # 44 h x 52 / 12
     monthly_days: Mapped[float] = mapped_column(Numeric(5, 2), nullable=False, default=22)  # working days
     inss_deducted_from_irt: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # the working days of the week, 0 = Monday ... 6 = Sunday (Monday to Friday by default; a bakery adds Saturday)
+    work_weekdays: Mapped[list] = mapped_column(JSONB, nullable=False, default=lambda: [0, 1, 2, 3, 4])
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 

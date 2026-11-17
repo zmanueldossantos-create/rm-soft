@@ -555,10 +555,13 @@ PAGES = [
             "«Registar saída»: a data e o motivo; «Readmitir» traz o colaborador de volta com uma nova data de admissão.",
             {"text": "«Tabelas de RH»: os departamentos, categorias, funções, tipos de contrato, horários, níveis de escolaridade "
                      "e documentos da empresa - renomear, acrescentar, desativar.", "perms": ["hr:settings"]},
-            {"text": "«Parâmetros salariais»: as taxas de INSS, as horas e dias de um mês, a tabela de IRT (uma nova lei é uma "
-                     "nova tabela a partir da sua data) e as rubricas - abonos e descontos de valor fixo, percentagem do "
-                     "salário, fórmula (ex.: SE(ANTIGUIDADE >= 5; SB * 5%; 0)) ou indicados em cada mês, com a base do INSS, "
-                     "a base do IRT e o limite isento.", "perms": ["hr:payroll_settings"]},
+            {"text": "«Parâmetros de RH»: as taxas de INSS, as horas e dias de um mês, os dias de trabalho da semana, a tabela "
+                     "de IRT (uma nova lei é uma nova tabela a partir da sua data) e as rubricas - abonos e descontos de valor "
+                     "fixo, percentagem do salário, fórmula (ex.: SE(ANTIGUIDADE >= 5; SB * 5%; 0)) ou indicados em cada mês, "
+                     "com a base do INSS, a base do IRT e o limite isento.", "perms": ["hr:payroll_settings"]},
+            {"text": "Parâmetros de RH → Feriados: «Feriados nacionais do ano» gera os feriados da lei e as pontes; retire uma "
+                     "ponte que não se aplique e acrescente as tolerâncias de ponto. → Tipos de ausência: remunerada ou não, "
+                     "dias úteis ou de calendário, máximo de dias, documento exigido.", "perms": ["hr:payroll_settings"]},
             "Ficha → Remuneração: as rubricas próprias do colaborador (ex.: subsídio de transporte de 15 000 Kz) e a "
             "«Simulação do recibo» - ilíquido, INSS, IRT e líquido com os parâmetros atuais.",
         ],
