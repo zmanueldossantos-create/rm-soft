@@ -70,8 +70,8 @@ CAPABILITIES: dict[str, Capability] = {
             ("orders",), ("/encomendas",),
         ),
         Capability(
-            "HR", "Recursos Humanos", "Colaboradores: ficha, contrato, remuneração e as tabelas de RH", (),
-            ("hr",), ("/rh/colaboradores",),
+            "HR", "Recursos Humanos", "Colaboradores: ficha, contrato, remuneração, ausências e as tabelas de RH", (),
+            ("hr",), ("/rh/colaboradores", "/rh/ausencias"),
         ),
         Capability(
             "ACCOUNTING", "Contabilidade", "Plano de contas, lançamentos, balancete e demonstrações financeiras", (),

@@ -1,5 +1,5 @@
 import { Fragment, useState, useEffect, useRef } from 'react';
-import { ChefHat, History as KitchenHistoryIcon, CakeSlice, Users2 } from 'lucide-react';
+import { ChefHat, History as KitchenHistoryIcon, CakeSlice, Users2, CalendarX } from 'lucide-react';
 import { Link, useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { Building2, LogOut, LayoutDashboard, Sun, Moon, Package, Users, Calendar, Receipt, Settings, Package2, UserCog, History, FileText, Landmark, LayoutGrid, Store, Wheat, Factory, Wallet, SlidersHorizontal, Tags, Wrench, ChevronDown, Cog, Plus, ArrowLeftRight, Calculator, ClipboardList, Gauge, PiggyBank, CreditCard, Boxes, CalendarClock, Wallet2, PackageMinus, Truck, ShieldCheck, FileInput, Send, HandCoins, Bot, HelpCircle, LifeBuoy, BookOpen, Layers, Inbox, ListTree, BookText, Scale, FileBarChart, BookOpenText, Tag } from 'lucide-react';
@@ -315,6 +315,7 @@ export default function Layout() {
     {
       key: 'rh', icon: Users2, label: 'RH', items: visible([
         { to: '/rh/colaboradores', icon: Users2, label: 'Colaboradores', show: can('hr:view') },
+        { to: '/rh/ausencias', icon: CalendarX, label: 'Ausências', show: can('hr:view') },
       ]),
     },
     {

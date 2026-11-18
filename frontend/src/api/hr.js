@@ -176,3 +176,34 @@ export async function saveAbsenceType(typeId, payload) {
 export async function deleteAbsenceType(typeId) {
   await apiClient.delete('/hr/absence-types/' + typeId);
 }
+
+// the absences (step 3c)
+export async function listAbsences(params = {}) {
+  return (await apiClient.get('/hr/absences', { params })).data;
+}
+
+export async function getAbsenceOptions() {
+  return (await apiClient.get('/hr/absences/options')).data;
+}
+
+export async function getAbsenceMap(year, month, departmentId) {
+  return (await apiClient.get('/hr/absences/map', { params: { year, month, department_id: departmentId || undefined } })).data;
+}
+
+export async function saveAbsence(absenceId, payload) {
+  return (absenceId ? await apiClient.put('/hr/absences/' + absenceId, payload) : await apiClient.post('/hr/absences', payload)).data;
+}
+
+export async function decideAbsence(absenceId, action, note) {
+  return (await apiClient.post('/hr/absences/' + absenceId + '/' + action, { note: note || null })).data;
+}
+
+export async function attachAbsenceDocument(absenceId, file) {
+  const form = new FormData();
+  form.append('file', file);
+  return (await apiClient.post('/hr/absences/' + absenceId + '/document', form, MULTIPART)).data;
+}
+
+export async function countDays(start, end, workingDays = true) {
+  return (await apiClient.get('/hr/calendar/count', { params: { start, end, working_days: workingDays } })).data;
+}

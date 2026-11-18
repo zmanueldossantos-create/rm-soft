@@ -144,6 +144,8 @@ PERMISSION_CATALOG: list[tuple[str, str, str, list[str]]] = [
     ("hr:view", "Ver os colaboradores e as suas fichas", "Recursos Humanos", ["RH"]),
     ("hr:manage", "Registar e alterar colaboradores, registar saídas e readmissões", "Recursos Humanos", ["RH"]),
     ("hr:settings", "Configurar as tabelas de RH (departamentos, categorias, funções, contratos, horários...)", "Recursos Humanos", ["RH"]),
+    ("hr:absences", "Registar e alterar pedidos de ausência (férias, faltas, licenças)", "Recursos Humanos", ["RH"]),
+    ("hr:absences_approve", "Aprovar, recusar e cancelar ausências", "Recursos Humanos", ["RH"]),
     ("hr:payroll_settings", "Configurar os parâmetros de RH (INSS, tabela de IRT, rubricas e fórmulas, feriados, tipos de ausência)", "Recursos Humanos", ["RH"]),
     ("accounting:chart_view", "Ver o plano de contas", "Contabilidade", ["CONTABILISTA"]),
     ("accounting:chart_manage", "Configurar o plano de contas (PGC, importação, contas)", "Contabilidade", ["CONTABILISTA"]),

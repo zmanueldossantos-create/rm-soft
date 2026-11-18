@@ -569,6 +569,20 @@ PAGES = [
                    ("Um valor não pode ser apagado", "Está na ficha de um colaborador: desative-o (a ficha guarda-o, uma nova ficha já não o propõe).")],
     },
     {
+        "id": "ausencias", "path": "/rh/ausencias", "title": "Ausências", "perms": ["hr:view"],
+        "intro": "As férias, faltas e licenças dos colaboradores: os pedidos, as decisões e o mapa do mês da equipa.",
+        "steps": [
+            {"text": "«Nova ausência»: o colaborador, o tipo, o primeiro e o último dia (ou meio dia). Os dias contam-se pelo tipo: "
+                     "dias úteis (sem fins de semana, feriados e pontes) ou dias de calendário.", "perms": ["hr:absences"]},
+            {"text": "Quem pode aprovar marca «Aprovar já»; senão fica «Pedida» e aprova-se ou recusa-se (com o motivo) na lista "
+                     "«Por decidir».", "perms": ["hr:absences_approve"]},
+            "Um tipo que exige documento (atestado médico...) só é aprovado com o justificativo: o clipe da linha junta-o.",
+            "«Mapa do mês»: cada dia de cada colaborador, a cor do tipo de ausência; uma ausência pedida aparece mais clara.",
+        ],
+        "errors": [("«Nenhum dia útil neste período»", "O período só tem fins de semana ou feriados (Parâmetros de RH → Feriados)."),
+                   ("«... já tem uma ausência de ...»", "Duas ausências do mesmo colaborador não se sobrepõem: cancele ou altere a outra.")],
+    },
+    {
         "id": "reservas-pagina", "path": "/reservas", "title": "Mapa de reservas", "module": "reservas", "perms": ["bookings:view"],
         "intro": "As reservas de quartos, praticantes, mesas ou qualquer recurso - a mesma lista que a receção vê na caixa.",
         "steps": [

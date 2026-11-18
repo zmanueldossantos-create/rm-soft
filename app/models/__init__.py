@@ -112,3 +112,4 @@ from app.models.agt_test_taxpayer import AgtTestTaxpayer  # noqa: E402,F401 - th
 from app.models.employee import Employee, EmployeeFile, HrReference  # noqa: E402,F401 - Recursos Humanos: colaboradores and their tables
 from app.models.payroll import EmployeePayrollItem, IrtTable, PayrollItem, PayrollSettings  # noqa: E402,F401 - Recursos Humanos: payroll settings
 from app.models.hr_calendar import AbsenceType, HrHoliday  # noqa: E402,F401 - Recursos Humanos: holidays and absence types
+from app.models.absence import Absence  # noqa: E402,F401 - Recursos Humanos: the employees' absences

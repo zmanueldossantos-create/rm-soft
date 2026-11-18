@@ -10,7 +10,7 @@ from app.api.deps import require_permission
 from app.core.database import get_db
 from app.models.user import User
 from app.schemas.employee import (
-    AbsenceTypeRequest, DepartureRequest, EmployeePayrollItemsRequest, HolidayRequest, EmployeeRequest, FormulaCheckRequest, HrReferenceCreateRequest,
+    AbsenceDecisionRequest, AbsenceRequest, AbsenceTypeRequest, DepartureRequest, EmployeePayrollItemsRequest, HolidayRequest, EmployeeRequest, FormulaCheckRequest, HrReferenceCreateRequest,
     HrReferenceUpdateRequest, IrtTableRequest, PayrollItemRequest, PayrollSettingsRequest, ReadmissionRequest,
     SimulationRequest,
 )
@@ -33,6 +33,12 @@ from app.services.hr_calendar_service import (
     count_days, delete_absence_type, delete_holiday, generate_holidays, list_absence_types, list_holidays,
     save_absence_type, save_holiday,
 )
+
+from app.services.absence_service import (
+    absence_detail, absence_options, approve_absence, attach_document, cancel_absence, create_absence, list_absences,
+    month_map, refuse_absence, update_absence,
+)
+from app.services.permission_service import has_permission
 
 router = APIRouter(prefix="/api/v1/hr", tags=["hr"])
 
@@ -426,5 +432,94 @@ async def remove_absence_type(type_id: uuid.UUID, db: AsyncSession = Depends(get
                               current_user: User = Depends(require_permission("hr:payroll_settings"))):
     try:
         await delete_absence_type(db, current_user.company_id, type_id)
+    except EmployeeError as e:
+        raise _refused(e)
+
+
+# --- the absences (step 3c) -----------------------------------------------------------------------------------------
+
+@router.get("/absences")
+async def get_absences(date_from: date | None = None, date_to: date | None = None, status_filter: str | None = None,
+                       employee_id: uuid.UUID | None = None, db: AsyncSession = Depends(get_db),
+                       current_user: User = Depends(require_permission("hr:view"))):
+    return await list_absences(db, current_user.company_id, date_from, date_to, status_filter, employee_id)
+
+
+@router.get("/absences/options")
+async def get_absence_options(db: AsyncSession = Depends(get_db), current_user: User = Depends(require_permission("hr:view"))):
+    return await absence_options(db, current_user.company_id)
+
+
+@router.get("/absences/map")
+async def get_absence_map(year: int, month: int, department_id: uuid.UUID | None = None, db: AsyncSession = Depends(get_db),
+                          current_user: User = Depends(require_permission("hr:view"))):
+    try:
+        return await month_map(db, current_user.company_id, year, month, department_id)
+    except EmployeeError as e:
+        raise _refused(e)
+
+
+@router.get("/absences/{absence_id}")
+async def get_absence(absence_id: uuid.UUID, db: AsyncSession = Depends(get_db),
+                      current_user: User = Depends(require_permission("hr:view"))):
+    try:
+        return await absence_detail(db, current_user.company_id, absence_id)
+    except EmployeeError as e:
+        raise _refused(e)
+
+
+@router.post("/absences", status_code=status.HTTP_201_CREATED)
+async def post_absence(payload: AbsenceRequest, db: AsyncSession = Depends(get_db),
+                       current_user: User = Depends(require_permission("hr:absences"))):
+    # approved at once only by who may approve
+    approve = payload.approve and await has_permission(db, current_user.company_id, current_user.role.value, "hr:absences_approve")
+    try:
+        return await create_absence(db, current_user.company_id, current_user.id, payload.model_dump(), approve=approve)
+    except EmployeeError as e:
+        raise _refused(e)
+
+
+@router.put("/absences/{absence_id}")
+async def put_absence(absence_id: uuid.UUID, payload: AbsenceRequest, db: AsyncSession = Depends(get_db),
+                      current_user: User = Depends(require_permission("hr:absences"))):
+    try:
+        return await update_absence(db, current_user.company_id, absence_id, payload.model_dump())
+    except EmployeeError as e:
+        raise _refused(e)
+
+
+@router.post("/absences/{absence_id}/approve")
+async def post_approve_absence(absence_id: uuid.UUID, payload: AbsenceDecisionRequest, db: AsyncSession = Depends(get_db),
+                               current_user: User = Depends(require_permission("hr:absences_approve"))):
+    try:
+        return await approve_absence(db, current_user.company_id, current_user.id, absence_id, payload.note)
+    except EmployeeError as e:
+        raise _refused(e)
+
+
+@router.post("/absences/{absence_id}/refuse")
+async def post_refuse_absence(absence_id: uuid.UUID, payload: AbsenceDecisionRequest, db: AsyncSession = Depends(get_db),
+                              current_user: User = Depends(require_permission("hr:absences_approve"))):
+    try:
+        return await refuse_absence(db, current_user.company_id, current_user.id, absence_id, payload.note)
+    except EmployeeError as e:
+        raise _refused(e)
+
+
+@router.post("/absences/{absence_id}/cancel")
+async def post_cancel_absence(absence_id: uuid.UUID, payload: AbsenceDecisionRequest, db: AsyncSession = Depends(get_db),
+                              current_user: User = Depends(require_permission("hr:absences_approve"))):
+    try:
+        return await cancel_absence(db, current_user.company_id, current_user.id, absence_id, payload.note)
+    except EmployeeError as e:
+        raise _refused(e)
+
+
+@router.post("/absences/{absence_id}/document")
+async def post_absence_document(absence_id: uuid.UUID, file: UploadFile = File(...), db: AsyncSession = Depends(get_db),
+                                current_user: User = Depends(require_permission("hr:absences"))):
+    try:
+        content = await _read_upload(file, DOCUMENT_MAX)
+        return await attach_document(db, current_user.company_id, current_user.id, absence_id, file.filename, content)
     except EmployeeError as e:
         raise _refused(e)

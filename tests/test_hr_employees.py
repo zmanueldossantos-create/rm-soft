@@ -29,7 +29,7 @@ def test_the_module_and_the_role():
     assert {capability_of_permission(c) for c in ("hr:view", "hr:manage", "hr:settings", "hr:payroll_settings")} == {"HR"}
     assert UserRole("RH") and "RH" in EDITABLE_ROLES
     rh = {code for code, _, _, roles in PERMISSION_CATALOG if "RH" in roles}
-    assert rh == {"hr:view", "hr:manage", "hr:settings", "hr:payroll_settings"}
+    assert rh == {"hr:view", "hr:manage", "hr:settings", "hr:payroll_settings", "hr:absences", "hr:absences_approve"}
 
 
 def test_iban_check_digits():

@@ -252,10 +252,14 @@ async def save_absence_type(db: AsyncSession, company_id: uuid.UUID, type_id: uu
 
 
 async def delete_absence_type(db: AsyncSession, company_id: uuid.UUID, type_id: uuid.UUID) -> None:
-    """A type no absence uses yet (the absences come with step 3c: then a used type is switched off instead)."""
+    """A type no absence uses: a used one is switched off instead (its absences keep it)."""
+    from app.models.absence import Absence
     absence_type = (await db.execute(select(AbsenceType).where(
         AbsenceType.id == type_id, AbsenceType.company_id == company_id))).scalar_one_or_none()
     if absence_type is None:
         raise EmployeeNotFoundError("Tipo de ausência não encontrado")
+    used = (await db.execute(select(func.count()).select_from(Absence).where(Absence.type_id == absence_type.id))).scalar_one()
+    if used:
+        raise EmployeeError(f"«{absence_type.name}» tem {used} ausência(s): desative-o em vez de o apagar")
     await db.delete(absence_type)
     await db.commit()

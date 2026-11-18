@@ -125,3 +125,17 @@ class AbsenceTypeRequest(BaseModel):
     requires_document: bool = False
     is_active: bool = True
     notes: str | None = None
+
+
+class AbsenceRequest(BaseModel):
+    employee_id: uuid.UUID | None = None
+    type_id: uuid.UUID | None = None
+    start_date: date | None = None
+    end_date: date | None = None
+    half_day: bool = False
+    reason: str | None = None
+    approve: bool = False
+
+
+class AbsenceDecisionRequest(BaseModel):
+    note: str | None = None
