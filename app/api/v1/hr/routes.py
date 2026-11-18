@@ -194,6 +194,17 @@ async def post_departure(employee_id: uuid.UUID, payload: DepartureRequest, db: 
         raise _refused(e)
 
 
+@router.delete("/employees/{employee_id}/departure")
+async def delete_departure(employee_id: uuid.UUID, db: AsyncSession = Depends(get_db),
+                           current_user: User = Depends(require_permission("hr:manage"))):
+    """A scheduled departure called off."""
+    from app.services.employee_service import cancel_departure
+    try:
+        return await cancel_departure(db, current_user.company_id, employee_id)
+    except EmployeeError as e:
+        raise _refused(e)
+
+
 @router.post("/employees/{employee_id}/readmission")
 async def post_readmission(employee_id: uuid.UUID, payload: ReadmissionRequest, db: AsyncSession = Depends(get_db),
                            current_user: User = Depends(require_permission("hr:manage"))):

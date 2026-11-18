@@ -316,6 +316,8 @@ async def notification_loop() -> None:
                     from app.services.bank_transfer_service import check_stale
                     await check_stale(db, now)
                     await send_orders_digests(db, now)
+                    from app.services.employee_service import apply_due_departures
+                    await apply_due_departures(db)  # RH: the scheduled departures whose last day is over
                 await send_due(db)
         except Exception:  # noqa: BLE001 - the loop never stops on one failure
             log.exception("notification loop failed")

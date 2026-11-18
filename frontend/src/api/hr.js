@@ -207,3 +207,7 @@ export async function attachAbsenceDocument(absenceId, file) {
 export async function countDays(start, end, workingDays = true) {
   return (await apiClient.get('/hr/calendar/count', { params: { start, end, working_days: workingDays } })).data;
 }
+
+export async function cancelDeparture(employeeId) {
+  return (await apiClient.delete('/hr/employees/' + employeeId + '/departure')).data;
+}

@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Users2, Plus, Pencil, Eye, Loader2, Search, LogOut, UserPlus, Settings2, Calculator } from 'lucide-react';
+import { Users2, Plus, Pencil, Eye, Loader2, Search, LogOut, UserPlus, Settings2, Calculator, Undo2 } from 'lucide-react';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
 import DateInput from '../components/DateInput';
 import EmployeeForm from '../components/EmployeeForm';
 import HrTablesModal from '../components/HrTablesModal';
 import PayrollSettingsModal from '../components/PayrollSettingsModal';
-import { listEmployees, getEmployeeOptions, registerDeparture, readmitEmployee } from '../api/hr';
+import { listEmployees, getEmployeeOptions, registerDeparture, readmitEmployee, cancelDeparture } from '../api/hr';
 import { useCan } from '../utils/permissions';
 import { formatDate, formatKz } from '../utils/format';
 import { extractErrorMessage } from '../utils/errors';
@@ -74,13 +74,25 @@ export default function Colaboradores() {
     setBusy(true);
     try {
       const gone = await registerDeparture(leaving.employee.id, { left_on: leaving.left_on, reason: leaving.reason, note: leaving.note || null });
-      toast.success(`Saída de ${leaving.employee.full_name} registada` + (gone.account_closed ? ` - a conta de ${gone.user_name} foi desativada` : ''));
+      toast.success(gone.scheduled
+        ? `Saída de ${leaving.employee.full_name} marcada para ${formatDate(gone.left_on)}: fica ativo até esse dia`
+        : `Saída de ${leaving.employee.full_name} registada` + (gone.account_closed ? ` - a conta de ${gone.user_name} foi desativada` : ''));
       setLeaving(null);
       await load();
     } catch (err) {
       toast.error(extractErrorMessage(err, 'Erro ao registar a saída'));
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function undoDeparture(employee) {
+    try {
+      await cancelDeparture(employee.id);
+      toast.success(`Saída de ${employee.full_name} anulada`);
+      await load();
+    } catch (err) {
+      toast.error(extractErrorMessage(err, 'Erro ao anular a saída'));
     }
   }
 
@@ -176,7 +188,9 @@ export default function Colaboradores() {
                   <td className="px-4 py-2.5 text-text-muted whitespace-nowrap">{formatDate(e.hired_on)}</td>
                   <td className="px-4 py-2.5 text-right font-mono whitespace-nowrap">{formatKz(e.base_salary)} Kz</td>
                   <td className="px-4 py-2.5">
-                    {e.is_active ? (
+                    {e.is_active && e.left_on ? (
+                      <span title={e.leaving_reason_label} className="inline-block whitespace-nowrap text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-500">Sai em {formatDate(e.left_on)}</span>
+                    ) : e.is_active ? (
                       <span className="inline-block whitespace-nowrap text-[11px] font-semibold px-2 py-0.5 rounded-full bg-success/15 text-success">Ativo</span>
                     ) : (
                       <span title={e.leaving_note || e.leaving_reason_label} className="inline-block whitespace-nowrap text-[11px] font-semibold px-2 py-0.5 rounded-full bg-bg-inset text-text-muted">
@@ -185,7 +199,13 @@ export default function Colaboradores() {
                     )}
                   </td>
                   <td className="px-4 py-2.5 text-right whitespace-nowrap">
-                    {canManage && e.is_active && (
+                    {canManage && e.is_active && e.left_on && (
+                      <button type="button" title="Anular a saída marcada" onClick={() => undoDeparture(e)}
+                        className="inline-flex items-center gap-1.5 h-8 px-2.5 mr-2 rounded-md border border-border text-text-muted text-[12px] font-medium hover:border-accent hover:text-accent cursor-pointer">
+                        <Undo2 size={13} /> Anular saída
+                      </button>
+                    )}
+                    {canManage && e.is_active && !e.left_on && (
                       <button type="button" title="Registar saída" onClick={() => setLeaving({ employee: e, left_on: today(), reason: '', note: '' })}
                         className="inline-flex items-center gap-1.5 h-8 px-2.5 mr-2 rounded-md border border-border text-text-muted text-[12px] font-medium hover:border-danger hover:text-danger cursor-pointer">
                         <LogOut size={13} /> Saída
@@ -229,7 +249,7 @@ export default function Colaboradores() {
               <label className={labelClass}>{leaving.reason === 'OUTRO' ? 'Descrição *' : 'Observação'}</label>
               <input value={leaving.note} maxLength={300} onChange={(e) => setLeaving((p) => ({ ...p, note: e.target.value }))} className={inputClass} />
             </div>
-            <p className="text-[12px] text-text-muted">A ficha fica guardada; o colaborador sai da lista dos ativos e pode ser readmitido.
+            <p className="text-[12px] text-text-muted">A data é o último dia de trabalho: numa data futura a saída fica marcada e o colaborador continua ativo até esse dia. A ficha fica guardada e pode ser readmitido.
               {leaving.employee.user_name && options?.users?.find((u) => u.id === leaving.employee.user_id)?.role !== 'GESTOR' ? ` A conta de utilizador (${leaving.employee.user_name}) é desativada.` : ''}</p>
             <button type="submit" disabled={busy} className="bg-danger hover:opacity-90 disabled:opacity-50 text-white font-semibold text-sm rounded-md py-2.5 flex items-center justify-center gap-2 cursor-pointer">
               {busy ? <Loader2 size={16} className="animate-spin" /> : <LogOut size={16} />} Registar saída

@@ -10,8 +10,9 @@ Rules:
 - a file needs the name, the admission date and the base salary; a transfer needs the IBAN (AO06 + 21 digits, its
   check digits verified); dates make sense (born before today, document valid after its issue, contract ending after
   the admission);
-- a departure keeps the file: the date (never before the admission) and the reason, the employee leaves the active
-  list; a readmission brings him back with a new admission date;
+- a departure keeps the file: the date (his last day, never before the admission) and the reason; a day already
+  reached takes him out of the active list at once, a day to come is scheduled (still active, cancellable) and applied
+  the day after; a readmission brings him back with a new admission date;
 - an employee may be linked to one user account of the company (one employee per account): his departure switches
   the account off (never the gestor's - the company would be locked out); a readmission does not switch it back on,
   the gestor does it in Utilizadores if he wants.
@@ -427,12 +428,24 @@ async def update_employee(db: AsyncSession, company_id: uuid.UUID, employee_id: 
     return await employee_detail(db, company_id, employee_id)
 
 
+def _close_account(db_user: User | None) -> bool:
+    """His account closes with him - never the gestor's (nobody could open the company any more)."""
+    if db_user is not None and db_user.is_active and db_user.role != UserRole.GESTOR:
+        db_user.is_active = False
+        return True
+    return False
+
+
 async def register_departure(db: AsyncSession, company_id: uuid.UUID, employee_id: uuid.UUID, left_on, reason: str,
                              note: str | None = None) -> dict:
-    """The employee leaves: the file stays, out of the active list."""
+    """The employee leaves on left_on (his last day): the file stays. A day already reached leaves at once (out of the
+    active list, his account closed); a day still to come is scheduled - he stays active, his account open, until
+    that day is over (apply_due_departures, the day after)."""
     employee = await get_employee(db, company_id, employee_id)
     if not employee.is_active:
         raise EmployeeError(f"{employee.full_name} já saiu da empresa")
+    if employee.left_on is not None:
+        raise EmployeeError(f"A saída de {employee.full_name} já está marcada para {employee.left_on:%d/%m/%Y}: anule-a antes")
     left_on = _date(left_on, "Data de saída")
     if left_on is None:
         raise EmployeeError("Indique a data de saída")
@@ -443,15 +456,42 @@ async def register_departure(db: AsyncSession, company_id: uuid.UUID, employee_i
     note = _text(note, 300, "Observação")
     if reason == "OUTRO" and not note:
         raise EmployeeError("Descreva o motivo da saída")
-    employee.is_active, employee.left_on, employee.leaving_reason, employee.leaving_note = False, left_on, reason, note
-    # his account closes with him (never the gestor's: nobody could open the company any more)
+    employee.left_on, employee.leaving_reason, employee.leaving_note = left_on, reason, note
+    scheduled = left_on > date.today()
     account_closed = False
-    if employee.user_id is not None:
-        user = await db.get(User, employee.user_id)
-        if user is not None and user.is_active and user.role != UserRole.GESTOR:
-            user.is_active, account_closed = False, True
+    if not scheduled:
+        employee.is_active = False
+        if employee.user_id is not None:
+            account_closed = _close_account(await db.get(User, employee.user_id))
     await db.commit()
-    return {**await employee_detail(db, company_id, employee_id), "account_closed": account_closed}
+    return {**await employee_detail(db, company_id, employee_id), "account_closed": account_closed, "scheduled": scheduled}
+
+
+async def cancel_departure(db: AsyncSession, company_id: uuid.UUID, employee_id: uuid.UUID) -> dict:
+    """A departure scheduled for a day to come, called off (the contract renewed, the resignation withdrawn)."""
+    employee = await get_employee(db, company_id, employee_id)
+    if not employee.is_active or employee.left_on is None:
+        raise EmployeeError(f"{employee.full_name} não tem uma saída marcada")
+    employee.left_on = employee.leaving_reason = employee.leaving_note = None
+    await db.commit()
+    return await employee_detail(db, company_id, employee_id)
+
+
+async def apply_due_departures(db: AsyncSession, company_id: uuid.UUID | None = None, today: date | None = None) -> int:
+    """The scheduled departures whose last day is over: out of the active list, their accounts closed. Run every
+    10 minutes by the notification loop (all companies) and before a list of employees (one company)."""
+    today = today or date.today()
+    query = select(Employee).where(Employee.is_active.is_(True), Employee.left_on.isnot(None), Employee.left_on < today)
+    if company_id is not None:
+        query = query.where(Employee.company_id == company_id)
+    due = (await db.execute(query)).scalars().all()
+    for employee in due:
+        employee.is_active = False
+        if employee.user_id is not None:
+            _close_account(await db.get(User, employee.user_id))
+    if due:
+        await db.commit()
+    return len(due)
 
 
 async def readmit_employee(db: AsyncSession, company_id: uuid.UUID, employee_id: uuid.UUID, hired_on) -> dict:
@@ -474,6 +514,7 @@ async def readmit_employee(db: AsyncSession, company_id: uuid.UUID, employee_id:
 async def list_employees(db: AsyncSession, company_id: uuid.UUID, status: str = "ATIVOS", search: str | None = None,
                          department_id: uuid.UUID | None = None) -> dict:
     """The employees (active, gone or all), by matrícula - with the counts for the filter's tabs."""
+    await apply_due_departures(db, company_id)
     query = select(Employee).where(Employee.company_id == company_id)
     if status == "ATIVOS":
         query = query.where(Employee.is_active.is_(True))

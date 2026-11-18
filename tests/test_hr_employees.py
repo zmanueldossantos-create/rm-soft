@@ -240,3 +240,36 @@ async def test_the_account_closes_with_the_departure(db, company_with_essentials
     # the gestor's own account is never closed (the company would be locked out)
     boss = await create_employee(db, company_id, user_id, _file(full_name="O Gestor", user_id=user_id))
     assert not (await register_departure(db, company_id, boss["id"], date(2026, 6, 30), "OUTRO", "Vendeu a empresa"))["account_closed"]
+
+
+@pytest.mark.asyncio
+async def test_a_departure_scheduled_ahead(db, company_with_essentials):
+    from datetime import timedelta
+    from app.core.security import hash_password
+    from app.models.user import User
+    from app.services.employee_service import apply_due_departures, cancel_departure
+    ctx = company_with_essentials
+    company_id, user_id = ctx["company"].id, ctx["gestor"].id
+    cashier = User(company_id=company_id, full_name="Joana Caixa", phone_number="+244923" + uuid.uuid4().hex[:6].translate(str.maketrans("abcdef", "123456")),
+                   password_hash=hash_password("Teste@2026"), role=UserRole.CAIXA)
+    db.add(cashier)
+    await db.commit()
+    cashier_id = cashier.id
+    joana = await create_employee(db, company_id, user_id, _file(full_name="Joana Mendes", user_id=cashier_id))
+    last_day = date.today() + timedelta(days=9)
+
+    planned = await register_departure(db, company_id, joana["id"], last_day, "FIM_CONTRATO")
+    assert planned["scheduled"] and planned["is_active"] and not planned["account_closed"]  # still working until then
+    assert [e["full_name"] for e in (await list_employees(db, company_id))["employees"]] == ["Joana Mendes"]
+    with pytest.raises(EmployeeError, match="já está marcada"):
+        await register_departure(db, company_id, joana["id"], last_day, "DEMISSAO")
+    await cancel_departure(db, company_id, joana["id"])  # the contract renewed
+    await register_departure(db, company_id, joana["id"], last_day, "FIM_CONTRATO")
+
+    assert await apply_due_departures(db, company_id, today=last_day) == 0  # his last day: still in
+    assert await apply_due_departures(db, company_id, today=last_day + timedelta(days=1)) == 1  # the day after: gone
+    await db.refresh(cashier)
+    assert not cashier.is_active
+    assert (await list_employees(db, company_id, "SAIDOS"))["employees"][0]["full_name"] == "Joana Mendes"
+    with pytest.raises(EmployeeError, match="não tem uma saída marcada"):
+        await cancel_departure(db, company_id, joana["id"])

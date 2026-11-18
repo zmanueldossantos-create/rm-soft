@@ -552,7 +552,8 @@ PAGES = [
             "(departamento, categoria, função, local, contrato, horário), Remuneração (salário base, forma de pagamento, "
             "banco e IBAN) e Habilitações.",
             "Uma transferência bancária precisa do IBAN (Angola: AO06 seguido de 21 algarismos).",
-            "«Registar saída»: a data e o motivo; «Readmitir» traz o colaborador de volta com uma nova data de admissão.",
+            "«Registar saída»: o último dia de trabalho e o motivo. Uma data futura fica marcada («Sai em ...»): o colaborador "
+            "continua ativo até esse dia e a saída pode ser anulada. «Readmitir» traz de volta quem saiu, com uma nova data de admissão.",
             {"text": "«Tabelas de RH»: os departamentos, categorias, funções, tipos de contrato, horários, níveis de escolaridade "
                      "e documentos da empresa - renomear, acrescentar, desativar.", "perms": ["hr:settings"]},
             {"text": "«Parâmetros de RH»: as taxas de INSS, as horas e dias de um mês, os dias de trabalho da semana, a tabela "
