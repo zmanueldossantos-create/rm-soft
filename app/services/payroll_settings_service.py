@@ -91,7 +91,9 @@ async def ensure_payroll_defaults(db: AsyncSession, company_id: uuid.UUID) -> Pa
     if settings is not None:
         return settings
     settings = PayrollSettings(company_id=company_id, inss_employee_rate=3, inss_employer_rate=8, monthly_hours=190.66,
-                               monthly_days=22, inss_deducted_from_irt=True, work_weekdays=[0, 1, 2, 3, 4])
+                               monthly_days=22, inss_deducted_from_irt=True, work_weekdays=[0, 1, 2, 3, 4],
+                               vacation_days_year=22, vacation_days_per_month_first_year=2, vacation_allow_negative=False,
+                               vacation_start_year=date.today().year)
     db.add(settings)
     if not (await db.execute(select(IrtTable.id).where(IrtTable.company_id == company_id))).first():
         db.add(IrtTable(company_id=company_id, **DEFAULT_IRT_TABLE))
@@ -109,7 +111,11 @@ async def ensure_payroll_defaults(db: AsyncSession, company_id: uuid.UUID) -> Pa
 def _settings(s: PayrollSettings) -> dict:
     return {"inss_employee_rate": float(s.inss_employee_rate), "inss_employer_rate": float(s.inss_employer_rate),
             "monthly_hours": float(s.monthly_hours), "monthly_days": float(s.monthly_days),
-            "inss_deducted_from_irt": s.inss_deducted_from_irt, "work_weekdays": list(s.work_weekdays or [0, 1, 2, 3, 4])}
+            "inss_deducted_from_irt": s.inss_deducted_from_irt, "work_weekdays": list(s.work_weekdays or [0, 1, 2, 3, 4]),
+            "vacation_days_year": float(s.vacation_days_year),
+            "vacation_days_per_month_first_year": float(s.vacation_days_per_month_first_year),
+            "vacation_carry_max": None if s.vacation_carry_max is None else float(s.vacation_carry_max),
+            "vacation_allow_negative": s.vacation_allow_negative, "vacation_start_year": s.vacation_start_year}
 
 
 def _number(value, label: str, low: float = 0, high: float | None = None, allow_low: bool = True) -> float:
@@ -128,16 +134,39 @@ async def get_payroll_settings(db: AsyncSession, company_id: uuid.UUID) -> dict:
 
 async def update_payroll_settings(db: AsyncSession, company_id: uuid.UUID, data: dict) -> dict:
     s = await ensure_payroll_defaults(db, company_id)
-    s.inss_employee_rate = _number(data.get("inss_employee_rate"), "INSS do trabalhador (%)", 0, 100)
-    s.inss_employer_rate = _number(data.get("inss_employer_rate"), "INSS da entidade empregadora (%)", 0, 100)
-    s.monthly_hours = _number(data.get("monthly_hours"), "Horas por mês", 0, 744, allow_low=False)
-    s.monthly_days = _number(data.get("monthly_days"), "Dias por mês", 0, 31, allow_low=False)
-    s.inss_deducted_from_irt = bool(data.get("inss_deducted_from_irt", True))
+    # only what is sent changes (the INSS tab and the holidays' rules are saved apart)
+    if "inss_employee_rate" in data:
+        s.inss_employee_rate = _number(data.get("inss_employee_rate"), "INSS do trabalhador (%)", 0, 100)
+    if "inss_employer_rate" in data:
+        s.inss_employer_rate = _number(data.get("inss_employer_rate"), "INSS da entidade empregadora (%)", 0, 100)
+    if "monthly_hours" in data:
+        s.monthly_hours = _number(data.get("monthly_hours"), "Horas por mês", 0, 744, allow_low=False)
+    if "monthly_days" in data:
+        s.monthly_days = _number(data.get("monthly_days"), "Dias por mês", 0, 31, allow_low=False)
+    if data.get("inss_deducted_from_irt") is not None:
+        s.inss_deducted_from_irt = bool(data.get("inss_deducted_from_irt"))
     if data.get("work_weekdays") is not None:
         weekdays = sorted({int(d) for d in data["work_weekdays"] if str(d).isdigit() and 0 <= int(d) <= 6})
         if not weekdays:
             raise PayrollError("Escolha pelo menos um dia de trabalho na semana")
         s.work_weekdays = weekdays
+    if data.get("vacation_days_year") is not None:
+        s.vacation_days_year = _number(data.get("vacation_days_year"), "Dias de férias por ano", 0, 366)
+    if data.get("vacation_days_per_month_first_year") is not None:
+        s.vacation_days_per_month_first_year = _number(data.get("vacation_days_per_month_first_year"),
+                                                       "Dias de férias por mês no ano de admissão", 0, 31)
+    if "vacation_carry_max" in data:
+        value = data.get("vacation_carry_max")
+        s.vacation_carry_max = None if value in (None, "") else _number(value, "Dias que passam para o ano seguinte", 0, 366)
+    if "vacation_start_year" in data:
+        value = data.get("vacation_start_year")
+        if value in (None, ""):
+            s.vacation_start_year = None
+        else:
+            year = int(_number(value, "Ano de início dos saldos de férias", 2000, 2100))
+            s.vacation_start_year = year
+    if data.get("vacation_allow_negative") is not None:
+        s.vacation_allow_negative = bool(data.get("vacation_allow_negative"))
     await db.commit()
     await db.refresh(s)
     return _settings(s)

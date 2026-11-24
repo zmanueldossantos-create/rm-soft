@@ -211,3 +211,20 @@ export async function countDays(start, end, workingDays = true) {
 export async function cancelDeparture(employeeId) {
   return (await apiClient.delete('/hr/employees/' + employeeId + '/departure')).data;
 }
+
+// the holiday balance (step 3d)
+export async function getVacations(year) {
+  return (await apiClient.get('/hr/vacations', { params: { year } })).data;
+}
+
+export async function listVacationAdjustments(employeeId, year) {
+  return (await apiClient.get('/hr/vacations/adjustments', { params: { employee_id: employeeId, year } })).data;
+}
+
+export async function addVacationAdjustment(payload) {
+  return (await apiClient.post('/hr/vacations/adjustments', payload)).data;
+}
+
+export async function deleteVacationAdjustment(adjustmentId) {
+  await apiClient.delete('/hr/vacations/adjustments/' + adjustmentId);
+}

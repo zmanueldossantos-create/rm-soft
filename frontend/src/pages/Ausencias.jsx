@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  CalendarX, Plus, Loader2, ChevronLeft, ChevronRight, Check, X, Ban, Pencil, Paperclip, FileText, List, LayoutGrid,
+  CalendarX, Plus, Loader2, ChevronLeft, ChevronRight, Check, X, Ban, Pencil, Paperclip, FileText, List, LayoutGrid, Palmtree,
 } from 'lucide-react';
+import VacationBalances from '../components/VacationBalances';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
 import DateInput from '../components/DateInput';
@@ -52,7 +53,7 @@ export default function Ausencias() {
         // «Por decidir» shows every pending request, whatever its month
         const params = filter === 'ABERTAS' ? { status_filter: 'ABERTAS' } : { date_from: iso(first), date_to: iso(last), status_filter: filter || undefined };
         setData(await listAbsences(params));
-      } else {
+      } else if (view === 'MAP') {
         setMap(await getAbsenceMap(period.year, period.month));
       }
     } catch (err) {
@@ -154,8 +155,16 @@ export default function Ausencias() {
           <div className="flex rounded-md border border-border overflow-hidden">
             <button type="button" onClick={() => setView('LIST')} className={'h-9 px-3 text-sm flex items-center gap-1.5 cursor-pointer ' + (view === 'LIST' ? 'bg-accent text-white' : 'text-text-muted hover:text-text-primary')}><List size={15} /> Lista</button>
             <button type="button" onClick={() => setView('MAP')} className={'h-9 px-3 text-sm flex items-center gap-1.5 cursor-pointer ' + (view === 'MAP' ? 'bg-accent text-white' : 'text-text-muted hover:text-text-primary')}><LayoutGrid size={15} /> Mapa do mês</button>
+            <button type="button" onClick={() => setView('BAL')} className={'h-9 px-3 text-sm flex items-center gap-1.5 cursor-pointer ' + (view === 'BAL' ? 'bg-accent text-white' : 'text-text-muted hover:text-text-primary')}><Palmtree size={15} /> Saldo de férias</button>
           </div>
-          {!(view === 'LIST' && filter === 'ABERTAS') && (
+          {view === 'BAL' && (
+            <div className="flex items-center gap-1">
+              <button type="button" onClick={() => setPeriod((p) => ({ ...p, year: p.year - 1 }))} className="w-9 h-9 rounded-md border border-border text-text-muted hover:text-text-primary flex items-center justify-center cursor-pointer"><ChevronLeft size={15} /></button>
+              <span className="w-16 text-center text-sm font-semibold text-text-primary">{period.year}</span>
+              <button type="button" onClick={() => setPeriod((p) => ({ ...p, year: p.year + 1 }))} className="w-9 h-9 rounded-md border border-border text-text-muted hover:text-text-primary flex items-center justify-center cursor-pointer"><ChevronRight size={15} /></button>
+            </div>
+          )}
+          {view !== 'BAL' && !(view === 'LIST' && filter === 'ABERTAS') && (
             <div className="flex items-center gap-1">
               <button type="button" onClick={() => move(-1)} className="w-9 h-9 rounded-md border border-border text-text-muted hover:text-text-primary flex items-center justify-center cursor-pointer"><ChevronLeft size={15} /></button>
               <span className="w-36 text-center text-sm font-semibold text-text-primary">{MONTHS[period.month - 1]} {period.year}</span>
@@ -176,7 +185,7 @@ export default function Ausencias() {
         )}
       </div>
 
-      {view === 'LIST' ? (
+      {view === 'BAL' ? <VacationBalances year={period.year} canAdjust={canDecide} /> : view === 'LIST' ? (
         !data ? <div className="flex justify-center py-16"><Loader2 size={18} className="animate-spin text-text-muted" /></div> : absences.length === 0 ? (
           <div className="bg-bg-elevated border border-border rounded-lg p-10 text-center">
             <CalendarX size={28} className="text-text-muted mx-auto mb-3" />

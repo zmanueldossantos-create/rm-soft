@@ -50,6 +50,15 @@ class PayrollSettings(Base):
     inss_deducted_from_irt: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     # the working days of the week, 0 = Monday ... 6 = Sunday (Monday to Friday by default; a bakery adds Saturday)
     work_weekdays: Mapped[list] = mapped_column(JSONB, nullable=False, default=lambda: [0, 1, 2, 3, 4])
+    # the holidays (férias): the days of a year, the year of the admission (days per complete month, up to the year's),
+    # how many days left pass to the next year (none: all of them), and whether a request may go beyond the balance
+    vacation_days_year: Mapped[float] = mapped_column(Numeric(5, 1), nullable=False, default=22)
+    vacation_days_per_month_first_year: Mapped[float] = mapped_column(Numeric(4, 2), nullable=False, default=2)
+    vacation_carry_max: Mapped[float | None] = mapped_column(Numeric(5, 1), nullable=True)
+    vacation_allow_negative: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # the first year the balances are counted (the year the company starts with RM SOFT): the years before are not
+    # followed - what was left then is typed as a correction of that year
+    vacation_start_year: Mapped[int | None] = mapped_column(Integer, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 

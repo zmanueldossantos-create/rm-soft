@@ -579,6 +579,9 @@ PAGES = [
                      "«Por decidir».", "perms": ["hr:absences_approve"]},
             "Um tipo que exige documento (atestado médico...) só é aprovado com o justificativo: o clipe da linha junta-o.",
             "«Mapa do mês»: cada dia de cada colaborador, a cor do tipo de ausência; uma ausência pedida aparece mais clara.",
+            "«Saldo de férias»: por colaborador e por ano, o direito, os dias transitados, os ajustes, os gozados, os pedidos e o "
+            "saldo. Um pedido de férias acima do saldo disponível é recusado (salvo se as regras o permitirem). As regras estão em "
+            "Parâmetros de RH → Tipos de ausência; o ícone de ajustes corrige um saldo (ex.: o saldo anterior ao RM SOFT).",
         ],
         "errors": [("«Nenhum dia útil neste período»", "O período só tem fins de semana ou feriados (Parâmetros de RH → Feriados)."),
                    ("«... já tem uma ausência de ...»", "Duas ausências do mesmo colaborador não se sobrepõem: cancele ou altere a outra.")],

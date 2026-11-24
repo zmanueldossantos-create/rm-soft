@@ -8,6 +8,7 @@ Rules:
   calendar days; half a day only for a single day; a period with no day to count is refused (a Saturday off);
 - the type's limit of days, and two absences of an employee never overlap (refused and cancelled ones aside);
 - a type that requires a document is approved only with it (it can be asked without, the document comes later);
+- holidays beyond the employee's balance are refused, unless the company allows it (vacation_service);
 - changed only while asked; cancelled while asked or approved; the decision (who, when, a note) is kept.
 """
 import uuid
@@ -22,6 +23,7 @@ from app.models.hr_calendar import ABSENCE_CATEGORIES, AbsenceType, HrHoliday
 from app.models.user import User
 from app.services.employee_service import EmployeeError, EmployeeNotFoundError, get_employee
 from app.services.hr_calendar_service import count_days, ensure_absence_types
+from app.services.vacation_service import check_vacation_balance
 
 STATUS_LABELS = {AbsenceStatus.PEDIDA: "Pedida", AbsenceStatus.APROVADA: "Aprovada", AbsenceStatus.RECUSADA: "Recusada",
                  AbsenceStatus.CANCELADA: "Cancelada"}
@@ -110,7 +112,8 @@ async def create_absence(db: AsyncSession, company_id: uuid.UUID, user_id: uuid.
     """Asked - or approved at once (approve: the caller may approve)."""
     clean = await _check(db, company_id, data, None)
     absence_type = clean.pop("_type")
-    clean.pop("_employee")
+    employee = clean.pop("_employee")
+    await check_vacation_balance(db, company_id, employee, absence_type, clean["start_date"], clean["days"], approving=approve)
     if approve and absence_type.requires_document:
         raise EmployeeError(f"«{absence_type.name}» precisa do documento justificativo: registe-a como pedida e junte-o")
     absence = Absence(company_id=company_id, requested_by_user_id=user_id, status=AbsenceStatus.PEDIDA, **clean)
@@ -126,8 +129,9 @@ async def update_absence(db: AsyncSession, company_id: uuid.UUID, absence_id: uu
     if absence.status != AbsenceStatus.PEDIDA:
         raise EmployeeError(f"Uma ausência {STATUS_LABELS[absence.status].lower()} já não se altera")
     clean = await _check(db, company_id, {**data, "employee_id": absence.employee_id}, absence)
-    clean.pop("_type")
-    clean.pop("_employee")
+    absence_type = clean.pop("_type")
+    employee = clean.pop("_employee")
+    await check_vacation_balance(db, company_id, employee, absence_type, clean["start_date"], clean["days"], exclude_id=absence.id)
     for field, value in clean.items():
         setattr(absence, field, value)
     await db.commit()
@@ -142,8 +146,10 @@ async def approve_absence(db: AsyncSession, company_id: uuid.UUID, user_id: uuid
     absence_type = await db.get(AbsenceType, absence.type_id)
     await _require_document(db, absence, absence_type)
     # checked again: the calendar or another absence may have changed since it was asked
-    await _check(db, company_id, {"employee_id": absence.employee_id, "type_id": absence.type_id, "start_date": absence.start_date,
-                                  "end_date": absence.end_date, "half_day": absence.half_day, "reason": absence.reason}, absence)
+    clean = await _check(db, company_id, {"employee_id": absence.employee_id, "type_id": absence.type_id, "start_date": absence.start_date,
+                                          "end_date": absence.end_date, "half_day": absence.half_day, "reason": absence.reason}, absence)
+    await check_vacation_balance(db, company_id, clean["_employee"], absence_type, clean["start_date"], clean["days"],
+                                 exclude_id=absence.id, approving=True)
     _decide(absence, AbsenceStatus.APROVADA, user_id, note)
     await db.commit()
     return await absence_detail(db, company_id, absence_id)

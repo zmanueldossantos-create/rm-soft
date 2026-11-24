@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Loader2, Plus, Pencil, Trash2, Save, ArrowLeft, Wand2, ChevronLeft, ChevronRight } from 'lucide-react';
 import Select from './Select';
 import DateInput from './DateInput';
-import { listHolidays, generateHolidays, saveHoliday, deleteHoliday, listAbsenceTypes, saveAbsenceType, deleteAbsenceType } from '../api/hr';
+import { listHolidays, generateHolidays, saveHoliday, deleteHoliday, listAbsenceTypes, saveAbsenceType, deleteAbsenceType, getPayrollSettings, updatePayrollSettings } from '../api/hr';
 import { formatDate } from '../utils/format';
 import { extractErrorMessage } from '../utils/errors';
 import { toast } from '../store/toastStore';
@@ -125,6 +125,63 @@ export function HolidaysTab({ canEdit }) {
   );
 }
 
+// the holidays' rules: days a year, days per complete month in the year of the admission, days that pass to the next
+// year (empty: all), a request beyond the balance allowed or not
+function VacationRules({ canEdit }) {
+  const [form, setForm] = useState(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    getPayrollSettings().then((s) => setForm({
+      vacation_days_year: String(s.vacation_days_year), vacation_days_per_month_first_year: String(s.vacation_days_per_month_first_year),
+      vacation_carry_max: s.vacation_carry_max === null ? '' : String(s.vacation_carry_max), vacation_allow_negative: s.vacation_allow_negative,
+      vacation_start_year: s.vacation_start_year === null ? '' : String(s.vacation_start_year),
+    })).catch(() => setForm(null));
+  }, []);
+  if (!form) return null;
+  const num = (v) => (v === '' ? null : Number(String(v).replace(',', '.')));
+  async function save(e) {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      await updatePayrollSettings({ vacation_days_year: num(form.vacation_days_year), vacation_days_per_month_first_year: num(form.vacation_days_per_month_first_year),
+        vacation_carry_max: num(form.vacation_carry_max), vacation_allow_negative: form.vacation_allow_negative,
+        vacation_start_year: num(form.vacation_start_year) });
+      toast.success('Regras de férias guardadas');
+    } catch (err) {
+      toast.error(extractErrorMessage(err, 'Erro ao guardar'));
+    } finally {
+      setBusy(false);
+    }
+  }
+  const field = (label, key, placeholder) => (
+    <div>
+      <label className={labelClass}>{label}</label>
+      <input value={form[key]} disabled={!canEdit} inputMode="decimal" placeholder={placeholder} onChange={(e) => setForm((p) => ({ ...p, [key]: e.target.value }))} className={inputClass + ' font-mono'} />
+    </div>
+  );
+  return (
+    <form noValidate onSubmit={save} className="border border-border rounded-md p-3 flex flex-col gap-3">
+      <p className="text-sm font-semibold text-text-primary">Regras de férias</p>
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+        {field('Saldos contados a partir de (ano)', 'vacation_start_year', 'Desde a admissão')}
+        {field('Dias úteis por ano', 'vacation_days_year')}
+        {field('No ano de admissão: dias por mês completo', 'vacation_days_per_month_first_year')}
+        {field('Dias que transitam para o ano seguinte', 'vacation_carry_max', 'Todos')}
+      </div>
+      <p className="text-[11px] text-text-muted -mt-1">Os anos antes do início não são seguidos: o saldo que restava indica-se como ajuste desse ano (Ausências → Saldo de férias).</p>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <Check checked={form.vacation_allow_negative} onChange={(v) => canEdit && setForm((p) => ({ ...p, vacation_allow_negative: v }))}
+          label="Permitir férias além do saldo" hint="Senão, um pedido acima do saldo disponível é recusado" />
+        {canEdit && (
+          <button type="submit" disabled={busy} className="h-9 px-4 rounded-md bg-accent hover:bg-accent-hover text-white text-sm font-medium flex items-center gap-1.5 cursor-pointer disabled:opacity-50">
+            {busy ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Guardar regras
+          </button>
+        )}
+      </div>
+    </form>
+  );
+}
+
 const emptyType = { name: '', category: 'JUSTIFICADA', paid: true, takes_holiday_days: false, working_days: true, max_days: '', requires_document: false, is_active: true, notes: '' };
 
 export function AbsenceTypesTab({ canEdit }) {
@@ -189,6 +246,7 @@ export function AbsenceTypesTab({ canEdit }) {
 
   return (
     <div className="flex flex-col gap-3">
+      <VacationRules canEdit={canEdit} />
       {canEdit && <button type="button" onClick={() => setEditing({ ...emptyType })} className="self-end h-9 px-3.5 rounded-md bg-accent hover:bg-accent-hover text-white text-sm font-medium flex items-center gap-1.5 cursor-pointer"><Plus size={15} /> Novo tipo</button>}
       <div className="border border-border rounded-md overflow-x-auto">
         <table className="w-full text-sm">

@@ -69,8 +69,13 @@ class PayrollSettingsRequest(BaseModel):
     inss_employer_rate: float | None = None
     monthly_hours: float | None = None
     monthly_days: float | None = None
-    inss_deducted_from_irt: bool = True
+    inss_deducted_from_irt: bool | None = None
     work_weekdays: list[int] | None = None
+    vacation_days_year: float | None = None
+    vacation_days_per_month_first_year: float | None = None
+    vacation_carry_max: float | None = None
+    vacation_allow_negative: bool | None = None
+    vacation_start_year: int | None = None
 
 
 class IrtTableRequest(BaseModel):
@@ -138,4 +143,11 @@ class AbsenceRequest(BaseModel):
 
 
 class AbsenceDecisionRequest(BaseModel):
+    note: str | None = None
+
+
+class VacationAdjustmentRequest(BaseModel):
+    employee_id: uuid.UUID | None = None
+    year: int = 0
+    days: float | None = None
     note: str | None = None

@@ -10,7 +10,7 @@ from app.api.deps import require_permission
 from app.core.database import get_db
 from app.models.user import User
 from app.schemas.employee import (
-    AbsenceDecisionRequest, AbsenceRequest, AbsenceTypeRequest, DepartureRequest, EmployeePayrollItemsRequest, HolidayRequest, EmployeeRequest, FormulaCheckRequest, HrReferenceCreateRequest,
+    AbsenceDecisionRequest, AbsenceRequest, VacationAdjustmentRequest, AbsenceTypeRequest, DepartureRequest, EmployeePayrollItemsRequest, HolidayRequest, EmployeeRequest, FormulaCheckRequest, HrReferenceCreateRequest,
     HrReferenceUpdateRequest, IrtTableRequest, PayrollItemRequest, PayrollSettingsRequest, ReadmissionRequest,
     SimulationRequest,
 )
@@ -257,7 +257,7 @@ async def get_settings(db: AsyncSession = Depends(get_db), current_user: User = 
 async def put_settings(payload: PayrollSettingsRequest, db: AsyncSession = Depends(get_db),
                        current_user: User = Depends(require_permission("hr:payroll_settings"))):
     try:
-        return await update_payroll_settings(db, current_user.company_id, payload.model_dump())
+        return await update_payroll_settings(db, current_user.company_id, payload.model_dump(exclude_unset=True))
     except EmployeeError as e:
         raise _refused(e)
 
@@ -532,5 +532,47 @@ async def post_absence_document(absence_id: uuid.UUID, file: UploadFile = File(.
     try:
         content = await _read_upload(file, DOCUMENT_MAX)
         return await attach_document(db, current_user.company_id, current_user.id, absence_id, file.filename, content)
+    except EmployeeError as e:
+        raise _refused(e)
+
+
+# --- the holiday balance (step 3d) ----------------------------------------------------------------------------------
+
+@router.get("/vacations")
+async def get_vacations(year: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_permission("hr:view"))):
+    from app.services.vacation_service import vacation_overview
+    try:
+        return await vacation_overview(db, current_user.company_id, year)
+    except EmployeeError as e:
+        raise _refused(e)
+
+
+@router.get("/vacations/adjustments")
+async def get_vacation_adjustments(employee_id: uuid.UUID, year: int, db: AsyncSession = Depends(get_db),
+                                   current_user: User = Depends(require_permission("hr:view"))):
+    from app.services.vacation_service import list_adjustments
+    try:
+        return await list_adjustments(db, current_user.company_id, employee_id, year)
+    except EmployeeError as e:
+        raise _refused(e)
+
+
+@router.post("/vacations/adjustments", status_code=status.HTTP_201_CREATED)
+async def post_vacation_adjustment(payload: VacationAdjustmentRequest, db: AsyncSession = Depends(get_db),
+                                   current_user: User = Depends(require_permission("hr:absences_approve"))):
+    from app.services.vacation_service import add_adjustment
+    try:
+        return await add_adjustment(db, current_user.company_id, current_user.id, payload.employee_id, payload.year,
+                                    payload.days, payload.note)
+    except EmployeeError as e:
+        raise _refused(e)
+
+
+@router.delete("/vacations/adjustments/{adjustment_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_vacation_adjustment(adjustment_id: uuid.UUID, db: AsyncSession = Depends(get_db),
+                                     current_user: User = Depends(require_permission("hr:absences_approve"))):
+    from app.services.vacation_service import delete_adjustment
+    try:
+        await delete_adjustment(db, current_user.company_id, adjustment_id)
     except EmployeeError as e:
         raise _refused(e)
